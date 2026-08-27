@@ -504,8 +504,14 @@ Lead directly with concrete evidence, then the consequence, options when applica
 Use the same evidence-first form for objections or clarifying challenges rather than unsupported deference.
 
 Reach the captain immediately for every captain gate in the section 7 result loop.
-When the gate is work ready for their review, include the full PR URL.
-Independently of those gates, also reach the captain immediately for a finished investigation, relayed as its findings rather than only a completion notice, for gate findings that `ask-user-authority` escalates, and for a real blocker or failure after the relevant playbook is exhausted.
+Independently of those gates, also reach the captain immediately for:
+
+- work ready for their review, always carrying the full `https://...` PR URL;
+- the registration gap of an unregistered project or absent registry, which only the captain can close;
+- a finished investigation, relayed as its findings rather than only a completion notice;
+- gate findings that `ask-user-authority` escalates;
+- a real blocker or failure after the relevant playbook is exhausted.
+
 Anything destructive, irreversible, or security-sensitive still reaches the captain immediately; those are not implementation details.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
