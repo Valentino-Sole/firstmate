@@ -195,14 +195,6 @@ run_hook() {
   printf '{"stop_hook_active":%s}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
 }
 
-nonexistent_pid() {
-  local pid=999999
-  while kill -0 "$pid" 2>/dev/null; do
-    pid=$((pid + 1))
-  done
-  printf '%s\n' "$pid"
-}
-
 watcher_identity() {
   local dir=$1 pid=$2
   FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$dir/bin/fm-wake-lib.sh" "$pid"
@@ -253,7 +245,7 @@ test_hook_blocks_source_only_home() {
 test_hook_blocks_when_dead_lock_has_fresh_beacon() {
   local dir dead out status
   dir=$(make_primary_dir "$TMP_ROOT/hook-dead-lock-fresh")
-  dead=$(nonexistent_pid)
+  dead=$(fm_dead_pid)
   : > "$dir/state/task1.meta"
   record_watcher_lock "$dir" "$dead" "dead watcher identity"
   touch "$dir/state/.last-watcher-beat"
@@ -1127,13 +1119,14 @@ test_exactly_one_layer_acts_per_logical_turn_end() {
 }
 
 test_no_protection_gap_when_the_owning_layer_is_unprovable() {
-  local dir pid out status case_name
-  for case_name in dead-session drifted-build no-evidence; do
+  local dir pid other stale out status case_name
+  for case_name in dead-session drifted-build reused-pid no-evidence; do
     dir=$(make_primary_dir "$TMP_ROOT/turnend-owner-$case_name")
     : > "$dir/state/task1.meta"
+    pid=
     case "$case_name" in
       dead-session)
-        fm_record_pi_extension_session "$dir" "$(nonexistent_pid)" "" lock \
+        fm_record_pi_extension_session "$dir" "$(fm_dead_pid)" "" lock \
           || fail "$case_name: could not record the Pi ownership evidence"
         ;;
       drifted-build)
@@ -1142,14 +1135,31 @@ test_no_protection_gap_when_the_owning_layer_is_unprovable() {
         fm_record_pi_extension_session "$dir" "$pid" drift lock \
           || fail "$case_name: could not record the Pi ownership evidence"
         ;;
+      reused-pid)
+        # A SIGKILLed Pi leaves its markers and its lock behind, and the OS later
+        # hands that pid to an unrelated live process. Everything a pid-only
+        # proof can see still lines up - current builds, marker pid equal to the
+        # lock pid, that pid alive - so only recomputing the recorded identity
+        # can tell that the owner is gone.
+        sleep 30 &
+        other=$!
+        stale=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$other")
+        kill "$other" 2>/dev/null || true
+        wait "$other" 2>/dev/null || true
+        [ -n "$stale" ] || fail "$case_name: could not capture the crashed owner's identity"
+        sleep 30 &
+        pid=$!
+        fm_record_pi_extension_session "$dir" "$pid" "" lock "$stale" \
+          || fail "$case_name: could not record the Pi ownership evidence"
+        ;;
       no-evidence) : ;;
     esac
     out=$(FM_CLAUDE_AUTOARM_SYNC_WAIT_MS=200 run_hook_claude "$dir" false); status=$?
-    [ "$case_name" = drifted-build ] && { kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
+    [ -z "$pid" ] || { kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
     expect_code 2 "$status" "$case_name: an unprovable owner must leave the Claude entry protecting the turn end"
     assert_contains "$out" "TURN WOULD END BLIND" "$case_name: the protecting block must carry the blind-turn banner"
   done
-  pass "fm-turnend-guard: an absent, crashed, or version-drifted owner leaves no protection gap"
+  pass "fm-turnend-guard: an absent, crashed, drifted, or pid-reused owner leaves no protection gap"
 }
 
 

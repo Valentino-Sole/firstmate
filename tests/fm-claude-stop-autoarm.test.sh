@@ -69,10 +69,39 @@ make_crewmate_worktree_dir() {
 # session lock. $1 = fixture dir. Any extra env assignments must be exported
 # before invocation. Captures stdout+stderr; exit code on stdout of the caller.
 run_autoarm() {
+  run_autoarm_as_session "$1" sess-autoarm
+}
+
+# Same, with an explicit Stop payload session_id: that field is the key the
+# consecutive-failure run and its cap are scoped by, so a test that spans two
+# sessions delivers two different ones.
+run_autoarm_as_session() {
+  local dir=$1 session=$2 rc=0
+  printf '{"session_id":"%s","stop_hook_active":false}\n' "$session" \
+    | FM_HOME="$dir" "$FAKE_CLAUDE" -c '
+        printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+        "$FM_HOME/bin/fm-claude-stop-autoarm.sh"
+      ' 2>&1 || rc=$?
+  printf 'RC=%s\n' "$rc" >&2
+  return "$rc"
+}
+
+# Same, after re-pointing the recorded Pi ownership markers at the fake harness's
+# own live pid, which is how a pid reuse looks from disk: the markers and their
+# recorded identity belong to a process that has since died, and this unrelated
+# live process now carries that very pid.
+run_autoarm_with_reused_owner_pid() {
   local dir=$1 rc=0
   printf '%s\n' '{"session_id":"sess-autoarm","stop_hook_active":false}' \
     | FM_HOME="$dir" "$FAKE_CLAUDE" -c '
         printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+        for marker in .pi-watch-extension-loaded .pi-turnend-extension-loaded; do
+          printf "%s\n%s\n%s\n" \
+            "$(sed -n 1p "$FM_HOME/state/$marker")" \
+            "$$" \
+            "$(sed -n 3p "$FM_HOME/state/$marker")" \
+            > "$FM_HOME/state/$marker"
+        done
         "$FM_HOME/bin/fm-claude-stop-autoarm.sh"
       ' 2>&1 || rc=$?
   printf 'RC=%s\n' "$rc" >&2
@@ -222,15 +251,6 @@ record_watcher_lock() {
 
 # --- scope and gates ----------------------------------------------------------
 
-# A pid that is guaranteed not to be running, for evidence a dead session left.
-dead_pid() {
-  local pid=999999
-  while kill -0 "$pid" 2>/dev/null; do
-    pid=$((pid + 1))
-  done
-  printf '%s\n' "$pid"
-}
-
 # Run the hook WITHOUT the fake harness claiming the session lock, so a fixture
 # that records its own lock owner (a Pi session) keeps it.
 run_autoarm_unclaimed() {
@@ -332,7 +352,7 @@ test_protects_when_the_pi_owner_cannot_be_proven() {
       # A crashed Pi session: its markers survive, its process does not. The
       # ownership proof must fail, and the fake harness then owns the lock and
       # arms exactly as it does with no Pi in the picture at all.
-      dead=$(dead_pid)
+      dead=$(fm_dead_pid)
       fm_record_pi_extension_session "$dir" "$dead" || fail "could not record the Pi ownership evidence"
       run_autoarm "$dir" >/dev/null 2>&1; status=$?
     else
@@ -348,6 +368,58 @@ test_protects_when_the_pi_owner_cannot_be_proven() {
     [ -e "$dir/state/arm-ran" ] || fail "$case_name: the Claude Stop entry did not arm without a proven owner"
   done
   pass "auto-arm: keeps protecting the turn end when Pi ownership cannot be proven"
+}
+
+# A SIGKILLed Pi leaves its markers and its lock behind, and the operating system
+# later hands that pid to an unrelated live process. Everything a pid-only proof
+# can see still lines up - current builds, marker pid equal to the lock pid, that
+# pid alive - so only recomputing the recorded identity can tell that the owner is
+# gone. It must, or this hook would stand down over nothing.
+test_a_reused_owner_pid_never_proves_pi_ownership() {
+  local dir status other stale
+  dir=$(make_primary_dir "$TMP_ROOT/pi-owner-reused-pid")
+  : > "$dir/state/task.meta"
+  write_arm_fixture "$dir" actionable
+  sleep 30 &
+  other=$!
+  stale=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$other")
+  kill "$other" 2>/dev/null || true
+  wait "$other" 2>/dev/null || true
+  [ -n "$stale" ] || fail "could not capture the crashed owner's identity"
+  fm_record_pi_extension_session "$dir" "$other" "" "" "$stale" \
+    || fail "could not record the Pi ownership evidence"
+  run_autoarm_with_reused_owner_pid "$dir" >/dev/null 2>&1; status=$?
+  expect_code 2 "$status" "a reused owner pid must leave the Claude Stop entry protecting the turn end"
+  [ -e "$dir/state/arm-ran" ] || fail "the Claude Stop entry did not arm behind a dead owner whose pid was reused"
+  pass "auto-arm: a reused owner pid never proves Pi ownership"
+}
+
+# --- session scope of the cap -------------------------------------------------
+
+# The consecutive-failure run and its cap belong to one session, exactly as the
+# synchronous guard's block budget does. A later session in the same home must
+# therefore get its own honest arm attempt instead of inheriting a previous
+# session's cap before it has failed even once.
+test_a_new_session_is_not_capped_by_a_previous_session() {
+  local dir status arms_before arms_after
+  dir=$(make_primary_dir "$TMP_ROOT/failure-cap-new-session")
+  : > "$dir/state/task.meta"
+  write_arm_fixture "$dir" failed
+  export FM_CLAUDE_AUTOARM_FAILURE_CAP=1
+  run_autoarm_as_session "$dir" sess-first >/dev/null 2>&1 || true
+  assert_present "$dir/state/.claude-autoarm-failure-capped" "the first session did not reach the cap"
+  arms_before=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
+
+  run_autoarm_as_session "$dir" sess-second >/dev/null 2>&1; status=$?
+  unset FM_CLAUDE_AUTOARM_FAILURE_CAP
+  arms_after=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
+
+  [ "$arms_after" -gt "$arms_before" ] \
+    || fail "the new session was capped before its own first failure: $arms_before arm attempts before, $arms_after after"
+  expect_code 2 "$status" "the new session's own first failure must still force its Stop-owned retry"
+  assert_contains "$(cat "$dir/state/.claude-autoarm-failure-capped")" "session=sess-second" \
+    "the new session's own cap must replace the previous session's stop record"
+  pass "auto-arm: a new session gets an honest arm attempt after a previous session's cap"
 }
 
 test_inert_in_child_worktree() {
@@ -1320,5 +1392,7 @@ test_consecutive_failures_stop_at_the_cap
 test_capped_episode_ends_on_positive_watcher_recovery
 test_stands_down_for_a_proven_pi_primary_owner
 test_protects_when_the_pi_owner_cannot_be_proven
+test_a_reused_owner_pid_never_proves_pi_ownership
+test_a_new_session_is_not_capped_by_a_previous_session
 test_active_in_marked_secondmate_home
 test_fm_lock_status_still_works_with_shared_lib

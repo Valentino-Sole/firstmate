@@ -239,10 +239,14 @@ autoarm_session_id() {
   esac
   printf '%s\n' "$id"
 }
+SESSION_ID=$(autoarm_session_id)
 
 # --- capped failure episode: stop re-arming ----------------------------------
-# Once this episode reached the consecutive-failure cap, the durable stop record
-# state/.claude-autoarm-failure-capped stands and its reason was surfaced once.
+# Once THIS session's episode reached the consecutive-failure cap, the durable
+# stop record state/.claude-autoarm-failure-capped stands with this session's key
+# and its reason was surfaced once. A record left by a previous session is that
+# session's cap and never this one's, so a fresh session still gets its own honest
+# arm attempt here and caps only on its own consecutive run.
 # From here this hook starts no further arm and creates no further continuation.
 # It still records failed-capped for its own generation, because the synchronous
 # guard's bounded progression is accounted per epoch identity: a frozen ledger
@@ -251,7 +255,7 @@ autoarm_session_id() {
 # Positive watcher recovery ends the episode, and this hook applies that reset
 # itself rather than waiting on the guard, so a home whose synchronous guard
 # never runs is not left permanently un-armed by its own cap.
-if fm_autoarm_failure_capped "$STATE"; then
+if fm_autoarm_failure_capped "$STATE" "$SESSION_ID"; then
   if ! fm_watcher_healthy "$STATE" "$SCRIPT_DIR/fm-watch.sh" "$GRACE" "$FM_HOME" \
     || ! fm_failure_episode_reset "$STATE"; then
     autoarm_record failed-capped
@@ -380,7 +384,7 @@ fi
 # A concurrent firing may have capped this episode while this one was arming:
 # the durable stop record already carries the reason, so add no second notice
 # and no further continuation.
-if fm_autoarm_failure_capped "$STATE"; then
+if fm_autoarm_failure_capped "$STATE" "$SESSION_ID"; then
   autoarm_record failed-capped
   [ -z "$OUT" ] || rm -f "$OUT" 2>/dev/null || true
   exit 0
@@ -391,7 +395,7 @@ fi
 # by this generation, so a superseded owner can neither advance nor cap the
 # episode, and a refusal or unwritable record deliberately falls through to the
 # ordinary retry paths below rather than turning into a silent stop.
-if fm_autoarm_failure_record "$STATE" "$MY_GEN" "$FAILURE_CAP" "$(autoarm_session_id)" \
+if fm_autoarm_failure_record "$STATE" "$MY_GEN" "$FAILURE_CAP" "$SESSION_ID" \
   "auto-arm exhausted its bounded retries on $FAILURE_CAP consecutive Stop firings with no verified watcher" \
   && [ "$FM_AUTOARM_FAILURE_CAPPED_NOW" -eq 1 ]; then
   {

@@ -185,18 +185,21 @@ FAILURE_ALARM="$STATE/.claude-autoarm-failure-alarmed"
 SESSION_ID=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"' 2>/dev/null || printf 'unknown')
 
 # This episode's durable operator-visible failure record: the once-per-episode
-# notice, or the auto-arm's own cap record. Either one proves the episode is a
-# real exhausted-failure episode rather than a first unexplained failure, which
-# is the question every caller below is actually asking (see the header).
+# notice, or the auto-arm's own cap record for THIS session. Either one proves
+# the episode is a real exhausted-failure episode rather than a first unexplained
+# failure, which is the question every caller below is actually asking (see the
+# header). The cap record is session-keyed exactly as the auto-arm writes it, so
+# both layers read "capped" as "capped for this session"; within one Stop event
+# they see the same session_id and therefore always agree.
 failure_episode_recorded() {
-  [ -e "$FAILURE_NOTICE" ] || fm_autoarm_failure_capped "$STATE"
+  [ -e "$FAILURE_NOTICE" ] || fm_autoarm_failure_capped "$STATE" "$SESSION_ID"
 }
 
 # An open auto-arm claim owns recovery only while the episode is not capped. A
 # capped firing claims a generation and then exits 0 without arming, so its
 # claim proves no continuation is coming.
 autoarm_claim_owns_recovery() {
-  ! fm_autoarm_failure_capped "$STATE" && fm_autoarm_claim_open "$STATE" "$GRACE"
+  ! fm_autoarm_failure_capped "$STATE" "$SESSION_ID" && fm_autoarm_claim_open "$STATE" "$GRACE"
 }
 
 budget_reset() {

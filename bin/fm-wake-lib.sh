@@ -169,9 +169,17 @@ fm_supervision_model() {
 }
 
 # Pi primary supervision evidence. The Pi extensions record, in their state
-# markers, the exact build they loaded and the session process that loaded it, so
-# "a live Pi session owns supervision" is provable from durable state without a
-# watcher process and without reading any vendor-rendered surface.
+# markers, the exact build they loaded, the session process that loaded it, and
+# that process's pid-identity, so "a live Pi session owns supervision" is provable
+# from durable state without a watcher process and without reading any
+# vendor-rendered surface. The marker is three lines, written by markLoaded in
+# .pi/extensions/fm-primary-pi-watch.ts and
+# .pi/extensions/fm-primary-turnend-guard.ts:
+#   1  the build version below
+#   2  the pid of the process that loaded that build
+#   3  that pid's fm_pid_identity, which those extensions obtain by calling this
+#      very function through bash rather than re-implementing its per-platform
+#      format, so the two can never drift apart
 #
 # fm_pi_extension_version <file>
 # Print the marker version string the Pi extensions record for <file>. Must stay
@@ -192,22 +200,38 @@ fm_pi_extension_version() {
 }
 
 # fm_pi_extension_loaded <marker> <expected-version> <session-lock>
-# True when <marker> records <expected-version> and names the session process in
-# <session-lock>, i.e. the session holding this home loaded exactly this build.
+# True when <marker> records <expected-version>, names the session process in
+# <session-lock>, and that pid still recomputes to the identity the marker
+# recorded - i.e. the session holding this home loaded exactly this build and is
+# still the very same process.
+#
+# The identity is MANDATORY, exactly as it is for an auto-arm claim
+# (fm_autoarm_claim_open): a pid alone cannot authenticate an owner, because the
+# markers survive a SIGKILLed Pi and the OS reuses pids. Without the recomputed
+# identity an unrelated live process that inherited the dead owner's pid would
+# prove ownership and stand every Claude-shaped turn-end layer down over nothing.
+# An identityless marker therefore fails closed, which costs nothing: a failed
+# proof simply leaves those layers protecting the turn end as they were.
 fm_pi_extension_loaded() {
-  local marker=$1 expected_version=$2 lock=$3 marker_version marker_pid lock_pid
+  local marker=$1 expected_version=$2 lock=$3
+  local marker_version marker_pid marker_identity lock_pid current_identity
   [ -f "$marker" ] && [ -f "$lock" ] && [ -n "$expected_version" ] || return 1
   marker_version=$(sed -n '1p' "$marker")
   marker_pid=$(sed -n '2p' "$marker")
+  marker_identity=$(sed -n '3p' "$marker")
   lock_pid=$(sed -n '1p' "$lock")
-  [ -n "$marker_pid" ] || return 1
-  [ "$marker_version" = "$expected_version" ] && [ "$marker_pid" = "$lock_pid" ]
+  [ -n "$marker_pid" ] && [ -n "$marker_identity" ] || return 1
+  [ "$marker_version" = "$expected_version" ] || return 1
+  [ "$marker_pid" = "$lock_pid" ] || return 1
+  current_identity=$(fm_pid_identity "$lock_pid" 2>/dev/null) || return 1
+  [ "$current_identity" = "$marker_identity" ]
 }
 
 # fm_pi_extension_owns_supervision <state> <root>
 # True when a LIVE Pi session owns supervision continuity for this home: both
 # primary extensions are loaded at their current on-disk builds by the process
-# recorded in this home's session lock, and that process is still alive.
+# recorded in this home's session lock, that process still recomputes to the
+# identity each marker recorded, and it is still alive.
 # Requiring the turn-end guard extension too is deliberate - it is the structural
 # backstop that catches a cycle the watch extension failed to restore, so a home
 # missing it has no benign hand-off to tolerate.
@@ -244,10 +268,12 @@ fm_pi_extension_owns_supervision() {
 #
 # The claim is therefore the same durable, verifiable record the pull guard
 # already trusts: both Pi primary extensions recorded at their current on-disk
-# builds by the process holding this home's session lock, and that process alive.
+# builds by the process holding this home's session lock, and that process still
+# alive under the very pid-identity the markers recorded.
 # It is a positive proof of an owner, never an assumption of one, so every way the
 # owning layer can be absent - Pi not primary, extension unloaded, build drifted,
-# session exited or crashed, lock held by someone else - fails this predicate and
+# session exited or crashed (even where its pid was later reused), lock held by
+# someone else - fails this predicate and
 # leaves the Claude entries protecting the turn end exactly as before. That is the
 # no-protection-gap direction, and it is why this must never be relaxed into a
 # host or environment sniff.
@@ -272,8 +298,10 @@ fm_turnend_owner_is_pi_primary() {  # <state> <root>
 # arbitrarily far apart never accumulate into a cap on a home whose mechanism
 # demonstrably works. And the run is SESSION-scoped by the Stop payload's
 # session_id, the same key and the same "unknown" fallback the synchronous
-# guard's block budget in state/.turnend-claude-blocks uses, so a fresh session
-# never inherits a previous session's run and cap on its own first failure.
+# guard's block budget in state/.turnend-claude-blocks uses. Both the count and
+# the durable stop record carry that key, and every reader of the record compares
+# it, so a fresh session never inherits a previous session's run and cap on its
+# own first failure: it gets one honest arm attempt.
 #
 # The count is durable, keyed by the auto-arm GENERATION so one generation counts
 # at most once, and written under the existing single-flight micro-mutex with the
@@ -335,9 +363,20 @@ fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> <session> [reason]
   fi
   # shellcheck disable=SC2034 # Read by callers after the function returns.
   FM_AUTOARM_FAILURE_COUNT=$count
-  if [ "$count" -ge "$cap" ] && [ ! -e "$capped" ]; then
-    if ! (set -C; printf 'count=%s\ncap=%s\ngen=%s\nat=%s\nreason=%s\n' \
-        "$count" "$cap" "$gen" "$(date +%s)" "$reason" > "$capped") 2>/dev/null; then
+  # The stop record carries the same session key as the count, so a run and its
+  # cap belong to one session. A record left by a DIFFERENT session is that
+  # session's finished run and must be REPLACED rather than refused: an O_EXCL
+  # create would fail on it, this session could never record its own cap, and it
+  # would keep re-arming past the bound. The replace is safe here because the
+  # whole section runs under the single-flight micro-mutex with this generation's
+  # ownership re-verified, and CAPPED_NOW is set only when this write created the
+  # record for THIS session, so the reason is still surfaced exactly once.
+  if [ "$count" -ge "$cap" ] && ! fm_autoarm_failure_capped "$state" "$session"; then
+    tmp="$capped.tmp.$pid"
+    if ! printf 'session=%s\ncount=%s\ncap=%s\ngen=%s\nat=%s\nreason=%s\n' \
+        "$session" "$count" "$cap" "$gen" "$(date +%s)" "$reason" > "$tmp" 2>/dev/null \
+      || ! mv -f "$tmp" "$capped" 2>/dev/null; then
+      rm -f "$tmp" 2>/dev/null || true
       fm_lock_release "$lock"
       return 1
     fi
@@ -348,13 +387,26 @@ fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> <session> [reason]
   return 0
 }
 
-# True once this failure episode has reached the consecutive-failure cap and the
-# durable stop record exists, so no further automatic re-arm may be attempted
-# until positive watcher recovery clears the episode. The synchronous guard reads
-# it too: a capped firing still takes a generation and briefly publishes an
-# "arming" claim it will never act on, which is not recovery to defer to.
-fm_autoarm_failure_capped() {  # <state-dir>
-  [ -e "$1/.claude-autoarm-failure-capped" ]
+# True once THIS session's failure episode has reached the consecutive-failure
+# cap and its durable stop record exists, so no further automatic re-arm may be
+# attempted until positive watcher recovery clears the episode. The synchronous
+# guard reads it too: a capped firing still takes a generation and briefly
+# publishes an "arming" claim it will never act on, which is not recovery to
+# defer to.
+#
+# The record is keyed by the same session and sanitized the same way the count is
+# (fm_autoarm_failure_record above), so both layers agree on what one session is
+# and a later session is never capped before its own first failure - it gets one
+# honest arm attempt, and caps again only on its own consecutive run. A record
+# from another session, or one written by a build that recorded no session at
+# all, is therefore not this session's cap.
+fm_autoarm_failure_capped() {  # <state-dir> <session>
+  local state=$1 session=${2:-} capped recorded
+  capped="$state/.claude-autoarm-failure-capped"
+  [ -e "$capped" ] || return 1
+  case "$session" in ''|*[!A-Za-z0-9._-]*) session=unknown ;; esac
+  recorded=$(sed -n '1s/^session=//p' "$capped" 2>/dev/null || true)
+  [ -n "$recorded" ] && [ "$recorded" = "$session" ]
 }
 
 # Clear ONLY the consecutive-failure count, for a generation this process still

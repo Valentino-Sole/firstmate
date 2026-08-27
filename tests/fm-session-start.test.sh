@@ -255,8 +255,14 @@ SH
   printf '%s\n' "$harness" > "$fakebin/.harness-name"
 }
 
+# The stub answers the harness-identification queries (comm=, args=, ppid=) and
+# delegates the pid-identity query to the real ps, which is not what it is here to
+# control: on a host with no readable /proc that form IS fm_pid_identity, and
+# answering it differently from the caller that recorded a marker would reject a
+# genuinely live owner.
 make_fake_ps_pi_holder() {
-  local fakebin=$1 holder_pid=$2
+  local fakebin=$1 holder_pid=$2 real_ps
+  real_ps=$(command -v ps)
   cat > "$fakebin/ps" <<SH
 #!/usr/bin/env bash
 set -u
@@ -284,6 +290,7 @@ case "\$*" in
     exit 0
     ;;
   *"ppid="*) printf '%s\n' "$holder_pid"; exit 0 ;;
+  *"lstart="*) exec "$real_ps" "\$@" ;;
 esac
 exit 1
 SH
@@ -679,16 +686,23 @@ install_pi_watch_extension_fixture() {
   cp "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" "$root/.pi/extensions/fm-primary-pi-watch.ts"
 }
 
+# A loaded marker is three lines: build version, loading pid, and that pid's
+# identity, which every reader recomputes so a reused pid cannot authenticate a
+# marker its dead writer left behind.
 write_pi_watch_loaded_marker() {
-  local home=$1 root=$2 pid=$3 version
+  local home=$1 root=$2 pid=$3 version identity
   version=$(hash_file_for_test "$root/.pi/extensions/fm-primary-pi-watch.ts")
-  printf '%s\n%s\n' "$version" "$pid" > "$home/state/.pi-watch-extension-loaded"
+  identity=$(fm_pid_identity_of "$ROOT/bin/fm-wake-lib.sh" "$home/state" "$pid")
+  [ -n "$identity" ] || identity=$FM_STALE_PID_IDENTITY
+  printf '%s\n%s\n%s\n' "$version" "$pid" "$identity" > "$home/state/.pi-watch-extension-loaded"
 }
 
 write_pi_turnend_loaded_marker() {
-  local home=$1 root=$2 pid=$3 version
+  local home=$1 root=$2 pid=$3 version identity
   version=$(hash_file_for_test "$root/.pi/extensions/fm-primary-turnend-guard.ts")
-  printf '%s\n%s\n' "$version" "$pid" > "$home/state/.pi-turnend-extension-loaded"
+  identity=$(fm_pid_identity_of "$ROOT/bin/fm-wake-lib.sh" "$home/state" "$pid")
+  [ -n "$identity" ] || identity=$FM_STALE_PID_IDENTITY
+  printf '%s\n%s\n%s\n' "$version" "$pid" "$identity" > "$home/state/.pi-turnend-extension-loaded"
 }
 
 write_pi_loaded_markers() {
