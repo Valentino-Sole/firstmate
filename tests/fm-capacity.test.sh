@@ -36,6 +36,25 @@ write_ship_meta() {
     "harness=echo"
 }
 
+# A ship record on a backend that has no recovery classifier (zellij, orca and
+# cmux always report `unverified`), which is exactly where endpoint liveness
+# can never be proven negative.
+write_unverified_ship_meta() {
+  local home=$1 id=$2 backend=${3:-zellij}
+  fm_write_meta "$home/state/$id.meta" \
+    "window=fm-$id" \
+    "endpoint_task_id=$id" \
+    "kind=ship" \
+    "backend=$backend" \
+    "harness=echo"
+}
+
+# Append one line to a task's append-only status log.
+write_status() {
+  local home=$1 id=$2 line=$3
+  printf '%s\n' "$line" >> "$home/state/$id.status"
+}
+
 # A tmux stand-in whose session window list is the fixture: a task whose window
 # is listed has a live agent pane, a task whose window is absent is an
 # authoritatively gone endpoint. That is exactly the distinction the capacity
@@ -491,11 +510,111 @@ test_gpu_suitability_requires_headroom() {
     && fail "low VRAM should be unsuitable"
   fm_capacity_host_suitable gpu 24 32000 2.0 8192 95 \
     && fail "high GPU util should be unsuitable"
+  fm_capacity_host_suitable gpu 24 32000 48.0 8192 10 \
+    && fail "free VRAM behind a pinned CPU should be unsuitable"
+  fm_capacity_host_suitable gpu 24 256 2.0 8192 10 \
+    && fail "free VRAM with no usable RAM should be unsuitable"
+  fm_capacity_host_suitable gpu 24 0 0 8192 10 \
+    && fail "an unmeasurable host reporting mem=0 load=0 must not read as idle"
   fm_capacity_host_suitable cpu 16 16000 1.0 "" "" \
     || fail "healthy CPU host should be suitable"
   fm_capacity_host_suitable cpu 16 16000 16.0 0 0 \
     && fail "saturated CPU host should be unsuitable"
   pass "gpu and cpu suitability follow measured headroom"
+}
+
+test_unverified_backend_releases_finished_records_but_not_active_work() {
+  local home out rc i
+  home="$TMP_ROOT/unverified-backend"
+  setup_home "$home"
+  for i in 1 2 3 4 5; do
+    write_unverified_ship_meta "$home" "occ-$i"
+  done
+  # occ-1 is still working and occ-2 has not declared anything yet (a worker one
+  # second after launch); the other three are finished or held. Nothing on this
+  # backend can be proven dead, so the declared state is the only evidence.
+  write_status "$home" occ-1 'working: implementing the parser'
+  write_status "$home" occ-3 'done: merged in PR 42'
+  write_status "$home" occ-4 'needs-decision: which schema wins?'
+  write_status "$home" occ-5 'paused: waiting on the upstream release'
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity "$home" slots
+  )
+  assert_contains "$out" "occupied=2" \
+    "only actively working and not-yet-declared work may hold a slot on an unverifiable backend"
+  assert_contains "$out" "free=3" \
+    "done, needs-decision and paused records must not permanently consume the budget"
+  set +e
+  FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    run_capacity "$home" spawn-gate --task-id fresh-u7 >/dev/null 2>&1
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "spawn-gate on a backend whose liveness is unverifiable"
+  [ -f "$home/state/occ-3.meta" ] || fail "a released record must survive as a durable record"
+  pass "finished work on an unverifiable backend releases its slot while active work keeps it"
+}
+
+test_live_worker_keeps_its_slot_despite_a_finished_status_line() {
+  local home out
+  home="$TMP_ROOT/live-beats-log"
+  setup_home "$home"
+  write_ship_meta "$home" occ-a1
+  set_live_windows "$home" occ-a1
+  # The append-only log is an EVENT history: a done line can precede more work.
+  # A positively live worker is never freed on the strength of that line.
+  write_status "$home" occ-a1 'done: first slice shipped'
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$home" slots
+  )
+  assert_contains "$out" "occupied=1" "a positively live worker must never be freed"
+  pass "a running worker keeps its slot even after a terminal status line"
+}
+
+test_uniqueness_refuses_reusing_a_live_secondmate_id() {
+  local home out rc
+  home="$TMP_ROOT/secondmate-id"
+  setup_home "$home"
+  fm_write_secondmate_meta "$home/state/jarvis.meta" "$home/jarvis-home"
+  set +e
+  out=$(run_capacity "$home" spawn-gate --task-id jarvis 2>&1)
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "spawn-gate on an id a secondmate already owns"
+  assert_contains "$out" "secondmate record" \
+    "the refusal must name the record a fresh worker would have overwritten"
+  pass "a fresh ship or scout may not reuse a live secondmate's task id"
+}
+
+test_home_paths_are_deduplicated_by_canonical_path() {
+  local home mate out i
+  home="$TMP_ROOT/canonical"
+  mate="$TMP_ROOT/canonical/jarvis-home"
+  setup_home "$home"
+  setup_home "$mate"
+  printf -- '- jarvis - platform work (home: %s; scope: platform work; projects: alpha; added 2026-08-27)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$home" \
+    > "$mate/.fm-secondmate-parent"
+  write_ship_meta "$home" prim-a1
+  for i in 1 2; do
+    write_ship_meta "$mate" "mate-$i"
+  done
+  set_live_windows "$home" prim-a1 mate-1 mate-2
+  cp -R "$home/tmux" "$mate/tmux"
+  # FM_HOME spelled with a trailing slash: the registry records the same home
+  # without one, so a raw string dedupe counts this home's workers twice.
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$mate/" slots
+  )
+  assert_contains "$out" "homes_scanned=2" \
+    "one home spelled two ways is still one home"
+  assert_contains "$out" "occupied=3" \
+    "a non-canonical FM_HOME must not double-count its own live workers"
+  assert_contains "$out" "free=2" "the inflated count must not eat free slots"
+  pass "host homes are deduplicated by canonical path, not by spelling"
 }
 
 test_slots_allow_five_on_healthy_supervisor
@@ -518,5 +637,9 @@ test_preferred_pin_keeps_the_configured_fallback
 test_invalid_pinned_kind_is_rejected
 test_spawn_refuses_at_capacity_without_launching
 test_gpu_suitability_requires_headroom
+test_unverified_backend_releases_finished_records_but_not_active_work
+test_live_worker_keeps_its_slot_despite_a_finished_status_line
+test_uniqueness_refuses_reusing_a_live_secondmate_id
+test_home_paths_are_deduplicated_by_canonical_path
 
 echo "# all fm-capacity tests passed"
