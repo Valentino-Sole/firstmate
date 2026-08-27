@@ -281,22 +281,23 @@ Loop until the outcome is met or a captain gate applies.
 That judgment is supervision, not a second review pipeline: it covers steering before validation runs and the adequacy of the reported outcome inside the approved corridor.
 The selected delivery path keeps its own rigor under the merge-authority subsection below, so never hold work for a manual clean verdict, stack serial manual reviews, or repeat the review, fixes, tests, documentation, push, PR, and CI that no-mistakes alone owns.
 
-Ask the captain only for:
+Inside that loop, ask the captain only for:
 
 - a new product or direction choice
 - genuine ambiguity in the goal
 - a security or privacy choice
 - credentials or permissions
 - a cost or purchase the captain has not already authorized
-- publication or another hard-to-reverse outward effect
+- publication or another hard-to-reverse outward effect the captain has not already authorized; section 14's Relay consent is that standing authorization for eligible public replies and normal reversible lifecycle actions, while a destructive, irreversible, or security-sensitive outward action still escalates
 - a necessary personal human acceptance
 - a finding `ask-user-authority` sends up: a contract-expanding fix, a product or architecture call its accepted intent does not settle, or repeated same-theme findings whose incremental corrections are preserving a questionable abstraction
 - a real blocker or failure after the relevant playbook is exhausted
 
 Do not ask for ordinary implementation details, bug fixes, regression tests, or corrections inside an already approved outcome.
-These gates do not relax the hard rules in section 1 or the merge authority in this section.
+This list is the result-loop gate inventory, not a ban on a consent, approval, or answer another always-loaded section or a prescribed skill already requires: section 3's bootstrap install consent, section 4's unverified-adapter and `unknown`-harness asks, the reason owed for dropping below a project's standing registry rigor, and the registration gap below all remain lawful asks.
+These gates likewise do not relax the hard rules in section 1 or the merge authority in this section.
 Section 9 owns how those gates are phrased to the captain and adds the operational reaches supervision owns.
-This list and those section 9 reaches are hand-mirrored into the supervision branch's prompt in `bin/fm-branch-prompt.sh`, which cannot read this file at wake time; edit both together or the branch silently reports the new gate as routine ([`docs/pi-supervision-branch.md`](docs/pi-supervision-branch.md)).
+This list and those section 9 reaches are hand-mirrored, in that prompt's own wording, into the supervision branch's prompt in `bin/fm-branch-prompt.sh`, which cannot read this file at wake time; edit both together or the branch silently reports the new gate as routine ([`docs/pi-supervision-branch.md`](docs/pi-supervision-branch.md)).
 
 ### Intake and authority
 
@@ -331,7 +332,8 @@ Record the resulting mode, `yolo` merge posture, and the one-line reason for any
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Do not artificially cap the fleet at one worker; independent strands may run in parallel.
-Account for host load, dependencies, and safety, and never spawn a second worker for the same commission.
+Account for host load, dependencies, and safety, and never run two workers on the same commission at once; a sequential replacement after the previous worker is gone stays allowed.
+Host load may pace, stagger, or briefly defer a new dispatch, but it never holds an eligible strand indefinitely and never justifies a standing cap of one.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
 
@@ -517,7 +519,7 @@ Independently of those gates, also reach the captain immediately for:
 - a finished investigation, relayed as its findings rather than only a completion notice.
 
 Anything destructive, irreversible, or security-sensitive still reaches the captain immediately; those are not implementation details.
-These operational reaches and the section 7 gate list are hand-mirrored in `bin/fm-branch-prompt.sh`; an edit here that skips that copy silently narrows what the supervision branch escalates.
+These operational reaches and the section 7 gate list are hand-mirrored in `bin/fm-branch-prompt.sh` in that prompt's own wording; an edit here that skips that copy silently narrows what the supervision branch escalates.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.

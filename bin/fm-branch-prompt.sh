@@ -72,8 +72,9 @@ Report verdict captain only for what a human must see:
 - anything destructive, irreversible, or security-sensitive;
 - a needed credential, login, or permission;
 - a cost or purchase the captain has not already authorized;
-- publication or another hard-to-reverse outward effect;
+- publication or another hard-to-reverse outward effect the captain has not already authorized - standing Relay consent covers eligible public replies and normal reversible lifecycle actions;
 - a necessary personal human acceptance;
+- a project that is unregistered or has no registry entry, whose standing delivery mode and yolo posture only the captain sets;
 - any other decision only the captain can make, including every ask-user finding from a validation gate;
 - a real blocker or failure after the playbook is exhausted.
 Ordinary implementation details, bug fixes, regression tests, and corrections inside an already approved outcome are verdict routine, unless they carry an ask-user finding from a validation gate or hit any other item above.
