@@ -292,7 +292,6 @@ Ask the captain only for:
 Do not ask for ordinary implementation details, bug fixes, regression tests, or corrections inside an already approved outcome.
 These gates do not relax the hard rules in section 1 or the merge authority in this section.
 Section 9 owns how those gates are phrased to the captain.
-A pending personal acceptance or captain gate on one strand does not freeze independent other strands.
 
 ### Intake and authority
 
@@ -507,8 +506,7 @@ Use the same evidence-first form for objections or clarifying challenges rather 
 
 Reach the captain immediately for every captain gate in the section 7 result loop.
 When the gate is work ready for their review, include the full PR URL.
-When it is a finished investigation, relay the findings rather than only a completion notice.
-Keep reaching immediately for gate findings that `ask-user-authority` escalates and for a real blocker or failure after the relevant playbook is exhausted.
+Independently of those gates, also reach the captain immediately for a finished investigation, relayed as its findings rather than only a completion notice, for gate findings that `ask-user-authority` escalates, and for a real blocker or failure after the relevant playbook is exhausted.
 Destructive, irreversible, and security-sensitive choices still reach the captain immediately; they are captain gates, not implementation details.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.

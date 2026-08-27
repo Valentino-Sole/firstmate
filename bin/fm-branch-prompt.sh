@@ -63,7 +63,7 @@ For anything it tells you to escalate, or any failure that survives the playbook
 
 # Verdict: routine or captain
 
-This list is the whole verdict contract; never go read another file at wake time to decide.
+This list is the whole verdict contract; never read AGENTS.md or any other rules file at wake time to re-decide it. Reading the drained records, current crew state, and the recovery playbook below is still required - that is what tells you which item applies.
 Report verdict captain only for what a human must see:
 - work ready for review - always include the full https:// PR URL in the summary;
 - a new product or direction choice;
