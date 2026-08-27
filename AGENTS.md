@@ -332,7 +332,7 @@ Record the resulting mode, `yolo` merge posture, and the one-line reason for any
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Do not artificially cap the fleet at one worker; independent strands may run in parallel.
-Account for host load, dependencies, and safety, and never run two workers on the same commission at once; a sequential replacement after the previous worker is gone stays allowed.
+Account for host load, dependencies, and safety, and never run two workers on the same task at once; a sequential replacement after the previous worker is stopped or superseded stays allowed, and separate tasks from one captain request are separate strands that may run at the same time.
 Host load may pace, stagger, or briefly defer a new dispatch, but it never holds an eligible strand indefinitely and never justifies a standing cap of one.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
