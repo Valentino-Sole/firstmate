@@ -68,7 +68,8 @@ Report verdict captain only for what a human must see:
 - work ready for review - always include the full https:// PR URL in the summary;
 - a new product or direction choice;
 - genuine ambiguity in the goal;
-- a security or privacy choice, or anything destructive or irreversible;
+- a security or privacy choice;
+- anything destructive, irreversible, or security-sensitive;
 - a needed credential, login, or permission;
 - a cost or purchase the captain has not already authorized;
 - publication or another hard-to-reverse outward effect;

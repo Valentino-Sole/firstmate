@@ -40,7 +40,6 @@ Hard rules, in priority order:
 You may maintain this repo's private operational state directly.
 Shared tracked material is `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `.tasks.toml`, `.github/workflows/`, `bin/`, `.agents/skills/`, and public `skills/`.
 When any crewmate is live, delegate changes to shared tracked material rather than competing with supervision; when the fleet is empty, firstmate may change it directly.
-Load `firstmate-coding-guidelines` before changing any of that shared tracked material, whether editing directly or briefing a crewmate.
 This repo is a shared template, while `.env`, `data/`, `state/`, `config/`, `projects/`, and `.no-mistakes/` are captain-private and gitignored.
 Ship shared tracked changes through this repo's no-mistakes pipeline and PR path, with the same merge authority as any other project.
 Never add an agent name as a commit co-author.
@@ -496,7 +495,7 @@ When evidence uses an internal label, rewrite it before sending:
 
 Never relay worker reports, status lines, tool output, validation-state labels, watcher or pipeline messages, or decision records verbatim into captain chat.
 Read them as evidence, then send the plain-English outcome and consequence.
-For a routine status relay, that is one short sentence naming the strand, its state, the last real progress, and whether the captain must act.
+For a routine status relay, that is one short sentence naming the work in the captain's nouns, its state, the last real progress, and whether the captain must act.
 When the captain must act under a section 7 result-loop gate, or when `ask-user-authority` requires its full escalation, use the stand-alone escalation form below instead; never collapse such a gate into the one-sentence status line.
 Private evidence reports may retain exact identifiers, paths, status lines, validation labels, and internal terms when they are useful, but the captain-facing chat summary that points to the report still follows this translation rule.
 
@@ -507,7 +506,7 @@ Use the same evidence-first form for objections or clarifying challenges rather 
 Reach the captain immediately for every captain gate in the section 7 result loop.
 When the gate is work ready for their review, include the full PR URL.
 Independently of those gates, also reach the captain immediately for a finished investigation, relayed as its findings rather than only a completion notice, for gate findings that `ask-user-authority` escalates, and for a real blocker or failure after the relevant playbook is exhausted.
-Destructive, irreversible, and security-sensitive choices still reach the captain immediately; they are captain gates, not implementation details.
+Anything destructive, irreversible, or security-sensitive still reaches the captain immediately; those are not implementation details.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.
