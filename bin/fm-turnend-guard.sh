@@ -64,6 +64,20 @@
 #      (default 3) consecutive blocks per session - safely below Claude Code's
 #      hard 8-consecutive-block override - then allow one loud attended
 #      fail-open only for an already verified failure episode.
+# An auto-arm that reached its own consecutive-failure cap records outcome
+# failed-capped and stops creating continuations, so this guard treats that
+# outcome exactly like the other exhausted-failure outcomes and carries the
+# episode to its bounded blocks and one attended fail-open.
+#
+# Ownership, --claude mode only: a Pi primary can run its turns through a nested
+# `claude` subprocess in this same checkout, so where that subprocess loads
+# project settings this Claude-registered entry would guard the same logical turn
+# end that .pi/extensions/fm-primary-turnend-guard.ts already guards from
+# `agent_settled`. When a live Pi primary provably owns this home's turn-end
+# protection, the Claude entry stands down for that owner; without the proof it
+# protects exactly as before, so a missing, crashed, or unclaimable owner leaves
+# no gap. The DEFAULT mode never defers, because the Pi extension itself is the
+# caller that runs this guard with no flags.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -146,6 +160,13 @@ fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
 # --- the actual predicate ----------------------------------------------------
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+
+# Exactly one protection layer per logical turn end (see the header). Only the
+# Claude-registered entry defers, and only to a proven live owner; the default
+# mode is how the owning Pi extension calls this guard.
+if [ "$CLAUDE_MODE" -eq 1 ] && fm_turnend_owner_is_pi_primary "$STATE" "$FM_ROOT"; then
+  exit 0
+fi
 
 BUDGET_FILE="$STATE/.turnend-claude-blocks"
 BUDGET_LOCK="$STATE/.turnend-claude-blocks.lock"
@@ -232,7 +253,7 @@ budget_account_current_epoch() {
   fi
   if [ ! -f "$BUDGET_FILE" ] || [ "${old_session:-}" != "$SESSION_ID" ]; then
     case "$outcome" in
-      failed|failed-suppressed)
+      failed|failed-suppressed|failed-capped)
         if [ -e "$FAILURE_NOTICE" ]; then
           initialized=1
           COUNT=0
@@ -297,7 +318,7 @@ autoarm_owns_recovery() {
         [ "$BUDGET_INITIALIZED_FAILURE" -eq 1 ] && return 0
       fi
       ;;
-    failed-suppressed)
+    failed-suppressed|failed-capped)
       age=$(fm_path_age "$STATE/.claude-autoarm-epoch")
       if [ "$age" -lt "$EPOCH_FRESH" ] && [ -e "$FAILURE_NOTICE" ] \
         && budget_account_current_epoch; then
@@ -389,7 +410,7 @@ failure_episode_verified() {
   [ -e "$FAILURE_NOTICE" ] || return 1
   outcome=$(sed -n '1s/^.*outcome=\([a-z][a-z-]*\) .*$/\1/p' "$STATE/.claude-autoarm-epoch" 2>/dev/null || true)
   case "$outcome" in
-    failed|failed-suppressed) return 0 ;;
+    failed|failed-suppressed|failed-capped) return 0 ;;
     *) return 1 ;;
   esac
 }

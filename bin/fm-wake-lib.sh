@@ -226,6 +226,118 @@ fm_pi_extension_owns_supervision() {
   fm_pid_alive "$session_pid"
 }
 
+# fm_turnend_owner_is_pi_primary <state> <root>
+# TRUE when a live Pi primary session provably owns this home's turn-end
+# protection, so the tracked Claude-shaped Stop entries are the NESTED duplicate
+# layer for that same logical turn end and must stand down.
+#
+# Why an ownership record and not host detection: a Pi primary can run its model
+# turns through a nested `claude` subprocess (the claude-code-cli provider), and
+# that subprocess is an ordinary Claude Code process in this same checkout. If it
+# ever loads project settings, both tracked Stop entries fire INSIDE it while
+# .pi/extensions/fm-primary-turnend-guard.ts is already guarding the same logical
+# turn end from `agent_settled`, giving one turn end two independent guards that
+# can each block or re-arm. Env markers cannot separate the two cases: Pi exports
+# its own variables into every child, so an env guard would also disable a Claude
+# session a human started by hand from a Pi pane - the GROK_SESSION_ID hazard
+# recorded in docs/turnend-guard.md.
+#
+# The claim is therefore the same durable, verifiable record the pull guard
+# already trusts: both Pi primary extensions recorded at their current on-disk
+# builds by the process holding this home's session lock, and that process alive.
+# It is a positive proof of an owner, never an assumption of one, so every way the
+# owning layer can be absent - Pi not primary, extension unloaded, build drifted,
+# session exited or crashed, lock held by someone else - fails this predicate and
+# leaves the Claude entries protecting the turn end exactly as before. That is the
+# no-protection-gap direction, and it is why this must never be relaxed into a
+# host or environment sniff.
+fm_turnend_owner_is_pi_primary() {  # <state> <root>
+  local state=$1 root=$2
+  [ -n "$state" ] && [ -n "$root" ] || return 1
+  fm_pi_extension_owns_supervision "$state" "$root"
+}
+
+# --- Claude Stop auto-arm consecutive-failure cap ------------------------------
+# The auto-arm's own bound on CONSECUTIVE failed re-arm attempts across Stop
+# firings, distinct from FM_CLAUDE_AUTOARM_ATTEMPTS (retries inside one firing)
+# and from the notice/alarm markers (which dedupe one operator notice and the
+# guard's one attended fail-open, and bound neither the retries nor the episode).
+# Without it an exhausted failure exits 2 on every firing forever whenever the
+# synchronous guard never reaches its attended fail-open - it is not registered,
+# has no jq, or stood down - so the session re-wakes itself indefinitely.
+#
+# The count is durable, keyed by the auto-arm GENERATION so one generation counts
+# at most once, and written under the existing single-flight micro-mutex with the
+# same ownership re-verification every other ledger write uses; a superseded
+# generation can neither advance nor cap the episode. Positive watcher recovery
+# clears it through fm_failure_episode_reset, so a later independent failure
+# episode starts from zero.
+#
+# Sets FM_AUTOARM_FAILURE_COUNT and FM_AUTOARM_FAILURE_CAPPED_NOW (1 only for the
+# firing that created the durable stop record, so the notice is surfaced once).
+# Returns 0 accounted, 2 superseded, 1 unable (contention or write failure) -
+# and 1 deliberately leaves the caller on its ordinary retry path, because
+# failing to record a stop must never become a silent stop.
+# shellcheck disable=SC2034 # Read by callers after the function returns.
+FM_AUTOARM_FAILURE_COUNT=0
+# shellcheck disable=SC2034 # Read by callers after the function returns.
+FM_AUTOARM_FAILURE_CAPPED_NOW=0
+fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> [reason]
+  local state=$1 gen=$2 cap=$3 reason=${4:-} lock count_file capped
+  local pid i count recorded tmp
+  lock="$state/.claude-autoarm.lock"
+  count_file="$state/.claude-autoarm-failure-count"
+  capped="$state/.claude-autoarm-failure-capped"
+  pid=${BASHPID:-$$}
+  FM_AUTOARM_FAILURE_COUNT=0
+  FM_AUTOARM_FAILURE_CAPPED_NOW=0
+  case "$cap" in ''|*[!0-9]*|0) return 1 ;; esac
+  i=0
+  while ! fm_lock_try_acquire "$lock"; do
+    [ "$i" -lt 20 ] || return 1
+    sleep 0.02
+    i=$((i + 1))
+  done
+  if ! fm_autoarm_ledger_read "$state" \
+    || [ "$FM_AUTOARM_GEN" != "$gen" ] || [ "$FM_AUTOARM_OWNER" != "$pid" ]; then
+    fm_lock_release "$lock"
+    return 2
+  fi
+  count=$(sed -n '1s/^count=//p' "$count_file" 2>/dev/null || true)
+  recorded=$(sed -n '2s/^gen=//p' "$count_file" 2>/dev/null || true)
+  case "$count" in
+    ''|*[!0-9]*) count=0 ;;
+  esac
+  [ "$recorded" = "$gen" ] || count=$((count + 1))
+  tmp="$count_file.tmp.$pid"
+  if ! printf 'count=%s\ngen=%s\n' "$count" "$gen" > "$tmp" 2>/dev/null \
+    || ! mv -f "$tmp" "$count_file" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    fm_lock_release "$lock"
+    return 1
+  fi
+  # shellcheck disable=SC2034 # Read by callers after the function returns.
+  FM_AUTOARM_FAILURE_COUNT=$count
+  if [ "$count" -ge "$cap" ] && [ ! -e "$capped" ]; then
+    if ! (set -C; printf 'count=%s\ncap=%s\ngen=%s\nat=%s\nreason=%s\n' \
+        "$count" "$cap" "$gen" "$(date +%s)" "$reason" > "$capped") 2>/dev/null; then
+      fm_lock_release "$lock"
+      return 1
+    fi
+    # shellcheck disable=SC2034 # Read by callers after the function returns.
+    FM_AUTOARM_FAILURE_CAPPED_NOW=1
+  fi
+  fm_lock_release "$lock"
+  return 0
+}
+
+# True once this failure episode has reached the consecutive-failure cap and the
+# durable stop record exists, so no further automatic re-arm may be attempted
+# until positive watcher recovery clears the episode.
+fm_autoarm_failure_capped() {  # <state-dir>
+  [ -e "$1/.claude-autoarm-failure-capped" ]
+}
+
 # fm_watcher_supervision_verdict <state> <watch-path> [grace] [home] [root]
 # Model-aware "is supervision healthy right now" verdict for the pull warning
 # guard (bin/fm-guard.sh), NOT the arm layer or the turn-end guard. Sets:
@@ -963,7 +1075,9 @@ fm_failure_episode_reset() {
   for path in \
     "$state/.turnend-claude-blocks" \
     "$state/.claude-autoarm-failure-notified" \
-    "$state/.claude-autoarm-failure-alarmed"
+    "$state/.claude-autoarm-failure-alarmed" \
+    "$state/.claude-autoarm-failure-count" \
+    "$state/.claude-autoarm-failure-capped"
   do
     if [ -d "$path" ] && [ ! -L "$path" ]; then
       [ "$acquired" -eq 0 ] || fm_lock_release "$lock"
@@ -974,6 +1088,8 @@ fm_failure_episode_reset() {
     "$state/.turnend-claude-blocks" \
     "$state/.claude-autoarm-failure-notified" \
     "$state/.claude-autoarm-failure-alarmed" \
+    "$state/.claude-autoarm-failure-count" \
+    "$state/.claude-autoarm-failure-capped" \
     2>/dev/null; then
     [ "$acquired" -eq 0 ] || fm_lock_release "$lock"
     return 1
