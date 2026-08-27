@@ -133,9 +133,11 @@
 #   Before a secondmate launch, the home is locally fast-forwarded to the primary
 #   default-branch commit when safe; skipped syncs warn and launch unchanged.
 #   A fresh ship or scout spawn consults bin/fm-capacity-lib.sh and refuses when
-#   this host has no free measured worker slot, or when this task id already has
-#   a durable record in this home - a running worker on the same task, or any
-#   other record such as a live secondmate's that a launch would overwrite.
+#   this host has no free measured worker slot, when this task id already has a
+#   LIVE worker, or when it belongs to a record that is not an independent
+#   worker - a live secondmate's above all - which a launch would overwrite.
+#   A ship or scout record whose worker is positively gone releases its id, so
+#   a task whose pane died is restartable through an ordinary fresh spawn.
 #   The gate never interrupts another task's running worker.
 #   Relaunch and --secondmate skip the slot budget: replacement is sequential,
 #   and a persistent secondmate is not an independent worker slot. Host-bound

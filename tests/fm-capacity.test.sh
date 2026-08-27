@@ -263,8 +263,9 @@ test_same_task_refuses_a_second_concurrent_worker() {
   home="$TMP_ROOT/same-task"
   setup_home "$home"
   write_ship_meta "$home" live-task-a1
+  set_live_windows "$home" live-task-a1
   set +e
-  out=$(run_capacity "$home" spawn-gate --task-id live-task-a1 2>&1)
+  out=$(run_capacity_live "$home" spawn-gate --task-id live-task-a1 2>&1)
   rc=$?
   set -e
   expect_code 1 "$rc" "same-task spawn-gate"
@@ -661,21 +662,23 @@ FM_CAP gpu=8192,10' || fail "a multi-sample Windows probe transcript should abso
     || fail "every load_pct sample must count, got $FM_CAPACITY_PROBE_LOAD_SAMPLES"
   [ "$FM_CAPACITY_PROBE_LOAD_PCT" = "40.00" ] \
     || fail "the mean of 10/10/100 should be 40.00, got $FM_CAPACITY_PROBE_LOAD_PCT"
-  got=$FM_CAPACITY_PROBE_LOAD1
-  [ "$got" = "9.60" ] || fail "24 cores at a mean 40% busy should be load1 9.60, got $got"
-  fm_capacity_host_suitable gpu 24 32000 "$got" 8192 10 "$FM_CAPACITY_PROBE_LOAD_PCT" \
+  [ -z "$FM_CAPACITY_PROBE_LOAD1" ] \
+    || fail "a percentage host reports no run-queue load1, got $FM_CAPACITY_PROBE_LOAD1"
+  got=$(fm_capacity_cpu_headroom_reading)
+  [ "$got" = "busy_pct=40.00/samples=3" ] \
+    || fail "the route report must name the averaged reading, got $got"
+  fm_capacity_host_suitable gpu 24 32000 "" 8192 10 "$FM_CAPACITY_PROBE_LOAD_PCT" \
     || fail "a one-second burst must not demote a healthy preferred GPU host"
-  # A host sitting near 100% in every sample is a sustained overload. Its
-  # load1 rescaling (23.84) is still below nproc, so the percentage itself has
-  # to be the gate or a pinned machine walks straight through.
+  # A host sitting near 100% in every sample is a sustained overload. Rescaled
+  # into a load1 it would be 23.84, still below nproc, so the percentage itself
+  # has to be the gate or a pinned machine walks straight through.
   fm_capacity_absorb_probe_text 'FM_CAP nproc=24
 FM_CAP mem_avail_mb=32000
 FM_CAP load_pct=100
 FM_CAP load_pct=98
 FM_CAP load_pct=100
 FM_CAP gpu=8192,10' || fail "a pinned Windows probe transcript should absorb"
-  fm_capacity_host_suitable gpu 24 32000 "$FM_CAPACITY_PROBE_LOAD1" 8192 10 \
-    "$FM_CAPACITY_PROBE_LOAD_PCT" \
+  fm_capacity_host_suitable gpu 24 32000 "" 8192 10 "$FM_CAPACITY_PROBE_LOAD_PCT" \
     && fail "a sustained pin must still fail the CPU-headroom gate"
   # A real run-queue load average keeps its own gate: no percentage, no change.
   fm_capacity_host_suitable cpu 16 16000 1.0 "" "" \
@@ -756,7 +759,7 @@ OUT
 }
 
 test_duplicate_id_refuses_without_measuring_the_host() {
-  local home fakebin out rc probes i
+  local home fakebin out rc i
   home="$TMP_ROOT/identity-first"
   setup_home "$home"
   for i in 1 2 3; do
@@ -766,9 +769,9 @@ test_duplicate_id_refuses_without_measuring_the_host() {
   make_fake_tmux "$fakebin"
   set_live_windows "$home" occ-1 occ-2 occ-3
   : > "$home/probe.log"
-  # Every liveness read of a recorded worker costs one backend subprocess. An
-  # id collision is decided from metadata alone, so refusing it must not spend
-  # any of them.
+  # Every liveness read costs backend subprocesses. An id collision is decided
+  # from the colliding record alone, so refusing it must not walk the host-wide
+  # occupancy scan and probe every other task's endpoint.
   set +e
   out=$(
     PATH="$fakebin:$PATH" FM_FAKE_TMUX_DIR="$home/tmux" \
@@ -780,10 +783,12 @@ test_duplicate_id_refuses_without_measuring_the_host() {
   set -e
   expect_code 1 "$rc" "duplicate-id spawn-gate"
   assert_contains "$out" "already has a worker" "the identity refusal must still name the duplicate"
-  probes=$(wc -l < "$home/probe.log")
-  [ "${probes//[[:space:]]/}" = 0 ] \
-    || fail "an identity refusal must probe no endpoint, ran $probes backend calls"
-  # The same gate on a free id does measure, so the fixture really can record.
+  grep -q -- "fm-occ-1" "$home/probe.log" \
+    && fail "an identity refusal must not probe an unrelated task's endpoint"
+  grep -q -- "fm-occ-3" "$home/probe.log" \
+    && fail "an identity refusal must not probe an unrelated task's endpoint"
+  # The same gate on a free id does measure, so the fixture really can record
+  # the reads the identity refusal skipped.
   set +e
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_DIR="$home/tmux" \
     FM_CAPACITY_PROBE_LOG="$home/probe.log" \
@@ -792,10 +797,180 @@ test_duplicate_id_refuses_without_measuring_the_host() {
   rc=$?
   set -e
   expect_code 0 "$rc" "free-id spawn-gate"
-  probes=$(wc -l < "$home/probe.log")
-  [ "${probes//[[:space:]]/}" -gt 0 ] \
-    || fail "the occupancy scan should have probed endpoints for a free id"
-  pass "a duplicate task id is refused on identity alone, before any endpoint probe"
+  grep -q -- "fm-occ-1" "$home/probe.log" \
+    || fail "the occupancy scan should have probed every recorded endpoint"
+  grep -q -- "fm-occ-3" "$home/probe.log" \
+    || fail "the occupancy scan should have probed every recorded endpoint"
+  pass "a duplicate id is refused without the host-wide occupancy scan"
+}
+
+test_unmeasurable_windows_cpu_is_not_read_as_idle() {
+  local got
+  # Win32_Processor unavailable while the OS class answers: the probe emits no
+  # load_pct line at all rather than a fabricated 0%.
+  fm_capacity_absorb_probe_text 'FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP gpu=8192,10' || fail "a transcript with no CPU sample should still absorb"
+  [ "$FM_CAPACITY_PROBE_LOAD_SAMPLES" = 0 ] \
+    || fail "no CPU sample means no samples, got $FM_CAPACITY_PROBE_LOAD_SAMPLES"
+  [ -z "$FM_CAPACITY_PROBE_LOAD_PCT" ] \
+    || fail "an absent CPU reading must not become a percentage, got $FM_CAPACITY_PROBE_LOAD_PCT"
+  got=$(fm_capacity_cpu_headroom_reading)
+  [ "$got" = unmeasured ] || fail "the route report must say unmeasured, got $got"
+  fm_capacity_host_suitable gpu 24 32000 "$FM_CAPACITY_PROBE_LOAD1" 8192 10 \
+    "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    && fail "a host whose CPU was never measured must be unsuitable, not idle"
+  # A zero that the host genuinely measured is still a real reading.
+  fm_capacity_absorb_probe_text 'FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP load_pct=0
+FM_CAP gpu=8192,10' || fail "a genuinely idle transcript should absorb"
+  fm_capacity_host_suitable gpu 24 32000 "" 8192 10 "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    || fail "a measured idle host must stay suitable"
+  pass "an unreadable Windows CPU counter reads as unmeasurable, never as idle"
+}
+
+test_unmeasurable_preferred_host_falls_through_to_the_fallback() {
+  local home fakebin out
+  home="$TMP_ROOT/route-win-unmeasured"
+  setup_home "$home"
+  fakebin=$(fm_fakebin "$home")
+  make_fake_ssh "$fakebin"
+  mkdir -p "$home/ssh"
+  # Reachable, plenty of RAM and VRAM, but the CPU counter answered nothing.
+  cat > "$home/ssh/Valentino" <<'OUT'
+FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP gpu=8192,10
+OUT
+  cat > "$home/ssh/Valentino-Arbeit" <<'OUT'
+FM_CAP nproc=16
+FM_CAP mem_avail_mb=16000
+FM_CAP load1=1.0
+FM_CAP gpu=
+OUT
+  printf '%s\n' '{"preferred":{"ssh":"Valentino","kind":"gpu"},"fallback":{"ssh":"Valentino-Arbeit","kind":"cpu"}}' \
+    > "$home/config/compute-hosts.json"
+  out=$(
+    PATH="$fakebin:$PATH" FM_CAPACITY_SKIP_REMOTE='' \
+      FM_FAKE_SSH_DIR="$home/ssh" \
+      run_capacity "$home" route
+  )
+  assert_contains "$out" "route=fallback" \
+    "an unmeasured CPU must not be routed to as if it were idle"
+  assert_contains "$out" "preferred_reachable=yes" "the host did answer the probe"
+  assert_contains "$out" "preferred_suitable=no" "but it is not suitable"
+  assert_contains "$out" "preferred_cpu=unmeasured" \
+    "the report must say why the preferred host was passed over"
+  assert_contains "$out" "fallback_cpu=load1=1.0" \
+    "a run-queue host reports its own load average"
+  pass "a preferred host whose CPU could not be measured yields to the fallback"
+}
+
+test_gone_worker_releases_its_id_for_a_sequential_restart() {
+  local home out rc
+  home="$TMP_ROOT/restart-gone"
+  setup_home "$home"
+  write_ship_meta "$home" reboot-a1
+  write_ship_meta "$home" alive-b2
+  # The server was killed: alive-b2's window is listed, reboot-a1's is not, so
+  # its endpoint reads `missing` - positively gone, worktree and commits intact.
+  set_live_windows "$home" alive-b2
+  set +e
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$home" spawn-gate --task-id reboot-a1 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "restart of a task whose endpoint is gone"
+  [ -f "$home/state/reboot-a1.meta" ] || fail "the durable record must survive the gate"
+  # The still-running worker's id stays refused: no second concurrent worker.
+  set +e
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$home" spawn-gate --task-id alive-b2 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "spawn-gate against a live worker"
+  assert_contains "$out" "already has a worker" "a live worker still blocks its id"
+  pass "a task whose worker is positively gone can be restarted; a live one cannot"
+}
+
+test_undeclared_work_on_an_unverifiable_backend_still_blocks_its_id() {
+  local home out rc
+  home="$TMP_ROOT/restart-unknown"
+  setup_home "$home"
+  write_unverified_ship_meta "$home" unknown-a1
+  # Nothing can prove this endpoint dead and the task has declared nothing, so
+  # the fail-closed half of the liveness predicate keeps holding the id.
+  set +e
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity "$home" spawn-gate --task-id unknown-a1 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "spawn-gate against unverifiable active work"
+  assert_contains "$out" "already has a worker" "an unproven endpoint must fail closed"
+  pass "an unverifiable endpoint on undeclared work still blocks a duplicate spawn"
+}
+
+# Run the real emitted Windows probe under pwsh with <stub> standing in for the
+# CIM layer, and echo the FM_CAP transcript it produces. The probe command is a
+# generated interface delivered to a remote shell, so it is executed rather than
+# inspected.
+run_windows_probe() { # <stub-powershell>
+  local stub=$1 cmd
+  FM_CAPACITY_WIN_LOAD_SAMPLES=2 FM_CAPACITY_WIN_LOAD_SAMPLE_MS=1
+  cmd=$(fm_capacity_windows_probe_cmd)
+  FM_CAPACITY_WIN_LOAD_SAMPLES=3 FM_CAPACITY_WIN_LOAD_SAMPLE_MS=1000
+  # The transcript is the contract under test, not pwsh's exit code: a probe
+  # whose CPU query failed is exactly the case being exercised.
+  pwsh -NoProfile -NonInteractive -Command "$stub
+$cmd" 2>/dev/null || true
+  return 0
+}
+
+# PowerShell stubs for the probe under test; $-expressions here are PowerShell's.
+# shellcheck disable=SC2016
+FM_TEST_CIM_OK='function Get-CimInstance { [CmdletBinding()] param([Parameter(Position=0)]$ClassName)
+  if ($ClassName -eq "Win32_OperatingSystem") { [pscustomobject]@{ FreePhysicalMemory = 32768000 } }
+  else { [pscustomobject]@{ LoadPercentage = 42 } } }'
+# shellcheck disable=SC2016
+FM_TEST_CIM_CPU_THROWS='function Get-CimInstance { [CmdletBinding()] param([Parameter(Position=0)]$ClassName)
+  if ($ClassName -eq "Win32_OperatingSystem") { [pscustomobject]@{ FreePhysicalMemory = 32768000 } }
+  else { throw "WMI processor class unavailable" } }'
+# shellcheck disable=SC2016
+FM_TEST_CIM_CPU_NULL='function Get-CimInstance { [CmdletBinding()] param([Parameter(Position=0)]$ClassName)
+  if ($ClassName -eq "Win32_OperatingSystem") { [pscustomobject]@{ FreePhysicalMemory = 32768000 } }
+  else { [pscustomobject]@{ LoadPercentage = $null } } }'
+
+test_windows_probe_omits_a_sample_it_could_not_take() {
+  local out
+  command -v pwsh >/dev/null 2>&1 \
+    || { echo "skip: pwsh not found (Windows probe execution)"; return 0; }
+  out=$(run_windows_probe "$FM_TEST_CIM_OK")
+  assert_contains "$out" "FM_CAP mem_avail_mb=32000" "the probe must report available RAM"
+  assert_contains "$out" "FM_CAP load_pct=42" "a readable CPU counter must be reported"
+  [ "$(printf '%s\n' "$out" | grep -c 'FM_CAP load_pct=')" = 2 ] \
+    || fail "each configured sample should emit one line"
+  # The processor class errors: no line at all, never a fabricated 0%.
+  out=$(run_windows_probe "$FM_TEST_CIM_CPU_THROWS")
+  assert_contains "$out" "FM_CAP mem_avail_mb=32000" "the rest of the probe must still report"
+  assert_not_contains "$out" "FM_CAP load_pct=" \
+    "a failed processor query must emit no sample rather than 0%"
+  fm_capacity_absorb_probe_text "$out
+FM_CAP gpu=8192,10" || fail "the transcript should still absorb"
+  fm_capacity_host_suitable gpu 24 "$FM_CAPACITY_PROBE_MEM_MB" \
+    "$FM_CAPACITY_PROBE_LOAD1" 8192 10 "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    && fail "a host whose CPU query failed must be unsuitable, not idle"
+  # A null LoadPercentage is the same non-answer, not [int]$null = 0.
+  out=$(run_windows_probe "$FM_TEST_CIM_CPU_NULL")
+  assert_not_contains "$out" "FM_CAP load_pct=" \
+    "a null LoadPercentage must emit no sample rather than 0%"
+  pass "the Windows probe omits an unreadable CPU sample instead of fabricating idle"
 }
 
 test_slots_allow_five_on_healthy_supervisor
@@ -827,5 +1002,10 @@ test_percentage_load_is_averaged_across_probe_samples
 test_burst_on_the_preferred_windows_host_keeps_heim_preference
 test_sustained_windows_pin_falls_through_to_the_fallback
 test_duplicate_id_refuses_without_measuring_the_host
+test_unmeasurable_windows_cpu_is_not_read_as_idle
+test_unmeasurable_preferred_host_falls_through_to_the_fallback
+test_gone_worker_releases_its_id_for_a_sequential_restart
+test_undeclared_work_on_an_unverifiable_backend_still_blocks_its_id
+test_windows_probe_omits_a_sample_it_could_not_take
 
 echo "# all fm-capacity tests passed"

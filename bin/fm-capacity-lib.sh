@@ -56,8 +56,13 @@
 # holding the slot.
 # Task identity is separate from that: same-task uniqueness reads the metadata
 # records themselves, EVERY regular record in the state dir including kinds
-# that never occupy a worker slot, so a fresh ship or scout can neither get a
-# second concurrent worker nor reuse (and overwrite) a live secondmate's id.
+# that never occupy a worker slot. A record that is not an independent worker -
+# a live secondmate's endpoint above all - blocks the id for as long as it
+# exists, because a fresh spawn would rewrite it out from under its owner. A
+# ship or scout record blocks the id only while its worker is still live, so a
+# task can never get a second concurrent worker, while one whose pane died with
+# its worktree and commits intact stays restartable instead of needing its
+# metadata deleted by hand.
 # Idle secondmates do not occupy a worker slot. A relaunch replaces one worker
 # and does not consume an extra slot. The gate never interrupts another task.
 #
@@ -71,7 +76,9 @@
 #   samples across a short window, and the mean is gated as a percentage
 #   (< FM_CAPACITY_PCT_MAX_BUSY) rather than rescaled into a load1: a
 #   one-second burst cannot demote the preferred host, and a host sitting at
-#   99% busy is still refused.
+#   99% busy is still refused. A sample the host could not actually take is
+#   omitted rather than reported as 0%, so a broken CPU counter reads as
+#   unmeasurable - and unsuitable - instead of idle.
 #   Prefer the preferred host when it is freshly reachable and suitable.
 #   Use the fallback only when the preferred is not.
 #   Never assign that class of work onto the protected local supervisor
@@ -82,9 +89,11 @@
 #   A gpu-kind host must clear those same host gates AND report nvidia-smi
 #   util <= 90 with at least 1024 MiB free: free VRAM on a machine whose CPU is
 #   pinned or whose RAM is exhausted is not usable capacity, and the fallback
-#   must get its chance. Those host gates also reject the probe's fabricated
-#   `mem_avail_mb=0 load1=0` reading from an unreadable /proc, so an
-#   unmeasurable host is never mistaken for an idle one.
+#   must get its chance. Those host gates also reject an unmeasurable host: the
+#   POSIX probe's fabricated `mem_avail_mb=0 load1=0` from an unreadable /proc
+#   fails on the RAM half, and a host that returned no usable CPU sample at all
+#   has no headroom measurement to pass, so neither is mistaken for an idle one.
+#   `fm-capacity.sh route` prints the reading each probe actually produced.
 #
 # Freshness: every probe() call measures again. Nothing here caches a prior
 # host snapshot across invocations.
@@ -392,15 +401,31 @@ fm_capacity_id_is_worker_record() { # <state-dir> <task-id>
   return 1
 }
 
-# 0 when <task-id> already has a durable record in this home, of any kind. The
-# general duplicate guard for a fresh spawn: a second concurrent worker on the
-# same task, and equally a ship/scout that would overwrite a live secondmate's
-# endpoint record by reusing its id.
+# 0 when a fresh ship or scout must NOT take <task-id>, because taking it would
+# either put a second worker on a task that already has a live one or overwrite
+# a durable record that something else owns.
+#
+# The two halves are deliberately different. A record whose kind is not an
+# independent worker - a live secondmate's endpoint above all - is refused for
+# as long as it exists: a fresh spawn would rewrite state/<id>.meta out from
+# under whoever owns it, and this library is not the surface that decides when
+# such a record may be retired. A ship or scout record is refused only while it
+# still holds its slot: once its worker is positively gone, the record is a
+# durable history entry, not a running worker, and sequential replacement of a
+# task whose pane died (a reboot, a killed server) is exactly what the intake
+# contract allows. Refusing those too would leave a task with an intact
+# worktree and unlanded commits restartable only by deleting its metadata by
+# hand, because fm-control.sh's relaunch also refuses a `missing` endpoint.
+# fm_capacity_worker_live is the same fail-closed predicate the slot budget
+# uses, so an ambiguous or unreadable endpoint still refuses.
 fm_capacity_task_occupies_slot() { # <state-dir> <task-id>
   local state=$1 want=$2 id
   [ -n "$want" ] || return 1
   while IFS= read -r id; do
-    [ "$id" = "$want" ] && return 0
+    [ "$id" = "$want" ] || continue
+    fm_capacity_id_is_worker_record "$state" "$id" || return 0
+    fm_capacity_worker_live "$state/$id.meta" && return 0
+    return 1
   done < <(fm_capacity_recorded_ids "$state")
   return 1
 }
@@ -548,15 +573,6 @@ fm_capacity_parse_gpu_csv() { # <csv> -> sets FM_CAPACITY_GPU_FREE_MB FM_CAPACIT
   return 0
 }
 
-# Convert an averaged Windows busy percentage (0-100) plus nproc into a load1
-# equivalent. The percentage may carry decimals because it is a mean of several
-# samples, not a single integer reading.
-fm_capacity_load1_from_pct() { # <nproc> <load_pct>
-  local nproc=$1 pct=$2
-  fm_capacity_is_uint "$nproc" && fm_capacity_is_number "$pct" || return 1
-  awk -v n="$nproc" -v p="$pct" 'BEGIN { printf "%.2f", n * p / 100 }'
-}
-
 fm_capacity_posix_probe_cmd() {
   cat <<'CMD'
 printf 'FM_CAP nproc=%s\n' "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || printf 0)"
@@ -566,13 +582,20 @@ printf 'FM_CAP gpu=%s\n' "$(nvidia-smi --query-gpu=memory.free,utilization.gpu -
 CMD
 }
 
-# Emits one `load_pct` line per sample; fm_capacity_absorb_probe_text averages
-# them. The shell side owns the averaging so the durability of the reading is
-# testable without a Windows host.
+# Emits one `load_pct` line per SUCCESSFUL sample; fm_capacity_absorb_probe_text
+# averages them. The shell side owns the averaging so the durability of the
+# reading is testable without a Windows host. A sample whose processor query
+# errors or whose processors all report a null LoadPercentage emits NO line
+# rather than a zero (Measure-Object averages a null property as 0, so the
+# nulls are filtered out before the mean, not after): a
+# fabricated 0% would be indistinguishable from a genuinely idle host and would
+# route work onto a machine whose CPU was never measured. With no samples at
+# all the mean stays empty, no CPU-headroom measurement exists, and the host is
+# unsuitable.
 fm_capacity_windows_probe_cmd() {
   local cmd
   cmd=$(cat <<'CMD'
-$n = [Environment]::ProcessorCount; $os = Get-CimInstance Win32_OperatingSystem; $avail = 0; if ($os -and $os.FreePhysicalMemory) { $avail = [int]($os.FreePhysicalMemory / 1024) }; $gpu = ''; try { $gpu = (& nvidia-smi --query-gpu=memory.free,utilization.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } catch {}; Write-Output ("FM_CAP nproc=" + $n); Write-Output ("FM_CAP mem_avail_mb=" + $avail); Write-Output ("FM_CAP gpu=" + $gpu); for ($i = 0; $i -lt @SAMPLES@; $i++) { if ($i -gt 0) { Start-Sleep -Milliseconds @SLEEPMS@ }; $load = 0; $cpu = @(Get-CimInstance Win32_Processor); if ($cpu.Count -gt 0) { $load = [int](($cpu | Measure-Object -Property LoadPercentage -Average).Average) }; Write-Output ("FM_CAP load_pct=" + $load) }
+$n = [Environment]::ProcessorCount; $os = Get-CimInstance Win32_OperatingSystem; $avail = 0; if ($os -and $os.FreePhysicalMemory) { $avail = [int]($os.FreePhysicalMemory / 1024) }; $gpu = ''; try { $gpu = (& nvidia-smi --query-gpu=memory.free,utilization.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } catch {}; Write-Output ("FM_CAP nproc=" + $n); Write-Output ("FM_CAP mem_avail_mb=" + $avail); Write-Output ("FM_CAP gpu=" + $gpu); for ($i = 0; $i -lt @SAMPLES@; $i++) { if ($i -gt 0) { Start-Sleep -Milliseconds @SLEEPMS@ }; $load = $null; try { $cpu = @(Get-CimInstance Win32_Processor -ErrorAction Stop | Where-Object { $null -ne $_.LoadPercentage }); if ($cpu.Count -gt 0) { $avg = ($cpu | Measure-Object -Property LoadPercentage -Average).Average; if ($null -ne $avg) { $load = [int]$avg } } } catch {}; if ($null -ne $load) { Write-Output ("FM_CAP load_pct=" + $load) } }
 CMD
   )
   cmd=${cmd//@SAMPLES@/$FM_CAPACITY_WIN_LOAD_SAMPLES}
@@ -604,7 +627,7 @@ fm_capacity_ssh_raw() { # <host> <remote-cmd> [extra-seconds]
 
 # Parse FM_CAP lines from a probe transcript into the FM_CAPACITY_PROBE_* vars.
 fm_capacity_absorb_probe_text() {
-  local text=$1 line key val mean
+  local text=$1 line key val
   local -a load_pct=()
   FM_CAPACITY_PROBE_NPROC=
   FM_CAPACITY_PROBE_MEM_MB=
@@ -623,7 +646,7 @@ fm_capacity_absorb_probe_text() {
           nproc) FM_CAPACITY_PROBE_NPROC=$val ;;
           mem_avail_mb) FM_CAPACITY_PROBE_MEM_MB=$val ;;
           load1) FM_CAPACITY_PROBE_LOAD1=$val ;;
-          load_pct) load_pct+=("$val") ;;
+          load_pct) fm_capacity_is_number "$val" && load_pct+=("$val") ;;
           gpu) fm_capacity_parse_gpu_csv "$val" && {
             FM_CAPACITY_PROBE_GPU_FREE=$FM_CAPACITY_GPU_FREE_MB
             FM_CAPACITY_PROBE_GPU_UTIL=$FM_CAPACITY_GPU_UTIL
@@ -637,16 +660,14 @@ EOF
   # A percentage-derived load is the mean of every sample the probe returned,
   # never a single reading: one ~1-second sample cannot distinguish a burst
   # from a pinned host, and treating it as a 1-minute average would refuse the
-  # preferred host for the length of a browser tab.
+  # preferred host for the length of a browser tab. It stays a PERCENTAGE all
+  # the way to fm_capacity_host_suitable, which gates it as one; there is no
+  # rescaling into a load1, because a busy fraction rescaled that way can only
+  # reach nproc at exactly 100% and would wave a pinned host through.
   if [ "${#load_pct[@]}" -gt 0 ]; then
-    mean=$(fm_capacity_mean "${load_pct[@]}") || mean=
-    FM_CAPACITY_PROBE_LOAD_PCT=$mean
+    FM_CAPACITY_PROBE_LOAD_PCT=$(fm_capacity_mean "${load_pct[@]}") \
+      || FM_CAPACITY_PROBE_LOAD_PCT=
     FM_CAPACITY_PROBE_LOAD_SAMPLES=${#load_pct[@]}
-  fi
-  if [ -z "$FM_CAPACITY_PROBE_LOAD1" ] && [ -n "$FM_CAPACITY_PROBE_LOAD_PCT" ] \
-    && [ -n "$FM_CAPACITY_PROBE_NPROC" ]; then
-    FM_CAPACITY_PROBE_LOAD1=$(fm_capacity_load1_from_pct \
-      "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_LOAD_PCT" || true)
   fi
   fm_capacity_is_uint "$FM_CAPACITY_PROBE_NPROC" || return 1
   [ "$FM_CAPACITY_PROBE_NPROC" -gt 0 ] || return 1
@@ -783,6 +804,24 @@ fm_capacity_load_hosts() { # <config-dir>
   return 0
 }
 
+# How the last probe measured CPU headroom, as one auditable token for the
+# routing report: the run-queue average a host with /proc/loadavg gave, the
+# mean busy percent and sample count a host without one gave, or `unmeasured`
+# when neither arrived - which is also the reading that makes a host
+# unsuitable, so an operator can see WHY a preferred host was passed over.
+fm_capacity_cpu_headroom_reading() {
+  if [ -n "${FM_CAPACITY_PROBE_LOAD_PCT:-}" ]; then
+    printf 'busy_pct=%s/samples=%s\n' \
+      "$FM_CAPACITY_PROBE_LOAD_PCT" "${FM_CAPACITY_PROBE_LOAD_SAMPLES:-0}"
+    return 0
+  fi
+  if fm_capacity_is_number "${FM_CAPACITY_PROBE_LOAD1:-}"; then
+    printf 'load1=%s\n' "$FM_CAPACITY_PROBE_LOAD1"
+    return 0
+  fi
+  printf 'unmeasured\n'
+}
+
 # Fill FM_CAPACITY_ROUTE* from a freshly loaded host pair. Probes live.
 # shellcheck disable=SC2034
 fm_capacity_route_hosts() {
@@ -791,11 +830,14 @@ fm_capacity_route_hosts() {
   FM_CAPACITY_ROUTE_REASON='no configured compute host was freshly reachable and suitable'
   FM_CAPACITY_PREF_REACHABLE=no
   FM_CAPACITY_PREF_SUITABLE=no
+  FM_CAPACITY_PREF_LOAD=unmeasured
   FM_CAPACITY_FALL_REACHABLE=no
   FM_CAPACITY_FALL_SUITABLE=no
+  FM_CAPACITY_FALL_LOAD=unmeasured
   if [ -n "${FM_CAPACITY_PREF_SSH:-}" ]; then
     if fm_capacity_probe_ssh "$FM_CAPACITY_PREF_SSH"; then
       FM_CAPACITY_PREF_REACHABLE=yes
+      FM_CAPACITY_PREF_LOAD=$(fm_capacity_cpu_headroom_reading)
       if fm_capacity_host_suitable "$FM_CAPACITY_PREF_KIND" \
         "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_MEM_MB" \
         "$FM_CAPACITY_PROBE_LOAD1" "$FM_CAPACITY_PROBE_GPU_FREE" \
@@ -811,6 +853,7 @@ fm_capacity_route_hosts() {
   if [ -n "${FM_CAPACITY_FALL_SSH:-}" ]; then
     if fm_capacity_probe_ssh "$FM_CAPACITY_FALL_SSH"; then
       FM_CAPACITY_FALL_REACHABLE=yes
+      FM_CAPACITY_FALL_LOAD=$(fm_capacity_cpu_headroom_reading)
       if fm_capacity_host_suitable "$FM_CAPACITY_FALL_KIND" \
         "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_MEM_MB" \
         "$FM_CAPACITY_PROBE_LOAD1" "$FM_CAPACITY_PROBE_GPU_FREE" \
