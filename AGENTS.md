@@ -297,7 +297,7 @@ Do not ask for ordinary implementation details, bug fixes, regression tests, or 
 This list is the result-loop gate inventory, not a ban on a consent, approval, or answer another always-loaded section or a prescribed skill already requires: section 3's bootstrap install consent, section 4's unverified-adapter and `unknown`-harness asks, the reason owed for dropping below a project's standing registry rigor, and the registration gap below all remain lawful asks.
 These gates likewise do not relax the hard rules in section 1 or the merge authority in this section.
 Section 9 owns how those gates are phrased to the captain and adds the operational reaches supervision owns.
-This list and those section 9 reaches are hand-mirrored, in that prompt's own wording, into the supervision branch's prompt in `bin/fm-branch-prompt.sh`, which cannot read this file at wake time; edit both together or the branch silently reports the new gate as routine ([`docs/pi-supervision-branch.md`](docs/pi-supervision-branch.md)).
+This list and those section 9 reaches, except the main-only findings relay named there, are hand-mirrored in that prompt's own wording into the supervision branch's prompt in `bin/fm-branch-prompt.sh`, which cannot read this file at wake time; edit both together or the branch silently reports the new gate as routine ([`docs/pi-supervision-branch.md`](docs/pi-supervision-branch.md)).
 
 ### Intake and authority
 
@@ -332,7 +332,7 @@ Record the resulting mode, `yolo` merge posture, and the one-line reason for any
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Do not artificially cap the fleet at one worker; independent strands may run in parallel.
-Account for host load, dependencies, and safety, and never run two workers on the same task at once; a sequential replacement after the previous worker is stopped or superseded stays allowed, and separate tasks from one captain request are separate strands that may run at the same time.
+Account for host load, dependencies, and safety, and never run two workers on the same task at once; a sequential replacement after the previous worker is stopped or superseded stays allowed only under `stuck-crewmate-recovery`'s worktree custody - prove no live agent still owns the task, keep the recorded worktree with its unlanded work and the same task identity, and never spawn fresh while that worktree is unaccounted for - or under the Validate-end invalidation handoff below; separate tasks from one captain request are separate strands that may run at the same time.
 Host load may pace, stagger, or briefly defer a new dispatch, but it never holds an eligible strand indefinitely and never justifies a standing cap of one.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
@@ -514,12 +514,12 @@ Use the same evidence-first form for objections or clarifying challenges rather 
 Reach the captain immediately for every captain gate in the section 7 result loop.
 Independently of those gates, also reach the captain immediately for:
 
-- work ready for their review, carrying the full `https://...` PR URL when the work produced one under `no-mistakes` or `direct-PR`, and otherwise pointing at the actual review artifact, a scout's report or ready `local-only` work's clean branch outcome;
+- work ready for their review, carrying the full `https://...` PR URL when the work produced one under `no-mistakes` or `direct-PR`, and otherwise carrying the review outcome itself: a scout deliverable reaches as its findings under the investigation bullet below, and ready `local-only` work reaches as its clean branch outcome;
 - an unregistered project or absent registry, because only the captain sets that project's standing delivery mode and `yolo` posture even though firstmate writes the registry entry itself;
 - a finished investigation, relayed as its findings rather than only a completion notice.
 
 Anything destructive, irreversible, or security-sensitive still reaches the captain immediately; those are not implementation details.
-These operational reaches and the section 7 gate list are hand-mirrored in `bin/fm-branch-prompt.sh` in that prompt's own wording; an edit here that skips that copy silently narrows what the supervision branch escalates.
+These operational reaches and the section 7 gate list are hand-mirrored in `bin/fm-branch-prompt.sh` in that prompt's own wording, except the findings-relay duty for a finished investigation, which main owns alone and the branch deliberately does not carry; an edit here that skips that copy silently narrows what the supervision branch escalates.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.
