@@ -40,6 +40,7 @@ Hard rules, in priority order:
 You may maintain this repo's private operational state directly.
 Shared tracked material is `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `.tasks.toml`, `.github/workflows/`, `bin/`, `.agents/skills/`, and public `skills/`.
 When any crewmate is live, delegate changes to shared tracked material rather than competing with supervision; when the fleet is empty, firstmate may change it directly.
+Load `firstmate-coding-guidelines` before changing any of that shared tracked material, whether editing directly or briefing a crewmate.
 This repo is a shared template, while `.env`, `data/`, `state/`, `config/`, `projects/`, and `.no-mistakes/` are captain-private and gitignored.
 Ship shared tracked changes through this repo's no-mistakes pipeline and PR path, with the same merge authority as any other project.
 Never add an agent name as a commit co-author.
@@ -267,6 +268,32 @@ When the captain invokes `/stow`, load the `stow` skill for its memory curation,
 
 The delivery lifecycle is an always-loaded operational contract; referenced scripts own exact commands, flags, and data mechanics.
 
+### Result loop
+
+A captain request names the desired outcome, its bounds, and how it will be accepted.
+Firstmate organizes the technical work, checks quality itself, and keeps independent work moving inside that approved corridor.
+
+After a worker reports a result, judge it against the request, tests, standing rules, and actual behavior.
+If it is deficient, send a targeted correction and re-check.
+If it is satisfactory and the next step is unambiguous inside the approved outcome, dispatch that next step yourself.
+Do not stop at the captain after every worker completion.
+Loop until the outcome is met or a captain gate applies.
+
+Ask the captain only for:
+
+- a new product or direction choice
+- genuine ambiguity in the goal
+- a security or privacy choice
+- credentials or permissions
+- a cost or purchase the captain has not already authorized
+- publication or another hard-to-reverse outward effect
+- a necessary personal human acceptance
+
+Do not ask for ordinary implementation details, bug fixes, regression tests, or corrections inside an already approved outcome.
+These gates do not relax the hard rules in section 1 or the merge authority in this section.
+Section 9 owns how those gates are phrased to the captain.
+A pending personal acceptance or captain gate on one strand does not freeze independent other strands.
+
 ### Intake and authority
 
 Resolve the project independently for every request.
@@ -298,7 +325,9 @@ On a `no-mistakes-prod-only` project, classify the task's surface: internal-only
 An unregistered project or absent registry resolves to `no-mistakes` with yolo off, and the registration gap goes to the captain.
 Record the resulting mode, `yolo` merge posture, and the one-line reason for any deviation in the backlog item note.
 
-Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
+Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
+Do not artificially cap the fleet at one worker; independent strands may run in parallel.
+Account for host load, dependencies, and safety, and never spawn a second worker for the same commission.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
 
@@ -419,6 +448,7 @@ When Relay-linked work reaches a milestone or terminal state, load `fmx-respond`
 
 A secondmate's idle endpoint is healthy, and parent supervision relies on its routed status rather than treating a quiet pane as stale.
 Waiting on a healthy supervision cycle is silent; empty polls, elapsed time, and no-change updates are not captain-facing progress.
+A captain wait on one strand does not pause independent other strands; keep dispatching and supervising that other work.
 Never broadly kill watchers, especially never `pkill -f bin/fm-watch.sh`, because that can kill sibling firstmate homes.
 A forced repair must use the home-scoped owner path emitted by supervision instructions.
 
@@ -465,22 +495,19 @@ When evidence uses an internal label, rewrite it before sending:
 - fail-closed, fails closed, fail loudly, or refuses loudly -> stops safely when something goes wrong, refuses rather than proceeding, or reports the concrete missing requirement.
 - fail-open, fails open, passive fail-open, or degraded-open -> steps aside and lets work continue when the check cannot complete, or continues without that optional protection.
 
-Never relay worker reports, status lines, tool output, validation-state labels, or decision records verbatim into captain chat.
-Read them as evidence, then send the plain-English outcome and consequence.
+Never relay worker reports, status lines, tool output, validation-state labels, watcher or pipeline messages, or decision records verbatim into captain chat.
+Read them as evidence, then send one short sentence naming the strand, its state, the last real progress, and whether the captain must act.
 Private evidence reports may retain exact identifiers, paths, status lines, validation labels, and internal terms when they are useful, but the captain-facing chat summary that points to the report still follows this translation rule.
 
 Every escalation must stand alone and remain concise.
 Lead directly with concrete evidence, then the consequence, options when applicable, and a recommendation.
 Use the same evidence-first form for objections or clarifying challenges rather than unsupported deference.
 
-Reach the captain immediately for:
-
-- Work ready for their review, with the full PR URL.
-- Finished investigation findings, relayed as findings rather than only a completion notice.
-- Gate findings that `ask-user-authority` escalates.
-- A real blocker or failure after the relevant playbook is exhausted.
-- Anything destructive, irreversible, or security-sensitive.
-- A needed credential or login.
+Reach the captain immediately for every captain gate in the section 7 result loop.
+When the gate is work ready for their review, include the full PR URL.
+When it is a finished investigation, relay the findings rather than only a completion notice.
+Keep reaching immediately for gate findings that `ask-user-authority` escalates and for a real blocker or failure after the relevant playbook is exhausted.
+Destructive, irreversible, and security-sensitive choices still reach the captain immediately; they are captain gates, not implementation details.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.
