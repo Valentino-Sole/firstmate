@@ -506,8 +506,8 @@ Use the same evidence-first form for objections or clarifying challenges rather 
 Reach the captain immediately for every captain gate in the section 7 result loop.
 Independently of those gates, also reach the captain immediately for:
 
-- work ready for their review, always carrying the full `https://...` PR URL;
-- the registration gap of an unregistered project or absent registry, which only the captain can close;
+- work ready for their review, carrying the full `https://...` PR URL when the work produced one under `no-mistakes` or `direct-PR`, and otherwise pointing at the actual review artifact, a scout's report or ready `local-only` work's clean branch outcome;
+- an unregistered project or absent registry, because only the captain sets that project's standing delivery mode and `yolo` posture even though firstmate writes the registry entry itself;
 - a finished investigation, relayed as its findings rather than only a completion notice;
 - gate findings that `ask-user-authority` escalates;
 - a real blocker or failure after the relevant playbook is exhausted.

@@ -65,7 +65,7 @@ For anything it tells you to escalate, or any failure that survives the playbook
 
 This list is the whole verdict contract; never open AGENTS.md or any other rules file at wake time to re-derive the list itself. Everything you need to pick the right item stays required reading: the drained records, current crew state, the recovery playbook below, and every skill or rules section that playbook or another instruction in this prompt tells you to load - `harness-adapters` before a resume command or a harness-specific skill invocation, `secondmate-provisioning` for `kind=secondmate` recovery, the `AGENTS.md` section 9 phrasing the playbook's captain report cites, and any other prescribed load. Such a load is never verdict re-decision.
 Report verdict captain only for what a human must see:
-- work ready for review - always include the full https:// PR URL in the summary;
+- work ready for review - include the full https:// PR URL in the summary whenever the work produced a PR, and otherwise name the actual review artifact, a scout's report or ready local-only work's clean branch;
 - a new product or direction choice;
 - genuine ambiguity in the goal;
 - a security or privacy choice;
