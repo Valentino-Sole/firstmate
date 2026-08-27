@@ -1602,6 +1602,107 @@ SH
   pass "fm-turnend-guard --claude: a capped auto-arm stops retrying and the guard still reaches one attended fail-open"
 }
 
+# The two bounds composed at a cap of ONE, where the capping firing is also the
+# first failure and therefore never writes state/.claude-autoarm-failure-notified
+# at all. The auto-arm still stops re-arming, and the episode must still reach
+# this guard's one attended fail-open instead of blocking every turn end until
+# Claude Code's hard consecutive-block override.
+test_hook_claude_mode_cap_of_one_still_reaches_the_fail_open() {
+  local dir out status guard_out i alarmed
+  dir=$(make_primary_dir "$TMP_ROOT/hook-claude-cap-one-fail-open")
+  : > "$dir/state/task1.meta"
+  install_integrated_autoarm "$dir"
+  write_integrated_failed_arm "$dir"
+  export FM_CLAUDE_AUTOARM_FAILURE_CAP=1
+
+  out=$(run_integrated_autoarm "$dir"); status=$?
+  expect_code 2 "$status" "the capping firing must deliver its one notice, which only exit 2 hands to the harness"
+  assert_contains "$out" "auto-arm CAPPED" "reaching the cap must surface the stop once"
+  assert_present "$dir/state/.claude-autoarm-failure-capped" "reaching the cap must record the stop durably"
+  assert_absent "$dir/state/.claude-autoarm-failure-notified" \
+    "this case is only meaningful while the cap is reached before any failure notice exists"
+
+  alarmed=0
+  for i in 1 2 3 4 5 6 7 8; do
+    out=$(run_integrated_autoarm "$dir"); status=$?
+    expect_code 0 "$status" "a capped auto-arm must not create another continuation"
+    [ -z "$out" ] || fail "a capped auto-arm repeated an operator notice: $out"
+    guard_out=$(FM_CLAUDE_AUTOARM_SYNC_WAIT_MS=100 run_hook_claude "$dir" true) || true
+    case "$guard_out" in
+      *'FIRSTMATE SUPERVISION IS GENUINELY DOWN'*) alarmed=1; break ;;
+      *'TURN WOULD END BLIND'*) : ;;
+      *) fail "a notice-less capped episode left the guard neither blocking nor alarming: $guard_out" ;;
+    esac
+  done
+  unset FM_CLAUDE_AUTOARM_FAILURE_CAP
+
+  [ "$alarmed" -eq 1 ] || fail "a capped episode with no failure notice never reached the attended fail-open"
+  assert_present "$dir/state/.claude-autoarm-failure-alarmed" "the episode did not consume its one attended alarm"
+  pass "fm-turnend-guard --claude: a cap reached before any failure notice still reaches one attended fail-open"
+}
+
+# Both layers fire on the SAME Stop event, and this is the interleaving the
+# sequential cases above cannot see. A post-cap auto-arm firing still takes a
+# generation and publishes an "arming" claim for a live pid, then exits 0 without
+# arming and without any continuation. While that claim is open the synchronous
+# guard must not read it as recovery under way: doing so allows the stop with no
+# watcher, no continuation from either layer, and no attended alarm.
+#
+# The real hook is frozen inside its own arming window with SIGSTOP, so the guard
+# runs against exactly the ledger state a concurrent capped firing publishes.
+test_hook_claude_mode_capped_arming_claim_never_allows_a_blind_stop() {
+  local dir out status guard_out i probe pid bg bg_out caught frozen_status
+  dir=$(make_primary_dir "$TMP_ROOT/hook-claude-capped-arming-race")
+  : > "$dir/state/task1.meta"
+  install_integrated_autoarm "$dir"
+  write_integrated_failed_arm "$dir"
+  export FM_CLAUDE_AUTOARM_FAILURE_CAP=1
+  out=$(run_integrated_autoarm "$dir") || true
+  assert_present "$dir/state/.claude-autoarm-failure-capped" "the fixture never reached the auto-arm cap"
+
+  bg_out="$dir/state/capped-firing.out"
+  caught=0
+  i=0
+  while [ "$i" -lt 25 ] && [ "$caught" -eq 0 ]; do
+    i=$((i + 1))
+    run_integrated_autoarm "$dir" > "$bg_out" 2>&1 &
+    bg=$!
+    probe=0
+    while [ "$probe" -lt 600 ]; do
+      probe=$((probe + 1))
+      pid=$(sed -n '1s/^epoch=[0-9][0-9]* owner_pid=\([0-9][0-9]*\) outcome=arming .*/\1/p' \
+        "$dir/state/.claude-autoarm-epoch" 2>/dev/null || true)
+      [ -n "$pid" ] || continue
+      kill -STOP "$pid" 2>/dev/null || break
+      # The firing may have moved on between the read and the signal: only a
+      # ledger that still names this frozen pid as arming is the window.
+      if sed -n '1p' "$dir/state/.claude-autoarm-epoch" 2>/dev/null \
+        | grep -q "owner_pid=$pid outcome=arming"; then
+        caught=1
+      else
+        kill -CONT "$pid" 2>/dev/null || true
+      fi
+      break
+    done
+    [ "$caught" -eq 1 ] && break
+    wait "$bg" 2>/dev/null || true
+  done
+  [ "$caught" -eq 1 ] || fail "could not observe a post-cap firing inside its arming window"
+
+  guard_out=$(FM_CLAUDE_AUTOARM_SYNC_WAIT_MS=200 run_hook_claude "$dir" true); status=$?
+  kill -CONT "$pid" 2>/dev/null || true
+  frozen_status=0
+  wait "$bg" 2>/dev/null || frozen_status=$?
+
+  expect_code 2 "$status" "an arming claim inside a capped episode must not pass for recovery under way"
+  assert_contains "$guard_out" "TURN WOULD END BLIND" "the capped-episode block must carry the blind-turn banner"
+  expect_code 0 "$frozen_status" "the concurrent capped firing must create no continuation of its own"
+  [ ! -s "$bg_out" ] || fail "the concurrent capped firing emitted: $(cat "$bg_out")"
+  assert_absent "$dir/state/.watch.lock" "no watcher was ever established, so the stop would have ended blind"
+  unset FM_CLAUDE_AUTOARM_FAILURE_CAP
+  pass "fm-turnend-guard --claude: a capped firing's open arming claim never allows a blind stop"
+}
+
 test_hook_claude_mode_integrated_monotonic_fail_open() {
   local dir out status guard_out guard_status i pid identity count
   dir=$(make_primary_dir "$TMP_ROOT/hook-claude-integrated-fail-open")
@@ -1930,6 +2031,8 @@ test_grok_adapter_native_true_allows_without_resume
 test_grok_adapter_snake_case_native_and_camel_precedence
 test_grok_adapter_invalid_inputs_start_neither_path
 test_hook_claude_mode_autoarm_cap_still_reaches_the_fail_open
+test_hook_claude_mode_cap_of_one_still_reaches_the_fail_open
+test_hook_claude_mode_capped_arming_claim_never_allows_a_blind_stop
 test_exactly_one_layer_acts_per_logical_turn_end
 test_no_protection_gap_when_the_owning_layer_is_unprovable
 test_grok_adapter_missing_jq_and_no_supervision_allow

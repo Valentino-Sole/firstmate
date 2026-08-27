@@ -55,7 +55,11 @@
 #   - Failure cap: consecutive exhausted failures are counted durably per
 #     auto-arm GENERATION in state/.claude-autoarm-failure-count, under the same
 #     single-flight micro-mutex and ownership re-verification as every other
-#     ledger write (fm_autoarm_failure_record in bin/fm-wake-lib.sh). At
+#     ledger write (fm_autoarm_failure_record in bin/fm-wake-lib.sh). The run is
+#     genuinely consecutive: a successful arm clears the count, including the
+#     ACTIONABLE close that is this model's ordinary success, and the run is
+#     keyed by the Stop payload's session_id exactly as the synchronous guard
+#     keys its block budget, so a fresh session never inherits a previous run. At
 #     FM_CLAUDE_AUTOARM_FAILURE_CAP (default 3) this hook writes the durable stop
 #     record state/.claude-autoarm-failure-capped naming the reason, prints that
 #     reason ONCE, and stops re-arming: every later firing in the same episode
@@ -222,6 +226,20 @@ autoarm_record() {  # <outcome>
   fm_autoarm_write_owned "$STATE" "$MY_GEN" "$1" >/dev/null 2>&1 || true
 }
 
+# The session this Stop belongs to, which scopes the consecutive-failure run.
+# Same field, same reader, and same "unknown" fallback the synchronous guard
+# keys state/.turnend-claude-blocks by, so the two bounds agree on what one
+# session is; jq is already this hook's optional payload reader, and its absence
+# degrades to a single shared run rather than to no cap.
+autoarm_session_id() {
+  local id
+  id=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"' 2>/dev/null || printf 'unknown')
+  case "$id" in
+    ''|*[!A-Za-z0-9._-]*) id=unknown ;;
+  esac
+  printf '%s\n' "$id"
+}
+
 # --- capped failure episode: stop re-arming ----------------------------------
 # Once this episode reached the consecutive-failure cap, the durable stop record
 # state/.claude-autoarm-failure-capped stands and its reason was surfaced once.
@@ -348,6 +366,10 @@ if [ "$ACTIONABLE" -eq 1 ]; then
     printf 'Run bin/fm-wake-drain.sh first, handle the wake, then run its exact WAKE_ACK_REQUIRED --ack-through command. Until that post-handling acknowledgement, interruption leaves the wake durable for idempotent re-handling. This Stop hook owns watcher continuity: when the handling turn ends, the next needed cycle arms automatically - do NOT run bin/fm-watch-arm.sh after an ordinary wake.\n'
   } >&2
   if autoarm_commit rewake; then
+    # This arm worked, so the consecutive-failure run ends here: only the COUNT
+    # clears, because an actionable close is not the verified positive recovery
+    # that ends a failure episode's notice, alarm, and stop record.
+    fm_autoarm_failure_count_reset "$STATE" "$MY_GEN" >/dev/null 2>&1 || true
     [ -z "$OUT" ] || rm -f "$OUT" 2>/dev/null || true
     exit 2
   fi
@@ -369,7 +391,7 @@ fi
 # by this generation, so a superseded owner can neither advance nor cap the
 # episode, and a refusal or unwritable record deliberately falls through to the
 # ordinary retry paths below rather than turning into a silent stop.
-if fm_autoarm_failure_record "$STATE" "$MY_GEN" "$FAILURE_CAP" \
+if fm_autoarm_failure_record "$STATE" "$MY_GEN" "$FAILURE_CAP" "$(autoarm_session_id)" \
   "auto-arm exhausted its bounded retries on $FAILURE_CAP consecutive Stop firings with no verified watcher" \
   && [ "$FM_AUTOARM_FAILURE_CAPPED_NOW" -eq 1 ]; then
   {

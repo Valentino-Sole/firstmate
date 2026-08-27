@@ -266,6 +266,15 @@ fm_turnend_owner_is_pi_primary() {  # <state> <root>
 # synchronous guard never reaches its attended fail-open - it is not registered,
 # has no jq, or stood down - so the session re-wakes itself indefinitely.
 #
+# CONSECUTIVE is literal, and two things make it so. A successful arm clears the
+# count through fm_autoarm_failure_count_reset below, including the ACTIONABLE
+# close that is this model's ordinary success, so isolated transient failures
+# arbitrarily far apart never accumulate into a cap on a home whose mechanism
+# demonstrably works. And the run is SESSION-scoped by the Stop payload's
+# session_id, the same key and the same "unknown" fallback the synchronous
+# guard's block budget in state/.turnend-claude-blocks uses, so a fresh session
+# never inherits a previous session's run and cap on its own first failure.
+#
 # The count is durable, keyed by the auto-arm GENERATION so one generation counts
 # at most once, and written under the existing single-flight micro-mutex with the
 # same ownership re-verification every other ledger write uses; a superseded
@@ -282,9 +291,9 @@ fm_turnend_owner_is_pi_primary() {  # <state> <root>
 FM_AUTOARM_FAILURE_COUNT=0
 # shellcheck disable=SC2034 # Read by callers after the function returns.
 FM_AUTOARM_FAILURE_CAPPED_NOW=0
-fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> [reason]
-  local state=$1 gen=$2 cap=$3 reason=${4:-} lock count_file capped
-  local pid i count recorded tmp
+fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> <session> [reason]
+  local state=$1 gen=$2 cap=$3 session=$4 reason=${5:-} lock count_file capped
+  local pid i count recorded recorded_session tmp
   lock="$state/.claude-autoarm.lock"
   count_file="$state/.claude-autoarm-failure-count"
   capped="$state/.claude-autoarm-failure-capped"
@@ -292,6 +301,9 @@ fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> [reason]
   FM_AUTOARM_FAILURE_COUNT=0
   FM_AUTOARM_FAILURE_CAPPED_NOW=0
   case "$cap" in ''|*[!0-9]*|0) return 1 ;; esac
+  # An unusable session key degrades to one shared run rather than to no cap at
+  # all, exactly as the guard's budget degrades when it cannot read session_id.
+  case "$session" in ''|*[!A-Za-z0-9._-]*) session=unknown ;; esac
   i=0
   while ! fm_lock_try_acquire "$lock"; do
     [ "$i" -lt 20 ] || return 1
@@ -305,12 +317,17 @@ fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> [reason]
   fi
   count=$(sed -n '1s/^count=//p' "$count_file" 2>/dev/null || true)
   recorded=$(sed -n '2s/^gen=//p' "$count_file" 2>/dev/null || true)
+  recorded_session=$(sed -n '3s/^session=//p' "$count_file" 2>/dev/null || true)
   case "$count" in
     ''|*[!0-9]*) count=0 ;;
   esac
+  if [ "$recorded_session" != "$session" ]; then
+    count=0
+    recorded=
+  fi
   [ "$recorded" = "$gen" ] || count=$((count + 1))
   tmp="$count_file.tmp.$pid"
-  if ! printf 'count=%s\ngen=%s\n' "$count" "$gen" > "$tmp" 2>/dev/null \
+  if ! printf 'count=%s\ngen=%s\nsession=%s\n' "$count" "$gen" "$session" > "$tmp" 2>/dev/null \
     || ! mv -f "$tmp" "$count_file" 2>/dev/null; then
     rm -f "$tmp" 2>/dev/null || true
     fm_lock_release "$lock"
@@ -333,9 +350,46 @@ fm_autoarm_failure_record() {  # <state-dir> <gen> <cap> [reason]
 
 # True once this failure episode has reached the consecutive-failure cap and the
 # durable stop record exists, so no further automatic re-arm may be attempted
-# until positive watcher recovery clears the episode.
+# until positive watcher recovery clears the episode. The synchronous guard reads
+# it too: a capped firing still takes a generation and briefly publishes an
+# "arming" claim it will never act on, which is not recovery to defer to.
 fm_autoarm_failure_capped() {  # <state-dir>
   [ -e "$1/.claude-autoarm-failure-capped" ]
+}
+
+# Clear ONLY the consecutive-failure count, for a generation this process still
+# owns. A successful arm proves the mechanism works right now, so the next
+# failure starts a fresh consecutive run. Deliberately narrower than
+# fm_failure_episode_reset: the failure notice, the attended-alarm marker, the
+# guard's block budget, and the durable stop record are episode state that only
+# VERIFIED positive recovery clears, and an actionable arm close is not that
+# proof. Returns 0 cleared, 2 superseded, 1 unable.
+fm_autoarm_failure_count_reset() {  # <state-dir> <gen>
+  local state=$1 gen=$2 lock count_file pid i
+  lock="$state/.claude-autoarm.lock"
+  count_file="$state/.claude-autoarm-failure-count"
+  pid=${BASHPID:-$$}
+  i=0
+  while ! fm_lock_try_acquire "$lock"; do
+    [ "$i" -lt 20 ] || return 1
+    sleep 0.02
+    i=$((i + 1))
+  done
+  if ! fm_autoarm_ledger_read "$state" \
+    || [ "$FM_AUTOARM_GEN" != "$gen" ] || [ "$FM_AUTOARM_OWNER" != "$pid" ]; then
+    fm_lock_release "$lock"
+    return 2
+  fi
+  if [ -d "$count_file" ] && [ ! -L "$count_file" ]; then
+    fm_lock_release "$lock"
+    return 1
+  fi
+  if ! rm -f "$count_file" 2>/dev/null; then
+    fm_lock_release "$lock"
+    return 1
+  fi
+  fm_lock_release "$lock"
+  return 0
 }
 
 # fm_watcher_supervision_verdict <state> <watch-path> [grace] [home] [root]

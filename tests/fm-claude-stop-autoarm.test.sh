@@ -1285,10 +1285,6 @@ test_afk_mid_cycle_suppresses_rewake() {
   pass "auto-arm: mid-cycle AFK hands triage to the daemon with no rewake"
 }
 
-test_consecutive_failures_stop_at_the_cap
-test_capped_episode_ends_on_positive_watcher_recovery
-test_stands_down_for_a_proven_pi_primary_owner
-test_protects_when_the_pi_owner_cannot_be_proven
 test_active_in_marked_secondmate_home() {
   local dir out status
   dir=$(make_secondmate_dir "$TMP_ROOT/secondmate")
@@ -1345,5 +1341,9 @@ test_superseded_owner_never_reinvokes_the_arm
 test_superseded_owner_goes_silent_and_never_double_translates
 test_need_vanished_mid_cycle_closes_quietly
 test_afk_mid_cycle_suppresses_rewake
+test_consecutive_failures_stop_at_the_cap
+test_capped_episode_ends_on_positive_watcher_recovery
+test_stands_down_for_a_proven_pi_primary_owner
+test_protects_when_the_pi_owner_cannot_be_proven
 test_active_in_marked_secondmate_home
 test_fm_lock_status_still_works_with_shared_lib
