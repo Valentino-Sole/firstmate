@@ -21,11 +21,32 @@
 #                  otherwise the ceiling
 #   slots        = min(cpu_slots, ram_slots, load_cap, 5)
 # The ceiling 5 is a safety cap on the formula, not a rigid agent count.
-# Occupied slots are this home's ship and scout metadata records. Idle
-# secondmates do not occupy a worker slot. A relaunch replaces one worker and
-# does not consume an extra slot. The gate never interrupts another task.
+#
+# Occupancy is host-scoped, not home-scoped: the budget protects one physical
+# server, so N firstmate homes on this host share one budget instead of taking
+# N independent ones. The scanned set is this home, the local primary home it
+# was seeded from when it is a secondmate home (.fm-secondmate-parent), and
+# every locally routed secondmate registered under that primary
+# (data/secondmates.md). Remote secondmates run on another machine and are not
+# counted. `fm-capacity.sh slots` prints homes_scanned so the measurement is
+# auditable.
+#
+# A slot is held by a LIVE worker, not by a metadata record: each ship/scout
+# record's endpoint is classified through fm-backend.sh's agent-state contract,
+# and only a confidently gone endpoint (dead or missing) frees its slot. A task
+# parked on a captain hold or waiting on a merge with no running worker
+# therefore stops blocking fresh dispatch, while an ambiguous or unreadable
+# endpoint keeps its slot so a probe failure can never oversubscribe the host.
+# Task identity is separate from that: same-task uniqueness still reads the
+# metadata record, so a task never gets a second concurrent worker.
+# Idle secondmates do not occupy a worker slot. A relaunch replaces one worker
+# and does not consume an extra slot. The gate never interrupts another task.
 #
 # Host routing (recompute-heavy / host-bound work only):
+#   Session pins (flags/env) merge over config/compute-hosts.json field by
+#   field: pinning only the preferred host keeps the configured fallback, and
+#   an unrecognised pinned kind is rejected exactly like an unrecognised kind
+#   inside the config file rather than coerced to a default.
 #   Probe configured preferred, then fallback, with a bounded SSH call.
 #   Prefer the preferred host when it is freshly reachable and suitable.
 #   Use the fallback only when the preferred is not.
@@ -45,8 +66,23 @@
 #   FM_CAPACITY_FALLBACK_SSH, FM_CAPACITY_FALLBACK_KIND
 #   FM_CAPACITY_SSH_TIMEOUT (seconds, default 5)
 
+_FM_CAPACITY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-timeout-lib.sh
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-timeout-lib.sh"
+. "$_FM_CAPACITY_LIB_DIR/fm-timeout-lib.sh"
+# Endpoint liveness and the local-home topology come from the surfaces that
+# already own them; a caller that sourced them first keeps its own copy.
+if ! declare -F fm_backend_agent_alive >/dev/null 2>&1; then
+  # shellcheck source=bin/fm-backend.sh
+  . "$_FM_CAPACITY_LIB_DIR/fm-backend.sh"
+fi
+if ! declare -F secondmate_registry_parse_line >/dev/null 2>&1; then
+  # shellcheck source=bin/fm-secondmate-registry-lib.sh
+  . "$_FM_CAPACITY_LIB_DIR/fm-secondmate-registry-lib.sh"
+fi
+if ! declare -F fm_secondmate_parent_record_parse >/dev/null 2>&1; then
+  # shellcheck source=bin/fm-secondmate-parent-lib.sh
+  . "$_FM_CAPACITY_LIB_DIR/fm-secondmate-parent-lib.sh"
+fi
 
 FM_CAPACITY_SLOT_CEILING=5
 FM_CAPACITY_CPU_PER_SLOT=3
@@ -172,9 +208,11 @@ fm_capacity_read_load1() {
   sysctl -n vm.loadavg 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]/) { print $i; exit } }'
 }
 
-# Occupied independent workers: ship and scout metadata in this home only.
-# Prints one task id per line. Secondmates are persistent specialists and do
-# not occupy these slots.
+# Independent-worker records in one home: ship and scout metadata. Prints one
+# task id per line. This is the task-IDENTITY view, so a record counts here
+# whether or not its worker is still running; fm_capacity_live_ids applies
+# liveness on top. Secondmates are persistent specialists and never occupy an
+# independent worker slot.
 fm_capacity_occupied_ids() { # <state-dir>
   local state=$1 file id kind
   [ -d "$state" ] || return 0
@@ -191,11 +229,35 @@ fm_capacity_occupied_ids() { # <state-dir>
   done
 }
 
+# Does <meta-file>'s recorded endpoint still hold a worker slot? Only an
+# endpoint that fm-backend.sh reports as confidently gone (dead or missing)
+# frees its slot. Ambiguous, unreadable, and unverified endpoints keep theirs,
+# so a failed probe never licenses an extra worker on this host.
+fm_capacity_worker_live() { # <meta-file>
+  local meta=$1 backend target
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
+  declare -F fm_backend_agent_alive >/dev/null 2>&1 || return 0
+  backend=$(fm_backend_of_meta "$meta")
+  target=$(fm_backend_target_of_meta "$meta")
+  [ -n "$target" ] || return 0
+  [ "$(fm_backend_agent_alive "$backend" "$target")" != dead ]
+}
+
+# Independent workers in one home that still hold a slot.
+fm_capacity_live_ids() { # <state-dir>
+  local state=$1 id
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    fm_capacity_worker_live "$state/$id.meta" || continue
+    printf '%s\n' "$id"
+  done < <(fm_capacity_occupied_ids "$state")
+}
+
 fm_capacity_occupied_count() { # <state-dir>
   local n=0
   while IFS= read -r _; do
     n=$((n + 1))
-  done < <(fm_capacity_occupied_ids "$1")
+  done < <(fm_capacity_live_ids "$1")
   printf '%s\n' "$n"
 }
 
@@ -205,6 +267,58 @@ fm_capacity_task_occupies_slot() { # <state-dir> <task-id>
     [ "$id" = "$want" ] && return 0
   done < <(fm_capacity_occupied_ids "$state")
   return 1
+}
+
+# Every local firstmate home that shares this physical host with <home-dir>:
+# this home, the local primary home it was seeded from when it is a secondmate
+# home, and every locally routed secondmate registered under that primary. A
+# remote secondmate lives on another machine and is left out. Unparsable
+# registry lines are skipped rather than trusted.
+fm_capacity_host_homes() { # <home-dir>
+  local home=$1 root reg line seen
+  [ -n "$home" ] || return 0
+  root=$home
+  if fm_secondmate_parent_record_parse "$home/.fm-secondmate-parent" 2>/dev/null; then
+    if [ "${FM_SECONDMATE_PARENT_ROUTE:-}" = local ] && [ -n "${FM_SECONDMATE_PARENT_HOME:-}" ]; then
+      root=$FM_SECONDMATE_PARENT_HOME
+    fi
+  fi
+  seen=$'\n'
+  for line in "$home" "$root"; do
+    case "$seen" in *$'\n'"$line"$'\n'*) continue ;; esac
+    seen="$seen$line"$'\n'
+    printf '%s\n' "$line"
+  done
+  reg="$root/data/secondmates.md"
+  [ -f "$reg" ] && [ ! -L "$reg" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '- '*) ;; *) continue ;; esac
+    secondmate_registry_parse_line "$line" || continue
+    [ "$SECONDMATE_REGISTRY_REMOTE" -eq 0 ] || continue
+    case "$SECONDMATE_REGISTRY_HOME" in /*) ;; *) continue ;; esac
+    case "$seen" in *$'\n'"$SECONDMATE_REGISTRY_HOME"$'\n'*) continue ;; esac
+    seen="$seen$SECONDMATE_REGISTRY_HOME"$'\n'
+    printf '%s\n' "$SECONDMATE_REGISTRY_HOME"
+  done < "$reg"
+}
+
+# Live independent workers across every local home on this host. Sets
+# FM_CAPACITY_OCCUPIED and the auditable FM_CAPACITY_HOMES_SCANNED.
+# shellcheck disable=SC2034
+fm_capacity_measure_host_occupancy() { # <state-dir> <home-dir>
+  local state=$1 home=$2 peer peer_state
+  FM_CAPACITY_OCCUPIED=$(fm_capacity_occupied_count "$state")
+  FM_CAPACITY_HOMES_SCANNED=1
+  [ -n "$home" ] || return 0
+  while IFS= read -r peer; do
+    [ -n "$peer" ] || continue
+    [ "$peer" != "$home" ] || continue
+    peer_state="$peer/state"
+    [ "$peer_state" != "$state" ] || continue
+    [ -d "$peer_state" ] || continue
+    FM_CAPACITY_HOMES_SCANNED=$((FM_CAPACITY_HOMES_SCANNED + 1))
+    FM_CAPACITY_OCCUPIED=$((FM_CAPACITY_OCCUPIED + $(fm_capacity_occupied_count "$peer_state")))
+  done < <(fm_capacity_host_homes "$home")
 }
 
 fm_capacity_host_suitable() { # <kind> <nproc> <mem_avail_mb> <load1> <gpu_free_mb> <gpu_util>
@@ -349,78 +463,98 @@ fm_capacity_config_path() { # <config-dir>
 }
 
 # Load preferred/fallback from flags/env/config into FM_CAPACITY_PREF_* and
-# FM_CAPACITY_FALL_*. Returns 1 only for a present but malformed config file.
+# FM_CAPACITY_FALL_*. Each session pin merges over its own config-derived
+# counterpart, so pinning one host never discards the other configured one; a
+# pinned kind is validated exactly like a configured kind. Returns 1 for a
+# rejected pin or a present but malformed config file.
 # shellcheck disable=SC2034
 fm_capacity_load_hosts() { # <config-dir>
   local config_dir=$1 path ssh kind json
-  FM_CAPACITY_PREF_SSH=${FM_CAPACITY_PREFERRED_SSH:-}
-  FM_CAPACITY_PREF_KIND=${FM_CAPACITY_PREFERRED_KIND:-gpu}
-  FM_CAPACITY_FALL_SSH=${FM_CAPACITY_FALLBACK_SSH:-}
-  FM_CAPACITY_FALL_KIND=${FM_CAPACITY_FALLBACK_KIND:-cpu}
+  local pin_pref_ssh=${FM_CAPACITY_PREFERRED_SSH:-} pin_pref_kind=${FM_CAPACITY_PREFERRED_KIND:-}
+  local pin_fall_ssh=${FM_CAPACITY_FALLBACK_SSH:-} pin_fall_kind=${FM_CAPACITY_FALLBACK_KIND:-}
+  local cfg_pref_ssh='' cfg_pref_kind='' cfg_fall_ssh='' cfg_fall_kind=''
+  FM_CAPACITY_PREF_SSH=
+  FM_CAPACITY_PREF_KIND=gpu
+  FM_CAPACITY_FALL_SSH=
+  FM_CAPACITY_FALL_KIND=cpu
   FM_CAPACITY_CONFIG_ERROR=
+  if [ -n "$pin_pref_ssh" ]; then
+    fm_capacity_ssh_alias_ok "$pin_pref_ssh" || {
+      FM_CAPACITY_CONFIG_ERROR="preferred SSH alias is not a safe host token"
+      return 1
+    }
+  fi
+  if [ -n "$pin_fall_ssh" ]; then
+    fm_capacity_ssh_alias_ok "$pin_fall_ssh" || {
+      FM_CAPACITY_CONFIG_ERROR="fallback SSH alias is not a safe host token"
+      return 1
+    }
+  fi
+  if [ -n "$pin_pref_kind" ]; then
+    fm_capacity_kind_ok "$pin_pref_kind" || {
+      FM_CAPACITY_CONFIG_ERROR="preferred kind must be gpu or cpu"
+      return 1
+    }
+  fi
+  if [ -n "$pin_fall_kind" ]; then
+    fm_capacity_kind_ok "$pin_fall_kind" || {
+      FM_CAPACITY_CONFIG_ERROR="fallback kind must be gpu or cpu"
+      return 1
+    }
+  fi
   path=$(fm_capacity_config_path "$config_dir")
-  if [ -n "$FM_CAPACITY_PREF_SSH" ] || [ -n "$FM_CAPACITY_FALL_SSH" ]; then
-    if [ -n "$FM_CAPACITY_PREF_SSH" ]; then
-      fm_capacity_ssh_alias_ok "$FM_CAPACITY_PREF_SSH" || {
-        FM_CAPACITY_CONFIG_ERROR="preferred SSH alias is not a safe host token"
+  # Both hosts pinned leaves the file nothing to contribute; any partial pin
+  # still needs its configured counterpart.
+  if { [ -z "$pin_pref_ssh" ] || [ -z "$pin_fall_ssh" ]; } && [ -e "$path" ]; then
+    [ -f "$path" ] && [ ! -L "$path" ] || {
+      FM_CAPACITY_CONFIG_ERROR="config/compute-hosts.json must be a regular file"
+      return 1
+    }
+    command -v jq >/dev/null 2>&1 || {
+      FM_CAPACITY_CONFIG_ERROR="jq is required to read config/compute-hosts.json"
+      return 1
+    }
+    json=$(cat "$path") || {
+      FM_CAPACITY_CONFIG_ERROR="could not read config/compute-hosts.json"
+      return 1
+    }
+    printf '%s\n' "$json" | jq -e . >/dev/null 2>&1 || {
+      FM_CAPACITY_CONFIG_ERROR="config/compute-hosts.json is not valid JSON"
+      return 1
+    }
+    ssh=$(printf '%s\n' "$json" | jq -r '.preferred.ssh // empty')
+    kind=$(printf '%s\n' "$json" | jq -r '.preferred.kind // "gpu"')
+    if [ -n "$ssh" ]; then
+      fm_capacity_ssh_alias_ok "$ssh" || {
+        FM_CAPACITY_CONFIG_ERROR="preferred.ssh is not a safe host token"
         return 1
       }
-      fm_capacity_kind_ok "$FM_CAPACITY_PREF_KIND" || FM_CAPACITY_PREF_KIND=gpu
-    fi
-    if [ -n "$FM_CAPACITY_FALL_SSH" ]; then
-      fm_capacity_ssh_alias_ok "$FM_CAPACITY_FALL_SSH" || {
-        FM_CAPACITY_CONFIG_ERROR="fallback SSH alias is not a safe host token"
+      fm_capacity_kind_ok "$kind" || {
+        FM_CAPACITY_CONFIG_ERROR="preferred.kind must be gpu or cpu"
         return 1
       }
-      fm_capacity_kind_ok "$FM_CAPACITY_FALL_KIND" || FM_CAPACITY_FALL_KIND=cpu
+      cfg_pref_ssh=$ssh
+      cfg_pref_kind=$kind
     fi
-    return 0
+    ssh=$(printf '%s\n' "$json" | jq -r '.fallback.ssh // empty')
+    kind=$(printf '%s\n' "$json" | jq -r '.fallback.kind // "cpu"')
+    if [ -n "$ssh" ]; then
+      fm_capacity_ssh_alias_ok "$ssh" || {
+        FM_CAPACITY_CONFIG_ERROR="fallback.ssh is not a safe host token"
+        return 1
+      }
+      fm_capacity_kind_ok "$kind" || {
+        FM_CAPACITY_CONFIG_ERROR="fallback.kind must be gpu or cpu"
+        return 1
+      }
+      cfg_fall_ssh=$ssh
+      cfg_fall_kind=$kind
+    fi
   fi
-  [ -e "$path" ] || return 0
-  [ -f "$path" ] && [ ! -L "$path" ] || {
-    FM_CAPACITY_CONFIG_ERROR="config/compute-hosts.json must be a regular file"
-    return 1
-  }
-  command -v jq >/dev/null 2>&1 || {
-    FM_CAPACITY_CONFIG_ERROR="jq is required to read config/compute-hosts.json"
-    return 1
-  }
-  json=$(cat "$path") || {
-    FM_CAPACITY_CONFIG_ERROR="could not read config/compute-hosts.json"
-    return 1
-  }
-  printf '%s\n' "$json" | jq -e . >/dev/null 2>&1 || {
-    FM_CAPACITY_CONFIG_ERROR="config/compute-hosts.json is not valid JSON"
-    return 1
-  }
-  ssh=$(printf '%s\n' "$json" | jq -r '.preferred.ssh // empty')
-  kind=$(printf '%s\n' "$json" | jq -r '.preferred.kind // "gpu"')
-  if [ -n "$ssh" ]; then
-    fm_capacity_ssh_alias_ok "$ssh" || {
-      FM_CAPACITY_CONFIG_ERROR="preferred.ssh is not a safe host token"
-      return 1
-    }
-    fm_capacity_kind_ok "$kind" || {
-      FM_CAPACITY_CONFIG_ERROR="preferred.kind must be gpu or cpu"
-      return 1
-    }
-    FM_CAPACITY_PREF_SSH=$ssh
-    FM_CAPACITY_PREF_KIND=$kind
-  fi
-  ssh=$(printf '%s\n' "$json" | jq -r '.fallback.ssh // empty')
-  kind=$(printf '%s\n' "$json" | jq -r '.fallback.kind // "cpu"')
-  if [ -n "$ssh" ]; then
-    fm_capacity_ssh_alias_ok "$ssh" || {
-      FM_CAPACITY_CONFIG_ERROR="fallback.ssh is not a safe host token"
-      return 1
-    }
-    fm_capacity_kind_ok "$kind" || {
-      FM_CAPACITY_CONFIG_ERROR="fallback.kind must be gpu or cpu"
-      return 1
-    }
-    FM_CAPACITY_FALL_SSH=$ssh
-    FM_CAPACITY_FALL_KIND=$kind
-  fi
+  FM_CAPACITY_PREF_SSH=${pin_pref_ssh:-$cfg_pref_ssh}
+  FM_CAPACITY_PREF_KIND=${pin_pref_kind:-${cfg_pref_kind:-gpu}}
+  FM_CAPACITY_FALL_SSH=${pin_fall_ssh:-$cfg_fall_ssh}
+  FM_CAPACITY_FALL_KIND=${pin_fall_kind:-${cfg_fall_kind:-cpu}}
   return 0
 }
 
@@ -471,7 +605,9 @@ fm_capacity_route_hosts() {
 }
 
 # Snapshot local measurements plus occupied/free into FM_CAPACITY_* vars.
-fm_capacity_measure_local() { # <state-dir>
+# Occupancy is host-scoped: <home-dir> anchors the local-home set and defaults
+# to FM_HOME.
+fm_capacity_measure_local() { # <state-dir> [home-dir]
   FM_CAPACITY_LOCAL_NPROC=$(fm_capacity_read_nproc)
   FM_CAPACITY_LOCAL_MEM_MB=$(fm_capacity_read_mem_avail_mb)
   FM_CAPACITY_LOCAL_LOAD1=$(fm_capacity_read_load1)
@@ -479,7 +615,7 @@ fm_capacity_measure_local() { # <state-dir>
   fm_capacity_is_number "$FM_CAPACITY_LOCAL_LOAD1" || FM_CAPACITY_LOCAL_LOAD1=0
   FM_CAPACITY_SLOTS=$(fm_capacity_slots_from_local \
     "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_MEM_MB" "$FM_CAPACITY_LOCAL_LOAD1")
-  FM_CAPACITY_OCCUPIED=$(fm_capacity_occupied_count "$1")
+  fm_capacity_measure_host_occupancy "$1" "${2:-${FM_HOME:-}}"
   FM_CAPACITY_FREE=$((FM_CAPACITY_SLOTS - FM_CAPACITY_OCCUPIED))
   [ "$FM_CAPACITY_FREE" -ge 0 ] || FM_CAPACITY_FREE=0
 }
@@ -487,11 +623,11 @@ fm_capacity_measure_local() { # <state-dir>
 # Allow a fresh independent worker. Relaunch and secondmate skip the slot
 # budget. Never interrupts another task. Prints nothing on allow; one error
 # line on refuse.
-fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch>
-  local state=$1 id=$2 kind=$3 relaunch=$4
+fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch> [home-dir]
+  local state=$1 id=$2 kind=$3 relaunch=$4 home=${5:-${FM_HOME:-}}
   [ "$relaunch" != 1 ] || return 0
   [ "$kind" != secondmate ] || return 0
-  fm_capacity_measure_local "$state"
+  fm_capacity_measure_local "$state" "$home"
   if fm_capacity_task_occupies_slot "$state" "$id"; then
     printf 'error: capacity: task %s already has a worker; sequential replacement uses relaunch, never a second concurrent worker\n' "$id" >&2
     return 1
@@ -500,11 +636,11 @@ fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch>
     return 0
   fi
   if [ "$FM_CAPACITY_SLOTS" -eq 0 ]; then
-    printf 'error: capacity: supervisor host is at measured capacity (slots=0 occupied=%s nproc=%s load1=%s mem_avail_mb=%s); refusing a new independent worker rather than overloading this host\n' \
-      "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_LOAD1" "${FM_CAPACITY_LOCAL_MEM_MB:-unknown}" >&2
+    printf 'error: capacity: supervisor host is at measured capacity (slots=0 occupied=%s homes_scanned=%s nproc=%s load1=%s mem_avail_mb=%s); refusing a new independent worker rather than overloading this host\n' \
+      "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_HOMES_SCANNED" "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_LOAD1" "${FM_CAPACITY_LOCAL_MEM_MB:-unknown}" >&2
     return 1
   fi
-  printf 'error: capacity: no free worker slot (occupied=%s slots=%s); independent work waits until a slot frees; running workers were left running\n' \
-    "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_SLOTS" >&2
+  printf 'error: capacity: no free worker slot (occupied=%s slots=%s homes_scanned=%s); independent work waits until a live worker on this host finishes; running workers were left running\n' \
+    "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_HOMES_SCANNED" >&2
   return 1
 }

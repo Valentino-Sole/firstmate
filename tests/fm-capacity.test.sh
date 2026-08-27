@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Behavior tests for resource-aware parallel dispatch: slot formula, occupied
-# counting, same-task uniqueness, refuse-rather-than-kill spawn gating, and
-# preferred-then-fallback host routing from fresh probes.
+# Behavior tests for resource-aware parallel dispatch: slot formula, live
+# host-scoped occupancy, same-task uniqueness, refuse-rather-than-kill spawn
+# gating, and preferred-then-fallback host routing from fresh probes.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -34,6 +34,69 @@ write_ship_meta() {
     "endpoint_task_id=$id" \
     "kind=ship" \
     "harness=echo"
+}
+
+# A tmux stand-in whose session window list is the fixture: a task whose window
+# is listed has a live agent pane, a task whose window is absent is an
+# authoritatively gone endpoint. That is exactly the distinction the capacity
+# budget must draw between a running worker and a parked record.
+make_fake_tmux() {
+  local fakebin=$1
+  cat > "$fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+set -u
+cmd=${1:-}
+shift || true
+session=; fmt=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -p) shift ;;
+    -t) session=${2%%:*}; shift 2 ;;
+    -F) shift 2 ;;
+    *) fmt=$1; shift ;;
+  esac
+done
+dir=${FM_FAKE_TMUX_DIR:-}
+case "$cmd" in
+  list-windows)
+    if [ -n "$dir" ] && [ -f "$dir/$session" ]; then
+      cat "$dir/$session"
+      exit 0
+    fi
+    printf "can't find session: %s\n" "$session" >&2
+    exit 1
+    ;;
+  display-message)
+    [ "$fmt" = '#{pane_current_command}' ] && printf 'claude\n'
+    exit 0
+    ;;
+esac
+exit 1
+SH
+  chmod +x "$fakebin/tmux"
+}
+
+# Declare which task windows are live in the fake tmux session for <home>.
+set_live_windows() {
+  local home=$1
+  shift
+  local id
+  mkdir -p "$home/tmux"
+  : > "$home/tmux/firstmate"
+  for id in "$@"; do
+    printf 'fm-%s\n' "$id" >> "$home/tmux/firstmate"
+  done
+}
+
+# Run <home>'s capacity CLI with the fake tmux answering endpoint liveness.
+run_capacity_live() {
+  local home=$1
+  shift
+  local fakebin
+  fakebin=$(fm_fakebin "$home")
+  make_fake_tmux "$fakebin"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_DIR="$home/tmux" \
+    run_capacity "$home" "$@"
 }
 
 make_fake_ssh() {
@@ -105,9 +168,74 @@ test_occupied_counts_ship_and_scout_not_secondmates() {
   write_ship_meta "$home" ship-b2
   fm_write_meta "$home/state/scout-c3.meta" kind=scout window=firstmate:fm-scout-c3
   fm_write_secondmate_meta "$home/state/jarvis.meta" "$home/jarvis-home"
-  n=$(fm_capacity_occupied_count "$home/state")
+  set_live_windows "$home" ship-a1 ship-b2 scout-c3 jarvis
+  n=$(run_capacity_live "$home" slots | sed -n 's/^occupied=//p')
   [ "$n" = 3 ] || fail "occupied should count 2 ship + 1 scout, not the secondmate; got $n"
-  pass "occupied slots are ship and scout workers, not idle secondmates"
+  pass "occupied slots are live ship and scout workers, not idle secondmates"
+}
+
+test_parked_task_without_a_live_worker_frees_its_slot() {
+  local home out rc i
+  home="$TMP_ROOT/parked"
+  setup_home "$home"
+  for i in 1 2 3 4 5; do
+    write_ship_meta "$home" "occ-$i"
+  done
+  # occ-1 and occ-2 still run; the other three are parked records whose panes
+  # are gone (captain hold, merge wait, exited pane).
+  set_live_windows "$home" occ-1 occ-2
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$home" slots
+  )
+  assert_contains "$out" "occupied=2" "only live workers hold slots"
+  assert_contains "$out" "free=3" "parked records must not consume the budget"
+  set +e
+  FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    run_capacity_live "$home" spawn-gate --task-id fresh-x7 >/dev/null 2>&1
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "spawn-gate with parked records only"
+  [ -f "$home/state/occ-5.meta" ] || fail "a parked record must survive as a durable record"
+  pass "parked tasks with no running worker do not block fresh dispatch"
+}
+
+test_live_workers_in_a_local_secondmate_home_share_the_host_budget() {
+  local home mate out rc i
+  home="$TMP_ROOT/host-budget"
+  mate="$TMP_ROOT/host-budget/jarvis-home"
+  setup_home "$home"
+  setup_home "$mate"
+  printf -- '- jarvis - platform work (home: %s; scope: platform work; projects: alpha; added 2026-08-27)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$home" \
+    > "$mate/.fm-secondmate-parent"
+  write_ship_meta "$home" prim-a1
+  for i in 1 2 3 4; do
+    write_ship_meta "$mate" "mate-$i"
+  done
+  set_live_windows "$home" prim-a1 mate-1 mate-2 mate-3 mate-4
+  cp -R "$home/tmux" "$mate/tmux"
+  set +e
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$home" spawn-gate --task-id extra-p6 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "host-wide budget from the primary home"
+  assert_contains "$out" "occupied=5" "the primary home must see the secondmate home's live workers"
+  assert_contains "$out" "homes_scanned=2" "the measurement must name how many homes it counted"
+  set +e
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity_live "$mate" spawn-gate --task-id extra-m6 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "host-wide budget from the secondmate home"
+  assert_contains "$out" "occupied=5" "a secondmate home must not take a second independent budget"
+  pass "local firstmate homes share one measured budget for this host"
 }
 
 test_same_task_refuses_a_second_concurrent_worker() {
@@ -131,12 +259,13 @@ test_full_budget_refuses_without_touching_running_workers() {
   for i in 1 2 3 4 5; do
     write_ship_meta "$home" "occ-$i"
   done
+  set_live_windows "$home" occ-1 occ-2 occ-3 occ-4 occ-5
   before=$(cat "$home/state/occ-1.meta" "$home/state/occ-2.meta" "$home/state/occ-3.meta" \
     "$home/state/occ-4.meta" "$home/state/occ-5.meta")
   set +e
   out=$(
     FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
-      run_capacity "$home" spawn-gate --task-id extra-w6 2>&1
+      run_capacity_live "$home" spawn-gate --task-id extra-w6 2>&1
   )
   rc=$?
   set -e
@@ -170,15 +299,15 @@ test_relaunch_and_secondmate_skip_the_slot_budget() {
   setup_home "$home"
   write_ship_meta "$home" occ-a1
   FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=4096 FM_CAPACITY_LOAD1=16
-  fm_capacity_measure_local "$home/state"
+  fm_capacity_measure_local "$home/state" "$home"
   [ "$FM_CAPACITY_SLOTS" = 0 ] || fail "preload should force slots=0, got $FM_CAPACITY_SLOTS"
   set +e
-  fm_capacity_allow_new_worker "$home/state" new-b2 ship 1
+  fm_capacity_allow_new_worker "$home/state" new-b2 ship 1 "$home"
   rc=$?
   set -e
   expect_code 0 "$rc" "relaunch skip"
   set +e
-  fm_capacity_allow_new_worker "$home/state" mate-c3 secondmate 0
+  fm_capacity_allow_new_worker "$home/state" mate-c3 secondmate 0 "$home"
   rc=$?
   set -e
   expect_code 0 "$rc" "secondmate skip"
@@ -190,14 +319,16 @@ test_cli_slots_print_measured_budget() {
   home="$TMP_ROOT/cli-slots"
   setup_home "$home"
   write_ship_meta "$home" occ-a1
+  set_live_windows "$home" occ-a1
   out=$(
     FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
-      run_capacity "$home" slots
+      run_capacity_live "$home" slots
   )
   assert_contains "$out" "slots=5" "slots line"
   assert_contains "$out" "occupied=1" "occupied line"
   assert_contains "$out" "free=4" "free line"
-  pass "slots command prints measured slots, occupied, and free"
+  assert_contains "$out" "homes_scanned=1" "homes scanned line"
+  pass "slots command prints measured slots, live occupancy, free, and homes scanned"
 }
 
 test_preferred_gpu_host_wins_when_freshly_suitable() {
@@ -285,17 +416,62 @@ test_no_route_when_both_hosts_are_down() {
   pass "host-bound work is not piled onto the supervisor when both remotes fail"
 }
 
+test_preferred_pin_keeps_the_configured_fallback() {
+  local home fakebin out
+  home="$TMP_ROOT/route-pin-merge"
+  setup_home "$home"
+  fakebin=$(fm_fakebin "$home")
+  make_fake_ssh "$fakebin"
+  mkdir -p "$home/ssh"
+  # Heim-PC is down; only the configured Arbeits-PC answers.
+  cat > "$home/ssh/Valentino-Arbeit" <<'OUT'
+FM_CAP nproc=16
+FM_CAP mem_avail_mb=16000
+FM_CAP load1=1.0
+FM_CAP gpu=
+OUT
+  printf '%s\n' '{"preferred":{"ssh":"Valentino","kind":"gpu"},"fallback":{"ssh":"Valentino-Arbeit","kind":"cpu"}}' \
+    > "$home/config/compute-hosts.json"
+  out=$(
+    PATH="$fakebin:$PATH" FM_CAPACITY_SKIP_REMOTE='' \
+      FM_FAKE_SSH_DIR="$home/ssh" \
+      run_capacity "$home" route --preferred Valentino
+  )
+  assert_contains "$out" "route=fallback" "a preferred-only pin must keep the configured fallback"
+  assert_contains "$out" "route_host=Valentino-Arbeit" "fallback host survives the pin"
+  assert_contains "$out" "fallback_ssh=Valentino-Arbeit" "the configured fallback is still loaded"
+  pass "pinning only the preferred host preserves the configured Arbeits-PC fallback"
+}
+
+test_invalid_pinned_kind_is_rejected() {
+  local home out rc
+  home="$TMP_ROOT/route-bad-kind"
+  setup_home "$home"
+  set +e
+  out=$(run_capacity "$home" route --preferred Valentino-Arbeit --preferred-kind CPU 2>&1)
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "invalid pinned kind"
+  assert_contains "$out" "must be gpu or cpu" "an unknown pinned kind must be reported, not coerced"
+  assert_not_contains "$out" "preferred_suitable" "a rejected pin must not produce a routing verdict"
+  pass "an unknown pinned host kind is rejected instead of silently coerced"
+}
+
 test_spawn_refuses_at_capacity_without_launching() {
-  local home out rc id=cap-new-z9
+  local home fakebin out rc id=cap-new-z9
   home="$TMP_ROOT/spawn-refuse"
   setup_home "$home"
   write_ship_meta "$home" occ-a1
   write_ship_meta "$home" occ-b2
+  fakebin=$(fm_fakebin "$home")
+  make_fake_tmux "$fakebin"
+  set_live_windows "$home" occ-a1 occ-b2
   mkdir -p "$home/data/$id"
   printf 'Delivery contract: mode=no-mistakes\n' > "$home/data/$id/brief.md"
   set +e
   out=$(
-    FM_CAPACITY_NPROC=6 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.2 \
+    PATH="$fakebin:$PATH" FM_FAKE_TMUX_DIR="$home/tmux" \
+      FM_CAPACITY_NPROC=6 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.2 \
       FM_HOME="$home" FM_ROOT_OVERRIDE="" \
       FM_SPAWN_NO_GUARD=1 FM_BACKEND=tmux \
       "$SPAWN" "$id" projects/demo --mode no-mistakes --yolo off 2>&1
@@ -328,6 +504,8 @@ test_slots_drop_when_ram_is_tight
 test_slots_small_host_keeps_one_when_healthy
 test_slots_high_but_not_full_load_caps_at_one
 test_occupied_counts_ship_and_scout_not_secondmates
+test_parked_task_without_a_live_worker_frees_its_slot
+test_live_workers_in_a_local_secondmate_home_share_the_host_budget
 test_same_task_refuses_a_second_concurrent_worker
 test_full_budget_refuses_without_touching_running_workers
 test_free_slot_allows_a_new_independent_worker
@@ -336,6 +514,8 @@ test_cli_slots_print_measured_budget
 test_preferred_gpu_host_wins_when_freshly_suitable
 test_fallback_used_when_preferred_is_unsuitable
 test_no_route_when_both_hosts_are_down
+test_preferred_pin_keeps_the_configured_fallback
+test_invalid_pinned_kind_is_rejected
 test_spawn_refuses_at_capacity_without_launching
 test_gpu_suitability_requires_headroom
 

@@ -359,7 +359,7 @@ Secondmate homes inherit this file from the primary, so a secondmate's own crewm
 It is not inherited by secondmate homes, and it is not a harness or model profile: leave `config/crew-dispatch.json` alone when editing this file.
 An absent file still protects the local supervisor host through measured worker slots; only host-bound routing needs the inventory.
 This section is the single owner of the canonical schema.
-`bin/fm-capacity-lib.sh` owns the slot formula, the fresh-probe contract, occupied-worker counting, and the refuse-rather-than-kill spawn gate.
+`bin/fm-capacity-lib.sh` owns the slot formula, the fresh-probe contract, host-scoped live-worker counting, and the refuse-rather-than-kill spawn gate.
 `resource-aware-dispatch` owns the firstmate procedure that consults that command.
 
 ```json
@@ -370,11 +370,13 @@ This section is the single owner of the canonical schema.
 ```
 
 `ssh` is a safe SSH config alias (`A-Za-z0-9._-`).
-`kind` is `gpu` or `cpu`.
+`kind` is `gpu` or `cpu`; any other value is an error in this file and in the `--preferred-kind`/`--fallback-kind` session pins alike.
+A session pin overrides only its own field, so `bin/fm-capacity.sh route --preferred <alias>` still uses the fallback configured here.
 A `gpu` host is suitable when a fresh probe reports GPU utilization at most 90 and at least 1024 MiB free.
 A `cpu` host is suitable when load1 is below nproc and at least 2048 MiB is available.
 Routing prefers the preferred host when it is freshly reachable and suitable, then the fallback, and otherwise returns `route=none` rather than piling that class of work onto the protected local supervisor.
 Worker panes still launch on the supervisor host; the route is where the host-bound compute runs.
+The worker-slot budget is scoped to this physical host rather than to one home: occupancy counts live workers across this home, the local primary home it was seeded from, and every locally routed secondmate home registered under that primary, and `bin/fm-capacity.sh slots` prints `homes_scanned` alongside `occupied`.
 See [`docs/examples/compute-hosts.json`](examples/compute-hosts.json) for a copyable starting point.
 When the file exists, `bin/fm-capacity.sh` requires `jq` to parse it; a present but malformed file is a concrete error for routing, while local slot calculation still runs.
 
