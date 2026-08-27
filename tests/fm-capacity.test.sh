@@ -64,6 +64,7 @@ make_fake_tmux() {
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
+[ -z "${FM_CAPACITY_PROBE_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_CAPACITY_PROBE_LOG"
 cmd=${1:-}
 shift || true
 session=; fmt=
@@ -617,6 +618,186 @@ test_home_paths_are_deduplicated_by_canonical_path() {
   pass "host homes are deduplicated by canonical path, not by spelling"
 }
 
+test_legacy_terminal_line_releases_a_slot_on_an_unverifiable_backend() {
+  local home out rc
+  home="$TMP_ROOT/legacy-terminal"
+  setup_home "$home"
+  write_unverified_ship_meta "$home" occ-a1
+  write_unverified_ship_meta "$home" occ-b2
+  write_unverified_ship_meta "$home" occ-c3
+  # Legacy lines that carry no leading verb at all. bin/fm-classify-lib.sh owns
+  # this vocabulary; nothing on this backend can ever be proven dead, so a line
+  # it reads as captain-relevant must release the slot too.
+  write_status "$home" occ-a1 'PR ready for review, captain: https://example.test/pull/42'
+  write_status "$home" occ-b2 'merged'
+  write_status "$home" occ-c3 'working: still building the parser'
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity "$home" slots
+  )
+  assert_contains "$out" "occupied=1" \
+    "a bare legacy terminal line must not pin a slot forever"
+  assert_contains "$out" "free=4" "released legacy records must return their slots"
+  set +e
+  FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    run_capacity "$home" spawn-gate --task-id fresh-l9 >/dev/null 2>&1
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "spawn-gate behind bare legacy terminal lines"
+  pass "legacy terminal status lines release their slot on an unverifiable backend"
+}
+
+test_percentage_load_is_averaged_across_probe_samples() {
+  local got
+  # One ~1s burst inside an otherwise idle window must not read as a pinned
+  # host: the mean of every sample is the measurement, not the last sample.
+  fm_capacity_absorb_probe_text 'FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP load_pct=10
+FM_CAP load_pct=10
+FM_CAP load_pct=100
+FM_CAP gpu=8192,10' || fail "a multi-sample Windows probe transcript should absorb"
+  [ "$FM_CAPACITY_PROBE_LOAD_SAMPLES" = 3 ] \
+    || fail "every load_pct sample must count, got $FM_CAPACITY_PROBE_LOAD_SAMPLES"
+  [ "$FM_CAPACITY_PROBE_LOAD_PCT" = "40.00" ] \
+    || fail "the mean of 10/10/100 should be 40.00, got $FM_CAPACITY_PROBE_LOAD_PCT"
+  got=$FM_CAPACITY_PROBE_LOAD1
+  [ "$got" = "9.60" ] || fail "24 cores at a mean 40% busy should be load1 9.60, got $got"
+  fm_capacity_host_suitable gpu 24 32000 "$got" 8192 10 "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    || fail "a one-second burst must not demote a healthy preferred GPU host"
+  # A host sitting near 100% in every sample is a sustained overload. Its
+  # load1 rescaling (23.84) is still below nproc, so the percentage itself has
+  # to be the gate or a pinned machine walks straight through.
+  fm_capacity_absorb_probe_text 'FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP load_pct=100
+FM_CAP load_pct=98
+FM_CAP load_pct=100
+FM_CAP gpu=8192,10' || fail "a pinned Windows probe transcript should absorb"
+  fm_capacity_host_suitable gpu 24 32000 "$FM_CAPACITY_PROBE_LOAD1" 8192 10 \
+    "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    && fail "a sustained pin must still fail the CPU-headroom gate"
+  # A real run-queue load average keeps its own gate: no percentage, no change.
+  fm_capacity_host_suitable cpu 16 16000 1.0 "" "" \
+    || fail "a loadavg host must still be judged on load1"
+  fm_capacity_host_suitable cpu 16 16000 16.0 "" "" \
+    && fail "a saturated loadavg host must still be refused"
+  pass "a percentage-derived load is averaged and gated as a percentage"
+}
+
+test_burst_on_the_preferred_windows_host_keeps_heim_preference() {
+  local home fakebin out
+  home="$TMP_ROOT/route-win-burst"
+  setup_home "$home"
+  fakebin=$(fm_fakebin "$home")
+  make_fake_ssh "$fakebin"
+  mkdir -p "$home/ssh"
+  # The Heim-PC reports no load1 at all (Windows), just busy-percent samples.
+  # The burst lands on the LAST sample, which is what a last-sample-wins read
+  # would hand to the gate.
+  cat > "$home/ssh/Valentino" <<'OUT'
+FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP gpu=8192,10
+FM_CAP load_pct=12
+FM_CAP load_pct=8
+FM_CAP load_pct=100
+OUT
+  cat > "$home/ssh/Valentino-Arbeit" <<'OUT'
+FM_CAP nproc=16
+FM_CAP mem_avail_mb=16000
+FM_CAP load1=1.0
+FM_CAP gpu=
+OUT
+  printf '%s\n' '{"preferred":{"ssh":"Valentino","kind":"gpu"},"fallback":{"ssh":"Valentino-Arbeit","kind":"cpu"}}' \
+    > "$home/config/compute-hosts.json"
+  out=$(
+    PATH="$fakebin:$PATH" FM_CAPACITY_SKIP_REMOTE='' \
+      FM_FAKE_SSH_DIR="$home/ssh" \
+      run_capacity "$home" route
+  )
+  assert_contains "$out" "route=preferred" \
+    "a single burst sample must not force the Arbeits-PC"
+  assert_contains "$out" "route_host=Valentino" "the Heim-PC keeps the route"
+  pass "a transient burst on the Windows Heim-PC does not invert the routing preference"
+}
+
+test_sustained_windows_pin_falls_through_to_the_fallback() {
+  local home fakebin out
+  home="$TMP_ROOT/route-win-pinned"
+  setup_home "$home"
+  fakebin=$(fm_fakebin "$home")
+  make_fake_ssh "$fakebin"
+  mkdir -p "$home/ssh"
+  cat > "$home/ssh/Valentino" <<'OUT'
+FM_CAP nproc=24
+FM_CAP mem_avail_mb=32000
+FM_CAP gpu=8192,10
+FM_CAP load_pct=100
+FM_CAP load_pct=100
+FM_CAP load_pct=99
+OUT
+  cat > "$home/ssh/Valentino-Arbeit" <<'OUT'
+FM_CAP nproc=16
+FM_CAP mem_avail_mb=16000
+FM_CAP load1=1.0
+FM_CAP gpu=
+OUT
+  printf '%s\n' '{"preferred":{"ssh":"Valentino","kind":"gpu"},"fallback":{"ssh":"Valentino-Arbeit","kind":"cpu"}}' \
+    > "$home/config/compute-hosts.json"
+  out=$(
+    PATH="$fakebin:$PATH" FM_CAPACITY_SKIP_REMOTE='' \
+      FM_FAKE_SSH_DIR="$home/ssh" \
+      run_capacity "$home" route
+  )
+  assert_contains "$out" "route=fallback" "a sustained pin must still yield to the fallback"
+  assert_contains "$out" "preferred_suitable=no" "the overload gate must still fire"
+  pass "a sustained pin on the Windows Heim-PC still routes host-bound work to the Arbeits-PC"
+}
+
+test_duplicate_id_refuses_without_measuring_the_host() {
+  local home fakebin out rc probes i
+  home="$TMP_ROOT/identity-first"
+  setup_home "$home"
+  for i in 1 2 3; do
+    write_ship_meta "$home" "occ-$i"
+  done
+  fakebin=$(fm_fakebin "$home")
+  make_fake_tmux "$fakebin"
+  set_live_windows "$home" occ-1 occ-2 occ-3
+  : > "$home/probe.log"
+  # Every liveness read of a recorded worker costs one backend subprocess. An
+  # id collision is decided from metadata alone, so refusing it must not spend
+  # any of them.
+  set +e
+  out=$(
+    PATH="$fakebin:$PATH" FM_FAKE_TMUX_DIR="$home/tmux" \
+      FM_CAPACITY_PROBE_LOG="$home/probe.log" \
+      FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+      run_capacity "$home" spawn-gate --task-id occ-2 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "duplicate-id spawn-gate"
+  assert_contains "$out" "already has a worker" "the identity refusal must still name the duplicate"
+  probes=$(wc -l < "$home/probe.log")
+  [ "${probes//[[:space:]]/}" = 0 ] \
+    || fail "an identity refusal must probe no endpoint, ran $probes backend calls"
+  # The same gate on a free id does measure, so the fixture really can record.
+  set +e
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_DIR="$home/tmux" \
+    FM_CAPACITY_PROBE_LOG="$home/probe.log" \
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    run_capacity "$home" spawn-gate --task-id fresh-i8 >/dev/null 2>&1
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "free-id spawn-gate"
+  probes=$(wc -l < "$home/probe.log")
+  [ "${probes//[[:space:]]/}" -gt 0 ] \
+    || fail "the occupancy scan should have probed endpoints for a free id"
+  pass "a duplicate task id is refused on identity alone, before any endpoint probe"
+}
+
 test_slots_allow_five_on_healthy_supervisor
 test_slots_drop_to_zero_when_load_saturates
 test_slots_drop_when_ram_is_tight
@@ -641,5 +822,10 @@ test_unverified_backend_releases_finished_records_but_not_active_work
 test_live_worker_keeps_its_slot_despite_a_finished_status_line
 test_uniqueness_refuses_reusing_a_live_secondmate_id
 test_home_paths_are_deduplicated_by_canonical_path
+test_legacy_terminal_line_releases_a_slot_on_an_unverifiable_backend
+test_percentage_load_is_averaged_across_probe_samples
+test_burst_on_the_preferred_windows_host_keeps_heim_preference
+test_sustained_windows_pin_falls_through_to_the_fallback
+test_duplicate_id_refuses_without_measuring_the_host
 
 echo "# all fm-capacity tests passed"
