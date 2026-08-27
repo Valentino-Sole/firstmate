@@ -418,6 +418,74 @@ test_a_new_session_is_not_capped_by_a_previous_session() {
   pass "auto-arm: a new session gets an honest arm attempt after a previous session's cap"
 }
 
+# A PATH holding only the tools this hook needs, with jq deliberately absent.
+# The hook is jq-optional and runs fully without it, so the key it scopes the
+# consecutive-failure run and its cap by has to keep varying per session there;
+# the synchronous guard cannot cover for a shared one, because it exits before
+# its own jq-dependent read and so never reaches the fail-open that would end
+# such an episode.
+make_nojq_bin() {
+  local dir=$1 bin tool real
+  bin="$dir/nojq-bin"
+  mkdir -p "$bin"
+  for tool in awk bash basename cat chmod cksum date dirname env find git grep head \
+    ln ls mkdir mktemp mv od ps readlink rm sed sha256sum shasum sleep sort stat \
+    tail touch tr uname wc; do
+    real=$(command -v "$tool") || continue
+    case "$real" in /*) ln -sf "$real" "$bin/$tool" ;; esac
+  done
+  for tool in bash cat git grep ps sed; do
+    [ -x "$bin/$tool" ] || return 1
+  done
+  printf '%s\n' "$bin"
+}
+
+# Same fake harness and same Stop payload as run_autoarm_as_session, run against
+# a PATH with no jq on it. The payload's session_id is unreadable there, so the
+# key can only come from the harness pid this session writes into state/.lock.
+run_autoarm_without_jq() {
+  local dir=$1 session=$2 bin=$3 rc=0
+  printf '{"session_id":"%s","stop_hook_active":false}\n' "$session" \
+    | FM_HOME="$dir" PATH="$bin" "$FAKE_CLAUDE" -c '
+        printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+        "$FM_HOME/bin/fm-claude-stop-autoarm.sh"
+      ' 2>&1 || rc=$?
+  printf 'RC=%s\n' "$rc" >&2
+  return "$rc"
+}
+
+# The cap must stay session-scoped on a host without jq, which is one of the
+# three cases the cap exists for: there the synchronous guard never runs at all,
+# so a cap shared across sessions would leave the next session un-armed on its
+# very first Stop with no automatic escape.
+test_a_new_session_is_not_capped_by_a_previous_session_without_jq() {
+  local dir bin status arms_before arms_after first_key second_key
+  dir=$(make_primary_dir "$TMP_ROOT/failure-cap-new-session-nojq")
+  bin=$(make_nojq_bin "$dir") || fail "could not build a jq-less fixture PATH"
+  ! PATH="$bin" command -v jq >/dev/null 2>&1 \
+    || fail "the jq-less fixture PATH still resolves jq"
+  : > "$dir/state/task.meta"
+  write_arm_fixture "$dir" failed
+  export FM_CLAUDE_AUTOARM_FAILURE_CAP=1
+  run_autoarm_without_jq "$dir" sess-nojq "$bin" >/dev/null 2>&1 || true
+  assert_present "$dir/state/.claude-autoarm-failure-capped" "the first jq-less session did not reach the cap"
+  first_key=$(sed -n '1s/^session=//p' "$dir/state/.claude-autoarm-failure-capped")
+  arms_before=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
+
+  run_autoarm_without_jq "$dir" sess-nojq "$bin" >/dev/null 2>&1; status=$?
+  unset FM_CLAUDE_AUTOARM_FAILURE_CAP
+  arms_after=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
+  second_key=$(sed -n '1s/^session=//p' "$dir/state/.claude-autoarm-failure-capped")
+
+  [ "$arms_after" -gt "$arms_before" ] \
+    || fail "without jq the new session was capped before its own first failure: $arms_before arm attempts before, $arms_after after"
+  expect_code 2 "$status" "the new jq-less session's own first failure must still force its Stop-owned retry"
+  [ -n "$first_key" ] || fail "the jq-less cap recorded no session key at all"
+  [ "$first_key" != "$second_key" ] \
+    || fail "the jq-less session key did not vary between sessions: both recorded $first_key"
+  pass "auto-arm: without jq a new session still gets an honest arm attempt after a previous cap"
+}
+
 test_inert_in_child_worktree() {
   local base dir out status
   base="$TMP_ROOT/crew-base"
@@ -1390,5 +1458,6 @@ test_stands_down_for_a_proven_pi_primary_owner
 test_protects_when_the_pi_owner_cannot_be_proven
 test_a_reused_owner_pid_never_proves_pi_ownership
 test_a_new_session_is_not_capped_by_a_previous_session
+test_a_new_session_is_not_capped_by_a_previous_session_without_jq
 test_active_in_marked_secondmate_home
 test_fm_lock_status_still_works_with_shared_lib

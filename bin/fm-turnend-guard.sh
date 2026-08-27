@@ -182,7 +182,7 @@ BUDGET_LOCK="$STATE/.turnend-claude-blocks.lock"
 OWNER_LOCK="$STATE/.claude-autoarm.lock"
 FAILURE_NOTICE="$STATE/.claude-autoarm-failure-notified"
 FAILURE_ALARM="$STATE/.claude-autoarm-failure-alarmed"
-SESSION_ID=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"' 2>/dev/null || printf 'unknown')
+SESSION_ID=$(fm_autoarm_session_key "$PAYLOAD" "$STATE")
 
 # This episode's durable operator-visible failure record: the once-per-episode
 # notice, or the auto-arm's own cap record for THIS session. Either one proves

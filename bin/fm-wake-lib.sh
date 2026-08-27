@@ -283,6 +283,51 @@ fm_turnend_owner_is_pi_primary() {  # <state> <root>
   fm_pi_extension_owns_supervision "$state" "$root"
 }
 
+# --- Claude turn-end per-session key -------------------------------------------
+# The key BOTH Claude-shaped turn-end layers scope their per-session bounds by:
+# the auto-arm's consecutive-failure run and its durable stop record
+# (bin/fm-claude-stop-autoarm.sh), and the synchronous guard's block budget in
+# state/.turnend-claude-blocks (bin/fm-turnend-guard.sh). One owner of the
+# derivation, because both layers fire on the SAME Stop event and must agree on
+# what one session is: the guard reads the auto-arm's stop record as this
+# episode's failure record, and a key the two derive differently would leave that
+# guard blocking an episode it can no longer recognize as recorded.
+#
+# The Stop payload's session_id is the key whenever it is readable. It is not
+# always: jq is optional for the auto-arm, which runs fully without it, and a
+# payload can carry no session_id at all. A CONSTANT fallback would make the cap
+# durable across sessions rather than session-scoped, and on a jq-less host that
+# is not a small residual - the guard exits before its own jq-dependent read, so
+# it never reaches the attended fail-open that ends such an episode, and a later
+# session would be capped before its own first failure with no automatic escape.
+# The harness pid holding state/.lock is therefore the fallback: this hook already
+# depends on that lock, and it changes with every session.
+#
+# The two kinds cannot collide. A pid-derived key always carries the reserved
+# prefix below, and a payload session_id in that namespace is refused as
+# unusable, so no recorded key is ever ambiguous about which kind wrote it.
+#
+# unknown remains ONLY for an unreadable or non-numeric lock. Every caller
+# reaches this after the identity gate has proven this session owns state/.lock
+# or has recovered it, so that residual needs a concurrent rewrite of the lock to
+# occur at all, and it degrades to one shared run rather than to no cap.
+FM_AUTOARM_SESSION_LOCK_PREFIX='lock-pid-'
+fm_autoarm_session_key() {  # <payload> <state-dir>
+  local payload=$1 state=$2 id lock_pid
+  id=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || printf '')
+  case "$id" in
+    ''|*[!A-Za-z0-9._-]*|"$FM_AUTOARM_SESSION_LOCK_PREFIX"*) id= ;;
+  esac
+  if [ -z "$id" ]; then
+    lock_pid=$(sed -n '1p' "$state/.lock" 2>/dev/null || true)
+    case "$lock_pid" in
+      ''|*[!0-9]*) id=unknown ;;
+      *) id="$FM_AUTOARM_SESSION_LOCK_PREFIX$lock_pid" ;;
+    esac
+  fi
+  printf '%s\n' "$id"
+}
+
 # --- Claude Stop auto-arm consecutive-failure cap ------------------------------
 # The auto-arm's own bound on CONSECUTIVE failed re-arm attempts across Stop
 # firings, distinct from FM_CLAUDE_AUTOARM_ATTEMPTS (retries inside one firing)
@@ -296,12 +341,15 @@ fm_turnend_owner_is_pi_primary() {  # <state> <root>
 # count through fm_autoarm_failure_count_reset below, including the ACTIONABLE
 # close that is this model's ordinary success, so isolated transient failures
 # arbitrarily far apart never accumulate into a cap on a home whose mechanism
-# demonstrably works. And the run is SESSION-scoped by the Stop payload's
-# session_id, the same key and the same "unknown" fallback the synchronous
-# guard's block budget in state/.turnend-claude-blocks uses. Both the count and
-# the durable stop record carry that key, and every reader of the record compares
-# it, so a fresh session never inherits a previous session's run and cap on its
-# own first failure: it gets one honest arm attempt.
+# demonstrably works. And the run is SESSION-scoped by fm_autoarm_session_key
+# above, the same derivation the synchronous guard's block budget in
+# state/.turnend-claude-blocks uses, which falls back to the harness pid holding
+# state/.lock rather than to a constant when the payload's session_id cannot be
+# read. Both the count and the durable stop record carry that key, and every
+# reader of the record compares it, so a fresh session never inherits a previous
+# session's run and cap on its own first failure - including on a host with no
+# jq, where the guard never runs to end the episode itself - and it gets one
+# honest arm attempt.
 #
 # The count is durable, keyed by the auto-arm GENERATION so one generation counts
 # at most once, and written under the existing single-flight micro-mutex with the

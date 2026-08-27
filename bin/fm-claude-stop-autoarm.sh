@@ -58,8 +58,10 @@
 #     ledger write (fm_autoarm_failure_record in bin/fm-wake-lib.sh). The run is
 #     genuinely consecutive: a successful arm clears the count, including the
 #     ACTIONABLE close that is this model's ordinary success, and the run is
-#     keyed by the Stop payload's session_id exactly as the synchronous guard
-#     keys its block budget, so a fresh session never inherits a previous run. At
+#     keyed by fm_autoarm_session_key exactly as the synchronous guard keys its
+#     block budget - the Stop payload's session_id, or this session's harness pid
+#     from state/.lock when that field cannot be read, never a constant - so a
+#     fresh session never inherits a previous run, jq or no jq. At
 #     FM_CLAUDE_AUTOARM_FAILURE_CAP (default 3) this hook writes the durable stop
 #     record state/.claude-autoarm-failure-capped naming the reason, prints that
 #     reason ONCE, and stops re-arming: every later firing in the same episode
@@ -227,19 +229,12 @@ autoarm_record() {  # <outcome>
 }
 
 # The session this Stop belongs to, which scopes the consecutive-failure run.
-# Same field, same reader, and same "unknown" fallback the synchronous guard
-# keys state/.turnend-claude-blocks by, so the two bounds agree on what one
-# session is; jq is already this hook's optional payload reader, and its absence
-# degrades to a single shared run rather than to no cap.
-autoarm_session_id() {
-  local id
-  id=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"' 2>/dev/null || printf 'unknown')
-  case "$id" in
-    ''|*[!A-Za-z0-9._-]*) id=unknown ;;
-  esac
-  printf '%s\n' "$id"
-}
-SESSION_ID=$(autoarm_session_id)
+# Same derivation the synchronous guard keys state/.turnend-claude-blocks by, so
+# the two bounds agree on what one session is (fm_autoarm_session_key in
+# bin/fm-wake-lib.sh owns the contract). Resolved HERE, after the stale-lock
+# recovery above, so its jq-less fallback names THIS session's harness pid rather
+# than a dead predecessor's.
+SESSION_ID=$(fm_autoarm_session_key "$PAYLOAD" "$STATE")
 
 # --- capped failure episode: stop re-arming ----------------------------------
 # Once THIS session's episode reached the consecutive-failure cap, the durable
