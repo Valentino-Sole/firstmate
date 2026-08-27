@@ -231,11 +231,6 @@ run_autoarm_bg() {
   RUN_AUTOARM_BG_PID=$!
 }
 
-watcher_identity() {
-  local dir=$1 pid=$2
-  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$dir/bin/fm-wake-lib.sh" "$pid"
-}
-
 record_watcher_lock() {
   local dir=$1 pid=$2 identity=$3 root bin_dir
   root=$dir
@@ -306,7 +301,8 @@ test_capped_episode_ends_on_positive_watcher_recovery() {
   # not left permanently un-armed.
   sleep 30 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid")
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") \
+    || fail "could not identify the recovered home's live watcher"
   record_watcher_lock "$dir" "$pid" "$identity"
   touch "$dir/state/.last-watcher-beat"
   write_arm_fixture "$dir" actionable
@@ -598,7 +594,7 @@ test_actionable_close_with_live_successor_rewakes_once() {
   write_arm_fixture "$dir" actionable
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || fail "could not identify live successor for actionable close"
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || fail "could not identify live successor for actionable close"
   record_watcher_lock "$dir" "$pid" "$identity"
   touch "$dir/state/.last-watcher-beat"
 
@@ -719,7 +715,7 @@ test_benign_cycle_end_with_live_watcher_is_silent() {
   write_arm_fixture "$dir" benign-live
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || fail "could not identify live watcher holder for benign close"
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || fail "could not identify live watcher holder for benign close"
   record_watcher_lock "$dir" "$pid" "$identity"
   touch "$dir/state/.last-watcher-beat"
   printf 'session=sess-autoarm\ncount=3\nepoch=9\n' > "$dir/state/.turnend-claude-blocks"
@@ -748,7 +744,7 @@ test_positive_recovery_budget_contention_preserves_episode() {
   write_arm_fixture "$dir" benign-live
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || fail "could not identify live watcher holder for recovery contention"
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || fail "could not identify live watcher holder for recovery contention"
   record_watcher_lock "$dir" "$pid" "$identity"
   touch "$dir/state/.last-watcher-beat"
   printf 'session=sess-autoarm\ncount=3\nepoch=9\n' > "$dir/state/.turnend-claude-blocks"
@@ -784,7 +780,7 @@ test_owner_mutex_contention_preserves_failure_episode_reset() {
   write_arm_fixture "$dir" reset-boundary
   sleep 60 &
   watcher=$!
-  watcher_id=$(watcher_identity "$dir" "$watcher") || fail "could not identify reset-contention watcher"
+  watcher_id=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$watcher") || fail "could not identify reset-contention watcher"
   record_watcher_lock "$dir" "$watcher" "$watcher_id"
   touch "$dir/state/.last-watcher-beat"
   out="$dir/state/hook.out"

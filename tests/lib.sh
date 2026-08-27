@@ -317,10 +317,13 @@ fm_dead_pid() {
 
 # fm_pid_identity_of <wake-lib> <state> <pid>: the identity the real
 # fm_pid_identity computes for <pid>, which is what every marker and lock in this
-# repo records. Empty when <pid> is not alive.
+# repo records. Prints nothing and returns nonzero when <pid> has no identity to
+# record, i.e. it is not alive: the status is propagated deliberately, because
+# most callers record that identity into a fixture and a silent empty value
+# would make the fixture prove something other than what its test is named for.
 fm_pid_identity_of() {
   local wake_lib=$1 state=$2 pid=$3
-  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$wake_lib" "$pid" 2>/dev/null || true
+  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$wake_lib" "$pid" 2>/dev/null
 }
 
 # The identity a marker for a process that is no longer running carries: a real

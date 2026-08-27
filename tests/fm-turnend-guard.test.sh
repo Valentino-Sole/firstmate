@@ -195,11 +195,6 @@ run_hook() {
   printf '{"stop_hook_active":%s}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
 }
 
-watcher_identity() {
-  local dir=$1 pid=$2
-  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$dir/bin/fm-wake-lib.sh" "$pid"
-}
-
 record_watcher_lock() {
   local dir=$1 pid=$2 identity=$3 root bin_dir
   root=$(cd "$dir" && pwd)
@@ -261,7 +256,7 @@ test_hook_silent_with_live_lock_and_fresh_beacon() {
   : > "$dir/state/task1.meta"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || {
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     fail "could not identify live watcher holder"
@@ -283,7 +278,7 @@ test_hook_non_claude_health_ignores_claude_budget_contention() {
   : > "$dir/state/task1.meta"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || {
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     fail "could not identify non-Claude contention watcher"
@@ -329,7 +324,7 @@ test_hook_blocks_with_live_lock_and_stale_beacon() {
   : > "$dir/state/task1.meta"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || {
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     fail "could not identify live watcher holder"
@@ -479,7 +474,7 @@ test_hook_secondmate_reinvoke_recovery_loop() {
   : > "$dir/state/child1.meta"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || {
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     fail "could not identify live watcher holder"
@@ -1733,7 +1728,7 @@ test_hook_claude_mode_integrated_monotonic_fail_open() {
 
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || {
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     fail "could not identify the positive recovery watcher"
@@ -1769,7 +1764,7 @@ test_hook_claude_mode_recovery_contention_is_not_ordinary_allow() {
   : > "$dir/state/.claude-autoarm-failure-alarmed"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || fail "could not identify recovery-contention watcher"
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || fail "could not identify recovery-contention watcher"
   record_watcher_lock "$dir" "$pid" "$identity"
   touch "$dir/state/.last-watcher-beat"
   sleep 60 &
@@ -1805,7 +1800,7 @@ test_hook_claude_mode_concurrent_recovery_resets_are_idempotent() {
   : > "$dir/state/.claude-autoarm-failure-alarmed"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || fail "could not identify concurrent recovery watcher"
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || fail "could not identify concurrent recovery watcher"
   record_watcher_lock "$dir" "$pid" "$identity"
   touch "$dir/state/.last-watcher-beat"
   (run_integrated_autoarm "$dir" > "$dir/auto.out"; printf '%s\n' "$?" > "$dir/auto.status") &
@@ -1917,7 +1912,7 @@ test_hook_claude_mode_allow_resets_budget() {
   : > "$dir/state/.claude-autoarm-failure-alarmed"
   sleep 60 &
   pid=$!
-  identity=$(watcher_identity "$dir" "$pid") || {
+  identity=$(fm_pid_identity_of "$dir/bin/fm-wake-lib.sh" "$dir/state" "$pid") || {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     fail "could not identify live watcher holder"
