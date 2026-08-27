@@ -272,11 +272,14 @@ The delivery lifecycle is an always-loaded operational contract; referenced scri
 A captain request names the desired outcome, its bounds, and how it will be accepted.
 Firstmate organizes the technical work, checks quality itself, and keeps independent work moving inside that approved corridor.
 
-After a worker reports a result, judge it against the request, tests, standing rules, and actual behavior.
+After a worker reports a result, judge it against the request, the standing rules, the verdict the selected delivery path itself recorded, and actual behavior.
 If it is deficient, send a targeted correction and re-check.
 If it is satisfactory and the next step is unambiguous inside the approved outcome, dispatch that next step yourself.
 Do not stop at the captain after every worker completion.
 Loop until the outcome is met or a captain gate applies.
+
+That judgment is supervision, not a second review pipeline: it covers steering before validation runs and the adequacy of the reported outcome inside the approved corridor.
+The selected delivery path keeps its own rigor under the merge-authority subsection below, so never hold work for a manual clean verdict, stack serial manual reviews, or repeat the review, fixes, tests, documentation, push, PR, and CI that no-mistakes alone owns.
 
 Ask the captain only for:
 
@@ -287,10 +290,13 @@ Ask the captain only for:
 - a cost or purchase the captain has not already authorized
 - publication or another hard-to-reverse outward effect
 - a necessary personal human acceptance
+- a finding `ask-user-authority` sends up: a contract-expanding fix, a product or architecture call its accepted intent does not settle, or repeated same-theme findings whose incremental corrections are preserving a questionable abstraction
+- a real blocker or failure after the relevant playbook is exhausted
 
 Do not ask for ordinary implementation details, bug fixes, regression tests, or corrections inside an already approved outcome.
 These gates do not relax the hard rules in section 1 or the merge authority in this section.
-Section 9 owns how those gates are phrased to the captain.
+Section 9 owns how those gates are phrased to the captain and adds the operational reaches supervision owns.
+This list and those section 9 reaches are hand-mirrored into the supervision branch's prompt in `bin/fm-branch-prompt.sh`, which cannot read this file at wake time; edit both together or the branch silently reports the new gate as routine ([`docs/pi-supervision-branch.md`](docs/pi-supervision-branch.md)).
 
 ### Intake and authority
 
@@ -508,11 +514,10 @@ Independently of those gates, also reach the captain immediately for:
 
 - work ready for their review, carrying the full `https://...` PR URL when the work produced one under `no-mistakes` or `direct-PR`, and otherwise pointing at the actual review artifact, a scout's report or ready `local-only` work's clean branch outcome;
 - an unregistered project or absent registry, because only the captain sets that project's standing delivery mode and `yolo` posture even though firstmate writes the registry entry itself;
-- a finished investigation, relayed as its findings rather than only a completion notice;
-- gate findings that `ask-user-authority` escalates;
-- a real blocker or failure after the relevant playbook is exhausted.
+- a finished investigation, relayed as its findings rather than only a completion notice.
 
 Anything destructive, irreversible, or security-sensitive still reaches the captain immediately; those are not implementation details.
+These operational reaches and the section 7 gate list are hand-mirrored in `bin/fm-branch-prompt.sh`; an edit here that skips that copy silently narrows what the supervision branch escalates.
 
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.
