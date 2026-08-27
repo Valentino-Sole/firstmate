@@ -304,3 +304,34 @@ assert_absent() {
 assert_present() {
   [ -e "$1" ] || fail "$2"
 }
+
+# fm_record_pi_extension_session <dir> <session-pid> [drift] [write-lock]: stand up
+# the durable evidence a live Pi primary session leaves behind, which is what
+# fm_pi_extension_owns_supervision (and the turn-end ownership predicate built on
+# it) reads. Writes both primary extensions under <dir>/.pi/extensions and one
+# marker per extension in <dir>/state recording that extension's build version
+# and <session-pid>. Pass drift="drift" to record a version that is NOT the
+# current build, i.e. a session that loaded an older extension. Pass
+# write-lock="lock" to also claim <dir>/state/.lock for <session-pid>.
+# <dir>/bin/fm-wake-lib.sh must already be installed, since the real
+# fm_pi_extension_version computes the expected marker version.
+fm_record_pi_extension_session() {
+  local dir=$1 session_pid=$2 drift=${3:-} write_lock=${4:-} pair source marker version
+  mkdir -p "$dir/.pi/extensions"
+  for pair in \
+    "fm-primary-pi-watch.ts:.pi-watch-extension-loaded" \
+    "fm-primary-turnend-guard.ts:.pi-turnend-extension-loaded"; do
+    source=${pair%%:*}
+    marker=${pair#*:}
+    printf '// %s fixture\n' "$source" > "$dir/.pi/extensions/$source"
+    if [ "$drift" = drift ]; then
+      version="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    else
+      version=$(FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pi_extension_version "$2"' \
+        _ "$dir/bin/fm-wake-lib.sh" "$dir/.pi/extensions/$source") || return 1
+    fi
+    printf '%s\n%s\n' "$version" "$session_pid" > "$dir/state/$marker"
+  done
+  [ "$write_lock" != lock ] || printf '%s\n' "$session_pid" > "$dir/state/.lock"
+  return 0
+}

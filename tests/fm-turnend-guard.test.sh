@@ -1104,38 +1104,13 @@ run_hook_claude() {
 # and that extension calls this guard in its DEFAULT mode. Exactly one of the two
 # must act per turn end, and the owning layer must be the one that does.
 
-# Both Pi primary extensions under the fixture root plus a marker per extension
-# recording that extension's current build and the pid this home's session lock
-# names - the durable ownership evidence a live Pi session leaves behind.
-# $3 = "drift" writes a marker whose version is not the current build.
-record_pi_extension_session() {
-  local dir=$1 session_pid=$2 drift=${3:-} pair source marker version
-  mkdir -p "$dir/.pi/extensions"
-  for pair in \
-    "fm-primary-pi-watch.ts:.pi-watch-extension-loaded" \
-    "fm-primary-turnend-guard.ts:.pi-turnend-extension-loaded"; do
-    source=${pair%%:*}
-    marker=${pair#*:}
-    printf '// %s fixture\n' "$source" > "$dir/.pi/extensions/$source"
-    if [ "$drift" = drift ]; then
-      version="sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    else
-      version=$(FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pi_extension_version "$2"' \
-        _ "$dir/bin/fm-wake-lib.sh" "$dir/.pi/extensions/$source") || return 1
-    fi
-    printf '%s\n%s\n' "$version" "$session_pid" > "$dir/state/$marker"
-  done
-  printf '%s\n' "$session_pid" > "$dir/state/.lock"
-  return 0
-}
-
 test_exactly_one_layer_acts_per_logical_turn_end() {
   local dir pid claude_out claude_status pi_out pi_status
   dir=$(make_primary_dir "$TMP_ROOT/turnend-owner-pi")
   : > "$dir/state/task1.meta"
   sleep 30 &
   pid=$!
-  record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi ownership evidence"
+  fm_record_pi_extension_session "$dir" "$pid" "" lock || fail "could not record the Pi ownership evidence"
 
   claude_out=$(FM_CLAUDE_AUTOARM_SYNC_WAIT_MS=200 run_hook_claude "$dir" false); claude_status=$?
   pi_out=$(run_hook "$dir" false); pi_status=$?
@@ -1158,13 +1133,13 @@ test_no_protection_gap_when_the_owning_layer_is_unprovable() {
     : > "$dir/state/task1.meta"
     case "$case_name" in
       dead-session)
-        record_pi_extension_session "$dir" "$(nonexistent_pid)" \
+        fm_record_pi_extension_session "$dir" "$(nonexistent_pid)" "" lock \
           || fail "$case_name: could not record the Pi ownership evidence"
         ;;
       drifted-build)
         sleep 30 &
         pid=$!
-        record_pi_extension_session "$dir" "$pid" drift \
+        fm_record_pi_extension_session "$dir" "$pid" drift lock \
           || fail "$case_name: could not record the Pi ownership evidence"
         ;;
       no-evidence) : ;;

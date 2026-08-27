@@ -231,31 +231,6 @@ dead_pid() {
   printf '%s\n' "$pid"
 }
 
-# Stand up the durable evidence a live Pi primary session leaves behind: both Pi
-# primary extensions under the fixture root, and a marker per extension recording
-# that extension's current build plus the pid this home's session lock names.
-# $2 is the session pid the markers claim; "drift" writes a marker whose version
-# is not the current build, i.e. the session loaded an older extension.
-record_pi_extension_session() {
-  local dir=$1 session_pid=$2 drift=${3:-} pair source marker version
-  mkdir -p "$dir/.pi/extensions"
-  for pair in \
-    "fm-primary-pi-watch.ts:.pi-watch-extension-loaded" \
-    "fm-primary-turnend-guard.ts:.pi-turnend-extension-loaded"; do
-    source=${pair%%:*}
-    marker=${pair#*:}
-    printf '// %s fixture\n' "$source" > "$dir/.pi/extensions/$source"
-    if [ "$drift" = drift ]; then
-      version="sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    else
-      version=$(FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pi_extension_version "$2"' \
-        _ "$dir/bin/fm-wake-lib.sh" "$dir/.pi/extensions/$source") || return 1
-    fi
-    printf '%s\n%s\n' "$version" "$session_pid" > "$dir/state/$marker"
-  done
-  return 0
-}
-
 # Run the hook WITHOUT the fake harness claiming the session lock, so a fixture
 # that records its own lock owner (a Pi session) keeps it.
 run_autoarm_unclaimed() {
@@ -337,7 +312,7 @@ test_stands_down_for_a_proven_pi_primary_owner() {
   sleep 30 &
   pid=$!
   printf '%s\n' "$pid" > "$dir/state/.lock"
-  record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi ownership evidence"
+  fm_record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi ownership evidence"
   run_autoarm_unclaimed "$dir" >/dev/null 2>&1; status=$?
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
@@ -358,13 +333,13 @@ test_protects_when_the_pi_owner_cannot_be_proven() {
       # ownership proof must fail, and the fake harness then owns the lock and
       # arms exactly as it does with no Pi in the picture at all.
       dead=$(dead_pid)
-      record_pi_extension_session "$dir" "$dead" || fail "could not record the Pi ownership evidence"
+      fm_record_pi_extension_session "$dir" "$dead" || fail "could not record the Pi ownership evidence"
       run_autoarm "$dir" >/dev/null 2>&1; status=$?
     else
       sleep 30 &
       pid=$!
       printf '%s\n' "$pid" > "$dir/state/.lock"
-      record_pi_extension_session "$dir" "$pid" drift || fail "could not record the Pi ownership evidence"
+      fm_record_pi_extension_session "$dir" "$pid" drift || fail "could not record the Pi ownership evidence"
       run_autoarm_unclaimed "$dir" >/dev/null 2>&1; status=$?
       kill "$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
