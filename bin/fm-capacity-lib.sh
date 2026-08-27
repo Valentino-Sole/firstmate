@@ -43,11 +43,14 @@
 # all, so fm_backend_agent_state always prints `unverified` there and liveness
 # can never be proven negative. Treating that as "still live" would let a home
 # on those backends accumulate finished records until the budget is
-# permanently full. So for a non-answer the task's own DECLARED state decides:
-# done, failed, blocked, needs-decision, paused, or captain-held (parked,
-# merge-waiting, finished with the pane gone) releases the slot, while a task
-# that is actively working - or that has declared nothing yet, such as a
-# worker one second after launch - keeps it. That second half is the
+# permanently full. So for a non-answer the task's own DECLARED state decides,
+# using the terminal vocabulary bin/fm-classify-lib.sh already owns rather than
+# a second copy of it: done, failed, blocked, needs-decision, paused,
+# captain-held, and the legacy bare lines that carry no leading verb at all
+# (`PR ready ...`, `merged`, `checks green`, each home's own FM_CAPTAIN_RE) all
+# mean parked, merge-waiting, or finished with the pane gone, and all release
+# the slot. A task that is actively working - or that has declared nothing yet,
+# such as a worker one second after launch - keeps it. That second half is the
 # fail-closed carve-out: an unknown endpoint on active work is exactly where a
 # wrong guess would oversubscribe the host, so it is resolved in favour of
 # holding the slot.
@@ -63,12 +66,19 @@
 #   field: pinning only the preferred host keeps the configured fallback, and
 #   an unrecognised pinned kind is rejected exactly like an unrecognised kind
 #   inside the config file rather than coerced to a default.
-#   Probe configured preferred, then fallback, with a bounded SSH call.
+#   Probe configured preferred, then fallback, with a bounded SSH call. A host
+#   with no run-queue load average (Windows) is asked for several busy-percent
+#   samples across a short window, and the mean is gated as a percentage
+#   (< FM_CAPACITY_PCT_MAX_BUSY) rather than rescaled into a load1: a
+#   one-second burst cannot demote the preferred host, and a host sitting at
+#   99% busy is still refused.
 #   Prefer the preferred host when it is freshly reachable and suitable.
 #   Use the fallback only when the preferred is not.
 #   Never assign that class of work onto the protected local supervisor
 #   just because both remotes failed; route=none in that case.
-#   A cpu-kind host is suitable when load1 < nproc and mem_avail_mb >= 2048.
+#   A cpu-kind host is suitable when it has CPU headroom (load1 < nproc, or a
+#   mean busy percent below FM_CAPACITY_PCT_MAX_BUSY on a host that reports
+#   only a percentage) and mem_avail_mb >= 2048.
 #   A gpu-kind host must clear those same host gates AND report nvidia-smi
 #   util <= 90 with at least 1024 MiB free: free VRAM on a machine whose CPU is
 #   pinned or whose RAM is exhausted is not usable capacity, and the fallback
@@ -116,6 +126,21 @@ FM_CAPACITY_GPU_MIN_FREE_MB=1024
 FM_CAPACITY_GPU_MAX_UTIL=90
 FM_CAPACITY_CPU_MIN_MEM_MB=2048
 FM_CAPACITY_CONFIG_FILE=compute-hosts.json
+# A Windows host has no run-queue load average to read, so its busy percentage
+# is sampled several times across a short window and averaged. One sample is a
+# ~1-second CPU-busy reading: a browser or compile burst pins it at 100 and
+# would flip an otherwise healthy Heim-PC to unsuitable, inverting the routing
+# preference. Averaging dilutes a burst that short while a genuinely pinned
+# machine still reads ~100 across every sample, so the sustained-overload gate
+# survives.
+FM_CAPACITY_WIN_LOAD_SAMPLES=3
+FM_CAPACITY_WIN_LOAD_SAMPLE_MS=1000
+# ... and the averaged percentage is then gated as a PERCENTAGE. Rescaling it
+# into a load1 equivalent and reusing `load1 < nproc` would mean "refuse only
+# at literally 100% busy", which lets a machine sitting at 99% through; a busy
+# fraction and a run-queue depth are different measurements and get different
+# thresholds. A mean busy percent at or above this is a sustained overload.
+FM_CAPACITY_PCT_MAX_BUSY=90
 
 fm_capacity_is_uint() {
   case "${1:-}" in '' | *[!0-9]*) return 1 ;; esac
@@ -157,6 +182,16 @@ fm_capacity_min() {
 fm_capacity_max() {
   local a=$1 b=$2
   [ "$a" -gt "$b" ] && printf '%s\n' "$a" || printf '%s\n' "$b"
+}
+
+# Mean of the given numeric samples, to two decimals. Non-numeric samples are
+# skipped; returns 1 when nothing numeric was given.
+fm_capacity_mean() { # <value>...
+  [ "$#" -gt 0 ] || return 1
+  printf '%s\n' "$@" | awk '
+    $1 ~ /^[0-9]+(\.[0-9]+)?$/ { sum += $1; n++ }
+    END { if (n == 0) exit 1; printf "%.2f", sum / n }
+  '
 }
 
 # Integer slot count from one local measurement triple. Unknown RAM (empty or
@@ -268,6 +303,17 @@ fm_capacity_occupied_ids() { # <state-dir>
 # (paused, captain-held) are not. Fail closed on anything else: a missing,
 # blank, or unrecognised declaration reads as ACTIVE, so a worker that has not
 # written its first status line yet still holds its slot.
+#
+# The four standard verbs are matched here directly so they always release,
+# even in a home that overrides FM_CAPTAIN_RE. Beyond them, the terminal
+# vocabulary is NOT this library's to define: bin/fm-classify-lib.sh already
+# owns it for the watcher and the away-mode daemon, including the legacy bare
+# lines that carry no leading verb at all (`PR ready ...`, `checks green`,
+# `merged`) and each home's own FM_CAPTAIN_RE. Restating a narrower list here
+# would let exactly those lines pin a slot forever on a backend whose liveness
+# can never be proven negative, so the shared classifier is consulted instead
+# of a second copy of the vocabulary. It answers "not relevant" for working,
+# resolved, paused and captain-held, so an active crew is never released by it.
 fm_capacity_task_active() { # <state-dir> <task-id>
   local state=$1 id=$2 line verb
   declare -F last_status_line >/dev/null 2>&1 || return 0
@@ -278,6 +324,9 @@ fm_capacity_task_active() { # <state-dir> <task-id>
   case "$verb" in
     done | failed | blocked | needs-decision) return 1 ;;
   esac
+  if declare -F status_is_captain_relevant >/dev/null 2>&1; then
+    status_is_captain_relevant "$line" && return 1
+  fi
   return 0
 }
 
@@ -435,7 +484,7 @@ fm_capacity_measure_host_occupancy() { # <state-dir> <home-dir>
 
 # Is a freshly probed host suitable for host-bound work of <kind>?
 # Both kinds must first clear the same HOST gates the local slot formula uses -
-# load1 below nproc and at least FM_CAPACITY_CPU_MIN_MEM_MB available - because
+# CPU headroom and at least FM_CAPACITY_CPU_MIN_MEM_MB available - because
 # host-bound work still needs a CPU and RAM to run on wherever it lands. A gpu
 # host then adds its accelerator gates on top; free VRAM behind a pinned CPU or
 # an exhausted RAM is not usable capacity, and treating it as capacity would
@@ -444,14 +493,28 @@ fm_capacity_measure_host_occupancy() { # <state-dir> <home-dir>
 # emits mem_avail_mb=0 and load1=0 when /proc is unreadable, and a fabricated
 # 0 load must never read as headroom, so the 0 RAM that always accompanies it
 # fails the gate.
-fm_capacity_host_suitable() { # <kind> <nproc> <mem_avail_mb> <load1> <gpu_free_mb> <gpu_util>
-  local kind=$1 nproc=$2 mem=$3 load1=$4 gpu_free=$5 gpu_util=$6 load_h nproc_h
+# CPU headroom is read from whichever measurement the host can actually
+# produce. A host with a run-queue load average is gated on load1 < nproc. A
+# host that only reports a busy percentage (Windows) passes that averaged
+# percentage as <mean_busy_pct> and is gated on it directly, against
+# FM_CAPACITY_PCT_MAX_BUSY: the two are different measurements and the load1
+# rescaling of a percentage can only reach nproc at exactly 100%, which would
+# wave a host sitting at 99% straight through.
+fm_capacity_host_suitable() { # <kind> <nproc> <mem_avail_mb> <load1> <gpu_free_mb> <gpu_util> [mean_busy_pct]
+  local kind=$1 nproc=$2 mem=$3 load1=$4 gpu_free=$5 gpu_util=$6 pct=${7:-}
+  local load_h nproc_h pct_h max_pct_h
   fm_capacity_kind_ok "$kind" || return 1
   fm_capacity_is_uint "$nproc" || return 1
   [ "$nproc" -gt 0 ] || return 1
-  load_h=$(fm_capacity_load_hundredths "$load1") || return 1
-  nproc_h=$((nproc * 100))
-  [ "$load_h" -lt "$nproc_h" ] || return 1
+  if [ -n "$pct" ]; then
+    pct_h=$(fm_capacity_load_hundredths "$pct") || return 1
+    max_pct_h=$((FM_CAPACITY_PCT_MAX_BUSY * 100))
+    [ "$pct_h" -lt "$max_pct_h" ] || return 1
+  else
+    load_h=$(fm_capacity_load_hundredths "$load1") || return 1
+    nproc_h=$((nproc * 100))
+    [ "$load_h" -lt "$nproc_h" ] || return 1
+  fi
   fm_capacity_is_uint "$mem" || return 1
   [ "$mem" -ge "$FM_CAPACITY_CPU_MIN_MEM_MB" ] || return 1
   case "$kind" in
@@ -485,10 +548,12 @@ fm_capacity_parse_gpu_csv() { # <csv> -> sets FM_CAPACITY_GPU_FREE_MB FM_CAPACIT
   return 0
 }
 
-# Convert a Windows LoadPercentage (0-100) plus nproc into a load1 equivalent.
+# Convert an averaged Windows busy percentage (0-100) plus nproc into a load1
+# equivalent. The percentage may carry decimals because it is a mean of several
+# samples, not a single integer reading.
 fm_capacity_load1_from_pct() { # <nproc> <load_pct>
   local nproc=$1 pct=$2
-  fm_capacity_is_uint "$nproc" && fm_capacity_is_uint "$pct" || return 1
+  fm_capacity_is_uint "$nproc" && fm_capacity_is_number "$pct" || return 1
   awk -v n="$nproc" -v p="$pct" 'BEGIN { printf "%.2f", n * p / 100 }'
 }
 
@@ -501,16 +566,33 @@ printf 'FM_CAP gpu=%s\n' "$(nvidia-smi --query-gpu=memory.free,utilization.gpu -
 CMD
 }
 
+# Emits one `load_pct` line per sample; fm_capacity_absorb_probe_text averages
+# them. The shell side owns the averaging so the durability of the reading is
+# testable without a Windows host.
 fm_capacity_windows_probe_cmd() {
-  cat <<'CMD'
-$n = [Environment]::ProcessorCount; $os = Get-CimInstance Win32_OperatingSystem; $avail = 0; if ($os -and $os.FreePhysicalMemory) { $avail = [int]($os.FreePhysicalMemory / 1024) }; $load = 0; $cpu = @(Get-CimInstance Win32_Processor); if ($cpu.Count -gt 0) { $load = [int](($cpu | Measure-Object -Property LoadPercentage -Average).Average) }; $gpu = ''; try { $gpu = (& nvidia-smi --query-gpu=memory.free,utilization.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } catch {}; Write-Output ("FM_CAP nproc=" + $n); Write-Output ("FM_CAP mem_avail_mb=" + $avail); Write-Output ("FM_CAP load_pct=" + $load); Write-Output ("FM_CAP gpu=" + $gpu)
+  local cmd
+  cmd=$(cat <<'CMD'
+$n = [Environment]::ProcessorCount; $os = Get-CimInstance Win32_OperatingSystem; $avail = 0; if ($os -and $os.FreePhysicalMemory) { $avail = [int]($os.FreePhysicalMemory / 1024) }; $gpu = ''; try { $gpu = (& nvidia-smi --query-gpu=memory.free,utilization.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } catch {}; Write-Output ("FM_CAP nproc=" + $n); Write-Output ("FM_CAP mem_avail_mb=" + $avail); Write-Output ("FM_CAP gpu=" + $gpu); for ($i = 0; $i -lt @SAMPLES@; $i++) { if ($i -gt 0) { Start-Sleep -Milliseconds @SLEEPMS@ }; $load = 0; $cpu = @(Get-CimInstance Win32_Processor); if ($cpu.Count -gt 0) { $load = [int](($cpu | Measure-Object -Property LoadPercentage -Average).Average) }; Write-Output ("FM_CAP load_pct=" + $load) }
 CMD
+  )
+  cmd=${cmd//@SAMPLES@/$FM_CAPACITY_WIN_LOAD_SAMPLES}
+  cmd=${cmd//@SLEEPMS@/$FM_CAPACITY_WIN_LOAD_SAMPLE_MS}
+  printf '%s\n' "$cmd"
 }
 
-fm_capacity_ssh_raw() { # <host> <remote-cmd>
-  local host=$1 cmd=$2 bound
+# Seconds the Windows sampling window adds to a probe, so its SSH call is not
+# cut short by the bound that fits the single-shot POSIX probe.
+fm_capacity_win_probe_extra_secs() {
+  local ms=$((FM_CAPACITY_WIN_LOAD_SAMPLES * FM_CAPACITY_WIN_LOAD_SAMPLE_MS))
+  printf '%s\n' $(((ms + 999) / 1000))
+}
+
+fm_capacity_ssh_raw() { # <host> <remote-cmd> [extra-seconds]
+  local host=$1 cmd=$2 extra=${3:-0} bound
+  fm_capacity_is_uint "$extra" || extra=0
   bound=$((${FM_CAPACITY_SSH_TIMEOUT:-5} + 3))
   [ "$bound" -gt 3 ] || bound=8
+  bound=$((bound + extra))
   fm_run_timed "$bound" ssh \
     -o BatchMode=yes \
     -o ConnectTimeout="${FM_CAPACITY_SSH_TIMEOUT:-5}" \
@@ -522,13 +604,15 @@ fm_capacity_ssh_raw() { # <host> <remote-cmd>
 
 # Parse FM_CAP lines from a probe transcript into the FM_CAPACITY_PROBE_* vars.
 fm_capacity_absorb_probe_text() {
-  local text=$1 line key val load_pct
+  local text=$1 line key val mean
+  local -a load_pct=()
   FM_CAPACITY_PROBE_NPROC=
   FM_CAPACITY_PROBE_MEM_MB=
   FM_CAPACITY_PROBE_LOAD1=
   FM_CAPACITY_PROBE_GPU_FREE=
   FM_CAPACITY_PROBE_GPU_UTIL=
-  load_pct=
+  FM_CAPACITY_PROBE_LOAD_PCT=
+  FM_CAPACITY_PROBE_LOAD_SAMPLES=0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       FM_CAP\ *)
@@ -539,7 +623,7 @@ fm_capacity_absorb_probe_text() {
           nproc) FM_CAPACITY_PROBE_NPROC=$val ;;
           mem_avail_mb) FM_CAPACITY_PROBE_MEM_MB=$val ;;
           load1) FM_CAPACITY_PROBE_LOAD1=$val ;;
-          load_pct) load_pct=$val ;;
+          load_pct) load_pct+=("$val") ;;
           gpu) fm_capacity_parse_gpu_csv "$val" && {
             FM_CAPACITY_PROBE_GPU_FREE=$FM_CAPACITY_GPU_FREE_MB
             FM_CAPACITY_PROBE_GPU_UTIL=$FM_CAPACITY_GPU_UTIL
@@ -550,8 +634,19 @@ fm_capacity_absorb_probe_text() {
   done <<EOF
 $text
 EOF
-  if [ -z "$FM_CAPACITY_PROBE_LOAD1" ] && [ -n "$load_pct" ] && [ -n "$FM_CAPACITY_PROBE_NPROC" ]; then
-    FM_CAPACITY_PROBE_LOAD1=$(fm_capacity_load1_from_pct "$FM_CAPACITY_PROBE_NPROC" "$load_pct" || true)
+  # A percentage-derived load is the mean of every sample the probe returned,
+  # never a single reading: one ~1-second sample cannot distinguish a burst
+  # from a pinned host, and treating it as a 1-minute average would refuse the
+  # preferred host for the length of a browser tab.
+  if [ "${#load_pct[@]}" -gt 0 ]; then
+    mean=$(fm_capacity_mean "${load_pct[@]}") || mean=
+    FM_CAPACITY_PROBE_LOAD_PCT=$mean
+    FM_CAPACITY_PROBE_LOAD_SAMPLES=${#load_pct[@]}
+  fi
+  if [ -z "$FM_CAPACITY_PROBE_LOAD1" ] && [ -n "$FM_CAPACITY_PROBE_LOAD_PCT" ] \
+    && [ -n "$FM_CAPACITY_PROBE_NPROC" ]; then
+    FM_CAPACITY_PROBE_LOAD1=$(fm_capacity_load1_from_pct \
+      "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_LOAD_PCT" || true)
   fi
   fm_capacity_is_uint "$FM_CAPACITY_PROBE_NPROC" || return 1
   [ "$FM_CAPACITY_PROBE_NPROC" -gt 0 ] || return 1
@@ -559,6 +654,10 @@ EOF
 }
 
 # Probe one SSH alias. Sets measurement vars when reachable. Does not cache.
+# FM_CAPACITY_PROBE_LOAD_PCT and FM_CAPACITY_PROBE_LOAD_SAMPLES record how CPU
+# headroom was measured on a host with no run-queue load average: the mean
+# busy percent, and how many samples it was averaged over.
+# shellcheck disable=SC2034
 fm_capacity_probe_ssh() { # <ssh-alias>
   local host=$1 out
   FM_CAPACITY_PROBE_NPROC=
@@ -566,6 +665,8 @@ fm_capacity_probe_ssh() { # <ssh-alias>
   FM_CAPACITY_PROBE_LOAD1=
   FM_CAPACITY_PROBE_GPU_FREE=
   FM_CAPACITY_PROBE_GPU_UTIL=
+  FM_CAPACITY_PROBE_LOAD_PCT=
+  FM_CAPACITY_PROBE_LOAD_SAMPLES=0
   fm_capacity_ssh_alias_ok "$host" || return 1
   if [ "${FM_CAPACITY_SKIP_REMOTE:-}" = 1 ]; then
     return 1
@@ -574,7 +675,8 @@ fm_capacity_probe_ssh() { # <ssh-alias>
   if fm_capacity_absorb_probe_text "$out"; then
     return 0
   fi
-  out=$(fm_capacity_ssh_raw "$host" "$(fm_capacity_windows_probe_cmd)" 2>/dev/null) || out=
+  out=$(fm_capacity_ssh_raw "$host" "$(fm_capacity_windows_probe_cmd)" \
+    "$(fm_capacity_win_probe_extra_secs)" 2>/dev/null) || out=
   if fm_capacity_absorb_probe_text "$out"; then
     return 0
   fi
@@ -697,7 +799,7 @@ fm_capacity_route_hosts() {
       if fm_capacity_host_suitable "$FM_CAPACITY_PREF_KIND" \
         "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_MEM_MB" \
         "$FM_CAPACITY_PROBE_LOAD1" "$FM_CAPACITY_PROBE_GPU_FREE" \
-        "$FM_CAPACITY_PROBE_GPU_UTIL"; then
+        "$FM_CAPACITY_PROBE_GPU_UTIL" "${FM_CAPACITY_PROBE_LOAD_PCT:-}"; then
         FM_CAPACITY_PREF_SUITABLE=yes
         FM_CAPACITY_ROUTE=preferred
         FM_CAPACITY_ROUTE_HOST=$FM_CAPACITY_PREF_SSH
@@ -712,7 +814,7 @@ fm_capacity_route_hosts() {
       if fm_capacity_host_suitable "$FM_CAPACITY_FALL_KIND" \
         "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_MEM_MB" \
         "$FM_CAPACITY_PROBE_LOAD1" "$FM_CAPACITY_PROBE_GPU_FREE" \
-        "$FM_CAPACITY_PROBE_GPU_UTIL"; then
+        "$FM_CAPACITY_PROBE_GPU_UTIL" "${FM_CAPACITY_PROBE_LOAD_PCT:-}"; then
         FM_CAPACITY_FALL_SUITABLE=yes
         FM_CAPACITY_ROUTE=fallback
         FM_CAPACITY_ROUTE_HOST=$FM_CAPACITY_FALL_SSH
@@ -750,7 +852,9 @@ fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch> [home
   local state=$1 id=$2 kind=$3 relaunch=$4 home=${5:-${FM_HOME:-}}
   [ "$relaunch" != 1 ] || return 0
   [ "$kind" != secondmate ] || return 0
-  fm_capacity_measure_local "$state" "$home"
+  # Identity first: it is a pure metadata read and its refusal quotes no
+  # measured value, so an id collision never pays for a host-wide occupancy
+  # scan (one backend agent-state probe per record across every local home).
   if fm_capacity_task_occupies_slot "$state" "$id"; then
     if fm_capacity_id_is_worker_record "$state" "$id"; then
       printf 'error: capacity: task %s already has a worker; sequential replacement uses relaunch, never a second concurrent worker\n' "$id" >&2
@@ -760,6 +864,7 @@ fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch> [home
     fi
     return 1
   fi
+  fm_capacity_measure_local "$state" "$home"
   if [ "$FM_CAPACITY_FREE" -ge 1 ]; then
     return 0
   fi

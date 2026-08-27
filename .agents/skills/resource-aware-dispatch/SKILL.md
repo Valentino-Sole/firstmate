@@ -33,7 +33,7 @@ If captain preferences name a preferred SSH alias and a fallback SSH alias, pass
 Read the printed `slots`, `occupied`, `free`, `homes_scanned`, and `route` lines as the verdict.
 `occupied` counts live workers across every local firstmate home on this host, including secondmate homes, so the budget protects the server rather than granting each home its own; `homes_scanned` says how many homes that count covers.
 A task whose worker is confidently gone - a captain hold, a merge wait, an exited pane - keeps its record but releases its slot.
-On a backend whose endpoint state cannot be classified at all, that release follows the task's own declared state instead: `done`, `failed`, `blocked`, `needs-decision`, `paused`, and `captain-held` release the slot, while actively working or not-yet-declared work keeps it, so an unreadable endpoint can never oversubscribe the host.
+Whenever the endpoint state is neither a confident `alive` nor a confident gone - a backend with no recovery classifier, and equally an ambiguous or unreadable read on one that has it - that release follows the task's own last declaration instead: anything the shared wake classifier reads as captain-relevant releases the slot, while actively working or not-yet-declared work keeps it, so an unreadable endpoint can never oversubscribe the host.
 A fresh ship or scout is also refused when its id already has any durable record in this home, including a live secondmate's, so a spawn never overwrites a record something else owns.
 Each of `--preferred`, `--fallback`, `--preferred-kind`, and `--fallback-kind` overrides only its own field of the config file, so a preferred-only pin keeps the configured fallback; an unknown kind is refused rather than coerced.
 

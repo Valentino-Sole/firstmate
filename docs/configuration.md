@@ -374,12 +374,14 @@ This section is the single owner of the canonical schema.
 A session pin overrides only its own field, so `bin/fm-capacity.sh route --preferred <alias>` still uses the fallback configured here.
 A `cpu` host is suitable when load1 is below nproc and at least 2048 MiB is available.
 A `gpu` host must clear those same host gates and additionally report GPU utilization at most 90 with at least 1024 MiB VRAM free, so free VRAM on a machine whose CPU is pinned or whose RAM is exhausted still falls through to the fallback.
+A host with no run-queue load average - a Windows host, where the probe reads a busy percentage instead - is sampled several times across a short window and the mean is what the load gate sees, so a one-second burst does not demote the preferred host while a sustained pin still does.
 Those host gates are also what rejects an unmeasurable host: the probe reports `mem_avail_mb=0` and `load1=0` when it cannot read `/proc`, and that fabricated zero load never counts as headroom.
 Routing prefers the preferred host when it is freshly reachable and suitable, then the fallback, and otherwise returns `route=none` rather than piling that class of work onto the protected local supervisor.
 Worker panes still launch on the supervisor host; the route is where the host-bound compute runs.
 The worker-slot budget is scoped to this physical host rather than to one home: occupancy counts live workers across this home, the local primary home it was seeded from, and every locally routed secondmate home registered under that primary, and `bin/fm-capacity.sh slots` prints `homes_scanned` alongside `occupied`.
 Those home paths are canonicalized before they are deduplicated, so a home reached through a trailing slash or a symlink is counted once rather than twice.
-A slot is released when the recorded endpoint is confidently gone, and on a backend with no recovery classifier - where liveness can never be proven negative - when the task itself has declared `done`, `failed`, `blocked`, `needs-decision`, `paused`, or `captain-held`; a task that is actively working, or that has declared nothing yet, keeps its slot.
+A slot is released when the recorded endpoint is confidently gone (`dead` or `missing`), and always kept when it is confidently `alive`.
+For every other endpoint verdict - `unverified` on a backend with no recovery classifier, and equally `ambiguous` or `unreadable` on one that has it - the task's own last declaration decides: any line the shared wake classifier reads as captain-relevant (`done`, `failed`, `blocked`, `needs-decision`, the declared waits `paused` and `captain-held`, and legacy bare lines such as `PR ready ...` or `merged`) releases the slot, while actively working or not-yet-declared work keeps it.
 See [`docs/examples/compute-hosts.json`](examples/compute-hosts.json) for a copyable starting point.
 When the file exists, `bin/fm-capacity.sh` requires `jq` to parse it; a present but malformed file is a concrete error for routing, while local slot calculation still runs.
 
