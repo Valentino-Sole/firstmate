@@ -7,9 +7,9 @@
 #   fm-capacity.sh spawn-gate [--task-id <id>]
 #
 # `probe` prints one fresh local measurement plus configured preferred/fallback
-# reachability, suitability, derived slots, the live occupied count across the
-# local firstmate homes on this host, free count, and the host-bound routing
-# verdict. `slots` prints only the local slot budget, including homes_scanned so
+# reachability, suitability, the CPU-headroom reading each probe returned,
+# derived slots, the live occupied count across the local firstmate homes on
+# this host, free count, and the host-bound routing verdict. `slots` prints only the local slot budget, including homes_scanned so
 # the host-scoped occupancy is auditable. `route` prints only the host-bound
 # routing verdict. `spawn-gate` exits 0 when a new independent ship/scout worker
 # may start, and 1 when it must wait; it never interrupts a running worker.
@@ -130,9 +130,11 @@ print_route() {
   printf 'preferred_ssh=%s\n' "${FM_CAPACITY_PREF_SSH:-}"
   printf 'preferred_reachable=%s\n' "$FM_CAPACITY_PREF_REACHABLE"
   printf 'preferred_suitable=%s\n' "$FM_CAPACITY_PREF_SUITABLE"
+  printf 'preferred_cpu=%s\n' "$FM_CAPACITY_PREF_LOAD"
   printf 'fallback_ssh=%s\n' "${FM_CAPACITY_FALL_SSH:-}"
   printf 'fallback_reachable=%s\n' "$FM_CAPACITY_FALL_REACHABLE"
   printf 'fallback_suitable=%s\n' "$FM_CAPACITY_FALL_SUITABLE"
+  printf 'fallback_cpu=%s\n' "$FM_CAPACITY_FALL_LOAD"
 }
 
 print_probe() {
