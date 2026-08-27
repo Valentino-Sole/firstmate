@@ -353,6 +353,31 @@ Malformed JSON, an empty or malformed rule/default array, an unverified harness,
 While the file remains present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
 Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
 
+## Compute hosts and worker slots (config/compute-hosts.json)
+
+`config/compute-hosts.json` is an optional local, gitignored file naming a preferred SSH compute host and a fallback SSH compute host for recompute-heavy or host-bound work.
+It is not inherited by secondmate homes, and it is not a harness or model profile: leave `config/crew-dispatch.json` alone when editing this file.
+An absent file still protects the local supervisor host through measured worker slots; only host-bound routing needs the inventory.
+This section is the single owner of the canonical schema.
+`bin/fm-capacity-lib.sh` owns the slot formula, the fresh-probe contract, occupied-worker counting, and the refuse-rather-than-kill spawn gate.
+`resource-aware-dispatch` owns the firstmate procedure that consults that command.
+
+```json
+{
+  "preferred": { "ssh": "<ssh-config-alias>", "kind": "gpu" },
+  "fallback": { "ssh": "<ssh-config-alias>", "kind": "cpu" }
+}
+```
+
+`ssh` is a safe SSH config alias (`A-Za-z0-9._-`).
+`kind` is `gpu` or `cpu`.
+A `gpu` host is suitable when a fresh probe reports GPU utilization at most 90 and at least 1024 MiB free.
+A `cpu` host is suitable when load1 is below nproc and at least 2048 MiB is available.
+Routing prefers the preferred host when it is freshly reachable and suitable, then the fallback, and otherwise returns `route=none` rather than piling that class of work onto the protected local supervisor.
+Worker panes still launch on the supervisor host; the route is where the host-bound compute runs.
+See [`docs/examples/compute-hosts.json`](examples/compute-hosts.json) for a copyable starting point.
+When the file exists, `bin/fm-capacity.sh` requires `jq` to parse it; a present but malformed file is a concrete error for routing, while local slot calculation still runs.
+
 ## Toolchain
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
@@ -369,6 +394,7 @@ An unknown resolved backend emits `BACKEND_INVALID` and blocks dispatch instead 
 Orca provides both the task worktree and terminal endpoint (see "Runtime backend" above), so `backend=orca` requires only `orca` on top of the universal toolchain and skips both `treehouse` and every other backend's session CLI.
 A herdr, zellij, or cmux home is therefore never told `tmux` is missing, and the `treehouse` durable-lease upgrade check runs only for the backends that actually use treehouse.
 When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
+When `config/compute-hosts.json` exists, `bin/fm-capacity.sh` also requires `jq` to parse that host inventory.
 When Relay is opted in, bootstrap also requires `curl` and `jq` before arming the relay poll shim.
 `tasks-axi` and `quota-axi` are required bootstrap tools in every profile, the same class as `lavish-axi`.
 An absent or incompatible `tasks-axi` reports `MISSING: tasks-axi (install: npm install -g tasks-axi)`; when `config/backlog-backend` is not `manual` and compatible `tasks-axi` is on `PATH`, bootstrap stays silent and firstmate uses its verbs for routine backlog mutations, otherwise it hand-edits `data/backlog.md` until installation is approved and completed.
