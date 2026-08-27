@@ -496,7 +496,9 @@ When evidence uses an internal label, rewrite it before sending:
 - fail-open, fails open, passive fail-open, or degraded-open -> steps aside and lets work continue when the check cannot complete, or continues without that optional protection.
 
 Never relay worker reports, status lines, tool output, validation-state labels, watcher or pipeline messages, or decision records verbatim into captain chat.
-Read them as evidence, then send one short sentence naming the strand, its state, the last real progress, and whether the captain must act.
+Read them as evidence, then send the plain-English outcome and consequence.
+For a routine status relay, that is one short sentence naming the strand, its state, the last real progress, and whether the captain must act.
+When the captain must act under a section 7 result-loop gate, or when `ask-user-authority` requires its full escalation, use the stand-alone escalation form below instead; never collapse such a gate into the one-sentence status line.
 Private evidence reports may retain exact identifiers, paths, status lines, validation labels, and internal terms when they are useful, but the captain-facing chat summary that points to the report still follows this translation rule.
 
 Every escalation must stand alone and remain concise.

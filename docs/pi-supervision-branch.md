@@ -57,7 +57,7 @@ Because Pi gives the model only a custom message's `content`, that silent note n
 This self-description lets main distinguish a new supervision outcome from its own earlier captain-facing answer; without it, main can mistake the outcome for that answer and re-emit the stale answer instead of relaying the outcome.
 If envelope encoding fails, the note degrades to the same relay instruction as plain text rather than losing the outcome or opening another turn.
 A no-change heartbeat outcome explicitly reported with `task=fleet` and `silent=true` is also delivered silently with no rendered note, while every other `routine` outcome stays rendered with its sailboat prefix.
-The verdict criteria in the branch prompt follow the captain gates in the [`AGENTS.md`](../AGENTS.md) section 7 result loop and the phrasing contract in section 9; doubt escalates.
+The branch prompt embeds its own complete verdict list, so the branch never reads [`AGENTS.md`](../AGENTS.md) at wake time; that embedded list restates the section 7 result-loop captain gates plus the operational escalations supervision owns, and its summary language follows the section 9 phrasing contract, so an edit to either section has to be mirrored here by hand. Doubt escalates.
 Main can read the durable outcome store on demand through its `fm_branch_outcomes` tool.
 
 ## Heartbeat routing
