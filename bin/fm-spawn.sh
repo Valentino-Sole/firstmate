@@ -1715,7 +1715,7 @@ fi
 # Relaunch is sequential replacement and is exempt; --secondmate is persistent
 # and is exempt. Refusing here leaves every other running worker untouched.
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
-  fm_capacity_allow_new_worker "$STATE" "$ID" "$KIND" 0 || exit 1
+  fm_capacity_allow_new_worker "$STATE" "$ID" "$KIND" 0 "$FM_HOME" || exit 1
 fi
 
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)

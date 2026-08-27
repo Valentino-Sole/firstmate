@@ -13,7 +13,7 @@ metadata:
 # resource-aware-dispatch
 
 This skill is the single owner of the firstmate procedure for resource-aware parallel dispatch.
-`bin/fm-capacity-lib.sh` owns the slot formula, the fresh-probe contract, occupied-worker counting, same-task uniqueness, and the refuse-rather-than-kill spawn gate.
+`bin/fm-capacity-lib.sh` owns the slot formula, the fresh-probe contract, host-scoped live-worker counting, same-task uniqueness, and the refuse-rather-than-kill spawn gate.
 [`docs/configuration.md`](../../../docs/configuration.md) "Compute hosts and worker slots" owns optional `config/compute-hosts.json`.
 `AGENTS.md` section 7 owns the always-loaded intake boundary and load trigger.
 This is not model routing: do not edit `config/crew-dispatch.json` or standing harness pins from this skill.
@@ -30,7 +30,10 @@ Run `bin/fm-capacity.sh probe` at the moment of assignment.
 Do not reuse an earlier session's reachability, load, or slot count.
 If captain preferences name a preferred SSH alias and a fallback SSH alias, pass them on that invocation (`--preferred` and `--fallback`) even when the config file is absent, so the executable sees this home's hosts without copying them into shared instructions.
 
-Read the printed `slots`, `occupied`, `free`, and `route` lines as the verdict.
+Read the printed `slots`, `occupied`, `free`, `homes_scanned`, and `route` lines as the verdict.
+`occupied` counts live workers across every local firstmate home on this host, including secondmate homes, so the budget protects the server rather than granting each home its own; `homes_scanned` says how many homes that count covers.
+A task whose worker is confidently gone - a captain hold, a merge wait, an exited pane - keeps its record but releases its slot.
+Each of `--preferred`, `--fallback`, `--preferred-kind`, and `--fallback-kind` overrides only its own field of the config file, so a preferred-only pin keeps the configured fallback; an unknown kind is refused rather than coerced.
 
 ## Independent workers
 

@@ -7,18 +7,20 @@
 #   fm-capacity.sh spawn-gate [--task-id <id>]
 #
 # `probe` prints one fresh local measurement plus configured preferred/fallback
-# reachability, suitability, derived slots, occupied count, free count, and the
-# host-bound routing verdict. `slots` prints only the local slot budget.
-# `route` prints only the host-bound routing verdict. `spawn-gate` exits 0 when
-# a new independent ship/scout worker may start, and 1 when it must wait; it
-# never interrupts a running worker. --task-id refuses when that id already
-# occupies a slot.
+# reachability, suitability, derived slots, the live occupied count across the
+# local firstmate homes on this host, free count, and the host-bound routing
+# verdict. `slots` prints only the local slot budget, including homes_scanned so
+# the host-scoped occupancy is auditable. `route` prints only the host-bound
+# routing verdict. `spawn-gate` exits 0 when a new independent ship/scout worker
+# may start, and 1 when it must wait; it never interrupts a running worker.
+# --task-id refuses when that id already occupies a slot.
 #
 # Optional session pins: --preferred <ssh> --fallback <ssh>
-# [--preferred-kind gpu|cpu] [--fallback-kind gpu|cpu]. Those override
-# config/compute-hosts.json for this invocation. The script header of
-# bin/fm-capacity-lib.sh owns the formula. This command does not choose a
-# harness or model.
+# [--preferred-kind gpu|cpu] [--fallback-kind gpu|cpu]. Each pin overrides only
+# its own field of config/compute-hosts.json for this invocation, so pinning the
+# preferred host keeps the configured fallback, and an unknown kind is rejected
+# rather than coerced. The script header of bin/fm-capacity-lib.sh owns the
+# formula. This command does not choose a harness or model.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +33,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-capacity-lib.sh"
 
 usage() {
-  sed -n '2,21{s/^# \{0,1\}//;p;}' "$0"
+  sed -n '2,23{s/^# \{0,1\}//;p;}' "$0"
 }
 
 die() {
@@ -109,10 +111,11 @@ load_hosts_or_die() {
 }
 
 print_slots() {
-  fm_capacity_measure_local "$STATE"
+  fm_capacity_measure_local "$STATE" "$FM_HOME"
   printf 'slots=%s\n' "$FM_CAPACITY_SLOTS"
   printf 'occupied=%s\n' "$FM_CAPACITY_OCCUPIED"
   printf 'free=%s\n' "$FM_CAPACITY_FREE"
+  printf 'homes_scanned=%s\n' "$FM_CAPACITY_HOMES_SCANNED"
   printf 'nproc=%s\n' "$FM_CAPACITY_LOCAL_NPROC"
   printf 'mem_avail_mb=%s\n' "${FM_CAPACITY_LOCAL_MEM_MB:-unknown}"
   printf 'load1=%s\n' "$FM_CAPACITY_LOCAL_LOAD1"
@@ -143,6 +146,6 @@ case "$CMD" in
   slots) print_slots ;;
   route) print_route ;;
   spawn-gate)
-    fm_capacity_allow_new_worker "$STATE" "${TASK_ID:-}" ship 0
+    fm_capacity_allow_new_worker "$STATE" "${TASK_ID:-}" ship 0 "$FM_HOME"
     ;;
 esac
