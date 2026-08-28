@@ -973,6 +973,77 @@ FM_CAP gpu=8192,10" || fail "the transcript should still absorb"
   pass "the Windows probe omits an unreadable CPU sample instead of fabricating idle"
 }
 
+test_unreadable_local_load_is_not_read_as_idle() {
+  local home out rc
+  home="$TMP_ROOT/local-load-unreadable"
+  setup_home "$home"
+  # A failed platform query is a non-numeric override, not a measured 0.
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=unavailable \
+      run_capacity "$home" slots
+  )
+  assert_contains "$out" "slots=0" "unreadable load must yield zero slots, not idle headroom"
+  assert_contains "$out" "load1=unavailable" "the failed reading must stay visible"
+  assert_not_contains "$out" "load1=0" "a missing load must not be rewritten as idle"
+  set +e
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=unavailable \
+      run_capacity "$home" spawn-gate --task-id fresh-u0 2>&1
+  )
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "spawn-gate with unreadable load"
+  assert_contains "$out" "slots=0" "the refuse must cite a zero budget"
+  assert_not_contains "$out" "load1=0" "the refuse must not claim idle load"
+  # A host that actually measured 0 is idle and still has headroom.
+  out=$(
+    FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0 \
+      run_capacity "$home" slots
+  )
+  assert_contains "$out" "slots=5" "a measured idle load must keep the full budget"
+  assert_contains "$out" "load1=0" "a genuine zero must remain a zero"
+  pass "an unreadable local load yields zero slots rather than idle headroom"
+}
+
+test_task_id_is_refused_on_probe_slots_and_route() {
+  local home out rc cmd
+  home="$TMP_ROOT/task-id-commands"
+  setup_home "$home"
+  for cmd in probe slots route; do
+    set +e
+    out=$(run_capacity "$home" "$cmd" --task-id ghost-a1 2>&1)
+    rc=$?
+    set -e
+    expect_code 1 "$rc" "$cmd --task-id"
+    assert_contains "$out" "--task-id applies only to spawn-gate" \
+      "$cmd must refuse --task-id rather than ignore it"
+    assert_not_contains "$out" "slots=" "$cmd --task-id must not print a slot budget"
+    assert_not_contains "$out" "route=" "$cmd --task-id must not print a routing verdict"
+    assert_not_contains "$out" "generated=" "$cmd --task-id must not print a probe"
+  done
+  set +e
+  out=$(run_capacity "$home" slots --task-id=ghost-b2 2>&1)
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "slots --task-id="
+  assert_contains "$out" "--task-id applies only to spawn-gate" \
+    "the equals form must also be refused on slots"
+  set +e
+  out=$(run_capacity "$home" --task-id ghost-c3 probe 2>&1)
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "--task-id before probe"
+  assert_contains "$out" "--task-id applies only to spawn-gate" \
+    "flag-before-command must also be refused"
+  set +e
+  FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    run_capacity "$home" spawn-gate --task-id fresh-t9 >/dev/null 2>&1
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "spawn-gate --task-id"
+  pass "probe, slots, and route refuse --task-id; spawn-gate still accepts it"
+}
+
 test_slots_allow_five_on_healthy_supervisor
 test_slots_drop_to_zero_when_load_saturates
 test_slots_drop_when_ram_is_tight
@@ -1007,5 +1078,7 @@ test_unmeasurable_preferred_host_falls_through_to_the_fallback
 test_gone_worker_releases_its_id_for_a_sequential_restart
 test_undeclared_work_on_an_unverifiable_backend_still_blocks_its_id
 test_windows_probe_omits_a_sample_it_could_not_take
+test_unreadable_local_load_is_not_read_as_idle
+test_task_id_is_refused_on_probe_slots_and_route
 
 echo "# all fm-capacity tests passed"
