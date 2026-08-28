@@ -16,7 +16,7 @@
 #   ram_slots    = max(0, (mem_avail_mb - 4096) / 3072) when mem_avail_mb is known;
 #                  when RAM cannot be read, ram_slots is the ceiling (CPU and
 #                  load still protect the host)
-#   load_cap     = 0 when load1 >= nproc;
+#   load_cap     = 0 when load1 is missing or not a number, or when load1 >= nproc;
 #                  1 when load1 >= 0.7 * nproc;
 #                  otherwise the ceiling
 #   slots        = min(cpu_slots, ram_slots, load_cap, 5)
@@ -205,6 +205,7 @@ fm_capacity_mean() { # <value>...
 
 # Integer slot count from one local measurement triple. Unknown RAM (empty or
 # non-numeric mem_avail_mb) skips the RAM axis rather than inventing a size.
+# Unknown load (empty or non-numeric load1) yields 0 slots rather than idle.
 fm_capacity_slots_from_local() { # <nproc> <mem_avail_mb-or-empty> <load1>
   local nproc=$1 mem=$2 load1=$3 cpu_slots ram_slots load_cap load_h nproc_h slots
   fm_capacity_is_uint "$nproc" || { printf '0\n'; return 0; }
@@ -880,7 +881,8 @@ fm_capacity_measure_local() { # <state-dir> [home-dir]
   FM_CAPACITY_LOCAL_MEM_MB=$(fm_capacity_read_mem_avail_mb)
   FM_CAPACITY_LOCAL_LOAD1=$(fm_capacity_read_load1)
   fm_capacity_is_uint "$FM_CAPACITY_LOCAL_NPROC" || FM_CAPACITY_LOCAL_NPROC=1
-  fm_capacity_is_number "$FM_CAPACITY_LOCAL_LOAD1" || FM_CAPACITY_LOCAL_LOAD1=0
+  # A missing or non-numeric load is left as-is. slots_from_local then yields 0
+  # rather than treating the failed query as idle (load1=0).
   FM_CAPACITY_SLOTS=$(fm_capacity_slots_from_local \
     "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_MEM_MB" "$FM_CAPACITY_LOCAL_LOAD1")
   fm_capacity_measure_host_occupancy "$1" "${2:-${FM_HOME:-}}"
@@ -913,7 +915,7 @@ fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch> [home
   fi
   if [ "$FM_CAPACITY_SLOTS" -eq 0 ]; then
     printf 'error: capacity: supervisor host is at measured capacity (slots=0 occupied=%s homes_scanned=%s nproc=%s load1=%s mem_avail_mb=%s); refusing a new independent worker rather than overloading this host\n' \
-      "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_HOMES_SCANNED" "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_LOAD1" "${FM_CAPACITY_LOCAL_MEM_MB:-unknown}" >&2
+      "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_HOMES_SCANNED" "$FM_CAPACITY_LOCAL_NPROC" "${FM_CAPACITY_LOCAL_LOAD1:-unknown}" "${FM_CAPACITY_LOCAL_MEM_MB:-unknown}" >&2
     return 1
   fi
   printf 'error: capacity: no free worker slot (occupied=%s slots=%s homes_scanned=%s); independent work waits until a live worker on this host finishes; running workers were left running\n' \

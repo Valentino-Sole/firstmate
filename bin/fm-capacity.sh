@@ -13,7 +13,8 @@
 # the host-scoped occupancy is auditable. `route` prints only the host-bound
 # routing verdict. `spawn-gate` exits 0 when a new independent ship/scout worker
 # may start, and 1 when it must wait; it never interrupts a running worker.
-# --task-id refuses when that id already occupies a slot.
+# --task-id refuses when that id already occupies a slot, and probe, slots, and
+# route reject the flag rather than ignoring it.
 #
 # Optional session pins: --preferred <ssh> --fallback <ssh>
 # [--preferred-kind gpu|cpu] [--fallback-kind gpu|cpu]. Each pin overrides only
@@ -33,7 +34,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-capacity-lib.sh"
 
 usage() {
-  sed -n '2,23{s/^# \{0,1\}//;p;}' "$0"
+  sed -n '2,24{s/^# \{0,1\}//;p;}' "$0"
 }
 
 die() {
@@ -43,6 +44,7 @@ die() {
 
 CMD=
 TASK_ID=
+TASK_ID_GIVEN=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     probe | slots | route | spawn-gate)
@@ -53,10 +55,12 @@ while [ "$#" -gt 0 ]; do
     --task-id)
       [ "$#" -ge 2 ] || die "--task-id requires a value"
       TASK_ID=$2
+      TASK_ID_GIVEN=1
       shift 2
       ;;
     --task-id=*)
       TASK_ID=${1#--task-id=}
+      TASK_ID_GIVEN=1
       shift
       ;;
     --preferred)
@@ -105,6 +109,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ -n "$CMD" ] || { usage >&2; exit 2; }
+if [ "$TASK_ID_GIVEN" = 1 ] && [ "$CMD" != spawn-gate ]; then
+  die "--task-id applies only to spawn-gate"
+fi
 
 load_hosts_or_die() {
   fm_capacity_load_hosts "$CONFIG" || die "${FM_CAPACITY_CONFIG_ERROR:-invalid compute-hosts config}"
@@ -118,7 +125,7 @@ print_slots() {
   printf 'homes_scanned=%s\n' "$FM_CAPACITY_HOMES_SCANNED"
   printf 'nproc=%s\n' "$FM_CAPACITY_LOCAL_NPROC"
   printf 'mem_avail_mb=%s\n' "${FM_CAPACITY_LOCAL_MEM_MB:-unknown}"
-  printf 'load1=%s\n' "$FM_CAPACITY_LOCAL_LOAD1"
+  printf 'load1=%s\n' "${FM_CAPACITY_LOCAL_LOAD1:-unknown}"
 }
 
 print_route() {
