@@ -99,6 +99,28 @@ last_status_line() {
   grep -v '^[[:space:]]*$' "$f" 2>/dev/null | tail -1
 }
 
+# 0 if a status line carries a ship self-test report (Tests N/0).
+status_has_self_test_report() {  # <status-line>
+  local line=$1
+  [ -n "$line" ] || return 1
+  printf '%s\n' "$line" | grep -Eq '[Tt]ests[[:space:]]+[0-9]+/[0-9]+'
+}
+
+# 0 if the status log documents a self-test report on or before its terminal done:.
+status_log_self_test_reported_before_done() {  # <status-file>
+  local f=$1 line
+  [ -e "$f" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line//$'\r'/}
+    [ -z "${line//[[:space:]]/}" ] && continue
+    status_has_self_test_report "$line" && return 0
+    if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = done ]; then
+      return 1
+    fi
+  done < "$f"
+  return 1
+}
+
 # 0 if the given (last) status line's leading verb is a real terminal captain verb
 # (done, needs-decision, blocked, failed). Free-text tokens alone never count here;
 # callers that need legacy free-text matching use status_is_captain_relevant.

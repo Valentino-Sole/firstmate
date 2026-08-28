@@ -712,6 +712,19 @@ test_pause_verb_override_renders_all_brief_scaffolds() {
   pass "fm-brief.sh: custom pause verb renders in every scaffold"
 }
 
+test_ship_brief_scaffold_carries_self_test_contract() {
+  local home="$TMP_ROOT/selftest-home" brief
+  home="$TMP_ROOT/selftest-home"
+  mkdir -p "$home/data"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-selftest-x ship-proj --mode local-only >/dev/null 2>&1 \
+    || fail "local-only brief scaffold failed"
+  brief="$home/data/brief-selftest-x/brief.md"
+  assert_grep '# Self-test before done' "$brief" "ship brief missing self-test section"
+  assert_grep 'Firstmate does not run your tests for you' "$brief" \
+    "ship brief missing the no-primary-test-run rule"
+  pass "fm-brief.sh: ship briefs require worker self-test before done:"
+}
+
 test_scout_and_secondmate_load_decision_hold_policy() {
   local home scout charter
   home="$TMP_ROOT/decision-policy-home"
@@ -776,5 +789,6 @@ test_secondmate_no_projects_charter
 test_secondmate_marked_request_reporting_contract
 test_secondmate_directory_paths_are_absolute_and_output_is_stable
 test_pause_verb_override_renders_all_brief_scaffolds
+test_ship_brief_scaffold_carries_self_test_contract
 test_scout_and_secondmate_load_decision_hold_policy
 test_scout_and_secondmate_scaffold

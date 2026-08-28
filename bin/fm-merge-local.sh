@@ -31,6 +31,14 @@ PROJ=$(grep '^project=' "$META" | cut -d= -f2-)
 MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 [ "$MODE" = local-only ] || { echo "error: task $ID is mode=$MODE, not local-only; merge PR tasks with bin/fm-pr-merge.sh <id> <PR url> after approval" >&2; exit 1; }
 
+# shellcheck source=bin/fm-classify-lib.sh
+. "$SCRIPT_DIR/fm-classify-lib.sh"
+STATUS_FILE="$STATE/$ID.status"
+if ! status_log_self_test_reported_before_done "$STATUS_FILE"; then
+  echo "REFUSED: task $ID status lacks a self-test report (expected Tests N/0 before terminal done:)" >&2
+  exit 1
+fi
+
 default_branch() {
   local ref branch
   ref=$(git -C "$PROJ" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
