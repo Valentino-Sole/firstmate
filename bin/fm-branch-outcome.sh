@@ -191,7 +191,7 @@ case "$CMD" in
     if [ -n "$UNREAD" ]; then
       VISIBLE=$(printf '%s\n' "$UNREAD" | jq -c 'select(.silent != true)')
       if [ -n "$VISIBLE" ]; then
-        printf 'BRANCH OUTCOMES (handled by the supervision branch, not yet seen by this session):\n'
+        printf 'BRANCH-ERGEBNISSE (vom Supervision-Branch bereits bearbeitet, in dieser Session noch nicht gesehen):\n'
         printf '%s\n' "$VISIBLE"
       fi
       LAST=$(record_seq "$(printf '%s\n' "$UNREAD" | tail -n 1)")

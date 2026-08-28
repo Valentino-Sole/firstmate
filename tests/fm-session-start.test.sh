@@ -504,10 +504,8 @@ SH
 # run_session_start <home> <root> <path>
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
-# Markers today: CLAUDECODE (claude), PI_CODING_AGENT plus FM_PI_HARNESS
-# (Pi family), GROK_AGENT (grok), CURSOR_AGENT / CURSOR_INVOKED_AS (cursor).
-# Cursor markers beat PI_CODING_AGENT, so a Cursor-hosted run would otherwise
-# classify as cursor even when the suite pins Pi.
+# Markers today: CURSOR_AGENT/CURSOR_INVOKED_AS (cursor), CLAUDECODE (claude),
+# PI_CODING_AGENT plus FM_PI_HARNESS (Pi family), GROK_AGENT (grok).
 # codex and opencode have no env markers (ancestry only). Without this, a local
 # claude/pi/grok/cursor session fails cases that pin a different fake harness
 # while CI (no ambient markers) still passes.
@@ -953,8 +951,7 @@ EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
   # Force a MISSING diagnostic line so the bootstrap section is non-trivial.
-  # Do not hide `node`: Cursor-hosted and most developer PATHs still have
-  # /usr/bin/node on BASE_PATH after the fake stub is removed.
+  # Use a tool that is not expected in BASE_PATH on CI/hosts where node exists.
   rm -f "$fakebin/chrome-devtools-axi"
 
   printf 'window=fm-sess:w1\nkind=ship\n' > "$home/state/task-a.meta"
@@ -1369,7 +1366,7 @@ EOF
   # fm-lock.sh's own exact success text.
   assert_contains "$out" "lock acquired: harness pid" "fm-lock.sh's real output did not appear (composition, not reimplementation)"
   # fm-bootstrap.sh's own exact MISSING-tool line format.
-  assert_contains "$out" "MISSING: chrome-devtools-axi (install:" "fm-bootstrap.sh's real detect line did not appear verbatim"
+  assert_contains "$out" "MISSING: tasks-axi (install:" "fm-bootstrap.sh's real detect line did not appear verbatim"
   # fm-wake-drain.sh's real drained record (raw tab-separated queue line).
   assert_contains "$out" "$(printf 'signal\ttask-z.status\tneeds-decision: pick a library')" "fm-wake-drain.sh's real drained record did not appear"
   assert_contains "$out" "wake annotation: latest wake-EVENT observed at drain, not current state: task-z.status: needs-decision: pick a library" "fm-session-start.sh did not preserve the drain's separate annotation line"
@@ -1397,7 +1394,7 @@ EOF
     || fail "could not seed the live lease"
 
   out=$(run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-  assert_contains "$out" "BRANCH OUTCOMES (handled by the supervision branch, not yet seen by this session):" \
+  assert_contains "$out" "BRANCH-ERGEBNISSE (vom Supervision-Branch bereits bearbeitet, in dieser Session noch nicht gesehen):" \
     "locked start did not replay the unread branch outcome"
   assert_contains "$out" "https://example.com/pr/b" "replayed outcome lost its content"
   [ ! -e "$home/state/.lease-task-dead" ] || fail "locked start left a provably dead lease in place"
@@ -1407,7 +1404,7 @@ EOF
   # locked start stays silent about the same outcome.
   out=$(run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   case "$out" in
-    *"BRANCH OUTCOMES"*) fail "second start re-presented already-replayed branch outcomes" ;;
+    *"BRANCH-ERGEBNISSE"*) fail "second start re-presented already-replayed branch outcomes" ;;
   esac
   pass "locked Pi session start replays unread branch outcomes once and sweeps only dead leases"
 }
@@ -1429,7 +1426,7 @@ EOF
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   case "$out" in
-    *"BRANCH OUTCOMES"*|*"unread Pi branch outcome"*) fail "non-Pi session replayed Pi branch outcomes" ;;
+    *"BRANCH-ERGEBNISSE"*|*"unread Pi branch outcome"*) fail "non-Pi session replayed Pi branch outcomes" ;;
   esac
   [ -e "$home/state/.lease-task-dead" ] || fail "non-Pi session swept a Pi branch lease"
   [ ! -e "$home/state/.branch-outcomes-cursor" ] || fail "non-Pi session marked a Pi branch outcome read"

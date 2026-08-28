@@ -131,6 +131,7 @@ const branchCacheKey = `fm-branch-${createHash("sha256").update(fmHome).digest("
 
 const MIRROR_MESSAGE_CAP = 4000;
 const MERGE_NOTE_BOAT = "⛵";
+const CAPTAIN_SUMMARY_MAX_LENGTH = 600;
 // Carried inside the captain note's own text because that text is the only
 // part of a custom message Pi gives the model (see mergeIntoMain).
 //
@@ -139,12 +140,13 @@ const MERGE_NOTE_BOAT = "⛵";
 // ownership forbids a second fleet operation, while the captain-facing verdict
 // requires a visible response and leaves its wording to main.
 const CAPTAIN_OUTCOME_INSTRUCTION =
-  "This is a supervision outcome delivered automatically by the supervision branch. " +
-  "It was not typed by the captain. " +
-  "The fleet event is already handled: do not re-drain, re-run, or acknowledge it. " +
-  "This outcome is captain-facing: give the captain a visible response now. " +
-  "Use your judgment over the wording and how to incorporate it, not whether to surface it. " +
-  "An outcome that directly answers an explicit captain request is captain-facing, regardless of whether it is healthy, routine, measured, actionable, or requires a decision.";
+  "Dies ist ein automatisch zugestelltes Supervision-Ergebnis aus dem Supervision-Branch. " +
+  "Es wurde nicht vom Captain getippt. " +
+  "Das Flottenereignis ist bereits bearbeitet: nicht erneut drainen, ausfuehren oder bestaetigen. " +
+  "Dieses Ergebnis ist captain-facing: gib dem Captain jetzt eine sichtbare Rueckmeldung. " +
+  "Antworte dabei durchgaengig auf Deutsch und fasse englische Worker-Texte sinngemaess auf Deutsch zusammen, statt sie als Dump weiterzureichen. " +
+  "Nutze dein Urteil fuer Formulierung und Einordnung, nicht fuer die Frage, ob es sichtbar sein soll. " +
+  "Ein Ergebnis, das eine explizite Captain-Anfrage direkt beantwortet, ist immer captain-facing - unabhaengig davon, ob es gesund, routinemaessig, messbar, handlungsrelevant oder entscheidungsbeduerftig ist.";
 type MirrorItem = { tag: "captain" | "main"; text: string };
 type MirrorCursor = { file: string; index: number };
 type Verdict = "routine" | "captain";
@@ -316,6 +318,53 @@ function capMirrorText(text: string): string {
   const tailLength = MIRROR_MESSAGE_CAP - headLength;
   const omitted = text.length - MIRROR_MESSAGE_CAP;
   return `${text.slice(0, headLength)}\n[mirror truncated: ${omitted} characters omitted]\n${text.slice(-tailLength)}`;
+}
+
+function compactCaptainSummary(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+function summaryLooksLikeRawDump(raw: string): boolean {
+  if (raw.includes("```")) return true;
+  if (/(^|\n)\s*\$ /.test(raw)) return true;
+  if (/(^|\n)\s*(working|needs-decision|blocked|paused|done|failed|resolved):/m.test(raw)) return true;
+  const nonEmptyLines = raw.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  return nonEmptyLines.length > 3;
+}
+
+function summaryLikelyEnglish(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  const englishSignals = [
+    " the ",
+    " and ",
+    " with ",
+    " ready ",
+    " checks ",
+    " green ",
+    " failed ",
+    " blocked ",
+    " waiting ",
+    " worker ",
+    " report ",
+    " summary ",
+  ];
+  const germanSignals = [
+    " und ",
+    " fuer ",
+    " nicht ",
+    " mit ",
+    " auf ",
+    " pruef",
+    " bereit",
+    " zusammenfassung",
+    " captain",
+    " kapitaen",
+  ];
+  const padded = ` ${lower.replace(/\s+/g, " ")} `;
+  const englishHits = englishSignals.reduce((count, signal) => count + (padded.includes(signal) ? 1 : 0), 0);
+  if (englishHits < 3) return false;
+  const germanHits = germanSignals.reduce((count, signal) => count + (padded.includes(signal) ? 1 : 0), 0);
+  return germanHits === 0;
 }
 
 function readMirrorCursor(): MirrorCursor {
@@ -674,7 +723,7 @@ export default function (pi: ExtensionAPI) {
         }),
         summary: Type.String({
           description:
-            "One or two sentences in captain outcome language; include the full https:// PR URL when a PR is involved",
+            "One or two concise German captain-outcome sentences (no raw dumps); include the full https:// PR URL when a PR is involved",
         }),
         wake: Type.Optional(Type.String({ description: "The wake reason line this outcome answers" })),
         silent: Type.Optional(Type.Boolean({
@@ -684,12 +733,33 @@ export default function (pi: ExtensionAPI) {
       execute: async (_toolCallId, params) => {
         const task = String((params as { task: unknown }).task || "").trim();
         const verdictRaw = String((params as { verdict: unknown }).verdict || "");
-        const summary = String((params as { summary: unknown }).summary || "").trim();
+        const summaryRaw = String((params as { summary: unknown }).summary || "");
+        const summary = compactCaptainSummary(summaryRaw);
         const wake = String((params as { wake?: unknown }).wake ?? "").trim();
         const silent = (params as { silent?: unknown }).silent === true;
         if (!task || !summary || (verdictRaw !== "routine" && verdictRaw !== "captain") || (silent && (task !== "fleet" || verdictRaw !== "routine"))) {
           return {
             content: [{ type: "text", text: "invalid report: task, verdict (routine|captain), and summary are required" }],
+            details: undefined,
+            isError: true,
+          };
+        }
+        if (summary.length > CAPTAIN_SUMMARY_MAX_LENGTH || summaryLooksLikeRawDump(summaryRaw)) {
+          return {
+            content: [{
+              type: "text",
+              text: "invalid report: summary must be one or two concise German outcome sentences, not raw logs or worker dumps",
+            }],
+            details: undefined,
+            isError: true,
+          };
+        }
+        if (summaryLikelyEnglish(summary)) {
+          return {
+            content: [{
+              type: "text",
+              text: "invalid report: summary appears English-heavy; paraphrase the captain outcome in German",
+            }],
             details: undefined,
             isError: true,
           };
@@ -1447,7 +1517,11 @@ ${context.command}
         .map((item) => normalizeOutcomesToolOutput(item.text))
         .join("\n");
       const shellState = context.state as OutcomesToolShellState;
-      shellState.result = output ? new Text(theme.fg("toolOutput", output), 0, 0) : new Container();
+      const coloredOutput = output
+        .split("\n")
+        .map((line) => theme.fg("toolOutput", line))
+        .join("\n");
+      shellState.result = output ? new Text(coloredOutput, 0, 0) : new Container();
       refreshOutcomesToolShell(shellState, theme, context);
       return new Container();
     },

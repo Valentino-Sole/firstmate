@@ -562,6 +562,8 @@ test_secondmate_marked_request_reporting_contract() {
     "secondmate charter did not name a landed merge as a reporting trigger"
   assert_grep 'States: working, needs-decision, blocked, paused, done, failed.' "$brief" \
     "secondmate charter changed the preserved status vocabulary"
+  assert_grep 'Write every free-text status note in German' "$brief" \
+    "secondmate charter lost the German captain-facing status-note guardrail"
   pass "fm-brief.sh: marked requests avoid generic acknowledgements and preserve material reporting"
 }
 

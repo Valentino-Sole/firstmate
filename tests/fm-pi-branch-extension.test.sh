@@ -780,22 +780,22 @@ EOF
   body=$(./bin/fm-operational-input.sh body < "$home/state/delivered-captain-note") \
     || fail "captain outcome envelope carries no readable body"
   case "$body" in
-    *"This is a supervision outcome delivered automatically by the supervision branch."*"It was not typed by the captain."*"task-9: PR https://example.com/pr/9"*) ;;
+    *"Dies ist ein automatisch zugestelltes Supervision-Ergebnis aus dem Supervision-Branch."*"Es wurde nicht vom Captain getippt."*"task-9: PR https://example.com/pr/9"*) ;;
     *) fail "captain outcome body lost its self-description or the outcome itself: $body" ;;
   esac
   # Event ownership and conversational judgment are separate contracts. The
   # delivered instruction forbids reprocessing the fleet event but leaves main
   # free to decide how the outcome belongs in the captain conversation.
   case "$body" in
-    *"The fleet event is already handled: do not re-drain, re-run, or acknowledge it."*) ;;
+    *"Das Flottenereignis ist bereits bearbeitet: nicht erneut drainen, ausfuehren oder bestaetigen."*) ;;
     *) fail "captain outcome body lost the event-ownership boundary: $body" ;;
   esac
   case "$body" in
-    *"This outcome is captain-facing: give the captain a visible response now."*"Use your judgment over the wording and how to incorporate it, not whether to surface it."*) ;;
+    *"Dieses Ergebnis ist captain-facing: gib dem Captain jetzt eine sichtbare Rueckmeldung."*"Antworte dabei durchgaengig auf Deutsch"*"Nutze dein Urteil fuer Formulierung und Einordnung, nicht fuer die Frage, ob es sichtbar sein soll."*) ;;
     *) fail "captain outcome body made visibility optional or removed wording judgment: $body" ;;
   esac
   case "$body" in
-    *"An outcome that directly answers an explicit captain request is captain-facing"*"regardless of whether it is healthy, routine, measured, actionable, or requires a decision."*) ;;
+    *"Ein Ergebnis, das eine explizite Captain-Anfrage direkt beantwortet, ist immer captain-facing"*"unabhaengig davon, ob es gesund, routinemaessig, messbar, handlungsrelevant oder entscheidungsbeduerftig ist."*) ;;
     *) fail "captain outcome body lost the unconditional explicit-request rule: $body" ;;
   esac
   # The routine note is rendered in the TUI, and its renderer reads the glyph off
@@ -873,12 +873,42 @@ globalThis.__fmOnBranchPrompt = async ({ session }) => {
       !verdictDescription.includes("regardless of whether it is healthy, routine, measured, actionable, or requires a decision")) {
     throw new Error(`branch provider received conflicting verdict semantics: ${verdictDescription}`);
   }
+  const englishLeak = await report.execute(
+    "resource-english-leak",
+    {
+      task: "task-resource",
+      verdict: "routine",
+      summary: "the worker report is ready and checks are green with summary details",
+      wake: "signal: healthy resource result",
+    },
+    undefined,
+    undefined,
+    {},
+  );
+  if (!englishLeak.isError || !englishLeak.content[0].text.includes("English-heavy")) {
+    throw new Error(`english summary leak was not rejected: ${JSON.stringify(englishLeak)}`);
+  }
+  const dumpLeak = await report.execute(
+    "resource-dump-leak",
+    {
+      task: "task-resource",
+      verdict: "routine",
+      summary: "working: setup done\n$ npm test\nall green",
+      wake: "signal: healthy resource result",
+    },
+    undefined,
+    undefined,
+    {},
+  );
+  if (!dumpLeak.isError || !dumpLeak.content[0].text.includes("raw logs or worker dumps")) {
+    throw new Error(`worker dump leak was not rejected: ${JSON.stringify(dumpLeak)}`);
+  }
   const result = await report.execute(
     `resource-result-${fleetOperations.length}`,
     {
       task: "task-resource",
       verdict: directlyRequested ? "captain" : "routine",
-      summary: "healthy resource report: CPU 12%, memory 41%",
+      summary: "Ressourcenbericht stabil: CPU 12%, Arbeitsspeicher 41%",
       wake: "signal: healthy resource result",
     },
     undefined,
@@ -939,7 +969,7 @@ const outcomes = mainTools.find((tool) => tool.name === "fm_branch_outcomes");
 if (!outcomes) throw new Error("main did not receive its outcome-reading permission surface");
 const visibleToMain = await outcomes.execute("main-reads-sailboat", { recent: 1 }, undefined, undefined, {});
 const mainOutcomeText = visibleToMain.content.map((item) => item.text ?? "").join("\n");
-if (visibleToMain.isError || !mainOutcomeText.includes("healthy resource report: CPU 12%, memory 41%")) {
+if (visibleToMain.isError || !mainOutcomeText.includes("Ressourcenbericht stabil: CPU 12%, Arbeitsspeicher 41%")) {
   throw new Error(`main could not use the sailboat content through its existing permission path: ${JSON.stringify(visibleToMain)}`);
 }
 if (fleetOperations.length !== 2) throw new Error("main's outcome read reprocessed the fleet event");
@@ -1039,9 +1069,10 @@ if (delivered.options.triggerTurn !== true || delivered.options.deliverAs !== "f
 if (delivered.message.content.includes("FIRSTMATE_OP:")) {
   throw new Error(`fallback unexpectedly carried an envelope: ${delivered.message.content}`);
 }
-if (!delivered.message.content.includes("The fleet event is already handled: do not re-drain, re-run, or acknowledge it.") ||
-    !delivered.message.content.includes("This outcome is captain-facing: give the captain a visible response now.") ||
-    !delivered.message.content.includes("Use your judgment over the wording and how to incorporate it, not whether to surface it.") ||
+if (!delivered.message.content.includes("Das Flottenereignis ist bereits bearbeitet: nicht erneut drainen, ausfuehren oder bestaetigen.") ||
+    !delivered.message.content.includes("Dieses Ergebnis ist captain-facing: gib dem Captain jetzt eine sichtbare Rueckmeldung.") ||
+    !delivered.message.content.includes("Antworte dabei durchgaengig auf Deutsch") ||
+    !delivered.message.content.includes("Nutze dein Urteil fuer Formulierung und Einordnung, nicht fuer die Frage, ob es sichtbar sein soll.") ||
     !delivered.message.content.includes("task-fallback: PR https://example.com/pr/fallback is ready")) {
   throw new Error(`fallback lost its instruction or outcome: ${delivered.message.content}`);
 }

@@ -209,6 +209,7 @@ if [ "$X_MODE" -eq 1 ]; then
 else
   printf '%s\n' '- X mode: inactive; use the default watcher cadence.'
 fi
+printf '%s\n' '- Captain language: keep captain-facing supervision summaries and status responses in German; paraphrase English worker output instead of forwarding dumps.'
 ordinary_wake_line
 printf '\n'
 render_snippet

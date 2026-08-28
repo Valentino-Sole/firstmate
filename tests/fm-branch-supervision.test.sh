@@ -52,6 +52,10 @@ test_branch_prompt_is_byte_stable_and_above_cache_floor() {
     *"Report verdict captain for any outcome that directly answers an explicit captain request."*"This rule is unconditional"*"Keep an unsolicited routine outcome as verdict routine"*"Keep an unchanged fleet review silent"*) ;;
     *) fail "branch prompt lost the unconditional requested-outcome or routine-silence rules" ;;
   esac
+  case "$out_a" in
+    *"Write every summary in German."*"Never paste raw worker dumps"*) ;;
+    *) fail "branch prompt lost the German-summary hardening guardrails" ;;
+  esac
   pass "branch prompt is byte-stable across homes, cwd, timezone, and time, above the cache floor"
 }
 
@@ -95,7 +99,7 @@ PY
   # startup-replay surfaces the unread remainder once, then goes silent, and
   # later appends land strictly after the earlier bytes (append-only merge).
   replay=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" startup-replay) || fail "startup-replay failed"
-  assert_contains "$replay" "BRANCH OUTCOMES" "replay lost its section header"
+  assert_contains "$replay" "BRANCH-ERGEBNISSE" "replay lost its section header"
   assert_contains "$replay" "https://example.com/pr/2" "replay lost the unread outcome"
   [ -z "$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" startup-replay)" ] \
     || fail "startup-replay re-presented already-read outcomes"
