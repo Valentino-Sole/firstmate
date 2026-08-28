@@ -2020,6 +2020,9 @@ if [ "$KIND" = ship ]; then
      && [ "$(delivery_rigor_rank "$MODE")" -lt "$(delivery_rigor_rank "$STANDING_MODE")" ]; then
     echo "notice: $ID ships mode=$MODE while the standing posture for $PROJ_NAME is $STANDING_MODE - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state" >&2
   fi
+  if ! grep -Fq 'Self-test before done' "$BRIEF"; then
+    echo "warning: $BRIEF lacks the ship self-test contract (scaffolded before self-test briefs recorded one); the worker may report done: without Tests N/0" >&2
+  fi
 fi
 if [ "$RELAUNCH" -eq 0 ]; then
   guard_existing_live_task "$STATE/$ID.meta" "$ID" || exit 1

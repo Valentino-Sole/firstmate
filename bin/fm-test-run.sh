@@ -217,7 +217,7 @@ family_for_basename() {
     fm-bearings-board.test.sh|\
     fm-brief.test.sh|fm-vendor-auth-probe.test.sh|\
     fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|\
-    fm-classify-decision-key.test.sh|\
+    fm-classify-decision-key.test.sh|fm-ship-self-test-status.test.sh|\
     fm-composer-ghost.test.sh|fm-composer-lib.test.sh|\
     fm-crew-state.test.sh|fm-captain-hold-lifecycle.test.sh|\
     fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|fm-grok-harness.test.sh|\
@@ -587,6 +587,7 @@ tests/fm-gate-refuse.test.sh 4977
 tests/fm-gitignore-config.test.sh 62
 tests/fm-gotmp.test.sh 1310
 tests/fm-grok-continuity-live-e2e.test.sh 20
+tests/fm-ship-self-test-status.test.sh 1200
 tests/fm-grok-stop-live-e2e.test.sh 21
 tests/fm-guard-stale-banner.test.sh 11218
 tests/fm-harness-adapter-instructions-live-e2e.test.sh 20
