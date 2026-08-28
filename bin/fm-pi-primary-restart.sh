@@ -135,7 +135,17 @@ mapfile -t LAUNCH_ARGS < <(fm_pi_restart_launch_args "$FM_ROOT" "$HARNESS" "$SES
 
 if [ "$BACKEND" = herdr ]; then
   fm_pi_restart_prepare_pane_for_exit "$BACKEND" "$HERDR_TARGET" || {
-    echo "error: Pi-primary pane stayed busy after interrupt; cannot deliver exit safely" >&2
+    case "${FM_PI_RESTART_PREPARE_REASON:-}" in
+      interrupt-send-failed)
+        echo "error: failed to deliver interrupt to the Pi-primary pane; refusing blind exit delivery" >&2
+        ;;
+      pane-stayed-busy)
+        echo "error: Pi-primary pane stayed busy after interrupt retries; cannot deliver exit safely" >&2
+        ;;
+      *)
+        echo "error: Pi-primary pane did not become exit-ready after interrupt retries" >&2
+        ;;
+    esac
     exit 1
   }
 fi
@@ -153,15 +163,27 @@ fm_pi_restart_write_pending "$STATE" \
 }
 
 EXIT_CMD=$(fm_control_exit_command "$HARNESS")
-SUBMIT=$(fm_backend_send_text_submit "$BACKEND" "${HERDR_TARGET:-$TARGET}" "$EXIT_CMD" 3 0.5 1.2 "pi-primary-restart") || {
+fm_pi_restart_submit_exit_command "$BACKEND" "${HERDR_TARGET:-$TARGET}" "$EXIT_CMD" 5 0.5 1.2 || {
   fm_pi_restart_clear_pending "$STATE"
-  echo "error: could not deliver $EXIT_CMD to the Pi-primary pane" >&2
+  case "${FM_PI_RESTART_SUBMIT_REASON:-}" in
+    send-failed)
+      echo "error: exit command was not accepted by the Pi-primary pane" >&2
+      ;;
+    unconfirmed)
+      echo "error: exit command delivery remained unconfirmed (${FM_PI_RESTART_SUBMIT_DETAIL:-unknown}); refusing blind restart" >&2
+      ;;
+    *)
+      echo "error: could not deliver $EXIT_CMD to the Pi-primary pane" >&2
+      ;;
+  esac
   exit 1
 }
-case "$SUBMIT" in
-  send-failed)
+case "${FM_PI_RESTART_SUBMIT_REASON:-}" in
+  '')
+    ;;
+  *)
     fm_pi_restart_clear_pending "$STATE"
-    echo "error: exit command was not accepted by the Pi-primary pane" >&2
+    echo "error: internal submit state mismatch while delivering $EXIT_CMD" >&2
     exit 1
     ;;
 esac
