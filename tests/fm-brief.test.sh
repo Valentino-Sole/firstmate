@@ -750,6 +750,10 @@ test_scout_and_secondmate_scaffold() {
   assert_present "$brief" "secondmate charter was not scaffolded"
   assert_grep "persistent second mate" "$brief" \
     "secondmate charter must declare its role"
+  assert_grep "Treat an idle/alive worker endpoint as healthy" "$brief" \
+    "secondmate charter did not anchor idle-is-healthy recovery behavior"
+  assert_grep "Never start the same task id in parallel to a worker that may still be active" "$brief" \
+    "secondmate charter did not forbid duplicate active task launches"
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 
