@@ -125,6 +125,19 @@ export default function (pi: ExtensionAPI) {
 
   let exportRendering = false;
   let removeTerminalInputHandler: (() => void) | undefined;
+  let exportRenderingTimeout: ReturnType<typeof setTimeout> | undefined;
+  // Bumps at every session lifetime so deferred export cleanup and any
+  // still-queued macrotask from the prior generation cannot touch stale ctx.
+  let sessionGeneration = 0;
+
+  const teardownExportTerminalInput = (): void => {
+    removeTerminalInputHandler?.();
+    removeTerminalInputHandler = undefined;
+    if (exportRenderingTimeout !== undefined) {
+      clearTimeout(exportRenderingTimeout);
+      exportRenderingTimeout = undefined;
+    }
+  };
   // One logical agent run, tracked from agent_start through agent_settled rather than
   // from turns or tool calls, so the boat never flickers between tool calls, automatic
   // continuations, retries, or compaction that stay inside the same run.
@@ -409,6 +422,8 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", (_event, ctx) => {
+    sessionGeneration += 1;
+    teardownExportTerminalInput();
     reportBuiltInLosses();
     calmToolRowRepaints.clear();
     exportRendering = false;
@@ -422,11 +437,12 @@ export default function (pi: ExtensionAPI) {
     applyWorkingPresentation(ctx.ui, true);
     ctx.ui.setHiddenThinkingLabel(calmPresentationIsActive() ? "" : undefined);
     ctx.ui.setStatus("firstmate-calm", undefined);
-    removeTerminalInputHandler?.();
-    removeTerminalInputHandler = ctx.ui.onTerminalInput((data) => {
+    const ui = ctx.ui;
+    const generation = sessionGeneration;
+    removeTerminalInputHandler = ui.onTerminalInput((data) => {
       if (!getKeybindings().matches(data, "tui.input.submit")) return;
 
-      const input = ctx.ui.getEditorText().trim();
+      const input = ui.getEditorText().trim();
       if (
         input !== "/share" &&
         input !== "/export" &&
@@ -438,7 +454,12 @@ export default function (pi: ExtensionAPI) {
       exportRendering = true;
       setCalmStockExportRendering(true);
       publishPresentationState();
-      setTimeout(() => {
+      if (exportRenderingTimeout !== undefined) {
+        clearTimeout(exportRenderingTimeout);
+      }
+      exportRenderingTimeout = setTimeout(() => {
+        exportRenderingTimeout = undefined;
+        if (generation !== sessionGeneration) return;
         exportRendering = false;
         setCalmStockExportRendering(false);
         publishPresentationState();
@@ -452,7 +473,7 @@ export default function (pi: ExtensionAPI) {
         // rows that consult Calm live in render(), such as operational user rows,
         // need without appending anything to the transcript.
         repaintCalmToolRows();
-        ctx.ui.setStatus("firstmate-calm", undefined);
+        ui.setStatus("firstmate-calm", undefined);
       }, 0);
     });
   });
@@ -469,6 +490,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
+    teardownExportTerminalInput();
+    exportRendering = false;
+    setCalmStockExportRendering(false);
     agentRunActive = false;
     applyWorkingPresentation(ctx.ui);
   });

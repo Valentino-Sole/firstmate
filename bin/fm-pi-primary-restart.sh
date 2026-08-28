@@ -109,6 +109,7 @@ case "$BACKEND" in
 esac
 
 TARGET=
+HERDR_TARGET=
 SESSION_ARG=
 HERDR_SESSION=
 if [ "$BACKEND" = herdr ]; then
@@ -119,6 +120,7 @@ if [ "$BACKEND" = herdr ]; then
     echo "error: could not locate the Pi-primary herdr pane for lock pid $LOCK_PID" >&2
     exit 1
   }
+  HERDR_TARGET="${HERDR_SESSION}:${TARGET}"
   SESSION_ARG=$(fm_pi_restart_herdr_session_file "$HERDR_SESSION" "$TARGET" || true)
 elif [ "$BACKEND" = tmux ]; then
   if [ -n "${TMUX_PANE:-}" ]; then
@@ -130,6 +132,13 @@ elif [ "$BACKEND" = tmux ]; then
 fi
 
 mapfile -t LAUNCH_ARGS < <(fm_pi_restart_launch_args "$FM_ROOT" "$HARNESS" "$SESSION_ARG")
+
+if [ "$BACKEND" = herdr ]; then
+  fm_pi_restart_prepare_pane_for_exit "$BACKEND" "$HERDR_TARGET" || {
+    echo "error: Pi-primary pane stayed busy after interrupt; cannot deliver exit safely" >&2
+    exit 1
+  }
+fi
 
 fm_pi_restart_write_pending "$STATE" \
   backend "$BACKEND" \
@@ -144,7 +153,7 @@ fm_pi_restart_write_pending "$STATE" \
 }
 
 EXIT_CMD=$(fm_control_exit_command "$HARNESS")
-SUBMIT=$(fm_backend_send_text_submit "$BACKEND" "$TARGET" "$EXIT_CMD" 3 0.5 1.2 "pi-primary-restart") || {
+SUBMIT=$(fm_backend_send_text_submit "$BACKEND" "${HERDR_TARGET:-$TARGET}" "$EXIT_CMD" 3 0.5 1.2 "pi-primary-restart") || {
   fm_pi_restart_clear_pending "$STATE"
   echo "error: could not deliver $EXIT_CMD to the Pi-primary pane" >&2
   exit 1

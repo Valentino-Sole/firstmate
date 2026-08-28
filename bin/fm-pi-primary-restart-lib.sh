@@ -162,6 +162,30 @@ fm_pi_restart_wait_lock_replaced() {  # <state-dir> <old-pid> <timeout-seconds>
   return 1
 }
 
+fm_pi_restart_prepare_pane_for_exit() {  # <backend> <target>
+  local backend=$1 target=$2 session raw i=0
+  [ "$backend" = herdr ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  fm_backend_herdr_parse_target "$target" || return 0
+  session=$FM_BACKEND_HERDR_SESSION
+  raw=$(fm_backend_herdr_agent_status_raw "$session" "$FM_BACKEND_HERDR_PANE")
+  case "$(fm_backend_herdr_classify_submit_agent_status "$raw")" in
+    busy)
+      fm_backend_herdr_send_key "$target" C-c || return 1
+      while [ "$i" -lt 45 ]; do
+        raw=$(fm_backend_herdr_agent_status_raw "$session" "$FM_BACKEND_HERDR_PANE")
+        case "$(fm_backend_herdr_classify_submit_agent_status "$raw")" in
+          idle|unknown) return 0 ;;
+        esac
+        sleep 1
+        i=$((i + 1))
+      done
+      return 1
+      ;;
+  esac
+  return 0
+}
+
 fm_pi_restart_extensions_loaded() {  # <state-dir> <root>
   local state=$1 root=$2 watch turnend
   watch="$state/.pi-watch-extension-loaded"
