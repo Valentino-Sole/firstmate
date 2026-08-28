@@ -10,7 +10,7 @@
 // callbacks from a prior generation are no-ops against the active replacement.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
@@ -103,6 +103,20 @@ const armReadyTimeoutMs = positiveInteger(
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
+const pendingRestartMarker = `${state}/.pi-primary-restart-pending`;
+
+function clearPendingRestart(): void {
+  try {
+    unlinkSync(pendingRestartMarker);
+  } catch {
+  }
+}
+
+function consumePendingRestart(): boolean {
+  if (!existsSync(pendingRestartMarker)) return false;
+  clearPendingRestart();
+  return true;
+}
 
 let nextGenerationId = 0;
 let activeGeneration: SessionGeneration | null = null;
@@ -565,6 +579,16 @@ export default function (pi: ExtensionAPI) {
     if (generation.stopping) generation = createGeneration();
     activateGeneration(generation);
     markLoaded();
+    if (!consumePendingRestart()) return;
+    const arm = startArm(generation);
+    if (!arm.ok) return;
+    void sendWake(
+      generation,
+      "PRIMARY RESTART COMPLETE - the session resumed after an automatic Pi-primary restart. " +
+        "Run bin/fm-wake-drain.sh first, handle any queued wakes, then continue in-flight work.",
+    ).catch(() => {
+      // Delivery errors are surfaced on the next guard cycle if needed.
+    });
   });
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);
