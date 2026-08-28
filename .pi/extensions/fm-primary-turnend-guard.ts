@@ -146,7 +146,20 @@ function encodeSessionstartContent(raw: string): string {
     : encodeFirstmateOperationalInput("session-start", raw);
 }
 
+function appendCompactProbe(record: Record<string, unknown>): void {
+  if (process.env.FM_COMPACT_POSTCOMPACT_PROBE !== "1") return;
+  try {
+    const line = `${JSON.stringify({ time: new Date().toISOString(), ...record })}\n`;
+    writeFileSync(`${state}/.compact-postcompact-probe.jsonl`, line, { flag: "a" });
+  } catch {
+  }
+}
+
 function injectSessionstartMessage(pi: ExtensionAPI, content: string): void {
+  appendCompactProbe({
+    delivery: "sendMessage",
+    encoded_bytes: Buffer.byteLength(content, "utf8"),
+  });
   pi.sendMessage({
     customType: "firstmate-sessionstart-nudge",
     content,
@@ -198,6 +211,12 @@ async function injectCompactContinuation(pi: ExtensionAPI): Promise<void> {
   const now = Date.now();
   const inCooldown = lastCompactContinueAt > 0
     && now - lastCompactContinueAt < COMPACT_CONTINUE_COOLDOWN_MS;
+  appendCompactProbe({
+    path: "session_compact",
+    raw_bytes: Buffer.byteLength(raw, "utf8"),
+    encoded_bytes: Buffer.byteLength(content, "utf8"),
+    in_cooldown: inCooldown,
+  });
   if (inCooldown) {
     try {
       injectSessionstartMessage(pi, content);
@@ -207,10 +226,12 @@ async function injectCompactContinuation(pi: ExtensionAPI): Promise<void> {
   }
   lastCompactContinueAt = now;
   try {
+    appendCompactProbe({ delivery: "followUp", encoded_bytes: Buffer.byteLength(content, "utf8") });
     await startCompactContinuationTurn(pi, content);
   } catch {
     lastCompactContinueAt = 0;
     try {
+      appendCompactProbe({ delivery: "followUp_retry_as_sendMessage", encoded_bytes: Buffer.byteLength(content, "utf8") });
       injectSessionstartMessage(pi, content);
     } catch {
     }
