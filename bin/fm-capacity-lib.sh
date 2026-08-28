@@ -89,10 +89,12 @@
 #   A gpu-kind host must clear those same host gates AND report nvidia-smi
 #   util <= 90 with at least 1024 MiB free: free VRAM on a machine whose CPU is
 #   pinned or whose RAM is exhausted is not usable capacity, and the fallback
-#   must get its chance. Those host gates also reject an unmeasurable host: the
-#   POSIX probe's fabricated `mem_avail_mb=0 load1=0` from an unreadable /proc
-#   fails on the RAM half, and a host that returned no usable CPU sample at all
-#   has no headroom measurement to pass, so neither is mistaken for an idle one.
+#   must get its chance. Those host gates also reject an unmeasurable host, on
+#   each axis independently: a host that returned no usable CPU sample at all -
+#   the POSIX probe omits load1 when /proc/loadavg is unreadable, the Windows
+#   probe omits load_pct when the processor query fails - has no headroom
+#   measurement to pass, and an unreadable /proc/meminfo reports
+#   mem_avail_mb=0, which fails the RAM gate. Neither reads as an idle host.
 #   `fm-capacity.sh route` prints the reading each probe actually produced.
 #
 # Freshness: every probe() call measures again. Nothing here caches a prior
@@ -515,10 +517,12 @@ fm_capacity_measure_host_occupancy() { # <state-dir> <home-dir>
 # host then adds its accelerator gates on top; free VRAM behind a pinned CPU or
 # an exhausted RAM is not usable capacity, and treating it as capacity would
 # short-circuit routing and hide a healthy configured fallback.
-# Those host gates are also what rejects an UNMEASURABLE host: the POSIX probe
-# emits mem_avail_mb=0 and load1=0 when /proc is unreadable, and a fabricated
-# 0 load must never read as headroom, so the 0 RAM that always accompanies it
-# fails the gate.
+# Those host gates are also what rejects an UNMEASURABLE host, on each axis
+# independently. A fabricated 0 load must never read as headroom, so no probe
+# fabricates one: an unreadable /proc/loadavg omits load1 entirely, and an
+# empty load fails the headroom gate here whether or not the host's RAM was
+# readable. An unreadable /proc/meminfo reports mem_avail_mb=0, which fails the
+# RAM gate on its own.
 # CPU headroom is read from whichever measurement the host can actually
 # produce. A host with a run-queue load average is gated on load1 < nproc. A
 # host that only reports a busy percentage (Windows) passes that averaged
@@ -574,13 +578,25 @@ fm_capacity_parse_gpu_csv() { # <csv> -> sets FM_CAPACITY_GPU_FREE_MB FM_CAPACIT
   return 0
 }
 
-fm_capacity_posix_probe_cmd() {
-  cat <<'CMD'
+# An unreadable /proc/loadavg emits NO load1 line, exactly as the Windows probe
+# omits a failed CPU sample rather than reporting 0%: a fabricated zero is
+# indistinguishable from a genuinely idle host and would route host-bound work
+# onto a machine whose CPU was never measured. The absent line leaves
+# FM_CAPACITY_PROBE_LOAD1 empty, which fails fm_capacity_host_suitable's
+# headroom gate on its own, without depending on the RAM half also failing.
+# <proc-dir> defaults to /proc and exists so the emitted command is testable
+# against a constructed /proc.
+fm_capacity_posix_probe_cmd() { # [proc-dir]
+  local proc=${1:-/proc} cmd
+  case $proc in *[!A-Za-z0-9._/-]*) proc=/proc ;; esac
+  cmd=$(cat <<'CMD'
 printf 'FM_CAP nproc=%s\n' "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || printf 0)"
-if [ -r /proc/meminfo ]; then awk '/^MemAvailable:/ { printf "FM_CAP mem_avail_mb=%d\n", $2/1024; exit }' /proc/meminfo; else printf 'FM_CAP mem_avail_mb=0\n'; fi
-if [ -r /proc/loadavg ]; then awk '{ printf "FM_CAP load1=%s\n", $1; exit }' /proc/loadavg; else printf 'FM_CAP load1=0\n'; fi
+if [ -r @PROC@/meminfo ]; then awk '/^MemAvailable:/ { printf "FM_CAP mem_avail_mb=%d\n", $2/1024; exit }' @PROC@/meminfo; else printf 'FM_CAP mem_avail_mb=0\n'; fi
+if [ -r @PROC@/loadavg ]; then awk '{ printf "FM_CAP load1=%s\n", $1; exit }' @PROC@/loadavg; fi
 printf 'FM_CAP gpu=%s\n' "$(nvidia-smi --query-gpu=memory.free,utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -n 1 | tr -d ' ')"
 CMD
+  )
+  printf '%s\n' "${cmd//@PROC@/$proc}"
 }
 
 # Emits one `load_pct` line per SUCCESSFUL sample; fm_capacity_absorb_probe_text

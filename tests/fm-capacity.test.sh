@@ -973,6 +973,45 @@ FM_CAP gpu=8192,10" || fail "the transcript should still absorb"
   pass "the Windows probe omits an unreadable CPU sample instead of fabricating idle"
 }
 
+test_posix_probe_omits_a_load_it_could_not_read() {
+  local proc out
+  proc="$TMP_ROOT/posix-proc"
+  mkdir -p "$proc"
+  printf 'MemTotal:       32768000 kB\nMemAvailable:    8192000 kB\n' > "$proc/meminfo"
+  printf '0.40 0.35 0.30 1/900 1234\n' > "$proc/loadavg"
+  out=$(sh -c "$(fm_capacity_posix_probe_cmd "$proc")")
+  assert_contains "$out" "FM_CAP mem_avail_mb=8000" "a readable meminfo must report available RAM"
+  assert_contains "$out" "FM_CAP load1=0.40" "a readable loadavg must report the run-queue average"
+  fm_capacity_absorb_probe_text "$out" || fail "a healthy POSIX transcript should absorb"
+  fm_capacity_host_suitable cpu "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_MEM_MB" \
+    "$FM_CAPACITY_PROBE_LOAD1" "" "" "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    || fail "a measured idle POSIX host must stay suitable"
+  # RAM still readable, load average not: the probe emits no load1 line at all,
+  # so the missing measurement cannot be mistaken for an idle host.
+  rm -f "$proc/loadavg"
+  out=$(sh -c "$(fm_capacity_posix_probe_cmd "$proc")")
+  assert_contains "$out" "FM_CAP mem_avail_mb=8000" "the rest of the probe must still report"
+  assert_not_contains "$out" "FM_CAP load1=" \
+    "an unreadable loadavg must emit no line rather than a fabricated 0"
+  fm_capacity_absorb_probe_text "$out" || fail "the transcript should still absorb"
+  [ -z "$FM_CAPACITY_PROBE_LOAD1" ] \
+    || fail "an absent loadavg must leave no load reading, got $FM_CAPACITY_PROBE_LOAD1"
+  [ "$(fm_capacity_cpu_headroom_reading)" = unmeasured ] \
+    || fail "the route report must say unmeasured for a host with no CPU sample"
+  fm_capacity_host_suitable cpu "$FM_CAPACITY_PROBE_NPROC" "$FM_CAPACITY_PROBE_MEM_MB" \
+    "$FM_CAPACITY_PROBE_LOAD1" "" "" "$FM_CAPACITY_PROBE_LOAD_PCT" \
+    && fail "readable RAM with no CPU measurement must be unsuitable, not idle"
+  if [ "$(id -u)" != 0 ]; then
+    printf '0.40 0.35 0.30 1/900 1234\n' > "$proc/loadavg"
+    chmod 000 "$proc/loadavg"
+    out=$(sh -c "$(fm_capacity_posix_probe_cmd "$proc")")
+    assert_not_contains "$out" "FM_CAP load1=" \
+      "a permission-denied loadavg must emit no line either"
+    chmod 644 "$proc/loadavg"
+  fi
+  pass "the POSIX probe omits an unreadable load average instead of fabricating idle"
+}
+
 test_unreadable_local_load_is_not_read_as_idle() {
   local home out rc
   home="$TMP_ROOT/local-load-unreadable"
@@ -1078,6 +1117,7 @@ test_unmeasurable_preferred_host_falls_through_to_the_fallback
 test_gone_worker_releases_its_id_for_a_sequential_restart
 test_undeclared_work_on_an_unverifiable_backend_still_blocks_its_id
 test_windows_probe_omits_a_sample_it_could_not_take
+test_posix_probe_omits_a_load_it_could_not_read
 test_unreadable_local_load_is_not_read_as_idle
 test_task_id_is_refused_on_probe_slots_and_route
 
