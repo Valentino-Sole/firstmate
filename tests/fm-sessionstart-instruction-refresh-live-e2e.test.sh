@@ -5,8 +5,7 @@
 #
 # The portable session-start tests own baseline and output logic. This guard
 # proves the vendor-dependent fact they cannot: Pi's actual session_compact
-# event delivers the current complete instruction file into the rebuilt model
-# context after the native cached session-start copy would otherwise persist.
+# event delivers the short continuation note, not a full AGENTS.md reprint.
 #
 # Run after Pi upgrades and before recording refreshed verification evidence:
 #
@@ -204,20 +203,27 @@ wait_for_text 'Compacted from' 120 || {
 }
 
 if [ "$EXPECTATION" = updated ]; then
-  send_line 'Which validation contract marker is active?'
-  wait_for_text "$NEW_MARKER" 120 || {
+  wait_for_file "$HOME_DIR/state/.sessionstart-e2e-output" 120 || {
     capture >&2
+    fail "Pi compact did not record session-start wrapper output"
+  }
+  grep -Fq 'SESSION COMPACT (NO DIGEST RE-EMIT)' "$HOME_DIR/state/.sessionstart-e2e-output" \
+    || fail "Pi compact did not emit the short continuation note"
+  grep -Fq 'Do not wait for the captain to say to resume.' "$HOME_DIR/state/.sessionstart-e2e-output" \
+    || fail "Pi compact note omitted autonomous continuation"
+  if grep -Fq 'CURRENT AGENTS.md - INSTRUCTION REFRESH' "$HOME_DIR/state/.sessionstart-e2e-output"; then
     printf '# compact delivery records:\n' >&2
     grep -F -A5 -B2 'CURRENT AGENTS.md - INSTRUCTION REFRESH' "$HOME_DIR/state/.sessionstart-e2e-output" >&2 || true
-    printf '# session-start invocation records:\n' >&2
-    cat "$HOME_DIR/state/.sessionstart-e2e-sources" >&2
-    fail "Pi retained the stale session-start AGENTS.md contract after compaction"
-  }
+    fail "Pi compact still dumped the full AGENTS.md"
+  fi
+  if grep -Fq "$NEW_MARKER" "$HOME_DIR/state/.sessionstart-e2e-output"; then
+    fail "Pi compact ingested the updated AGENTS.md body"
+  fi
   [ -f "$HOME_DIR/state/.session-start-agents-baseline" ] \
     || fail "Pi startup did not record the true-start instruction baseline"
   [ "$(sed -n '2p' "$HOME_DIR/state/.session-start-agents-baseline")" != "$(shasum -a 256 "$PROJECT/AGENTS.md" | awk '{print "sha256:" $1}')" ] \
     || fail "Pi compaction rewrote the true-start instruction baseline"
-  pass "Pi $(pi --version 2>/dev/null | head -n 1) re-injects updated AGENTS.md after a real compact in an isolated session"
+  pass "Pi $(pi --version 2>/dev/null | head -n 1) delivers a short compact note without reprinting AGENTS.md"
 else
   old_reply_count=$(capture | grep -Fc "$OLD_MARKER" || true)
   send_line 'Which validation contract marker is active?'

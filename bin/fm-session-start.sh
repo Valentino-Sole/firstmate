@@ -178,38 +178,51 @@
 # Hosts without timeout, gtimeout, or perl use the shared pure-Bash watchdog, so
 # the digest never runs without the same hard bound and process-group cleanup.
 #
-# Usage: fm-session-start.sh [--reemit] [--source <source>]
+# Usage: fm-session-start.sh [--reemit] [--compact-note] [--source <source>]
 #   Prints the full ordered digest to stdout and always exits 0: this is a
 #   reporting command, not a gate. A lock refusal is reported as a loud
 #   banner inline, never a silent failure or a non-zero exit that would make
 #   an agent skip the rest of the digest.
 #
 #   --reemit  This process ALREADY took the helm at its own startup and has
-#             only lost its context (a /clear or a compaction). Skip the
-#             mutating sweeps that startup already reconciled - the stale Herdr
-#             projection cleanup and bootstrap's six mutating sweeps (fleet
-#             sync, secondmate convergence and liveness, PR-check migration,
-#             pending remote handoff retry, X-mode artifact writes) - and
-#             re-emit the rest. Wake-queue presentation is NOT skipped: queued
-#             records are this turn's work queue, they arrived after startup,
-#             and a session that owns the lock is exactly the session that must
-#             handle and acknowledge them. Lock acquisition still runs, because
-#             ownership must be re-verified rather than assumed: fm-lock.sh already treats a lock
-#             this session's own harness holds as its own, so the re-emit
+#             only lost its context on a /clear. Skip the mutating sweeps that
+#             startup already reconciled - the stale Herdr projection cleanup
+#             and bootstrap's six mutating sweeps (fleet sync, secondmate
+#             convergence and liveness, PR-check migration, pending remote
+#             handoff retry, X-mode artifact writes) - and re-emit the rest.
+#             Wake-queue presentation is NOT skipped: queued records are this
+#             turn's work queue, they arrived after startup, and a session that
+#             owns the lock is exactly the session that must handle and
+#             acknowledge them. Lock acquisition still runs, because ownership
+#             must be re-verified rather than assumed: fm-lock.sh already treats
+#             a lock this session's own harness holds as its own, so the re-emit
 #             proceeds, while a lock another live session took meanwhile still
 #             produces the ordinary read-only path.
+#             Compaction does NOT use --reemit. Reprinting the digest after
+#             every compact refilled the window and retriggered compact.
+#             Use --compact-note instead.
+#
+#   --compact-note
+#             Completed-startup compaction continuation. Print only the short
+#             helm-held note that tells the session to continue in-flight work
+#             now. Never reprint fleet or context digests, never dump AGENTS.md
+#             (Pi already holds the session-start copy in its system prompt;
+#             a full reprint was ~18k tokens and filled keep-recent), never
+#             drain the wake queue into this message, and never re-run startup
+#             sweeps. If AGENTS.md's content hash differs from the true-start
+#             baseline, print a one-line pointer rather than the file.
+#             fm-sessionstart-run.sh is the only caller.
 #
 #   --source  The native session-open source, supplied only by
 #             fm-sessionstart-run.sh. A genuine `startup` that owns the active
 #             session lock records AGENTS.md's SHA-256 baseline only after the
 #             digest completion record is published, keyed to that lock's
 #             harness pid. No resume, clear, reset, compact, or other rebuild
-#             creates or replaces it. Pi and pi-signed compaction are the only
-#             supported stale-cache rebuild pair: a missing baseline, a baseline
-#             for another harness pid, or a changed hash causes the complete
-#             current AGENTS.md to print before the bulky digest. The baseline
-#             remains immutable so every later drifted compaction refreshes
-#             again, while an equal baseline emits no instruction refresh.
+#             creates or replaces it. Pi and pi-signed incomplete-startup
+#             compaction (full digest, no completion proof) is the only
+#             supported stale-cache rebuild pair that may still print the
+#             complete current AGENTS.md. Completed-startup compaction uses
+#             --compact-note and does not. The baseline remains immutable.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -222,11 +235,16 @@ COMPLETION_FILE="$STATE/.session-start-complete"
 AGENTS_BASELINE_FILE="$STATE/.session-start-agents-baseline"
 
 REEMIT=0
+COMPACT_NOTE=0
 SESSION_SOURCE=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --reemit)
       REEMIT=1
+      shift
+      ;;
+    --compact-note)
+      COMPACT_NOTE=1
       shift
       ;;
     --source)
@@ -243,7 +261,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     *)
       printf 'fm-session-start: unknown argument: %s\n' "$1" >&2
-      printf 'usage: fm-session-start.sh [--reemit] [--source <source>]\n' >&2
+      printf 'usage: fm-session-start.sh [--reemit] [--compact-note] [--source <source>]\n' >&2
       exit 2
       ;;
   esac
@@ -277,7 +295,17 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
     # is lost, so the child still runs bounded.
     SESSION_START_STAGE_FILE=/dev/null
   fi
-  if [ "$REEMIT" -eq 1 ]; then
+  if [ "$COMPACT_NOTE" -eq 1 ]; then
+    if [ -n "$SESSION_SOURCE" ]; then
+      fm_run_timed "$SESSION_START_BUDGET" \
+        env FM_SESSION_START_STAGE_FILE="$SESSION_START_STAGE_FILE" \
+        "$SCRIPT_DIR/fm-session-start.sh" --compact-note --source "$SESSION_SOURCE"
+    else
+      fm_run_timed "$SESSION_START_BUDGET" \
+        env FM_SESSION_START_STAGE_FILE="$SESSION_START_STAGE_FILE" \
+        "$SCRIPT_DIR/fm-session-start.sh" --compact-note
+    fi
+  elif [ "$REEMIT" -eq 1 ]; then
     if [ -n "$SESSION_SOURCE" ]; then
       fm_run_timed "$SESSION_START_BUDGET" \
         env FM_SESSION_START_STAGE_FILE="$SESSION_START_STAGE_FILE" \
@@ -600,9 +628,40 @@ EOF
   fi
 }
 
+# Compact notes must not treat a foreign baseline pid as drift when the file
+# hash is unchanged, and must not cat AGENTS.md when the hash did change.
+# The full file dump after every drifted compact refilled keep-recent (~20k)
+# and retriggered compact. A pointer is enough: Pi still has the session-start
+# copy in its system prompt.
+agents_content_hash_changed() {
+  local baseline_hash current_hash
+  [ -f "$AGENTS_BASELINE_FILE" ] && [ ! -L "$AGENTS_BASELINE_FILE" ] || return 1
+  baseline_hash=$(sed -n '2p' "$AGENTS_BASELINE_FILE" 2>/dev/null || true)
+  current_hash=$(hash_file_sha256 "$FM_ROOT/AGENTS.md" 2>/dev/null || true)
+  [ -n "$baseline_hash" ] && [ -n "$current_hash" ] || return 1
+  [ "$baseline_hash" != "$current_hash" ]
+}
+
 AGENTS_START_HASH=
-if [ "$REEMIT" -eq 0 ] && [ "$SESSION_SOURCE" = startup ]; then
+if [ "$REEMIT" -eq 0 ] && [ "$COMPACT_NOTE" -eq 0 ] && [ "$SESSION_SOURCE" = startup ]; then
   AGENTS_START_HASH=$(hash_file_sha256 "$FM_ROOT/AGENTS.md" 2>/dev/null || true)
+fi
+
+if [ "$COMPACT_NOTE" -eq 1 ]; then
+  section "SESSION COMPACT (NO DIGEST RE-EMIT)"
+  printf 'This session already holds the helm. Context was compacted.\n'
+  printf 'The full session-start digest is not reprinted.\n'
+  printf 'Do not re-run startup sweeps. Do not re-arm the watcher; the stop-hook park owns continuity.\n'
+  printf 'Do not bulk-read data/captain.md, data/learnings.md, data/backlog.md, state/*.status, or AGENTS.md.\n'
+  printf 'Continue the in-flight assignment now from the compaction summary and recent turns.\n'
+  printf 'Do not wait for the captain to say to resume.\n'
+  printf 'Drain wakes only if this turn emitted them.\n'
+  printf 'Auto-compaction stays enabled.\n'
+  if agents_content_hash_changed; then
+    printf '\nAGENTS.md on disk has changed since this session started.\n'
+    printf 'Do not ingest it in full. Read AGENTS.md from the Firstmate root only if an instruction conflict appears.\n'
+  fi
+  exit 0
 fi
 
 if [ "$REEMIT" -eq 1 ]; then

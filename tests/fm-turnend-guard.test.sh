@@ -189,10 +189,16 @@ make_secondmate_linked_home_dir() {
   printf '%s\n' "$dir"
 }
 
+# Cursor markers beat CLAUDECODE in fm-harness.sh detect_own. Drop them so a
+# Cursor-hosted run still exercises the Claude Stop wording these fixtures pin.
+run_claude_hook_env() {
+  env -u CURSOR_AGENT -u CURSOR_INVOKED_AS CLAUDECODE=1 "$@"
+}
+
 run_hook() {
   local dir=$1 stop_active=$2 home
   home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":%s}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
+  printf '{"stop_hook_active":%s}' "$stop_active" | run_claude_hook_env FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
 }
 
 nonexistent_pid() {
@@ -369,7 +375,7 @@ test_hook_blocks_from_fm_home_state() {
   home="$TMP_ROOT/hook-fm-home-op"
   mkdir -p "$home/state"
   : > "$home/state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  out=$(printf '{"stop_hook_active":false}' | run_claude_hook_env FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must inspect the active FM_HOME state dir"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: blocks from active FM_HOME state, not only repo-root state"
@@ -417,7 +423,7 @@ test_hook_uses_state_override() {
   state="$TMP_ROOT/hook-state-override-active"
   mkdir -p "$home/state" "$state"
   : > "$state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 FM_HOME="$home" FM_STATE_OVERRIDE="$state" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  out=$(printf '{"stop_hook_active":false}' | run_claude_hook_env FM_HOME="$home" FM_STATE_OVERRIDE="$state" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must let FM_STATE_OVERRIDE win over FM_HOME/state"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: uses FM_STATE_OVERRIDE ahead of FM_HOME/state"
@@ -777,7 +783,7 @@ test_grok_adapter_missing_jq_and_no_supervision_allow() {
   [ ! -e "$log" ] || fail "missing jq started a resume process"
 
   dir=$(make_primary_dir "$TMP_ROOT/grok-native-no-work")
-  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | FM_HOME="$dir" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "healthy no-supervision-needed native stop must allow"
   [ -z "$out" ] || fail "no-supervision-needed native stop produced output: $out"
   pass "fm-turnend-guard-grok: missing jq and no-supervision-needed stops stay silent and bounded"
@@ -1036,6 +1042,7 @@ EOF
 }
 
 test_pi_extension_retries_after_followup_delivery_failure() {
+
   local repo home ext out status
   repo="$TMP_ROOT/pi-delivery-failure-root"
   home="$TMP_ROOT/pi-delivery-failure-home"
@@ -1084,6 +1091,146 @@ EOF
   pass ".pi primary extension: delivery failure resets the logical-run latch"
 }
 
+test_pi_extension_compact_continues_as_followup() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-compact-continue-root"
+  home="$TMP_ROOT/pi-compact-continue-home"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$home/state"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  cat > "$repo/bin/fm-sessionstart-run.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'SESSION COMPACT (NO DIGEST RE-EMIT)\nContinue the in-flight assignment now.\n'
+SH
+  cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  cat > "$repo/bin/fm-arm-pretool-check.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$repo/bin/"*.sh
+  out=$(PLUGIN="$ext" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const userMessages = [];
+const customMessages = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  sendMessage(message) {
+    customMessages.push(message);
+  },
+  async sendUserMessage(message, options) {
+    userMessages.push({ message, options });
+  },
+};
+const mod = await import(`${pathToFileURL(process.env.PLUGIN).href}?compact=${Date.now()}`);
+mod.default(pi);
+const compact = handlers.get("session_compact");
+if (!compact) throw new Error("session_compact handler was not registered");
+await compact();
+if (userMessages.length !== 1) throw new Error(`expected one compact follow-up, got ${userMessages.length}`);
+if (userMessages[0].options?.deliverAs !== "followUp") {
+  throw new Error("compact continuation was not a follow-up");
+}
+if (!userMessages[0].message.includes("SESSION COMPACT (NO DIGEST RE-EMIT)")) {
+  throw new Error(`compact follow-up omitted the short note: ${userMessages[0].message}`);
+}
+if (!userMessages[0].message.startsWith("\u2063FIRSTMATE_OP: v1 session-start: ")) {
+  throw new Error("compact follow-up lost operational session-start provenance");
+}
+if (customMessages.length !== 0) {
+  throw new Error("first compact used silent sendMessage instead of a follow-up turn");
+}
+await compact();
+if (userMessages.length !== 1) {
+  throw new Error(`cooldown compact still followed up, saw ${userMessages.length} user messages`);
+}
+if (customMessages.length !== 1) {
+  throw new Error(`cooldown compact did not inject the note without a turn, saw ${customMessages.length}`);
+}
+if (!String(customMessages[0].content || "").includes("SESSION COMPACT (NO DIGEST RE-EMIT)")) {
+  throw new Error("cooldown compact note was empty");
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi compact must follow up once, then cool down"
+  [ -z "$out" ] || fail "Pi compact continuation test printed output: $out"
+  pass ".pi primary extension: compact continues in-flight work as a follow-up and cools down"
+}
+
+test_pi_extension_compact_retries_followup_after_in_progress_refusal() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-compact-retry-root"
+  home="$TMP_ROOT/pi-compact-retry-home"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$home/state"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  cat > "$repo/bin/fm-sessionstart-run.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'SESSION COMPACT (NO DIGEST RE-EMIT)\nContinue the in-flight assignment now.\n'
+SH
+  cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  cat > "$repo/bin/fm-arm-pretool-check.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$repo/bin/"*.sh
+  out=$(PLUGIN="$ext" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const userMessages = [];
+const customMessages = [];
+let attempts = 0;
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  sendMessage(message) {
+    customMessages.push(message);
+  },
+  async sendUserMessage(message, options) {
+    attempts += 1;
+    if (attempts === 1) {
+      throw new Error("Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.");
+    }
+    userMessages.push({ message, options });
+  },
+};
+const mod = await import(`${pathToFileURL(process.env.PLUGIN).href}?compact-retry=${Date.now()}`);
+mod.default(pi);
+const compact = handlers.get("session_compact");
+if (!compact) throw new Error("session_compact handler was not registered");
+await compact();
+if (attempts !== 2) throw new Error(`expected one refused prompt then one retry, got ${attempts} attempts`);
+if (userMessages.length !== 1) throw new Error(`expected one compact follow-up after retry, got ${userMessages.length}`);
+if (userMessages[0].options?.deliverAs !== "followUp") {
+  throw new Error("retried compact continuation was not a follow-up");
+}
+if (customMessages.length !== 0) {
+  throw new Error("in-progress refusal fell back to a silent custom message instead of retrying");
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi compact must retry follow-up after a compact-in-progress refusal"
+  [ -z "$out" ] || fail "Pi compact retry test printed output: $out"
+  pass ".pi primary extension: compact retries follow-up after a compact-in-progress refusal"
+}
+
 # --- --claude cooperative mode -----------------------------------------------
 # In --claude mode the guard ignores stop_hook_active (Claude marks every stop
 # after ANY stop-hook continuation true, including asyncRewake rewake turns) and
@@ -1093,7 +1240,7 @@ EOF
 run_hook_claude() {
   local dir=$1 stop_active=$2 home
   home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":%s,"session_id":"sess-claude-mode"}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1
+  printf '{"stop_hook_active":%s,"session_id":"sess-claude-mode"}' "$stop_active" | run_claude_hook_env FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1
 }
 
 seed_claude_failure() {
@@ -1270,7 +1417,7 @@ SH
         FM_TERMINAL_READY="$ready" \
         FM_TERMINAL_RELEASE="$release" \
         FM_TERMINAL_ONCE="$once" \
-        CLAUDECODE=1 FM_HOME="$dir" bash "$dir/bin/fm-turnend-guard.sh" --claude \
+        run_claude_hook_env FM_HOME="$dir" bash "$dir/bin/fm-turnend-guard.sh" --claude \
           > "$guard_out" 2>&1
     printf '%s\n' "$?" > "$guard_status"
   ) &
@@ -1796,6 +1943,8 @@ test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
+test_pi_extension_compact_continues_as_followup
+test_pi_extension_compact_retries_followup_after_in_progress_refusal
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
 test_hook_claude_mode_allows_when_autoarm_owner_alive

@@ -10,6 +10,11 @@ import {
 } from "./lib/fm-operational-input.ts";
 
 let guardFollowupActive = false;
+// Auto-compact with a stale Cursor occupancy meter retriggered within ~80-160s
+// (live primary 2026-08-28T06:26Z). A follow-up then becomes Compact->Resume->
+// Compact. Skip the follow-up inside this window; still inject the short note.
+let lastCompactContinueAt = 0;
+const COMPACT_CONTINUE_COOLDOWN_MS = 180000;
 
 type LockOwnership = "owned" | "missing" | "other";
 
@@ -130,25 +135,85 @@ function runSessionstartHook(source: string): Promise<string> {
   });
 }
 
+function encodeSessionstartContent(raw: string): string {
+  // Pi is the only adapter that injects a MESSAGE rather than hook stdout, so
+  // whatever it injects must carry operational provenance or the Ahoy skill
+  // would have to guess whether it was captain-authored. The wrapper already
+  // returns an encoded nudge on a context-preserving open, so only an
+  // unencoded digest needs the marker added here.
+  return classifyFirstmateCurrentOperationalText(raw)
+    ? raw
+    : encodeFirstmateOperationalInput("session-start", raw);
+}
+
+function injectSessionstartMessage(pi: ExtensionAPI, content: string): void {
+  pi.sendMessage({
+    customType: "firstmate-sessionstart-nudge",
+    content,
+    display: false,
+    details: { kind: "session-start" },
+  });
+}
+
 async function injectSessionstart(pi: ExtensionAPI, source: string): Promise<void> {
   const raw = await runSessionstartHook(source);
   if (!raw) return;
   try {
-    // Pi is the only adapter that injects a MESSAGE rather than hook stdout, so
-    // whatever it injects must carry operational provenance or the Ahoy skill
-    // would have to guess whether it was captain-authored. The wrapper already
-    // returns an encoded nudge on a context-preserving open, so only an
-    // unencoded digest needs the marker added here.
-    const content = classifyFirstmateCurrentOperationalText(raw)
-      ? raw
-      : encodeFirstmateOperationalInput("session-start", raw);
-    pi.sendMessage({
-      customType: "firstmate-sessionstart-nudge",
-      content,
-      display: false,
-      details: { kind: "session-start" },
-    });
+    injectSessionstartMessage(pi, encodeSessionstartContent(raw));
   } catch {
+  }
+}
+
+function afterCompactInProgressClears(): Promise<void> {
+  return new Promise((resolveDelay) => {
+    setTimeout(resolveDelay, 0);
+  });
+}
+
+async function startCompactContinuationTurn(pi: ExtensionAPI, content: string): Promise<void> {
+  try {
+    // Auto-compaction runs while _isAgentRunActive is true, so followUp is
+    // queued and Pi continues the loop (hasQueuedMessages). Idle sessions
+    // start a new continuation turn. Either way the in-flight assignment
+    // resumes without a captain prompt.
+    await pi.sendUserMessage(content, { deliverAs: "followUp" });
+  } catch {
+    // Manual /compact emits session_compact before it clears
+    // _compactionAbortController, so the first prompt() refuses. The next
+    // tick runs after that flag is cleared.
+    await afterCompactInProgressClears();
+    await pi.sendUserMessage(content, { deliverAs: "followUp" });
+  }
+}
+
+async function injectCompactContinuation(pi: ExtensionAPI): Promise<void> {
+  const raw = await runSessionstartHook("compact");
+  if (!raw) return;
+  let content: string;
+  try {
+    content = encodeSessionstartContent(raw);
+  } catch {
+    return;
+  }
+  const now = Date.now();
+  const inCooldown = lastCompactContinueAt > 0
+    && now - lastCompactContinueAt < COMPACT_CONTINUE_COOLDOWN_MS;
+  if (inCooldown) {
+    try {
+      injectSessionstartMessage(pi, content);
+    } catch {
+    }
+    return;
+  }
+  lastCompactContinueAt = now;
+  try {
+    await startCompactContinuationTurn(pi, content);
+  } catch {
+    lastCompactContinueAt = 0;
+    try {
+      injectSessionstartMessage(pi, content);
+    } catch {
+    }
   }
 }
 
@@ -207,10 +272,11 @@ export default function (pi: ExtensionAPI) {
     await injectSessionstart(pi, source);
   });
 
-  // Pi's compaction equivalent. The digest is what a compacted session has just
-  // lost, so re-emitting it here is the point rather than a side effect.
+  // After compaction the helm is still held. Inject the short continuation
+  // note as a follow-up so in-flight work resumes without a captain prompt.
+  // Never reprint the full session-start digest: that refill caused a compact loop.
   pi.on?.("session_compact", async () => {
-    await injectSessionstart(pi, "compact");
+    await injectCompactContinuation(pi);
   });
 
   pi.on("tool_call", async (event) => {

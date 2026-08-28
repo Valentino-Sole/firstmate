@@ -197,7 +197,10 @@ run_hook() {  # <root> [args...]
 run_hook_pi() {  # <root> [args...]
   local root=$1
   shift
-  env -u CLAUDECODE -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS=pi \
+  # Cursor markers beat PI_CODING_AGENT in fm-harness.sh, so a Cursor-hosted
+  # test run would otherwise classify as cursor and skip Pi compact refresh.
+  env -u CLAUDECODE -u GROK_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u HERDR_ENV \
+    PI_CODING_AGENT=true FM_PI_HARNESS=pi \
     FM_GATE_REFUSE_BYPASS=0 FM_ROOT_OVERRIDE="$root" FM_HOME="$root" PATH="$RUN_PATH" "$RUN" "$@"
 }
 
@@ -206,6 +209,7 @@ run_hook_pi() {  # <root> [args...]
 # was won in the test environment.
 FULL_BANNER="SESSION START - "
 REEMIT_BANNER="SESSION START (CONTEXT RE-EMIT) - "
+COMPACT_BANNER="SESSION COMPACT (NO DIGEST RE-EMIT)"
 
 test_run_startup_runs_the_full_digest() {
   local root="$TMP_ROOT/run-startup" out status=0
@@ -221,23 +225,109 @@ test_run_startup_runs_the_full_digest() {
   pass "run wrapper: startup runs the full digest and never also nudges"
 }
 
-test_run_clear_and_compact_reemit() {
-  local root out source status
-  for source in clear compact; do
-    root="$TMP_ROOT/run-$source"
-    make_run_primary "$root"
-    run_hook "$root" --source startup </dev/null >/dev/null
-    assert_present "$root/state/.session-start-complete" \
-      "startup did not publish the completion proof needed by $source"
-    status=0
-    out=$(run_hook "$root" --source "$source" </dev/null) || status=$?
-    expect_code 0 "$status" "run wrapper $source"
-    assert_contains "$out" "$REEMIT_BANNER$root" "$source did not re-emit the digest"
-    assert_contains "$out" "are NOT repeated" "$source did not report the skipped startup sweeps"
-    assert_contains "$out" "Queued wakes ARE still drained" "$source did not preserve the wake-queue drain"
-    assert_not_contains "$out" "FIRSTMATE_OP" "a $source open also emitted the nudge instruction"
-  done
-  pass "run wrapper: clear and compact re-emit the digest without repeating startup sweeps"
+test_run_clear_reemit() {
+  local root="$TMP_ROOT/run-clear" out status=0
+  make_run_primary "$root"
+  run_hook "$root" --source startup </dev/null >/dev/null
+  assert_present "$root/state/.session-start-complete" \
+    "startup did not publish the completion proof needed by clear"
+  out=$(run_hook "$root" --source clear </dev/null) || status=$?
+  expect_code 0 "$status" "run wrapper clear"
+  assert_contains "$out" "$REEMIT_BANNER$root" "clear did not re-emit the digest"
+  assert_contains "$out" "are NOT repeated" "clear did not report the skipped startup sweeps"
+  assert_contains "$out" "Queued wakes ARE still drained" "clear did not preserve the wake-queue drain"
+  assert_not_contains "$out" "FIRSTMATE_OP" "a clear open also emitted the nudge instruction"
+  pass "run wrapper: clear re-emits the digest without repeating startup sweeps"
+}
+
+test_run_compact_emits_short_note() {
+  local root="$TMP_ROOT/run-compact" out1 out2 out3 status=0 bytes
+  make_run_primary "$root"
+  run_hook "$root" --source startup </dev/null >/dev/null
+  assert_present "$root/state/.session-start-complete" \
+    "startup did not publish the completion proof needed by compact"
+  out1=$(run_hook "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "run wrapper compact 1"
+  out2=$(run_hook "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "run wrapper compact 2"
+  out3=$(run_hook "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "run wrapper compact 3"
+  assert_contains "$out1" "$COMPACT_BANNER" \
+    "compact after completed startup did not emit the short continuation note"
+  assert_contains "$out1" "Do not wait for the captain to say to resume." \
+    "compact note did not instruct autonomous continuation"
+  assert_not_contains "$out1" "$REEMIT_BANNER" "compact still reprinted the context re-emit digest"
+  assert_not_contains "$out1" "Queued wakes ARE still drained" \
+    "compact still drained the wake queue into the compact message"
+  assert_not_contains "$out1" "data/projects.md" "compact still reprinted the context digest"
+  assert_not_contains "$out1" "FIRSTMATE_OP" "a compact open also emitted the nudge instruction"
+  bytes=$(printf '%s' "$out1" | wc -c)
+  [ "$bytes" -lt 2000 ] \
+    || fail "compact continuation note was ${bytes} bytes; expected a short note under 2000"
+  [ "$out1" = "$out2" ] && [ "$out2" = "$out3" ] \
+    || fail "repeated compact notes grew or changed instead of staying a stable short note"
+  pass "run wrapper: compact after completed startup emits a stable short note, not the digest"
+}
+
+test_run_compact_pi_matching_hash_stays_short() {
+  local root="$TMP_ROOT/run-compact-pi-hash" out1 out2 out3 status=0 bytes baseline_hash
+  make_run_primary "$root"
+  printf '%s\n' 'RUN_TIER_AGENTS=stable' > "$root/AGENTS.md"
+  run_hook_pi "$root" --source startup </dev/null >/dev/null
+  assert_present "$root/state/.session-start-agents-baseline" \
+    "Pi startup did not record an instruction baseline"
+  baseline_hash=$(sed -n '2p' "$root/state/.session-start-agents-baseline")
+  [ -n "$baseline_hash" ] || fail "Pi startup baseline omitted the AGENTS.md hash"
+  printf '%s\n%s\n' '999999' "$baseline_hash" > "$root/state/.session-start-agents-baseline"
+  out1=$(run_hook_pi "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "Pi compact with matching hash 1"
+  out2=$(run_hook_pi "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "Pi compact with matching hash 2"
+  out3=$(run_hook_pi "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "Pi compact with matching hash 3"
+  assert_contains "$out1" "$COMPACT_BANNER" \
+    "Pi compact with a foreign baseline pid did not emit the short continuation note"
+  assert_not_contains "$out1" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
+    "Pi compact reprinted AGENTS.md although the content hash was unchanged"
+  assert_not_contains "$out1" "$REEMIT_BANNER" "Pi compact still reprinted the context re-emit digest"
+  bytes=$(printf '%s' "$out1" | wc -c)
+  [ "$bytes" -lt 2000 ] \
+    || fail "Pi compact with matching hash was ${bytes} bytes; expected a short note under 2000"
+  [ "$out1" = "$out2" ] && [ "$out2" = "$out3" ] \
+    || fail "repeated Pi compact notes grew or changed instead of staying a stable short note"
+  pass "run wrapper: Pi compact keeps the short note when only the baseline pid is foreign"
+}
+
+test_run_compact_drifted_agents_stays_short() {
+  local root="$TMP_ROOT/run-compact-drifted" out1 out2 status=0 bytes
+  make_run_primary "$root"
+  printf '%s\n' 'RUN_TIER_AGENTS=original' > "$root/AGENTS.md"
+  run_hook_pi "$root" --source startup </dev/null >/dev/null
+  # A 70k-class AGENTS.md is the live refill: dumping it after compact filled
+  # keep-recent and retriggered compact. The note must stay a pointer.
+  printf '%s\n' 'RUN_TIER_AGENTS=updated' > "$root/AGENTS.md"
+  head -c 70000 /dev/zero | tr '\0' 'X' >> "$root/AGENTS.md"
+  printf '\n' >> "$root/AGENTS.md"
+  out1=$(run_hook_pi "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "Pi compact with drifted AGENTS 1"
+  out2=$(run_hook_pi "$root" --source compact </dev/null) || status=$?
+  expect_code 0 "$status" "Pi compact with drifted AGENTS 2"
+  assert_contains "$out1" "$COMPACT_BANNER" \
+    "drifted compact lost the short continuation note"
+  assert_contains "$out1" "AGENTS.md on disk has changed since this session started." \
+    "drifted compact omitted the instruction-drift pointer"
+  assert_not_contains "$out1" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
+    "drifted compact still dumped the full AGENTS.md"
+  assert_not_contains "$out1" "RUN_TIER_AGENTS=updated" \
+    "drifted compact still ingested the updated AGENTS.md body"
+  assert_not_contains "$out1" "$REEMIT_BANNER" \
+    "drifted compact still reprinted the bulky context re-emit"
+  bytes=$(printf '%s' "$out1" | wc -c)
+  [ "$bytes" -lt 2000 ] \
+    || fail "drifted compact note was ${bytes} bytes; expected a short note under 2000 even with a 70k AGENTS.md"
+  [ "$out1" = "$out2" ] \
+    || fail "repeated drifted compact notes grew or changed"
+  pass "run wrapper: Pi compact keeps a short pointer when AGENTS.md drifted, never the file"
 }
 
 test_run_rebuild_forwards_source_to_drifted_instruction_refresh() {
@@ -254,8 +344,14 @@ test_run_rebuild_forwards_source_to_drifted_instruction_refresh() {
   clear_out=$(run_hook_pi "$root" --source clear </dev/null)
   resume_out=$(run_hook_pi "$root" --source resume </dev/null)
 
-  assert_contains "$compact_out" "RUN_TIER_AGENTS=updated" \
-    "the compact run wrapper did not forward its source to instruction refresh"
+  assert_contains "$compact_out" "$COMPACT_BANNER" \
+    "drifted compact lost the short continuation note"
+  assert_contains "$compact_out" "AGENTS.md on disk has changed since this session started." \
+    "drifted compact omitted the instruction-drift pointer"
+  assert_not_contains "$compact_out" "RUN_TIER_AGENTS=updated" \
+    "the compact run wrapper still dumped the updated AGENTS.md"
+  assert_not_contains "$compact_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
+    "the compact run wrapper still emitted a full instruction refresh"
   assert_not_contains "$clear_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
     "the clear run wrapper emitted a replacement contract despite Pi's fresh runtime"
   [ "$baseline" = "$(cat "$root/state/.session-start-agents-baseline")" ] \
@@ -263,7 +359,7 @@ test_run_rebuild_forwards_source_to_drifted_instruction_refresh() {
   [ -z "$resume_out" ] \
     || fail "an already-owned resume should preserve context without re-running the digest"
 
-  pass "run wrapper forwards only stale-cache rebuild sources to immutable-baseline instruction refresh"
+  pass "run wrapper forwards compact to a short note and keeps clear off the Pi instruction-refresh path"
 }
 
 test_run_compact_without_completion_refreshes_before_finishing_startup() {
@@ -479,7 +575,8 @@ test_run_reads_source_from_the_hook_payload() {
   out=$(printf '{"session_id":"s1","hook_event_name":"SessionStart","source":"compact"}' |
     run_hook "$root") || status=$?
   expect_code 0 "$status" "run wrapper payload compact"
-  assert_contains "$out" "$REEMIT_BANNER$root" "a compact hook payload was not routed to a re-emit"
+  assert_contains "$out" "$COMPACT_BANNER" "a compact hook payload was not routed to the short continuation note"
+  assert_not_contains "$out" "$REEMIT_BANNER" "a compact hook payload still reprinted the digest"
 
   # A fresh root, because the compact case above legitimately took the lock and
   # an owned lock is exactly when the nudge is supposed to stay silent.
@@ -542,7 +639,10 @@ test_missing_state_is_silent
 test_owned_lock_is_silent
 test_opencode_plugin_delivers_exact_nudge_once
 test_run_startup_runs_the_full_digest
-test_run_clear_and_compact_reemit
+test_run_clear_reemit
+test_run_compact_emits_short_note
+test_run_compact_pi_matching_hash_stays_short
+test_run_compact_drifted_agents_stays_short
 test_run_rebuild_forwards_source_to_drifted_instruction_refresh
 test_run_compact_without_completion_refreshes_before_finishing_startup
 test_run_clear_without_completion_finishes_startup
