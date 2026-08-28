@@ -14,6 +14,18 @@ set -u
 RESTART="$ROOT/bin/fm-pi-primary-restart.sh"
 TMP_ROOT=$(fm_test_tmproot fm-pi-primary-restart)
 
+reset_restart_stubs() {
+  unset -f sleep \
+    fm_backend_herdr_parse_target \
+    fm_backend_herdr_agent_status_raw \
+    fm_backend_herdr_classify_submit_agent_status \
+    fm_backend_herdr_send_key \
+    fm_backend_send_text_submit
+  FM_PI_RESTART_PREPARE_REASON=
+  FM_PI_RESTART_SUBMIT_REASON=
+  FM_PI_RESTART_SUBMIT_DETAIL=
+}
+
 test_pending_roundtrip() {
   local home="$TMP_ROOT/pending-home"
   mkdir -p "$home/state"
@@ -58,7 +70,108 @@ test_restart_refuses_without_pi_lock() {
   pass "restart refuses when the lock is not held by Pi"
 }
 
+test_prepare_exit_retries_until_idle() {
+  local status=0
+  local interrupts=0 counter_file="$TMP_ROOT/prepare-idle.counter"
+  reset_restart_stubs
+  printf '0\n' >"$counter_file"
+  sleep() { :; }
+  fm_backend_herdr_parse_target() { FM_BACKEND_HERDR_SESSION=s; FM_BACKEND_HERDR_PANE=p; return 0; }
+  fm_backend_herdr_agent_status_raw() {
+    local idx
+    idx=$(sed -n '1p' "$counter_file")
+    case "$idx" in
+      0|1) printf 'working' ;;
+      *) printf 'idle' ;;
+    esac
+    printf '%s\n' $((idx + 1)) >"$counter_file"
+  }
+  fm_backend_herdr_classify_submit_agent_status() {
+    case "$1" in
+      idle) printf 'idle' ;;
+      working|blocked) printf 'busy' ;;
+      *) printf 'unknown' ;;
+    esac
+  }
+  fm_backend_herdr_send_key() { interrupts=$((interrupts + 1)); return 0; }
+
+  fm_pi_restart_prepare_pane_for_exit herdr s:p 3 3 || status=$?
+  [ "$status" -eq 0 ] || fail "prepare should succeed when pane becomes idle"
+  [ "$interrupts" -eq 1 ] || fail "expected one interrupt attempt, got $interrupts"
+  [ -z "${FM_PI_RESTART_PREPARE_REASON:-}" ] || fail "unexpected prepare reason: ${FM_PI_RESTART_PREPARE_REASON:-}"
+  reset_restart_stubs
+  pass "prepare retries interrupt and returns on idle"
+}
+
+test_prepare_exit_fails_when_busy_persists() {
+  local status=0
+  local interrupts=0
+  reset_restart_stubs
+  sleep() { :; }
+  fm_backend_herdr_parse_target() { FM_BACKEND_HERDR_SESSION=s; FM_BACKEND_HERDR_PANE=p; return 0; }
+  fm_backend_herdr_agent_status_raw() { printf 'working'; }
+  fm_backend_herdr_classify_submit_agent_status() {
+    case "$1" in
+      idle) printf 'idle' ;;
+      working|blocked) printf 'busy' ;;
+      *) printf 'unknown' ;;
+    esac
+  }
+  fm_backend_herdr_send_key() { interrupts=$((interrupts + 1)); return 0; }
+
+  fm_pi_restart_prepare_pane_for_exit herdr s:p 2 2 || status=$?
+  [ "$status" -ne 0 ] || fail "prepare should fail when pane remains busy"
+  [ "$interrupts" -eq 2 ] || fail "expected two interrupt attempts, got $interrupts"
+  [ "${FM_PI_RESTART_PREPARE_REASON:-}" = pane-stayed-busy ] || fail "wrong prepare reason: ${FM_PI_RESTART_PREPARE_REASON:-}"
+  reset_restart_stubs
+  pass "prepare fails with explicit reason after busy retries"
+}
+
+test_prepare_exit_fails_when_interrupt_cannot_send() {
+  local status=0
+  reset_restart_stubs
+  sleep() { :; }
+  fm_backend_herdr_parse_target() { FM_BACKEND_HERDR_SESSION=s; FM_BACKEND_HERDR_PANE=p; return 0; }
+  fm_backend_herdr_agent_status_raw() { printf 'working'; }
+  fm_backend_herdr_classify_submit_agent_status() { printf 'busy'; }
+  fm_backend_herdr_send_key() { return 1; }
+
+  fm_pi_restart_prepare_pane_for_exit herdr s:p 2 2 || status=$?
+  [ "$status" -ne 0 ] || fail "prepare should fail when interrupt send fails"
+  [ "${FM_PI_RESTART_PREPARE_REASON:-}" = interrupt-send-failed ] || fail "wrong prepare reason: ${FM_PI_RESTART_PREPARE_REASON:-}"
+  reset_restart_stubs
+  pass "prepare surfaces interrupt-delivery failure reason"
+}
+
+test_submit_exit_requires_confirmed_delivery() {
+  local status=0
+  reset_restart_stubs
+  fm_backend_send_text_submit() { printf ''; }
+  fm_pi_restart_submit_exit_command herdr s:p /quit 2 0 0 || status=$?
+  [ "$status" -eq 0 ] || fail "empty submit verdict should be accepted"
+  [ -z "${FM_PI_RESTART_SUBMIT_REASON:-}" ] || fail "unexpected submit reason on success"
+
+  status=0
+  fm_backend_send_text_submit() { printf 'pending'; }
+  fm_pi_restart_submit_exit_command herdr s:p /quit 2 0 0 || status=$?
+  [ "$status" -ne 0 ] || fail "pending submit verdict must refuse blind exit"
+  [ "${FM_PI_RESTART_SUBMIT_REASON:-}" = unconfirmed ] || fail "expected unconfirmed reason"
+  [ "${FM_PI_RESTART_SUBMIT_DETAIL:-}" = pending ] || fail "expected pending submit detail"
+
+  status=0
+  fm_backend_send_text_submit() { printf 'send-failed'; }
+  fm_pi_restart_submit_exit_command herdr s:p /quit 2 0 0 || status=$?
+  [ "$status" -ne 0 ] || fail "send-failed must be surfaced"
+  [ "${FM_PI_RESTART_SUBMIT_REASON:-}" = send-failed ] || fail "expected send-failed reason"
+  reset_restart_stubs
+  pass "submit helper accepts only confirmed exit delivery"
+}
+
 test_pending_roundtrip
 test_launch_args_include_continue_and_extensions
 test_restart_refuses_non_primary_scope
 test_restart_refuses_without_pi_lock
+test_prepare_exit_retries_until_idle
+test_prepare_exit_fails_when_busy_persists
+test_prepare_exit_fails_when_interrupt_cannot_send
+test_submit_exit_requires_confirmed_delivery

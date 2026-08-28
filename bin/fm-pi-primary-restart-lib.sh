@@ -5,6 +5,11 @@ set -u
 
 FM_PI_RESTART_PENDING_NAME='.pi-primary-restart-pending'
 FM_PI_RESTART_NEEDS_DECISION_EXIT=2
+FM_PI_RESTART_INTERRUPT_ATTEMPTS_DEFAULT=3
+FM_PI_RESTART_INTERRUPT_WAIT_SECONDS_DEFAULT=15
+FM_PI_RESTART_PREPARE_REASON=
+FM_PI_RESTART_SUBMIT_REASON=
+FM_PI_RESTART_SUBMIT_DETAIL=
 
 fm_pi_restart_pending_path() {  # <state-dir>
   printf '%s/%s' "$1" "$FM_PI_RESTART_PENDING_NAME"
@@ -162,24 +167,61 @@ fm_pi_restart_wait_lock_replaced() {  # <state-dir> <old-pid> <timeout-seconds>
   return 1
 }
 
-fm_pi_restart_prepare_pane_for_exit() {  # <backend> <target>
-  local backend=$1 target=$2 session raw i=0
+fm_pi_restart_prepare_pane_for_exit() {  # <backend> <target> [interrupt-attempts] [wait-seconds]
+  local backend=$1 target=$2
+  local attempts=${3:-$FM_PI_RESTART_INTERRUPT_ATTEMPTS_DEFAULT}
+  local wait_s=${4:-$FM_PI_RESTART_INTERRUPT_WAIT_SECONDS_DEFAULT}
+  local session raw state attempt elapsed
+  FM_PI_RESTART_PREPARE_REASON=
   [ "$backend" = herdr ] || return 0
   command -v jq >/dev/null 2>&1 || return 0
   fm_backend_herdr_parse_target "$target" || return 0
   session=$FM_BACKEND_HERDR_SESSION
   raw=$(fm_backend_herdr_agent_status_raw "$session" "$FM_BACKEND_HERDR_PANE")
-  case "$(fm_backend_herdr_classify_submit_agent_status "$raw")" in
-    busy)
-      fm_backend_herdr_send_key "$target" C-c || return 1
-      while [ "$i" -lt 45 ]; do
-        raw=$(fm_backend_herdr_agent_status_raw "$session" "$FM_BACKEND_HERDR_PANE")
-        case "$(fm_backend_herdr_classify_submit_agent_status "$raw")" in
-          idle|unknown) return 0 ;;
-        esac
-        sleep 1
-        i=$((i + 1))
-      done
+  state=$(fm_backend_herdr_classify_submit_agent_status "$raw")
+  [ "$state" = busy ] || return 0
+
+  attempt=1
+  while [ "$attempt" -le "$attempts" ]; do
+    fm_backend_herdr_send_key "$target" C-c || {
+      FM_PI_RESTART_PREPARE_REASON='interrupt-send-failed'
+      return 1
+    }
+    elapsed=0
+    while [ "$elapsed" -lt "$wait_s" ]; do
+      raw=$(fm_backend_herdr_agent_status_raw "$session" "$FM_BACKEND_HERDR_PANE")
+      state=$(fm_backend_herdr_classify_submit_agent_status "$raw")
+      [ "$state" = idle ] && return 0
+      sleep 1
+      elapsed=$((elapsed + 1))
+    done
+    attempt=$((attempt + 1))
+  done
+
+  FM_PI_RESTART_PREPARE_REASON='pane-stayed-busy'
+  return 1
+}
+
+fm_pi_restart_submit_exit_command() {  # <backend> <target> <exit-cmd> [retries] [enter-sleep] [settle]
+  local backend=$1 target=$2 exit_cmd=$3
+  local retries=${4:-5} enter_sleep=${5:-0.5} settle=${6:-1.2}
+  local submit
+  FM_PI_RESTART_SUBMIT_REASON=
+  FM_PI_RESTART_SUBMIT_DETAIL=
+
+  submit=$(fm_backend_send_text_submit "$backend" "$target" "$exit_cmd" "$retries" "$enter_sleep" "$settle" "pi-primary-restart") || {
+    FM_PI_RESTART_SUBMIT_REASON='submit-call-failed'
+    return 1
+  }
+  case "$submit" in
+    '') return 0 ;;
+    send-failed)
+      FM_PI_RESTART_SUBMIT_REASON='send-failed'
+      return 1
+      ;;
+    *)
+      FM_PI_RESTART_SUBMIT_REASON='unconfirmed'
+      FM_PI_RESTART_SUBMIT_DETAIL="$submit"
       return 1
       ;;
   esac
