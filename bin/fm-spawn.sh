@@ -105,6 +105,9 @@
 #   even when they select different backends. A fresh spawn first takes the
 #   per-home task-set lock and refuses rather than waits when forced teardown owns
 #   it; relaunch is exempt because the existing task's control lock covers it.
+#   A fresh spawn also refuses when the same task id already has a live, ambiguous,
+#   unreadable, or otherwise unverified endpoint state, so no parallel worker can
+#   be started onto work that may still be active.
 #   With no harness arg, a crewmate/scout spawn resolves the CREW harness only when
 #   config/crew-dispatch.json is absent. When that file exists, crewmate/scout
 #   spawns require an explicit harness so firstmate cannot silently skip dispatch
@@ -580,6 +583,39 @@ spawn_remote_secondmate() {
     [ "$rc" -ne 255 ] || return 255
     return 1
   fi
+  if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [ "$rc" -eq 255 ]; then
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote secondmate $id endpoint state could not be confirmed; refusing duplicate launch" >&2
+    return 255
+  fi
+  if [ "$rc" -ne 0 ]; then
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote secondmate $id endpoint state is unreadable; refusing duplicate launch" >&2
+    return 1
+  fi
+  state=$(printf '%s\n' "$out" | tail -1)
+  case "$state" in
+    dead|missing) ;;
+    alive|ambiguous|unreadable|unknown|unverified)
+      fm_lock_release "$registry_lock" || true
+      fm_lock_release "$SPAWN_TASK_LOCK" || true
+      echo "error: remote secondmate $id endpoint is $state; refusing duplicate launch while another worker may still be active" >&2
+      return 1
+      ;;
+    *)
+      fm_lock_release "$registry_lock" || true
+      fm_lock_release "$SPAWN_TASK_LOCK" || true
+      echo "error: remote secondmate $id returned invalid endpoint state '$state'; refusing launch" >&2
+      return 1
+      ;;
+  esac
   # Pre-launch sync, the remote twin of the local-HEAD sync below: this home
   # follows THIS primary's default-branch commit, not the Firstmate copy on that
   # host, so the commit is resolved here and handed over for the host to import
@@ -1907,6 +1943,60 @@ delivery_rigor_rank() {  # <mode> -> 3 (most rigor) .. 1 (least); 0 = not a task
   esac
 }
 
+guard_existing_live_task() {  # <meta> <task-id>
+  local meta=$1 id=$2 backend target state kind backend_count window
+  [ -e "$meta" ] || return 0
+  [ -f "$meta" ] && [ ! -L "$meta" ] || {
+    echo "error: existing metadata for $id is unsafe or unreadable; refusing duplicate spawn" >&2
+    return 1
+  }
+  # Remote secondmates are validated through the remote state path in
+  # spawn_remote_secondmate(); skip local backend probing here.
+  if grep -q '^remote_host=' "$meta" 2>/dev/null; then
+    return 0
+  fi
+  if ! fm_backend_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+    # Secondmate records can predate strict endpoint metadata (project/worktree)
+    # while still carrying an authoritative window/backend pair. Preserve
+    # recovery by probing that pair directly, and still refuse uncertain states.
+    kind=$(fm_meta_get "$meta" kind)
+    if [ "$kind" != secondmate ]; then
+      echo "error: existing metadata for $id has no verifiable endpoint; refusing duplicate spawn" >&2
+      return 1
+    fi
+    window=$(fm_backend_meta_exact_value "$meta" window) || {
+      echo "error: existing secondmate metadata for $id has no verifiable endpoint; refusing duplicate spawn" >&2
+      return 1
+    }
+    backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
+    case "$backend_count" in
+      0) backend=tmux ;;
+      1) backend=$(fm_backend_meta_exact_value "$meta" backend) || backend= ;;
+      *) backend= ;;
+    esac
+    if [ -z "$backend" ] || ! fm_backend_is_known "$backend"; then
+      echo "error: existing secondmate metadata for $id has an unknown backend; refusing duplicate spawn" >&2
+      return 1
+    fi
+    target=$window
+  else
+    backend=$FM_BACKEND_VALIDATED_BACKEND
+    target=$FM_BACKEND_VALIDATED_TARGET
+  fi
+  state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || printf unreadable)
+  case "$state" in
+    dead|missing) return 0 ;;
+    alive|ambiguous|unreadable|unknown|unverified-harness|unverified)
+      echo "error: existing task $id endpoint is $state (backend=$backend); refusing duplicate spawn while another worker may still be active" >&2
+      return 1
+      ;;
+    *)
+      echo "error: existing task $id endpoint state is unverified ($state, backend=$backend); refusing duplicate spawn" >&2
+      return 1
+      ;;
+  esac
+}
+
 # Brief/spawn delivery agreement, checked before any endpoint exists.
 # fm-brief.sh records a ship brief's mode as a fixed "Delivery contract: mode=<mode>"
 # line. A spawn that disagrees would launch a worker whose instructions and whose
@@ -1930,6 +2020,9 @@ if [ "$KIND" = ship ]; then
      && [ "$(delivery_rigor_rank "$MODE")" -lt "$(delivery_rigor_rank "$STANDING_MODE")" ]; then
     echo "notice: $ID ships mode=$MODE while the standing posture for $PROJ_NAME is $STANDING_MODE - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state" >&2
   fi
+fi
+if [ "$RELAUNCH" -eq 0 ]; then
+  guard_existing_live_task "$STATE/$ID.meta" "$ID" || exit 1
 fi
 
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
