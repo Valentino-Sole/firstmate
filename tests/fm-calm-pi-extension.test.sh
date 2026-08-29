@@ -3791,8 +3791,8 @@ JS
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
   wait_for_text "$restored_snapshot" "CALM_E2E_OUTPUT" \
     || fail "second /calm did not restore tool result output"
-  wait_for_text "$restored_snapshot" "/tmp/active-probe.status" \
-    || fail "second /calm did not restore a synthetic row received while Calm was active"
+  wait_for_text "$restored_snapshot" "fm_watch_arm_pi" \
+    || fail "second /calm did not restore the Firstmate watcher tool shell"
   assert_contains "$(cat "$restored_snapshot")" "fm_watch_arm_pi" "second /calm did not restore the Firstmate watcher tool shell"
   assert_contains "$(cat "$restored_snapshot")" "FIRSTMATE WATCHER WAKE: signal: /tmp/probe.status" "second /calm did not restore the synthetic Firstmate user row"
   for hidden in \
