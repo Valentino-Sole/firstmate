@@ -146,6 +146,15 @@ FM_CAPACITY_CONFIG_FILE=compute-hosts.json
 # survives.
 FM_CAPACITY_WIN_LOAD_SAMPLES=3
 FM_CAPACITY_WIN_LOAD_SAMPLE_MS=1000
+# The sampling window is not the only thing the Windows probe adds over the
+# single-shot POSIX one: every sample is a Win32_Processor CIM round trip, and
+# the whole script pays a PowerShell-over-OpenSSH cold start plus the one-off
+# Win32_OperatingSystem and nvidia-smi calls before the loop even begins. Only
+# budgeting the sleeps would leave that work to fit inside a bound sized for a
+# POSIX one-liner, and a preferred host that answers slowly would be timed out
+# and recorded unreachable — the exact demotion the averaging exists to avoid.
+FM_CAPACITY_WIN_LOAD_QUERY_MS=1000
+FM_CAPACITY_WIN_PROBE_STARTUP_SECS=4
 # ... and the averaged percentage is then gated as a PERCENTAGE. Rescaling it
 # into a load1 equivalent and reusing `load1 < nproc` would mean "refuse only
 # at literally 100% busy", which lets a machine sitting at 99% through; a busy
@@ -620,11 +629,17 @@ CMD
   printf '%s\n' "$cmd"
 }
 
-# Seconds the Windows sampling window adds to a probe, so its SSH call is not
-# cut short by the bound that fits the single-shot POSIX probe.
+# Seconds the Windows probe adds to a probe call, so its SSH call is not cut
+# short by the bound that fits the single-shot POSIX probe. The loop sleeps
+# between samples, not before the first one, so the window is SAMPLES-1 gaps
+# wide; each of the SAMPLES iterations then costs a processor query, and the
+# script pays its interpreter start and one-off queries once.
 fm_capacity_win_probe_extra_secs() {
-  local ms=$((FM_CAPACITY_WIN_LOAD_SAMPLES * FM_CAPACITY_WIN_LOAD_SAMPLE_MS))
-  printf '%s\n' $(((ms + 999) / 1000))
+  local samples=$FM_CAPACITY_WIN_LOAD_SAMPLES ms
+  [ "$samples" -gt 0 ] 2>/dev/null || samples=1
+  ms=$(((samples - 1) * FM_CAPACITY_WIN_LOAD_SAMPLE_MS \
+    + samples * FM_CAPACITY_WIN_LOAD_QUERY_MS))
+  printf '%s\n' $((((ms + 999) / 1000) + FM_CAPACITY_WIN_PROBE_STARTUP_SECS))
 }
 
 fm_capacity_ssh_raw() { # <host> <remote-cmd> [extra-seconds]

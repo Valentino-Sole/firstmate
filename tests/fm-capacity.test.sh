@@ -316,11 +316,19 @@ test_free_slot_allows_a_new_independent_worker() {
 
 test_relaunch_and_secondmate_skip_the_slot_budget() {
   local home rc
+  # These names are exported by tests/lib.sh, so a saturating value assigned
+  # here would otherwise stay in the environment of every later test.
+  local was_nproc=$FM_CAPACITY_NPROC
+  local was_mem=$FM_CAPACITY_MEM_AVAIL_MB
+  local was_load=$FM_CAPACITY_LOAD1
   home="$TMP_ROOT/skip-kinds"
   setup_home "$home"
   write_ship_meta "$home" occ-a1
   FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=4096 FM_CAPACITY_LOAD1=16
   fm_capacity_measure_local "$home/state" "$home"
+  FM_CAPACITY_NPROC=$was_nproc
+  FM_CAPACITY_MEM_AVAIL_MB=$was_mem
+  FM_CAPACITY_LOAD1=$was_load
   [ "$FM_CAPACITY_SLOTS" = 0 ] || fail "preload should force slots=0, got $FM_CAPACITY_SLOTS"
   set +e
   fm_capacity_allow_new_worker "$home/state" new-b2 ship 1 "$home"
@@ -923,9 +931,12 @@ test_undeclared_work_on_an_unverifiable_backend_still_blocks_its_id() {
 # inspected.
 run_windows_probe() { # <stub-powershell>
   local stub=$1 cmd
+  local was_samples=$FM_CAPACITY_WIN_LOAD_SAMPLES
+  local was_sample_ms=$FM_CAPACITY_WIN_LOAD_SAMPLE_MS
   FM_CAPACITY_WIN_LOAD_SAMPLES=2 FM_CAPACITY_WIN_LOAD_SAMPLE_MS=1
   cmd=$(fm_capacity_windows_probe_cmd)
-  FM_CAPACITY_WIN_LOAD_SAMPLES=3 FM_CAPACITY_WIN_LOAD_SAMPLE_MS=1000
+  FM_CAPACITY_WIN_LOAD_SAMPLES=$was_samples
+  FM_CAPACITY_WIN_LOAD_SAMPLE_MS=$was_sample_ms
   # The transcript is the contract under test, not pwsh's exit code: a probe
   # whose CPU query failed is exactly the case being exercised.
   pwsh -NoProfile -NonInteractive -Command "$stub
@@ -971,6 +982,36 @@ FM_CAP gpu=8192,10" || fail "the transcript should still absorb"
   assert_not_contains "$out" "FM_CAP load_pct=" \
     "a null LoadPercentage must emit no sample rather than 0%"
   pass "the Windows probe omits an unreadable CPU sample instead of fabricating idle"
+}
+
+# One processor query per sample costs real time on top of the sleeps, and the
+# script pays a PowerShell start plus the one-off OS and GPU queries before the
+# loop begins. All of it has to fit the extra SSH seconds the shell grants the
+# Windows probe, or a reachable preferred host is cut short and recorded
+# unreachable. Runs the real emitted probe at its real sample settings against
+# a CIM stub that costs a realistic amount per query.
+# shellcheck disable=SC2016
+FM_TEST_CIM_SLOW='function Get-CimInstance { [CmdletBinding()] param([Parameter(Position=0)]$ClassName)
+  Start-Sleep -Milliseconds 300
+  if ($ClassName -eq "Win32_OperatingSystem") { [pscustomobject]@{ FreePhysicalMemory = 32768000 } }
+  else { [pscustomobject]@{ LoadPercentage = 42 } } }'
+
+test_windows_probe_fits_the_extra_ssh_seconds_it_is_granted() {
+  local budget started elapsed out
+  command -v pwsh >/dev/null 2>&1 \
+    || { echo "skip: pwsh not found (Windows probe execution)"; return 0; }
+  budget=$(fm_capacity_win_probe_extra_secs)
+  started=$SECONDS
+  out=$(pwsh -NoProfile -NonInteractive -Command "$FM_TEST_CIM_SLOW
+$(fm_capacity_windows_probe_cmd)" 2>/dev/null) || true
+  elapsed=$((SECONDS - started))
+  [ "$(printf '%s\n' "$out" | grep -c 'FM_CAP load_pct=')" = "$FM_CAPACITY_WIN_LOAD_SAMPLES" ] \
+    || fail "the probe should emit one sample per configured sample"
+  # Compared against the extra allowance alone, so the base bound stays
+  # available for the SSH connect and transport it was sized for.
+  [ "$elapsed" -le "$budget" ] \
+    || fail "the probe ran ${elapsed}s but is granted only ${budget}s of extra SSH time"
+  pass "the Windows probe's startup, queries and sampling fit its extra SSH seconds"
 }
 
 test_posix_probe_omits_a_load_it_could_not_read() {
@@ -1117,6 +1158,7 @@ test_unmeasurable_preferred_host_falls_through_to_the_fallback
 test_gone_worker_releases_its_id_for_a_sequential_restart
 test_undeclared_work_on_an_unverifiable_backend_still_blocks_its_id
 test_windows_probe_omits_a_sample_it_could_not_take
+test_windows_probe_fits_the_extra_ssh_seconds_it_is_granted
 test_posix_probe_omits_a_load_it_could_not_read
 test_unreadable_local_load_is_not_read_as_idle
 test_task_id_is_refused_on_probe_slots_and_route
