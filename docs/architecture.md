@@ -39,6 +39,8 @@ Live or inconclusive liveness remains fail-open at that initial surface, and a s
 Its initial normal-mode status signal still surfaces through the no-verb path, while away mode self-handles that routine signal and owns the later recheck.
 Fresh stale panes use the same current-state read before trusting the status log, so an active run or a proven busy worker outranks an old captain-relevant status-log line left behind before validation.
 No-change heartbeats are also benign.
+Section 7's work loop keeps dispatch moving without waiting for captain acknowledgment: after a ship worker lands or fails, firstmate tears down the pane and runs `bin/fm-work-loop.sh plan` to refill every measured free worker slot from the backlog rather than stopping after one replacement.
+`bin/fm-capacity-lib.sh` owns slot measurement; [`AGENTS.md`](../AGENTS.md) section 7 owns the ABSCHLUSS, land, cleanup, and continue chain.
 Separately from heartbeat backoff and wedge handling, the watcher poll runs `bin/fm-inactive-reconcile.sh` on its own bounded cadence, while locked session start performs the same bounded local scan immediately.
 In each home the scan considers only that home's long-inactive direct ordinary crewmates, excludes captain-held work, and accepts only `done` or `failed` from `bin/fm-crew-state.sh`.
 A secondmate retains a durable receipt for its idempotent report through the established parent route, and main-home captain presentation retains a separate receipt; neither path performs a forge or PR check.
