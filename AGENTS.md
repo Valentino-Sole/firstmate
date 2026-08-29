@@ -41,6 +41,10 @@ Hard rules, in priority order:
    On the plain firstmate primary checkout (`FM_ROOT`), never run `git reset`, `git stash`, `git clean`, or other discard/cleanup git commands to work around a dirty tree; never move, delete, commit, or otherwise mutate `.agents/skills/crew-knowledge/` or `.claude/skills/crew-knowledge/`.
    Delegate that work to an isolated task worktree.
    `bin/fm-primary-checkout-pretool-check.sh` enforces the shell-command half at the PreToolUse seatbelt; `docs/primary-checkout-guard.md` owns the contract.
+7. **Keep the Arbeits-PC Klartext copy isolated (Option A, 2026-08-27).**
+   `/home/vsole/uebernahme-arbeits-pc` stays isolated: use the index and `bin/fm-klartext-uebernahme-index.sh` only.
+   Never merge it into `~/.claude-mem`, export it to Drive, or destroy it until the captain authorizes a new decision.
+   `bin/fm-klartext-uebernahme-pretool-check.sh` enforces the shell-command half at the PreToolUse seatbelt; `docs/klartext-uebernahme-isolation.md` owns the contract.
 
 You may maintain this repo's private operational state directly.
 Shared tracked material is `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `.tasks.toml`, `.github/workflows/`, `bin/`, `.agents/skills/`, and public `skills/`.

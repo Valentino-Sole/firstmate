@@ -34,6 +34,12 @@
         "type": "command",
         "command": "\"$CURSOR_PROJECT_DIR\"/bin/fm-primary-checkout-pretool-check.sh --cursor",
         "timeout": 10
+      },
+      {
+        "matcher": "Shell",
+        "type": "command",
+        "command": "\"$CURSOR_PROJECT_DIR\"/bin/fm-klartext-uebernahme-pretool-check.sh --cursor",
+        "timeout": 10
       }
     ]
   }

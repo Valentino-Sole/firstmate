@@ -4,7 +4,7 @@ This document is the authoritative human-readable contract for the primary-check
 `bin/fm-primary-checkout-command-policy.mjs` is the single decision owner.
 `bin/fm-primary-checkout-pretool-check.sh` is the stable harness transport, primary-checkout scope, and output renderer.
 
-It is the fourth member of the primary-session PreToolUse seatbelt family alongside the watcher-arm seatbelt (`docs/arm-pretool-check.md`), the cd-guard (`docs/cd-guard.md`), and the subagent guard (`docs/subagent-guard.md`).
+It is the fourth member of the primary-session PreToolUse seatbelt family alongside the watcher-arm seatbelt (`docs/arm-pretool-check.md`), the cd-guard (`docs/cd-guard.md`), the subagent guard (`docs/subagent-guard.md`), and the Klartext-Uebernahme isolation guard (`docs/klartext-uebernahme-isolation.md`).
 
 ## Purpose and boundary
 

@@ -6,7 +6,7 @@ This document is the authoritative human-readable contract for the cd-guard PreT
 The tracked harness adapters forward command text without classifying it.
 
 It is the third member of a family of primary-session guards that share the same cross-harness hook machinery:
-the watcher-arm PreToolUse seatbelt (`bin/fm-arm-pretool-check.sh`, `docs/arm-pretool-check.md`), the turn-end supervision guard (`bin/fm-turnend-guard.sh`, `docs/turnend-guard.md`), and the primary-checkout guard (`bin/fm-primary-checkout-pretool-check.sh`, `docs/primary-checkout-guard.md`).
+the watcher-arm PreToolUse seatbelt (`bin/fm-arm-pretool-check.sh`, `docs/arm-pretool-check.md`), the turn-end supervision guard (`bin/fm-turnend-guard.sh`, `docs/turnend-guard.md`), the primary-checkout guard (`bin/fm-primary-checkout-pretool-check.sh`, `docs/primary-checkout-guard.md`), and the Klartext-Uebernahme isolation guard (`bin/fm-klartext-uebernahme-pretool-check.sh`, `docs/klartext-uebernahme-isolation.md`).
 
 ## Purpose and boundary
 
