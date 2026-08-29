@@ -7,8 +7,10 @@
 # `status` prints one machine-readable line:
 #   FM_WORK_LOOP slots=<n> occupied=<n> free=<n> real=<n> min_real=<n> shortfall=<n> homes_scanned=<n>
 #
-# `real` counts only provably working workers (busy pane or active run-step); idle
-# done-panes with a live endpoint do not count. `shortfall` is how many more real
+# `real` counts only provably working workers: active run-step, or a busy pane
+# while the task has not declared terminal completion. Idle done-panes with a
+# live endpoint and Herdr cards that lag behind done: do not count. `shortfall`
+# is how many more real
 # workers the loop should try to launch before the host slot ceiling.
 #
 # `plan` prints up to the plan limit dispatchable task ids, one per line, skipping
