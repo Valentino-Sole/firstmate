@@ -589,10 +589,10 @@ test_teardown_prompts_tasks_axi_done_when_compatible() {
   out=$(run_teardown "$case_dir") || fail "teardown failed with compatible tasks-axi"
   printf '%s\n' "$out" | grep -F 'tasks-axi done task-x1 --pr https://github.com/example/repo/pull/7' >/dev/null \
     || fail "teardown did not prompt tasks-axi done: $out"
-  printf '%s\n' "$out" | grep -F 'tasks-axi ready' >/dev/null \
-    || fail "teardown did not prompt tasks-axi ready: $out"
-  printf '%s\n' "$out" | grep -F 'check date gates' >/dev/null \
-    || fail "teardown did not preserve date-gate check: $out"
+  printf '%s\n' "$out" | grep -F 'bin/fm-work-loop.sh plan' >/dev/null \
+    || fail "teardown did not prompt work-loop refill: $out"
+  printf '%s\n' "$out" | grep -F 'until free worker slots are full' >/dev/null \
+    || fail "teardown did not preserve slot-refill instruction: $out"
   printf '%s\n' "$out" | grep -F 'keep Done to the 10 most recent' >/dev/null \
     && fail "teardown kept manual Done pruning in compatible tasks-axi prompt: $out"
   pass "teardown prompts tasks-axi backlog refresh when compatible"
@@ -669,8 +669,8 @@ test_no_mistakes_origin_remote_allows() {
 
   expect_code 0 "$rc" "nm-origin: teardown should succeed when HEAD is on origin"
   ! grep -q REFUSED "$case_dir/stderr" || fail "nm-origin: teardown printed a REFUSED line"
-  grep -F 'blockers are gone and date is due' "$case_dir/stdout" >/dev/null \
-    || fail "nm-origin: teardown manual prompt did not preserve date-gate check"
+  grep -F 'bin/fm-work-loop.sh plan' "$case_dir/stdout" >/dev/null \
+    || fail "nm-origin: teardown did not prompt work-loop refill"
   pass "no-mistakes worktree with HEAD on origin is torn down (no regression)"
 }
 
