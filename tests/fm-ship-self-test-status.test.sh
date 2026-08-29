@@ -46,6 +46,23 @@ test_status_log_self_test_reported_before_done() {
   pass "status_log_self_test_reported_before_done honors working and done lines"
 }
 
+test_status_parse_self_test_counts_and_clean_log() {
+  status_parse_self_test_counts 'done: ready · Tests 42/0' \
+    || fail "could not parse Tests 42/0"
+  [ "$STATUS_TEST_PASSED" = 42 ] && [ "$STATUS_TEST_FAILED" = 0 ] \
+    || fail "parsed counts were $STATUS_TEST_PASSED/$STATUS_TEST_FAILED, expected 42/0"
+
+  local dir="$TMP_ROOT/clean-fold"
+  mkdir -p "$dir"
+  printf 'done: ready in branch fm/x · Tests 5/2\n' > "$dir/failed-tests.status"
+  status_log_self_test_clean_before_done "$dir/failed-tests.status" \
+    && fail "Tests N/2 was accepted as clean"
+  printf 'done: ready in branch fm/x · Tests 5/0\n' > "$dir/clean.status"
+  status_log_self_test_clean_before_done "$dir/clean.status" \
+    || fail "Tests 5/0 was rejected as unclean"
+  pass "status_parse_self_test_counts and clean-log fold honor zero failures"
+}
+
 setup_merge_fixture() {  # <home> <id>
   local home=$1 id=$2 proj="$home/proj"
   git init -q -b main "$proj"
@@ -79,6 +96,33 @@ test_merge_local_lands_when_self_test_reported() {
   pass "fm-merge-local lands when Tests N/0 precedes terminal done:"
 }
 
+test_merge_local_refuses_test_failures() {
+  local home="$TMP_ROOT/fail-tests-home" id=task-fail-tests out status
+  setup_merge_fixture "$home" "$id"
+  printf 'done: ready in branch fm/%s · Tests 3/2\n' "$id" > "$home/state/$id.status"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" "$ROOT/bin/fm-merge-local.sh" "$id" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "merge-local succeeded with test failures"
+  assert_contains "$out" "test failures" "merge-local refusal lost its failure reason"
+  pass "fm-merge-local refuses local-only landing when Tests N/M has M > 0"
+}
+
+test_merge_local_refuses_zero_commits_ahead() {
+  local home="$TMP_ROOT/zero-ahead-home" id=task-zero proj out status
+  proj="$home/proj"
+  git init -q -b main "$proj"
+  git -C "$proj" commit -q --allow-empty -m init
+  git -C "$proj" branch -q "fm/$id"
+  mkdir -p "$home/state"
+  printf 'project=%s\nmode=local-only\n' "$proj" > "$home/state/$id.meta"
+  printf 'done: ready in branch fm/%s · Tests 1/0\n' "$id" > "$home/state/$id.status"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" "$ROOT/bin/fm-merge-local.sh" "$id" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "merge-local succeeded with zero commits ahead"
+  assert_contains "$out" "0 commits ahead" "merge-local refusal lost its zero-ahead reason"
+  pass "fm-merge-local refuses local-only landing with zero commits ahead"
+}
+
 test_ship_brief_scaffold_carries_self_test_contract() {
   local home="$TMP_ROOT/brief-home" brief
   mkdir -p "$home/data"
@@ -95,6 +139,9 @@ test_ship_brief_scaffold_carries_self_test_contract() {
 test_status_has_self_test_report_accepts_common_shapes
 test_status_has_self_test_report_rejects_missing_counts
 test_status_log_self_test_reported_before_done
+test_status_parse_self_test_counts_and_clean_log
 test_merge_local_refuses_done_without_self_test_report
 test_merge_local_lands_when_self_test_reported
+test_merge_local_refuses_test_failures
+test_merge_local_refuses_zero_commits_ahead
 test_ship_brief_scaffold_carries_self_test_contract
