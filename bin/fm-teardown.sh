@@ -1233,7 +1233,7 @@ backlog_refresh_reminder() {
   elif [ "$BACKLOG_CLOSED" = 1 ]; then
     printf '%s\n' "Backlog: $ID is closed in $backlog_display. Run bin/fm-work-loop.sh plan and spawn every listed item until free worker slots are full or the plan is empty; it lists only dependency-cleared, date-due work."
   else
-    printf '%s\n' "Backlog: $ID just finished ($BACKLOG_SKIP_REASON). Update $backlog_display - move $ID to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due."
+    printf '%s\n' "Backlog: $ID just finished ($BACKLOG_SKIP_REASON). Update $backlog_display - move $ID to Done, keep Done to the 10 most recent, then run bin/fm-work-loop.sh plan and spawn every listed item until free worker slots are full or the plan is empty."
   fi
 }
 

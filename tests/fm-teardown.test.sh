@@ -626,10 +626,10 @@ test_teardown_closes_the_backlog_item_itself() {
     "closed backlog item did not record the task's PR"
   assert_absent "$case_dir/state/task-x1.backlog-close" \
     "a landed close left its pending-close record behind"
-  printf '%s\n' "$out" | grep -F 'tasks-axi ready' >/dev/null \
-    || fail "teardown dropped the dependency-cleared follow-up: $out"
-  printf '%s\n' "$out" | grep -F 'check date gates' >/dev/null \
-    || fail "teardown did not preserve date-gate check: $out"
+  printf '%s\n' "$out" | grep -F 'bin/fm-work-loop.sh plan' >/dev/null \
+    || fail "teardown did not prompt work-loop refill: $out"
+  printf '%s\n' "$out" | grep -F 'until free worker slots are full' >/dev/null \
+    || fail "teardown did not preserve slot-refill instruction: $out"
   printf '%s\n' "$out" | grep -F 'Run tasks-axi done' >/dev/null \
     && fail "teardown still asked a later turn to close the item it already closed: $out"
   pass "teardown closes its own backlog item before reporting success"
@@ -721,8 +721,8 @@ test_no_mistakes_origin_remote_allows() {
 
   expect_code 0 "$rc" "nm-origin: teardown should succeed when HEAD is on origin"
   ! grep -q REFUSED "$case_dir/stderr" || fail "nm-origin: teardown printed a REFUSED line"
-  grep -F 'blockers are gone and date is due' "$case_dir/stdout" >/dev/null \
-    || fail "nm-origin: teardown manual prompt did not preserve date-gate check"
+  grep -F 'bin/fm-work-loop.sh plan' "$case_dir/stdout" >/dev/null \
+    || fail "nm-origin: teardown did not prompt work-loop refill"
   pass "no-mistakes worktree with HEAD on origin is torn down (no regression)"
 }
 
