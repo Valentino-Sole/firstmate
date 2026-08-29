@@ -176,7 +176,7 @@ family_for_basename() {
     fm-remote-reply.test.sh|fm-remote-secondmate-lifecycle-e2e.test.sh|\
     fm-remote-secondmate-trace-context.test.sh|\
     fm-secondmate-harness.test.sh|fm-secondmate-lifecycle-e2e.test.sh|\
-    fm-secondmate-liveness.test.sh|fm-secondmate-reconcile.test.sh|\
+    fm-secondmate-liveness.test.sh|fm-crew-liveness.test.sh|fm-secondmate-reconcile.test.sh|\
     fm-secondmate-safety.test.sh|fm-secondmate-sync.test.sh|\
     fm-startup-memory-budget.test.sh|fm-stow-cascade.test.sh|\
     fm-send-secondmate-marker.test.sh|fm-shared-captain-inheritance.test.sh)
@@ -463,6 +463,7 @@ tests/fm-remote-secondmate-trace-context.test.sh 39927
 tests/fm-secondmate-harness.test.sh 123471
 tests/fm-secondmate-lifecycle-e2e.test.sh 6539
 tests/fm-secondmate-liveness.test.sh 16365
+tests/fm-crew-liveness.test.sh 1200
 tests/fm-secondmate-safety.test.sh 49011
 tests/fm-secondmate-sync.test.sh 29236
 tests/fm-send-remote-delivery.test.sh 4892
