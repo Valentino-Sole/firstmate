@@ -491,7 +491,8 @@ function runGuard(): Promise<{ code: number; stderr: string }> {
 
 // PreToolUse seatbelts (bin/fm-arm-pretool-check.sh, docs/arm-pretool-check.md;
 // bin/fm-cd-pretool-check.sh, docs/cd-guard.md;
-// bin/fm-primary-checkout-pretool-check.sh, docs/primary-checkout-guard.md).
+// bin/fm-primary-checkout-pretool-check.sh, docs/primary-checkout-guard.md;
+// bin/fm-klartext-uebernahme-pretool-check.sh, docs/klartext-uebernahme-isolation.md).
 // extension file rather than separate ones so no extra Pi -e flag is needed at
 // launch - the primary already loads this file for the turn-end guard, and
 // pi.on("tool_call", ...) can block (verified 2026-07-09 against pi 0.80.5:
@@ -521,6 +522,10 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
 
 function runPrimaryCheckoutCheck(command: string): Promise<{ code: number; stderr: string }> {
   return runChecker("fm-primary-checkout-pretool-check.sh", command);
+}
+
+function runKlartextUebernahmeCheck(command: string): Promise<{ code: number; stderr: string }> {
+  return runChecker("fm-klartext-uebernahme-pretool-check.sh", command);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -648,6 +653,13 @@ export default function (pi: ExtensionAPI) {
       return {
         block: true,
         reason: primaryCheckoutResult.stderr.trim() || "denied by the primary-checkout PreToolUse seatbelt",
+      };
+    }
+    const klartextResult = await runKlartextUebernahmeCheck(command);
+    if (klartextResult.code === 2) {
+      return {
+        block: true,
+        reason: klartextResult.stderr.trim() || "denied by the Klartext-Uebernahme isolation PreToolUse seatbelt",
       };
     }
     const result = await runPretoolCheck(command);

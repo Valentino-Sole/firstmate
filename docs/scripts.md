@@ -47,6 +47,8 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
 | `fm-primary-checkout-pretool-check.sh` | Stable PreToolUse transport for the primary-checkout guard (docs/primary-checkout-guard.md) |
+| `fm-klartext-uebernahme-index.sh` | Read-only index entrypoint for the isolated Arbeits-PC copy (docs/klartext-uebernahme-isolation.md) |
+| `fm-klartext-uebernahme-pretool-check.sh` | Stable PreToolUse transport for the Klartext-Uebernahme isolation guard (docs/klartext-uebernahme-isolation.md) |
 | `fm-primary-checkout-command-policy.mjs` | Semantic owner of the primary-checkout PreToolUse policy (docs/primary-checkout-guard.md) |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |
 | `fm-supervision-instructions.sh` | Render the session-start primary-harness supervision block or the one-line repair instruction |
