@@ -80,7 +80,13 @@ install_fake_crew_state() {
 set -u
 id=${1:-}
 case "$id" in
-  live-a|live-b|live-c|live-d|live-e|alpha-one|busy-a|busy-b|busy-c|done-idle)
+  live-a|live-b|live-c|live-d|live-e|alpha-one|busy-a|busy-b|busy-c|done-idle|validating-a)
+    printf 'state: working · source: pane · harness busy\n'
+    ;;
+  validating-run)
+    printf 'state: working · source: run-step · validating (running)\n'
+    ;;
+  card-a|card-b|done-live-busy)
     printf 'state: working · source: pane · harness busy\n'
     ;;
   done-a|done-b|done-c)
@@ -202,6 +208,45 @@ test_plan_ignores_idle_done_panes_for_real_floor() {
   pass "fm-work-loop plan ignores idle done-panes when topping up the real-worker floor"
 }
 
+test_plan_ignores_live_done_panes_with_stale_busy_pane() {
+  local home out n
+  home="$TMP_ROOT/plan-done-live-busy"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_ship_meta "$home" done-live-busy
+  write_ship_meta "$home" card-a
+  write_ship_meta "$home" busy-a
+  printf 'done: fertig · Tests 3/0\n' > "$home/state/done-live-busy.status"
+  printf 'done: Karte idle · Tests 1/0\n' > "$home/state/card-a.status"
+  set_live_windows "$home" done-live-busy card-a busy-a
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  n=$(printf '%s\n' "$out" | sed '/^$/d' | wc -l)
+  [ "$n" -eq 2 ] || fail "stale busy panes after done: should not count; expected 2 spawns, got $n: $out"
+  pass "fm-work-loop plan ignores done-panes whose endpoint still looks busy"
+}
+
+test_plan_counts_validating_run_step_despite_done_status_log() {
+  local home out n
+  home="$TMP_ROOT/plan-validating-run"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_ship_meta "$home" validating-run
+  write_ship_meta "$home" card-a
+  write_ship_meta "$home" card-b
+  write_ship_meta "$home" busy-a
+  printf 'done: alter Eintrag vor Validierung\n' > "$home/state/validating-run.status"
+  printf 'done: Karte idle\n' > "$home/state/card-a.status"
+  printf 'done: Karte idle\n' > "$home/state/card-b.status"
+  printf 'done: schon fertig\n' > "$home/state/busy-a.status"
+  set_live_windows "$home" validating-run card-a card-b busy-a
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  n=$(printf '%s\n' "$out" | sed '/^$/d' | wc -l)
+  [ "$n" -eq 1 ] || fail "active run-step should count even with stale done status; expected 1 spawn, got $n: $out"
+  pass "fm-work-loop plan still counts an active run-step over a stale done status line"
+}
+
 test_plan_skips_tasks_that_already_occupy_slots() {
   local home out
   home="$TMP_ROOT/plan-skip"
@@ -237,5 +282,7 @@ test_status_reports_measured_slots
 test_plan_fills_up_to_free_slots
 test_plan_tops_up_below_real_floor
 test_plan_ignores_idle_done_panes_for_real_floor
+test_plan_ignores_live_done_panes_with_stale_busy_pane
+test_plan_counts_validating_run_step_despite_done_status_log
 test_plan_skips_tasks_that_already_occupy_slots
 test_plan_prints_nothing_when_no_free_slots

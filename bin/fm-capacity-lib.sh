@@ -388,18 +388,35 @@ fm_capacity_occupied_count() { # <state-dir>
   printf '%s\n' "$n"
 }
 
+# Does <task-id> count toward the section-7 real-worker floor? Active run-step
+# evidence always counts. Busy-pane evidence counts only while the task's own
+# status has not declared terminal completion, so idle done-panes whose endpoint
+# is still alive and Herdr cards that lag behind a done: report do not satisfy
+# the floor.
+fm_capacity_crew_counts_as_real_worker() { # <state-dir> <task-id>
+  local state=$1 id=$2 line src
+  declare -F crew_is_provably_working >/dev/null 2>&1 || return 1
+  crew_is_provably_working "$id" || return 1
+  line=$("${FM_CREW_STATE_BIN:-$_FM_CAPACITY_LIB_DIR/fm-crew-state.sh}" "$id" 2>/dev/null) || return 1
+  case "$line" in state:*) ;; *) return 1 ;; esac
+  src=${line#*source: }; src=${src%% *}
+  case "$src" in
+    run-step) return 0 ;;
+    pane) fm_capacity_task_active "$state" "$id" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Independent workers in one home that are actively working: a live worker slot
-# holder that bin/fm-crew-state.sh classifies as provably working (busy pane or
-# active run-step). Idle done-panes with a live endpoint do not count.
+# holder that passes fm_capacity_crew_counts_as_real_worker.
 fm_capacity_real_worker_ids() { # <state-dir>
   local state=$1 id
-  declare -F crew_is_provably_working >/dev/null 2>&1 || return 0
+  declare -F fm_capacity_crew_counts_as_real_worker >/dev/null 2>&1 || return 0
   while IFS= read -r id; do
     [ -n "$id" ] || continue
-    fm_capacity_worker_live "$state/$id.meta" || continue
-    crew_is_provably_working "$id" || continue
+    fm_capacity_crew_counts_as_real_worker "$state" "$id" || continue
     printf '%s\n' "$id"
-  done < <(fm_capacity_occupied_ids "$state")
+  done < <(fm_capacity_live_ids "$state")
 }
 
 fm_capacity_real_worker_count() { # <state-dir>
