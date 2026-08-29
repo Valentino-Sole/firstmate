@@ -44,8 +44,8 @@ pi -p -e .pi/extensions/fm-primary-turnend-guard.ts \
 ```
 
 Observed result: `PI_SMOKE_DONE`, with one session-start execution.
-The earlier `sendUserMessage` counterfactual raced the positional prompt; the current non-triggering `pi.sendMessage` custom message did not.
-The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
+That cold positional-prompt check established eventual custom-message delivery, but it did not submit immediately after `/new` while native digest generation was still running, so its earlier race-free inference is superseded by the provider-prerequisite evidence below.
+The installed pi-signed 0.82.0 wrapper repeated the shared Pi primary extension and session-start path on 2026-07-27.
 [`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
 
 ### Run-tier source vocabulary and context-reset injection
@@ -83,13 +83,53 @@ Pi disagrees with Claude and Codex on `resume`: a new Pi process continuing a se
 The current adapter classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#harness-transports) and the `bin/fm-session-start.sh` header.
 Their continuation classification is covered by portable tests, not claimed as live validation in this record.
 
-### Post-start compact continuation
+### Pi `/new` provider prerequisite
 
-Completed-startup Pi compaction no longer reprints AGENTS.md.
-Live primary measurement on 2026-08-28 showed every compact injecting 73,208 characters (the short note plus the full instruction file) and occupancy remaining at 160-167k, which retriggered compact.
-Portable tests now own the guarantee: `--compact-note` stays under 2,000 bytes even when AGENTS.md drifted, and the Pi adapter delivers that note as a follow-up, retrying once if the first prompt is refused while compact is still marked in progress.
-The older isolated live-Pi run from 2026-08-11 proved the previous full-file refresh path against Pi 0.84.0; that path is withdrawn.
-Refresh `tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh` after the next Pi upgrade to confirm the short note reaches a real session.
+The real offline Pi regression ran on 2026-08-26 with Pi 0.84.0, an isolated home and session directory, a barrier-controlled native digest, and a deterministic local `streamSimple` provider.
+The provider makes no HTTP request and requires no user credential.
+Its missing-native branch deliberately requests `bin/fm-session-start.sh`, so an escaped first call reproduces the duplicate-producing manual path rather than passing vacuously.
+
+```sh
+FM_PI_SESSIONSTART_RACE_LIVE_E2E=1 \
+  tests/fm-sessionstart-hook-live-e2e.test.sh
+```
+
+Observed output:
+
+```text
+ok - Pi 0.84.0: immediate and completed-before-prompt /new paths each made one first provider call with exactly one native startup context and no manual execution
+# fm-sessionstart-hook-live-e2e.test.sh: offline Pi /new race assertions passed
+```
+
+The immediate case submitted its first prompt only after the native `clear` child published `started`, held the child behind a release barrier, and proved the provider log remained absent for 500 milliseconds before release.
+After release, the first payload reported one native context and no manual result, the session persisted one matching custom message, and the fixture recorded one native execution.
+The control case let native generation complete before prompt submission and produced the same first-payload result.
+The portable public-event regression in `tests/fm-sessionstart-nudge.test.sh` separately covers interruption, process-tree retirement, two rapid replacements, stale completion, empty output, spawn error, timeout output, truncation, ineligible stand-down, and compaction cancellation.
+Pi and pi-signed load the same tracked extension bytes; pi-signed was not installed on this host for a separate 0.84.0 live rerun.
+
+### Post-start instruction refresh
+
+The isolated real-Pi instruction-refresh regression ran on 2026-08-11 with Pi 0.84.0.
+It used a scratch `FM_HOME`, a private tmux socket, and a disposable Firstmate checkout.
+The historical `origin/main` implementation first reproduced the stale original marker after a real compaction.
+The current implementation then recorded `source=startup`, changed and committed the lab's `AGENTS.md`, compacted the same real Pi session, and answered with the replacement marker.
+The fixed run also proved that the true-start baseline remained different from the updated file after compaction.
+
+```sh
+FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 \
+FM_SESSIONSTART_INSTRUCTION_REFRESH_REF=origin/main \
+FM_SESSIONSTART_INSTRUCTION_REFRESH_EXPECT=stale \
+tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
+# ok - Pi 0.84.0 reproduces stale AGENTS.md after a real compact
+
+FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 \
+tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
+# ok - Pi 0.84.0 re-injects updated AGENTS.md after a real compact in an isolated session
+```
+
+This is live coverage only for Pi compaction.
+The portable session-start tests cover continuation classification, baseline immutability, and source-routing behavior.
+Pi compaction is the only supported stale-cache refresh pair.
 Codex exec exposes only startup and context-preserving resume through tracked registration; Codex interactive reset behavior remains uncovered rather than inferred from direct wrapper invocation.
 
 ### Detached session-open workers survive the hook
@@ -142,6 +182,7 @@ tests/fm-sessionstart-nudge.test.sh
 tests/fm-session-start.test.sh
 tests/fm-startup-network.test.sh
 FM_SESSIONSTART_HOOK_LIVE_E2E=1 tests/fm-sessionstart-hook-live-e2e.test.sh
+FM_PI_SESSIONSTART_RACE_LIVE_E2E=1 tests/fm-sessionstart-hook-live-e2e.test.sh
 FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
 FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh
