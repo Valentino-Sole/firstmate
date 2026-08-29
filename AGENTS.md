@@ -373,7 +373,8 @@ When a ship worker reports terminal `done:` with a self-test report, handle it i
 1. **ABSCHLUSS** - Tell the captain one short German completion line that addresses them as **Kapitän** (never Benutzer or User). Name the outcome only; no internal machinery.
 2. **Land** - For `local-only`, call `bin/fm-merge-local.sh` only when the status documents `Tests N/0` with zero failures and the ready branch is at least one commit ahead of the project's default branch; otherwise record the task as **failed**, not landed. Zero commits ahead is always failed.
 3. **Cleanup** - Tear down the worker after confirmed landing, or after a terminal `failed`, `blocked`, or `needs-decision` state that ends the commission.
-4. **Continue** - Re-evaluate the backlog and spawn the next dispatchable item immediately when blockers and time gates have cleared.
+4. **Continue** - Run `bin/fm-work-loop.sh plan` and spawn every listed independent dispatchable item until free worker slots are full or the plan is empty.
+   On heartbeat, run the same refill when dispatchable queued work remains.
 
 Routine wake handling after session start never re-runs bootstrap sweeps, fleet surveys, or audit passes before step 4.
 Do not stop at the captain between routine completions unless a captain gate in section 9 applies.
@@ -522,6 +523,7 @@ Captain calls discovered by investigations or visual reviews follow `captain-hol
 Update the backlog on every dispatch, completion, and decision for a work item.
 Re-evaluate queued work after every teardown and heartbeat, dispatching items only when dependencies and time gates have cleared.
 While dispatchable queued work remains, keep the section 7 work loop moving instead of idling for captain acknowledgment.
+Refill every measured free worker slot through `bin/fm-work-loop.sh plan` rather than stopping after one spawn.
 
 `.tasks.toml`, `docs/configuration.md`, and current `tasks-axi --help` own the backlog schema, compatibility, retention, and routine command syntax.
 Use compatible `tasks-axi` when the configured backend selects it and the documented manual path otherwise; keep only the configured recent Done entries.
