@@ -408,7 +408,7 @@ tests/fm-busy-adapter-wiring.test.sh 14880
 tests/fm-busy-state.test.sh 714
 tests/fm-calm-pi-extension.test.sh 464
 tests/fm-classify-decision-key.test.sh 928
-tests/fm-ship-self-test-status.test.sh 1200
+tests/fm-ship-self-test-status.test.sh 1800
 tests/fm-claude-stop-autoarm-live-e2e.test.sh 30
 tests/fm-claude-stop-autoarm.test.sh 60633
 tests/fm-cmux-claude-composer-live-e2e.test.sh 20

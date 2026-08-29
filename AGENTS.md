@@ -363,6 +363,21 @@ Running, fixing, or CI states remain working; parked approval or fix-review stat
 A worker hand-editing, committing, aborting, or restarting during an active validation run duplicates pipeline ownership outside the supersession sequence above; steer it back to the gate response flow.
 The worker reports the PR when CI first becomes green rather than waiting for merge monitoring to finish.
 
+### Work loop never empty
+
+The fleet work loop never idles while dispatchable queued work remains.
+`data/captain.md` owns the standing Bauleitung posture; this subsection owns the mechanical completion chain.
+
+When a ship worker reports terminal `done:` with a self-test report, handle it in one wake-handling turn without waiting for captain acknowledgment:
+
+1. **ABSCHLUSS** - Tell the captain one short German completion line that addresses them as **Kapitän** (never Benutzer or User). Name the outcome only; no internal machinery.
+2. **Land** - For `local-only`, call `bin/fm-merge-local.sh` only when the status documents `Tests N/0` with zero failures and the ready branch is at least one commit ahead of the project's default branch; otherwise record the task as **failed**, not landed. Zero commits ahead is always failed.
+3. **Cleanup** - Tear down the worker after confirmed landing, or after a terminal `failed`, `blocked`, or `needs-decision` state that ends the commission.
+4. **Continue** - Re-evaluate the backlog and spawn the next dispatchable item immediately when blockers and time gates have cleared.
+
+Routine wake handling after session start never re-runs bootstrap sweeps, fleet surveys, or audit passes before step 4.
+Do not stop at the captain between routine completions unless a captain gate in section 9 applies.
+
 ### PR ready, landing, and teardown
 
 For PR-based ship tasks, the ready signal depends on mode: `no-mistakes` reports `done: PR <url> checks green` after CI is green, while `direct-PR` reports `done: PR <url>` after opening the PR.
@@ -374,7 +389,7 @@ For any custom `state/<id>.check.sh` you write yourself, keep it an ordinary sin
 Tear down a ship task only after landing is confirmed.
 A teardown refusal for uncommitted or unlanded work is a stop-and-investigate result, never an obstacle to bypass.
 Never force teardown without explicit discard authority.
-After successful teardown, record completion, retain only the configured recent Done history, and re-evaluate queued work whose blockers and time gates have cleared.
+After successful teardown, record completion, retain only the configured recent Done history, and continue the work loop in section 7 without waiting for captain acknowledgment.
 
 A secondmate is persistent and an empty queue is healthy.
 Retire one only on an explicit captain or main-firstmate decision, after loading `secondmate-provisioning`; its home must contain no work under way, and forced discard still requires explicit captain authority.
@@ -402,6 +417,7 @@ Do not wait for the captain to say to resume, and do not re-read the session-sta
 
 At the start of every wake-handling turn, drain the durable wake queue before peeking, reading beyond the reason line, steering, or starting work.
 Session start is the only exception because its one-shot digest already presented the queue while locked or deliberately left it untouched in lock-refused read-only mode.
+Routine wake handling never re-runs session-start bootstrap sweeps before dispatching the next queued item; section 7 owns the continuous work loop.
 Treat any `OPEN DECISIONS` section from the drain as actionable reconciliation input even when no wake record was queued.
 Treat any `UNREAD STATUS` section as newly surfaced status that must be read this turn; those lines are not re-printed after this presentation.
 Treat any `RECORD DIVERGENCE` section as a contradiction between two records of one captain call, never as proof the captain ruled; load `captain-hold-lifecycle` and reconcile it in whichever direction the evidence supports.
@@ -447,6 +463,10 @@ The skill owns the daemon procedure; these safety facts remain inline:
 Load `stuck-crewmate-recovery` after a stale wake, looping or confused pane, answered-by-brief question, unresponsive worker, or failed steer.
 
 ## 9. Escalation and captain etiquette
+
+**German captain address.**
+When speaking to the captain in German, address them as **Kapitän** (with the real umlaut when writing German), never Benutzer or User.
+`data/captain.md` owns the standing preference; section 7's ABSCHLUSS line follows it.
 
 **Talk in outcomes, not mechanics.**
 Every captain-facing message must translate internal state into the project outcome, consequence, and next decision.
@@ -501,6 +521,7 @@ When a main-side thread such as a pending captain decision or relay reminder is 
 Captain calls discovered by investigations or visual reviews follow `captain-hold-lifecycle`, which owns their completion gate and recorded-answer rules.
 Update the backlog on every dispatch, completion, and decision for a work item.
 Re-evaluate queued work after every teardown and heartbeat, dispatching items only when dependencies and time gates have cleared.
+While dispatchable queued work remains, keep the section 7 work loop moving instead of idling for captain acknowledgment.
 
 `.tasks.toml`, `docs/configuration.md`, and current `tasks-axi --help` own the backlog schema, compatibility, retention, and routine command syntax.
 Use compatible `tasks-axi` when the configured backend selects it and the documented manual path otherwise; keep only the configured recent Done entries.
