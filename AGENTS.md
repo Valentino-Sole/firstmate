@@ -378,6 +378,7 @@ When a ship worker reports terminal `done:` with a self-test report, handle it i
 2. **Land** - For `local-only`, call `bin/fm-merge-local.sh` only when the status documents `Tests N/0` with zero failures and the ready branch is at least one commit ahead of the project's default branch; otherwise record the task as **failed**, not landed. Zero commits ahead is always failed.
 3. **Cleanup** - Tear down the worker after confirmed landing, or after a terminal `failed`, `blocked`, or `needs-decision` state that ends the commission.
 4. **Continue** - Run `bin/fm-work-loop.sh plan` and spawn every listed independent dispatchable item until free worker slots are full or the plan is empty.
+   When fewer than three workers are provably busy, the plan tops up toward that floor first; idle done-panes do not count as busy workers.
    On heartbeat, run the same refill when dispatchable queued work remains.
 
 Routine wake handling after session start never re-runs bootstrap sweeps, fleet surveys, or audit passes before step 4.
@@ -528,6 +529,7 @@ Update the backlog on every dispatch, completion, and decision for a work item.
 Re-evaluate queued work after every teardown and heartbeat, dispatching items only when dependencies and time gates have cleared.
 While dispatchable queued work remains, keep the section 7 work loop moving instead of idling for captain acknowledgment.
 Refill every measured free worker slot through `bin/fm-work-loop.sh plan` rather than stopping after one spawn.
+While fewer than three workers are provably busy, spawn immediately through the same plan command until the floor is met or the backlog is empty; idle done-panes do not count toward that floor.
 
 `.tasks.toml`, `docs/configuration.md`, and current `tasks-axi --help` own the backlog schema, compatibility, retention, and routine command syntax.
 Use compatible `tasks-axi` when the configured backend selects it and the documented manual path otherwise; keep only the configured recent Done entries.

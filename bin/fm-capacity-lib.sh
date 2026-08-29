@@ -129,6 +129,8 @@ if ! declare -F status_line_verb >/dev/null 2>&1; then
   . "$_FM_CAPACITY_LIB_DIR/fm-classify-lib.sh"
 fi
 
+FM_WORK_LOOP_MIN_REAL=3
+
 FM_CAPACITY_SLOT_CEILING=5
 FM_CAPACITY_CPU_PER_SLOT=3
 FM_CAPACITY_RAM_RESERVE_MB=4096
@@ -384,6 +386,73 @@ fm_capacity_occupied_count() { # <state-dir>
     n=$((n + 1))
   done < <(fm_capacity_live_ids "$1")
   printf '%s\n' "$n"
+}
+
+# Independent workers in one home that are actively working: a live worker slot
+# holder that bin/fm-crew-state.sh classifies as provably working (busy pane or
+# active run-step). Idle done-panes with a live endpoint do not count.
+fm_capacity_real_worker_ids() { # <state-dir>
+  local state=$1 id
+  declare -F crew_is_provably_working >/dev/null 2>&1 || return 0
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    fm_capacity_worker_live "$state/$id.meta" || continue
+    crew_is_provably_working "$id" || continue
+    printf '%s\n' "$id"
+  done < <(fm_capacity_occupied_ids "$state")
+}
+
+fm_capacity_real_worker_count() { # <state-dir>
+  local n=0
+  while IFS= read -r _; do
+    n=$((n + 1))
+  done < <(fm_capacity_real_worker_ids "$1")
+  printf '%s\n' "$n"
+}
+
+# Real workers across every local home on this host. Sets FM_CAPACITY_REAL and
+# leaves FM_CAPACITY_HOMES_SCANNED unchanged (call fm_capacity_measure_host_occupancy
+# first when both occupancy and real counts are needed).
+fm_capacity_measure_host_real_workers() { # <state-dir> <home-dir>
+  local state=$1 home=$2 peer peer_state canon_home canon_state
+  FM_CAPACITY_REAL=$(fm_capacity_real_worker_count "$state")
+  [ -n "$home" ] || return 0
+  canon_home=$(fm_capacity_canonical_path "$home")
+  canon_state=$(fm_capacity_canonical_path "$state")
+  while IFS= read -r peer; do
+    [ -n "$peer" ] || continue
+    [ "$peer" != "$canon_home" ] || continue
+    peer_state="$peer/state"
+    [ "$(fm_capacity_canonical_path "$peer_state")" != "$canon_state" ] || continue
+    [ -d "$peer_state" ] || continue
+    FM_CAPACITY_REAL=$((FM_CAPACITY_REAL + $(fm_capacity_real_worker_count "$peer_state")))
+  done < <(fm_capacity_host_homes "$home")
+}
+
+# How many more real workers the section-7 loop should try to launch right now.
+fm_capacity_work_loop_shortfall() { # <real-count> [min-real]
+  local real=$1 min=${2:-$FM_WORK_LOOP_MIN_REAL}
+  fm_capacity_is_uint "$real" || real=0
+  fm_capacity_is_uint "$min" || min=$FM_WORK_LOOP_MIN_REAL
+  if [ "$real" -ge "$min" ]; then
+    printf '0\n'
+    return 0
+  fi
+  printf '%s\n' $((min - real))
+}
+
+# Plan limit for bin/fm-work-loop.sh plan: refill every free slot once the real
+# floor is met; below the floor, spawn only enough to reach it.
+fm_capacity_work_loop_plan_limit() { # <free-slots> <real-count> [min-real]
+  local free=$1 real=$2 min=${3:-$FM_WORK_LOOP_MIN_REAL} shortfall
+  fm_capacity_is_uint "$free" || free=0
+  fm_capacity_is_uint "$real" || real=0
+  shortfall=$(fm_capacity_work_loop_shortfall "$real" "$min")
+  if [ "$shortfall" -gt 0 ]; then
+    fm_capacity_min "$free" "$shortfall"
+    return 0
+  fi
+  printf '%s\n' "$free"
 }
 
 # The kind recorded for <task-id> in this home; `ship` when the record omits it,
