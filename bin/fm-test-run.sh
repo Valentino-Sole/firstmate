@@ -227,7 +227,7 @@ family_for_basename() {
     fm-kimi-harness.test.sh|fm-muse-harness.test.sh|fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-lint-workflows.test.sh|\
     fm-model-display.test.sh|\
-    fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
+    fm-operational-input.test.sh|fm-pi-primary-restart.test.sh|fm-pi-primary-types.test.sh|\
     fm-harness-adapter-references.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-subagent-pretool-check.test.sh|\
@@ -409,6 +409,7 @@ tests/fm-grok-harness.test.sh
 tests/fm-herdr-lab.test.sh
 tests/fm-lint.test.sh
 tests/fm-model-display.test.sh
+tests/fm-pi-primary-restart.test.sh
 tests/fm-pi-primary-types.test.sh
 tests/fm-pr-merge.test.sh
 tests/fm-review-diff.test.sh
@@ -440,6 +441,7 @@ tests/fm-composer-ghost.test.sh
 tests/fm-grok-harness.test.sh
 tests/fm-lint.test.sh
 tests/fm-model-display.test.sh
+tests/fm-pi-primary-restart.test.sh
 tests/fm-pi-primary-types.test.sh
 tests/fm-review-diff.test.sh
 tests/fm-brief.test.sh
@@ -600,6 +602,7 @@ tests/fm-grok-continuity-live-e2e.test.sh 20
 tests/fm-ship-self-test-status.test.sh 1200
 tests/fm-work-loop.test.sh 2300
 tests/fm-grok-stop-live-e2e.test.sh 21
+tests/fm-pi-primary-restart.test.sh 363
 tests/fm-crew-liveness.test.sh 1200
 tests/fm-guard-stale-banner.test.sh 11218
 tests/fm-harness-adapter-instructions-live-e2e.test.sh 20
@@ -1216,6 +1219,10 @@ families_for_changed_path() {
     bin/fm-backend.sh|bin/fm-backend-hometag-lib.sh)
       printf '%s\n' backend-dispatch
       printf '%s\n' real-herdr-gated
+      ;;
+    bin/fm-pi-primary-restart*)
+      printf '%s\n' pure-contract-unit
+      printf '%s\n' watcher-wake-lock
       ;;
     bin/fm-watch*|bin/fm-wake*|bin/fm-inactive-reconcile.sh|\
     bin/fm-classify-lib.sh|bin/fm-daemon*|bin/fm-turnend-guard*|bin/fm-guard.sh)
