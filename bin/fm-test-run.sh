@@ -218,6 +218,7 @@ family_for_basename() {
     fm-brief.test.sh|fm-vendor-auth-probe.test.sh|\
     fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|fm-primary-checkout-pretool-check.test.sh|\
     fm-classify-decision-key.test.sh|fm-ship-self-test-status.test.sh|\
+    fm-work-loop.test.sh|\
     fm-composer-ghost.test.sh|fm-composer-lib.test.sh|\
     fm-crew-state.test.sh|fm-captain-hold-lifecycle.test.sh|\
     fm-cursor-grok-pi-model.test.sh|\
@@ -417,6 +418,7 @@ tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
 tests/fm-tmux-submit-busy.test.sh
 tests/fm-transition-lib.test.sh
+tests/fm-work-loop.test.sh
 tests/fm-x-mode.test.sh
 EOF
 }
@@ -458,6 +460,7 @@ tests/fm-spawn-batch.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-composer-lib.test.sh
+tests/fm-work-loop.test.sh
 EOF
 }
 
@@ -592,6 +595,7 @@ tests/fm-gitignore-config.test.sh 62
 tests/fm-gotmp.test.sh 1310
 tests/fm-grok-continuity-live-e2e.test.sh 20
 tests/fm-ship-self-test-status.test.sh 1200
+tests/fm-work-loop.test.sh 2300
 tests/fm-grok-stop-live-e2e.test.sh 21
 tests/fm-crew-liveness.test.sh 1200
 tests/fm-guard-stale-banner.test.sh 11218
@@ -1330,6 +1334,10 @@ families_for_changed_path() {
       ;;
     bin/fm-lint.sh|bin/fm-lint-workflows.sh|bin/fm-install-shellcheck.sh|\
     bin/fm-install-actionlint.sh|\
+    bin/fm-work-loop.sh|bin/fm-capacity-lib.sh)
+      printf '%s\n' pure-contract-unit
+      printf '%s\n' pr-forge
+      ;;
     bin/fm-brief.sh|bin/fm-ensure-agents-md.sh|bin/fm-crew-state.sh|\
     bin/fm-captain-hold.sh|bin/fm-decision-hold.sh|bin/fm-supervision*|bin/fm-transition-lib.sh|\
     bin/fm-tmux-lib.sh|bin/fm-marker-lib.sh|bin/fm-operational-input.sh|bin/fm-tasks-axi-lib.sh|\

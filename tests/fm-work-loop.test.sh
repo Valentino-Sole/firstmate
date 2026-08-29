@@ -73,16 +73,39 @@ set_live_windows() {
   done
 }
 
+install_fake_crew_state() {
+  local fakebin=$1
+  cat > "$fakebin/fm-crew-state.sh" <<'SH'
+#!/usr/bin/env bash
+set -u
+id=${1:-}
+case "$id" in
+  live-a|live-b|live-c|live-d|live-e|alpha-one|busy-a|busy-b|busy-c|done-idle)
+    printf 'state: working · source: pane · harness busy\n'
+    ;;
+  done-a|done-b|done-c)
+    printf 'state: done · source: status-log · crew finished\n'
+    ;;
+  *)
+    printf 'state: unknown · source: none\n'
+    ;;
+esac
+SH
+  chmod +x "$fakebin/fm-crew-state.sh"
+}
+
 run_work_loop() {
   local home=$1
   shift
   local fakebin
   fakebin=$(fm_fakebin "$home")
   make_fake_tmux "$fakebin"
+  install_fake_crew_state "$fakebin"
   PATH="$fakebin:${PATH:-/usr/bin:/bin}" FM_FAKE_TMUX_DIR="$home/tmux" \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" \
     FM_DATA_OVERRIDE="$home/data" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
   "$SCRIPT" "$@"
 }
 
@@ -128,8 +151,8 @@ test_status_reports_measured_slots() {
   setup_home "$home"
   out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
     run_work_loop "$home" status)
-  assert_contains "$out" 'FM_WORK_LOOP slots=5 occupied=0 free=5 homes_scanned=1' \
-    "status did not report measured free slots: $out"
+  assert_contains "$out" 'FM_WORK_LOOP slots=5 occupied=0 free=5 real=0 min_real=3 shortfall=3 homes_scanned=1' \
+    "status did not report measured slot budget and real-worker floor: $out"
   pass "fm-work-loop status reports measured slot budget"
 }
 
@@ -138,11 +161,45 @@ test_plan_fills_up_to_free_slots() {
   home="$TMP_ROOT/plan-fill"
   setup_home "$home"
   add_compatible_tasks_axi "$home"
+  write_ship_meta "$home" busy-a
+  write_ship_meta "$home" busy-b
+  write_ship_meta "$home" busy-c
+  set_live_windows "$home" busy-a busy-b busy-c
   out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
     PATH="$home/bin:$PATH" run_work_loop "$home" plan)
   n=$(printf '%s\n' "$out" | sed '/^$/d' | wc -l)
-  [ "$n" -eq 3 ] || fail "expected 3 planned spawns with 5 free slots, got $n: $out"
-  pass "fm-work-loop plan lists every dispatchable id up to the free budget"
+  [ "$n" -eq 2 ] || fail "expected 2 planned spawns with 3 real workers and 2 free slots, got $n: $out"
+  pass "fm-work-loop plan lists every dispatchable id up to the free budget once the real floor is met"
+}
+
+test_plan_tops_up_below_real_floor() {
+  local home out n
+  home="$TMP_ROOT/plan-floor"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_ship_meta "$home" busy-a
+  set_live_windows "$home" busy-a
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  n=$(printf '%s\n' "$out" | sed '/^$/d' | wc -l)
+  [ "$n" -eq 2 ] || fail "expected 2 planned spawns to reach min_real=3, got $n: $out"
+  pass "fm-work-loop plan tops up toward min_real when fewer than three workers are busy"
+}
+
+test_plan_ignores_idle_done_panes_for_real_floor() {
+  local home out n
+  home="$TMP_ROOT/plan-done-idle"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_ship_meta "$home" done-a
+  write_ship_meta "$home" done-b
+  write_ship_meta "$home" busy-a
+  set_live_windows "$home" done-a done-b busy-a
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  n=$(printf '%s\n' "$out" | sed '/^$/d' | wc -l)
+  [ "$n" -eq 2 ] || fail "idle done-panes should not count toward min_real; expected 2 spawns, got $n: $out"
+  pass "fm-work-loop plan ignores idle done-panes when topping up the real-worker floor"
 }
 
 test_plan_skips_tasks_that_already_occupy_slots() {
@@ -178,5 +235,7 @@ test_plan_prints_nothing_when_no_free_slots() {
 
 test_status_reports_measured_slots
 test_plan_fills_up_to_free_slots
+test_plan_tops_up_below_real_floor
+test_plan_ignores_idle_done_panes_for_real_floor
 test_plan_skips_tasks_that_already_occupy_slots
 test_plan_prints_nothing_when_no_free_slots

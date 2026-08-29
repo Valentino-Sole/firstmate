@@ -5,10 +5,16 @@
 #   fm-work-loop.sh plan [--backlog <path>]
 #
 # `status` prints one machine-readable line:
-#   FM_WORK_LOOP slots=<n> occupied=<n> free=<n> homes_scanned=<n>
+#   FM_WORK_LOOP slots=<n> occupied=<n> free=<n> real=<n> min_real=<n> shortfall=<n> homes_scanned=<n>
 #
-# `plan` prints up to <free> dispatchable task ids, one per line, skipping ids that
-# already occupy a live worker slot. It prints nothing when free=0.
+# `real` counts only provably working workers (busy pane or active run-step); idle
+# done-panes with a live endpoint do not count. `shortfall` is how many more real
+# workers the loop should try to launch before the host slot ceiling.
+#
+# `plan` prints up to the plan limit dispatchable task ids, one per line, skipping
+# ids that already occupy a live worker slot. Below min_real it tops up toward the
+# floor; once the floor is met it fills every measured free slot. Prints nothing
+# when the plan limit is 0.
 #
 # Slot measurement is owned by bin/fm-capacity-lib.sh; this command never spawns.
 set -eu
@@ -68,12 +74,18 @@ done
 
 work_loop_measure() {
   fm_capacity_measure_local "$STATE" "$FM_HOME"
+  fm_capacity_measure_host_real_workers "$STATE" "$FM_HOME"
+  FM_CAPACITY_SHORTFALL=$(fm_capacity_work_loop_shortfall "$FM_CAPACITY_REAL")
+  FM_CAPACITY_PLAN_LIMIT=$(fm_capacity_work_loop_plan_limit \
+    "$FM_CAPACITY_FREE" "$FM_CAPACITY_REAL")
 }
 
 work_loop_print_status() {
   work_loop_measure
-  printf 'FM_WORK_LOOP slots=%s occupied=%s free=%s homes_scanned=%s\n' \
-    "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_FREE" "$FM_CAPACITY_HOMES_SCANNED"
+  printf 'FM_WORK_LOOP slots=%s occupied=%s free=%s real=%s min_real=%s shortfall=%s homes_scanned=%s\n' \
+    "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_FREE" \
+    "$FM_CAPACITY_REAL" "$FM_WORK_LOOP_MIN_REAL" "$FM_CAPACITY_SHORTFALL" \
+    "$FM_CAPACITY_HOMES_SCANNED"
 }
 
 # Print one task id per line from a tasks-axi ready listing.
@@ -122,7 +134,7 @@ case "$CMD" in
     ;;
   plan)
     work_loop_measure
-    [ "$FM_CAPACITY_FREE" -gt 0 ] || exit 0
-    work_loop_print_plan "$FM_CAPACITY_FREE"
+    [ "$FM_CAPACITY_PLAN_LIMIT" -gt 0 ] || exit 0
+    work_loop_print_plan "$FM_CAPACITY_PLAN_LIMIT"
     ;;
 esac
