@@ -87,6 +87,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-watch-checkpoint.sh` | Run one bounded foreground watcher checkpoint for Codex-style supervision            |
 | `fm-pi-primary-restart.sh` | Automatically restart a live Pi primary: checkpoint, clean exit, session resume, lock reclaim, and extension-owned watcher re-arm |
 | `fm-pi-primary-restart-lib.sh` | Shared helpers for Pi-primary restart checkpointing and launch planning |
+| `fm-crew-liveness-lib.sh` | Pi-primary session-start recovery for dead or missing cursor-grok crewmates |
 | `fm-watch.sh`            | Singleton-safe watcher: absorb benign wakes, detect stalled local-secondmate wake queues, and exit on actionable ones |
 | `fm-inactive-reconcile.sh` | Reconcile long-inactive direct crewmate terminal outcomes without forge access |
 | `fm-afk-start.sh`        | Run the common sourceable away-mode daemon entry in the foreground                      |
