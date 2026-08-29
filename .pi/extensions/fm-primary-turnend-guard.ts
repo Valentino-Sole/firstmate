@@ -459,7 +459,8 @@ function runGuard(): Promise<{ code: number; stderr: string }> {
 }
 
 // PreToolUse seatbelts (bin/fm-arm-pretool-check.sh, docs/arm-pretool-check.md;
-// bin/fm-cd-pretool-check.sh, docs/cd-guard.md). Both piggyback on this same
+// bin/fm-cd-pretool-check.sh, docs/cd-guard.md;
+// bin/fm-primary-checkout-pretool-check.sh, docs/primary-checkout-guard.md).
 // extension file rather than separate ones so no extra Pi -e flag is needed at
 // launch - the primary already loads this file for the turn-end guard, and
 // pi.on("tool_call", ...) can block (verified 2026-07-09 against pi 0.80.5:
@@ -485,6 +486,10 @@ function runPretoolCheck(command: string): Promise<{ code: number; stderr: strin
 
 function runCdCheck(command: string): Promise<{ code: number; stderr: string }> {
   return runChecker("fm-cd-pretool-check.sh", command);
+}
+
+function runPrimaryCheckoutCheck(command: string): Promise<{ code: number; stderr: string }> {
+  return runChecker("fm-primary-checkout-pretool-check.sh", command);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -584,6 +589,13 @@ export default function (pi: ExtensionAPI) {
     const cdResult = await runCdCheck(command);
     if (cdResult.code === 2) {
       return { block: true, reason: cdResult.stderr.trim() || "denied by the cd-guard PreToolUse seatbelt" };
+    }
+    const primaryCheckoutResult = await runPrimaryCheckoutCheck(command);
+    if (primaryCheckoutResult.code === 2) {
+      return {
+        block: true,
+        reason: primaryCheckoutResult.stderr.trim() || "denied by the primary-checkout PreToolUse seatbelt",
+      };
     }
     const result = await runPretoolCheck(command);
     if (result.code !== 2) return {};

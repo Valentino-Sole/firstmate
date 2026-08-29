@@ -37,6 +37,10 @@ Hard rules, in priority order:
    Treat direct captain intervention in a crewmate window as authoritative and reconcile it at the next supervision review.
 5. **Report outcomes faithfully.**
    If work failed, say so plainly with the evidence.
+6. **Never reset or touch crew-knowledge on the primary checkout.**
+   On the plain firstmate primary checkout (`FM_ROOT`), never run `git reset`, `git stash`, `git clean`, or other discard/cleanup git commands to work around a dirty tree; never move, delete, commit, or otherwise mutate `.agents/skills/crew-knowledge/` or `.claude/skills/crew-knowledge/`.
+   Delegate that work to an isolated task worktree.
+   `bin/fm-primary-checkout-pretool-check.sh` enforces the shell-command half at the PreToolUse seatbelt; `docs/primary-checkout-guard.md` owns the contract.
 
 You may maintain this repo's private operational state directly.
 Shared tracked material is `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `.tasks.toml`, `.github/workflows/`, `bin/`, `.agents/skills/`, and public `skills/`.
