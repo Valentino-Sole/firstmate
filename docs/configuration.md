@@ -100,6 +100,14 @@ Set the local, gitignored `config/backlog-backend` file to `manual` to force man
 Absent or `tasks-axi` selects the default tasks-axi backend.
 The file format is unchanged in both modes; tasks-axi and manual edits produce the same `## In flight`, `## Queued`, and `## Done` sections.
 
+## Work loop fixed list (config/work-loop-list)
+
+`config/work-loop-list` is an optional local, gitignored file listing task ids in the order section 7's work loop should refill empty worker slots.
+Each non-empty, non-comment line is one task id; `#` starts an inline comment and blank lines are ignored.
+When this file exists with at least one id, `bin/fm-work-loop.sh plan` walks the list in file order and offers only ids that are still `tasks-axi ready` and do not already occupy a live worker slot, so free slots keep filling without manual resupply.
+`bin/fm-work-loop.sh status` adds `source=list` while the file is active; otherwise `plan` keeps the existing tasks-axi ready ordering.
+See [`docs/examples/work-loop-list`](examples/work-loop-list) for a starting point to copy into local `config/work-loop-list`.
+
 ## Runtime backend (config/backend / FM_BACKEND)
 
 For spawn-capable adapters, the runtime session-provider backend controls where task windows/endpoints are created, captured, sent to, watched, and killed.

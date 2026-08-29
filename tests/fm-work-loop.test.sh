@@ -278,6 +278,71 @@ test_plan_prints_nothing_when_no_free_slots() {
   pass "fm-work-loop plan stays silent when every slot is occupied"
 }
 
+write_fixed_list() {
+  local home=$1
+  shift
+  mkdir -p "$home/config"
+  : > "$home/config/work-loop-list"
+  while [ "$#" -gt 0 ]; do
+    printf '%s\n' "$1" >> "$home/config/work-loop-list"
+    shift
+  done
+}
+
+test_status_reports_list_source_when_fixed_list_active() {
+  local home out
+  home="$TMP_ROOT/status-list"
+  setup_home "$home"
+  write_fixed_list "$home" alpha-one
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    run_work_loop "$home" status)
+  assert_contains "$out" 'source=list' "status should name fixed-list source: $out"
+  pass "fm-work-loop status reports source=list when a fixed list is active"
+}
+
+test_plan_uses_fixed_list_order() {
+  local home out first second
+  home="$TMP_ROOT/plan-list-order"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_fixed_list "$home" alpha-three alpha-one alpha-two
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  first=$(printf '%s\n' "$out" | sed -n '1p')
+  second=$(printf '%s\n' "$out" | sed -n '2p')
+  [ "$first" = alpha-three ] || fail "fixed list should preserve file order, first=$first"
+  [ "$second" = alpha-one ] || fail "fixed list should preserve file order, second=$second"
+  pass "fm-work-loop plan walks the fixed list in file order"
+}
+
+test_plan_fixed_list_skips_not_ready_ids() {
+  local home out
+  home="$TMP_ROOT/plan-list-skip"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_fixed_list "$home" alpha-missing alpha-two
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  assert_not_contains "$out" 'alpha-missing' "plan should skip list ids that are not ready"
+  assert_contains "$out" 'alpha-two' "plan should still offer ready list ids"
+  pass "fm-work-loop plan skips fixed-list ids that are not tasks-axi ready"
+}
+
+test_plan_fixed_list_skips_tasks_that_already_occupy_slots() {
+  local home out
+  home="$TMP_ROOT/plan-list-occupied"
+  setup_home "$home"
+  add_compatible_tasks_axi "$home"
+  write_fixed_list "$home" alpha-one alpha-two alpha-three
+  write_ship_meta "$home" alpha-one
+  set_live_windows "$home" alpha-one
+  out=$(FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=24576 FM_CAPACITY_LOAD1=0.4 \
+    PATH="$home/bin:$PATH" run_work_loop "$home" plan)
+  assert_not_contains "$out" 'alpha-one' "fixed-list plan should skip a task that already holds a live slot"
+  assert_contains "$out" 'alpha-two' "fixed-list plan should still offer other ready list ids"
+  pass "fm-work-loop fixed-list plan skips ids that already occupy a live worker slot"
+}
+
 test_status_reports_measured_slots
 test_plan_fills_up_to_free_slots
 test_plan_tops_up_below_real_floor
@@ -286,3 +351,7 @@ test_plan_ignores_live_done_panes_with_stale_busy_pane
 test_plan_counts_validating_run_step_despite_done_status_log
 test_plan_skips_tasks_that_already_occupy_slots
 test_plan_prints_nothing_when_no_free_slots
+test_status_reports_list_source_when_fixed_list_active
+test_plan_uses_fixed_list_order
+test_plan_fixed_list_skips_not_ready_ids
+test_plan_fixed_list_skips_tasks_that_already_occupy_slots
