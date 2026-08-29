@@ -1,0 +1,185 @@
+
+
+==================================================================
+SZENE 1 - Hetzner-Server allein, keine Worker: was traegt der Host?
+==================================================================
+Vorgabe: der Hetzner-Server allein hoechstens drei Dauer-Worker.
+
+$ fm-capacity.sh slots
+slots=3
+occupied=0
+free=3
+homes_scanned=1
+nproc=16
+mem_avail_mb=13312
+load1=2.0
+[exit 0]
+
+
+==================================================================
+SZENE 2 - Drei Dauer-Worker laufen: der vierte wird abgewiesen
+==================================================================
+
+$ fm-capacity.sh slots
+slots=3
+occupied=3
+free=0
+homes_scanned=1
+nproc=16
+mem_avail_mb=13312
+load1=2.0
+[exit 0]
+
+-> ein vierter unabhaengiger Worker will starten:
+
+$ fm-capacity.sh spawn-gate --task-id neue-aufgabe
+error: capacity: no free worker slot (occupied=3 slots=3 homes_scanned=1); independent work waits until a live worker on this host finishes; running workers were left running
+[exit 1]
+-> und dieselbe Aufgabe ein zweites Mal (Beweis je Worker: eine Task-ID, ein Worker):
+
+$ fm-capacity.sh spawn-gate --task-id jarvis-zentrale-kapazitaet
+error: capacity: task jarvis-zentrale-kapazitaet already has a worker; sequential replacement uses relaunch, never a second concurrent worker
+[exit 1]
+
+-> die drei laufenden Worker wurden nicht angefasst:
+fm-jarvis-zentrale-kapazitaet
+fm-fm-ressourcen
+fm-backlog-pflege
+
+
+==================================================================
+SZENE 3 - Freitag 21:00, Heim-PC (RTX 4080 Super) ist erreichbar
+==================================================================
+Erreichbarkeit UND Last werden frisch geprueft, nichts wird zwischengespeichert.
+
+$ fm-capacity.sh route
+route=preferred
+route_host=Valentino
+route_reason=preferred host is reachable and suitable
+preferred_ssh=Valentino
+preferred_reachable=yes
+preferred_suitable=yes
+preferred_cpu=busy_pct=11.33/samples=3
+fallback_ssh=Valentino-Arbeit
+fallback_reachable=no
+fallback_suitable=no
+fallback_cpu=unmeasured
+[exit 0]
+
+-> zusammen also: 3 lokale Dauer-Worker + rechenlastige Arbeit auf dem Heim-PC.
+
+
+==================================================================
+SZENE 4 - kurzer Lastausschlag auf dem Heim-PC kippt die Praeferenz nicht
+==================================================================
+
+$ fm-capacity.sh route
+route=preferred
+route_host=Valentino
+route_reason=preferred host is reachable and suitable
+preferred_ssh=Valentino
+preferred_reachable=yes
+preferred_suitable=yes
+preferred_cpu=busy_pct=40.00/samples=3
+fallback_ssh=Valentino-Arbeit
+fallback_reachable=no
+fallback_suitable=no
+fallback_cpu=unmeasured
+[exit 0]
+
+
+==================================================================
+SZENE 5 - der Kapitaen spielt: Heim-PC dauerhaft am Anschlag -> Arbeits-PC
+==================================================================
+
+$ fm-capacity.sh route
+route=fallback
+route_host=Valentino-Arbeit
+route_reason=preferred host was not usable; fallback is reachable and suitable
+preferred_ssh=Valentino
+preferred_reachable=yes
+preferred_suitable=no
+preferred_cpu=busy_pct=99.67/samples=3
+fallback_ssh=Valentino-Arbeit
+fallback_reachable=yes
+fallback_suitable=yes
+fallback_cpu=load1=1.0
+[exit 0]
+
+
+==================================================================
+SZENE 6 - Heim-PC ist aus: Rueckfall auf den Arbeits-PC
+==================================================================
+
+$ fm-capacity.sh route
+route=fallback
+route_host=Valentino-Arbeit
+route_reason=preferred host was not usable; fallback is reachable and suitable
+preferred_ssh=Valentino
+preferred_reachable=no
+preferred_suitable=no
+preferred_cpu=unmeasured
+fallback_ssh=Valentino-Arbeit
+fallback_reachable=yes
+fallback_suitable=yes
+fallback_cpu=load1=1.0
+[exit 0]
+
+
+==================================================================
+SZENE 7 - Heim-PC aus UND Kapitaen sitzt am Arbeits-PC: kein Ausweichen auf den Server
+==================================================================
+
+$ fm-capacity.sh route
+route=none
+route_host=
+route_reason=no configured compute host was freshly reachable and suitable
+preferred_ssh=Valentino
+preferred_reachable=no
+preferred_suitable=no
+preferred_cpu=unmeasured
+fallback_ssh=Valentino-Arbeit
+fallback_reachable=yes
+fallback_suitable=no
+fallback_cpu=load1=15.0
+[exit 0]
+
+-> route=none: rechenlastige Arbeit wird NICHT auf den Hetzner-Server geschoben.
+   Es bleibt beim gemessenen lokalen Budget von hoechstens drei Workern.
+
+
+==================================================================
+SZENE 8 - der Server kann seine eigene Last nicht lesen: fail closed
+==================================================================
+
+$ fm-capacity.sh slots
+slots=0
+occupied=3
+free=0
+homes_scanned=1
+nproc=16
+mem_avail_mb=13312
+load1=unavailable
+[exit 0]
+
+$ fm-capacity.sh spawn-gate --task-id neue-aufgabe
+error: capacity: supervisor host is at measured capacity (slots=0 occupied=3 homes_scanned=1 nproc=16 load1=unavailable mem_avail_mb=13312); refusing a new independent worker rather than overloading this host
+[exit 1]
+-> die gescheiterte Messung bleibt sichtbar (load1=unavailable), nicht ein erfundenes 0.
+   Kein Start auf einem ungemessenen Host.
+
+
+==================================================================
+SZENE 9 - der echte Spawn-Befehl: der vierte Worker startet gar nicht erst
+==================================================================
+(FM_GATE_REFUSE_BYPASS=1 wie in der Testbibliothek: nur die "kein Spawn aus einem no-mistakes-Gate"-Sperre
+ wird umgangen, damit der Kapazitaets-Gate ueberhaupt erreicht wird.)
+
+$ fm-spawn.sh neue-aufgabe projects/demo --mode no-mistakes --yolo off
+error: capacity: no free worker slot (occupied=3 slots=3 homes_scanned=1); independent work waits until a live worker on this host finishes; running workers were left running
+[exit 1]
+
+-> die drei laufenden Worker laufen weiter, es wurde keiner angefasst:
+fm-jarvis-zentrale-kapazitaet
+fm-fm-ressourcen
+fm-backlog-pflege
