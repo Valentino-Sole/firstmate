@@ -67,9 +67,27 @@ A response whose own `stopReason` is `"aborted"` is excluded from `_checkCompact
 This mechanism does not depend on which model provider is active: any provider response that completes with zero or malformed usage data routes the trigger through the full-array estimate, which can legitimately exceed the window while the footer - anchored to an earlier, real, smaller usage figure - still reads low.
 Not independently reproduced end to end in this task; recorded from source tracing plus the one live observation above, for whoever verifies it further to build on rather than re-derive.
 
+## `spawn claude ENOENT` and the spawning process's PATH
+
+A live session reported a `spawn claude ENOENT` error, the standard Node.js message when `child_process.spawn()` cannot resolve a bare command name against `PATH`.
+`claude-code-cli`'s `constants.ts` (`claudeBinary()`) returns `process.env.PI_CLAUDE_BIN ?? "claude"`: a bare command name, resolved by the OS against whatever `PATH` the enclosing Pi Node process inherited at its own launch, unless the operator sets `PI_CLAUDE_BIN`, which Firstmate does not.
+`session-registry.ts`'s `spawn(claudeBinary(), args, { stdio: [...] })` (the same call site described above under `claude-code-cli`) passes no explicit `env`, so every nested `claude` spawn for the whole life of that Pi process shares the same inherited `PATH`; the failure mode is per-process, not per-turn, so once it happens once with a given `PATH` it will keep happening on that process's every subsequent turn until the process is replaced.
+`~/.bashrc` on this host adds `~/.local/bin` (where `claude` is installed) to `PATH` only past its standard Debian non-interactive-shell guard (`case $- in *i*) ;; *) return;; esac`), so any process chain that reaches a bash invocation without an interactive flag set skips that `PATH` addition entirely.
+
+Firstmate's own automatic Pi-primary restart (`bin/fm-pi-primary-restart.sh`, `bin/fm-pi-primary-restart-lib.sh`) already treats bare-command `PATH` resolution as unsafe for relaunching Pi itself: `fm_pi_restart_resolve_pi_bin()` resolves the harness binary to an absolute, symlink-resolved path (`type -P` plus `cd "$(dirname ...)" && pwd -P`) specifically so the relaunch does not depend on `PATH` at spawn time, and the tmux-backend relaunch path types the launch command into the pane's existing interactive shell rather than starting a fresh one.
+The herdr-backend relaunch path instead hands the launch to `herdr agent start ... -- "${LAUNCH_ARGS[@]}"`, a third-party spawn path whose own environment construction for the new agent process was not traced here; whether it replicates a full interactive-shell `PATH` (with `~/.local/bin`) or a narrower one is the open question for reproducing this failure on demand.
+No equivalent absolute-path resolution exists for `claude-code-cli`'s own nested spawn: `claudeBinary()` never applies the pattern `fm_pi_restart_resolve_pi_bin()` already uses one call away in the same fleet.
+
+Connection to the full-history-replay finding above: these are two independent root causes, not one.
+A `PATH`-related `ENOENT` is an environment/robustness problem in how the nested `claude` process is found; the lack of cross-turn cache reuse is a session-continuity design trade-off in how much is resent once that process is found and started.
+They compound through the Pi-core mechanism recorded in the section above: a spawn that fails outright produces an assistant message with `stopReason: "error"` and no usage, which is exactly the condition that routes Pi's auto-compact trigger through the full-array estimate rather than the footer's own figure.
+Because `claude-code-cli` never keeps a session alive across ordinary turns (see above), a `PATH` failure on any turn has no prior live session to fall back to, so it surfaces immediately as that whole turn's outcome rather than being absorbed into an already-open connection.
+Not independently reproduced; the herdr `agent start` environment and the exact process chain leading to a bash invocation without an interactive flag are both open questions for whoever verifies this further.
+
 ## Reading this record
 
 `claude-code-cli` structurally cannot reuse prompt cache across ordinary Pi turns (fresh session id, no persistence, full-history requoting), so its reported context/cost grows with the full conversation size on every turn by design, not by a counting defect.
 `xai`/`grok-4.3` demonstrated real cross-turn cache reuse in this test, with one unexplained cold-cache turn worth re-checking if this record is revisited.
 Separately, Pi core's own auto-compact trigger can diverge from what the footer displays whenever a response completes with zero or malformed usage, which plausibly compounds with either provider's cost profile above but is not caused by either of them.
-None of the three findings in this record originate in Firstmate's own tracked `.pi/extensions/` or `bin/fm-session-start.sh`; both providers' session-start digest delivery was independently verified to happen at most once per session generation, capped at 512 KiB.
+A `PATH`-dependent `spawn claude ENOENT` in `claude-code-cli`'s nested spawn is a third, independent finding that can itself produce exactly the zero-usage response that trips the auto-compact divergence above, most plausibly after an automatic Pi-primary restart on the herdr backend, whose spawn environment was not traced here.
+None of the four findings in this record originate in Firstmate's own tracked `.pi/extensions/` or `bin/fm-session-start.sh`; both providers' session-start digest delivery was independently verified to happen at most once per session generation, capped at 512 KiB.
