@@ -59,6 +59,12 @@ type SessionGeneration = {
   retryFailures: number;
   restoring: boolean;
   seq: number;
+  // Tracks this generation's own turn activity so an actionable watcher close
+  // (which can land at any real wall-clock moment, fully decoupled from Pi's
+  // prompt lifecycle) never calls pi.sendUserMessage while a turn is already
+  // known to be in flight. See sendWake below for why this exists.
+  busy: boolean;
+  pendingWake: string | null;
 };
 
 function refreshWatchToolShell(
@@ -199,6 +205,8 @@ function createGeneration(): SessionGeneration {
     retryFailures: 0,
     restoring: false,
     seq: 0,
+    busy: false,
+    pendingWake: null,
   };
 }
 
@@ -243,7 +251,59 @@ export default function (pi: ExtensionAPI) {
     !calmPresentation.stockExportRendering &&
     !calmTranscriptClassIsVisible(itemClass);
 
-  async function sendWake(
+  // pi.sendUserMessage always triggers a turn (agent-session.js prompt()):
+  // deliverAs only changes queueing while the agent is already streaming, but
+  // an idle session falls straight into starting a brand-new run. That run
+  // has no atomic check-and-set against a concurrently-submitted captain
+  // message: prompt() reads isStreaming, then awaits several extension hooks
+  // (emitInput, checkCompaction, checkAuth, emitBeforeAgentStart) BEFORE it
+  // commits by setting _isAgentRunActive = true, so two prompt() calls that
+  // both observe "idle" can both fall through to a concurrent run against the
+  // same session state - one turn's tool call (typically the
+  // bin/fm-wake-drain.sh run this wake instructs) is left dangling with no
+  // synthesized reply while the other's continuation silently wins, which is
+  // the "stuck yellow tool block, no further answer" failure this closes.
+  // The arm child's close event (this file's only caller of sendWake) fires
+  // whenever the watcher happens to exit, fully decoupled from Pi's own turn
+  // lifecycle - unlike fm-primary-turnend-guard.ts's agent_settled-only
+  // followUp, nothing here previously refused to fire mid-turn. Deferring
+  // delivery until the current turn has genuinely settled closes that
+  // dominant, previously fully unguarded window down to the same narrow
+  // idle-vs-idle residual the turnend-guard extension already accepts: a
+  // captain message typed in the exact same tick a settled session delivers
+  // its own queued wake can still race, because Pi's extension API exposes no
+  // hook that fires atomically with prompt()'s internal isStreaming check.
+  // That residual is a Pi SDK gap, not something firstmate's own tracked code
+  // can close outside a full submission-serializing mutex, which is out of
+  // scope here given its own regression risk.
+  function sendWake(
+    owner: SessionGeneration,
+    message: string,
+  ): void {
+    if (!generationIsLive(owner)) return;
+    if (owner.busy) {
+      owner.pendingWake = message;
+      return;
+    }
+    void deliverWakeNow(owner, message).catch(() => {
+      // Pi owns delivery errors; continuity restoration never waits on prompting.
+    });
+  }
+
+  // Called from the agent_settled handler once a deferred wake's turn has
+  // genuinely finished. Re-checks owner.busy because a settled turn's own
+  // queued continuation (steer/followUp delivered during that same turn,
+  // drained before agent_settled fires) never flips busy back on here - only
+  // a fresh before_agent_start does - so this is safe to call unconditionally
+  // on every settle.
+  function flushPendingWake(owner: SessionGeneration): void {
+    const message = owner.pendingWake;
+    if (message === null) return;
+    owner.pendingWake = null;
+    sendWake(owner, message);
+  }
+
+  async function deliverWakeNow(
     owner: SessionGeneration,
     message: string,
   ): Promise<void> {
@@ -330,18 +390,16 @@ export default function (pi: ExtensionAPI) {
         if (!pidAlive(watcherPid)) {
           await retireArm(owner.child);
         }
-        await sendWake(owner, `${message}\n\n${confirmed.detail}`);
+        sendWake(owner, `${message}\n\n${confirmed.detail}`);
         return;
       }
     }
     if (!repairFailed && offerWakeToBranch(message)) return;
-    await sendWake(owner, message);
+    sendWake(owner, message);
   }
 
   function surfaceFailure(owner: SessionGeneration, message: string): void {
-    void sendWake(owner, message).catch(() => {
-      // Pi owns delivery errors; continuity restoration never waits on prompting.
-    });
+    sendWake(owner, message);
   }
 
   function retryDelay(attempt: number): number {
@@ -568,6 +626,19 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);
+  });
+
+  // Brackets this generation's own isStreaming window (agent-session.js sets
+  // _isAgentRunActive at the same before_agent_start/agent_settled
+  // boundaries) so sendWake can tell whether a turn - the captain's own or an
+  // earlier deferred wake's - is genuinely in flight before ever calling
+  // pi.sendUserMessage. See sendWake's comment for the race this closes.
+  pi.on?.("before_agent_start", () => {
+    generation.busy = true;
+  });
+  pi.on?.("agent_settled", () => {
+    generation.busy = false;
+    flushPendingWake(generation);
   });
 
   pi.registerCommand?.("fm-watch-arm-pi", {

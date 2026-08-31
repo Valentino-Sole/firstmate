@@ -423,6 +423,103 @@ EOF
   pass "Pi actionable close starts one successor before wake delivery settles"
 }
 
+test_pi_wake_delivery_defers_while_a_captain_turn_is_active() {
+  local repo home plugin log stop out status
+  repo="$TMP_ROOT/pi-wake-defer-root"
+  home="$TMP_ROOT/pi-wake-defer-home"
+  log="$TMP_ROOT/pi-wake-defer.log"
+  stop="$TMP_ROOT/pi-wake-defer.stop"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_pi_watch_extension_fixture "$repo"
+  plugin="$repo/.pi/extensions/fm-primary-pi-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = --handling-delivered ]; then
+  printf 'confirmed generation=%s watcher=%s\n' "$2" "$4" >> "${FM_ARM_LOG:?}"
+  exit 0
+fi
+printf 'arm=%s predecessor=%s\n' "$$" "${FM_WATCH_PREDECESSOR_ARM_PID:-none}" >> "${FM_ARM_LOG:?}"
+count=$(grep -c '^arm=' "$FM_ARM_LOG")
+if [ "$count" -eq 1 ]; then
+  printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+  printf 'stale: synthetic actionable close\n'
+  exit 0
+fi
+printf 'watcher: started pid=%s (beacon fresh) recovery-generation=fixture-generation\n' "$$"
+trap 'exit 0' TERM INT
+while [ ! -e "$FM_STOP_FILE" ]; do sleep 0.02; done
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_STOP_FILE="$stop" node --input-type=module 2>&1 <<'EOF'
+import { writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+// Regression coverage for the captain-input hang: a watcher stale wake used
+// to call pi.sendUserMessage(..., {deliverAs: "followUp"}) the instant the
+// watcher's arm child closed, with zero regard for whether a turn (the
+// captain's own, or an earlier wake's handling turn) was already active.
+// Because Pi's own prompt() has no atomic check-and-set against a
+// concurrently-submitted message while idle, that unconditional mid-turn
+// delivery could race a real captain message and leave one turn's tool call
+// as the final visible transcript entry with no synthesized reply. The fix
+// defers delivery until agent_settled fires while a turn is marked busy.
+const handlers = {};
+let tool = null;
+const sendCalls = [];
+const pi = {
+  on(event, handler) {
+    handlers[event] = handler;
+  },
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_pi") tool = candidate;
+  },
+  sendUserMessage: async (message) => {
+    sendCalls.push(message);
+  },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+if (!handlers.before_agent_start || !handlers.agent_settled) {
+  throw new Error("extension did not register before_agent_start/agent_settled handlers");
+}
+
+// Simulate: a captain turn is already in flight when the watcher's stale
+// wake arrives.
+handlers.before_agent_start();
+
+await tool.execute("tool-call-wake-defer", {}, undefined, undefined, {});
+
+// Give the actionable close, successor establishment, and handling
+// confirmation handshake time to run to completion. The wake must stay
+// queued - not delivered - for as long as the turn is marked busy.
+await new Promise((resolve) => setTimeout(resolve, 1500));
+if (sendCalls.length !== 0) {
+  throw new Error(`wake delivered while a captain turn was still active: ${sendCalls.join(" | ")}`);
+}
+
+// The turn settles: the deferred wake must be delivered now, exactly once.
+handlers.agent_settled();
+for (let i = 0; i < 250 && sendCalls.length === 0; i += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+if (sendCalls.length !== 1) {
+  throw new Error(`expected exactly one deferred wake delivery after settle, got ${sendCalls.length}: ${sendCalls.join(" | ")}`);
+}
+if (!sendCalls[0].includes("FIRSTMATE WATCHER WAKE")) {
+  throw new Error(`deferred delivery missing wake content: ${sendCalls[0]}`);
+}
+writeFileSync(process.env.FM_STOP_FILE, "stop\n");
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi wake delivery must defer while a captain turn is active and flush on settle"
+  [ -z "$out" ] || fail "Pi wake-defer test printed output: $out"
+  pass "Pi wake delivery defers while a captain turn is active and flushes on settle"
+}
+
 test_pi_branch_offer_owns_actionable_wake() {
   local repo home plugin log stop out status
   repo="$TMP_ROOT/pi-branch-offer-root"
@@ -2809,6 +2906,7 @@ test_pi_tool_returns_agent_tool_result
 test_pi_redundant_tool_call_is_owned_noop
 test_pi_scheduled_retry_call_is_owned_noop
 test_pi_actionable_close_starts_single_successor_before_delivery
+test_pi_wake_delivery_defers_while_a_captain_turn_is_active
 test_pi_branch_offer_owns_actionable_wake
 test_pi_branch_offer_flags_heartbeat
 test_pi_heartbeat_is_not_ridden_into_main_by_a_co_present_check
