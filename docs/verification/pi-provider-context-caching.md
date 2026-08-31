@@ -100,6 +100,10 @@ Whether a *stale* value can persist is a separate, narrower question this reprod
 What can persist is the *condition*: if compaction fails (or the provider keeps returning zero/malformed usage on retry) the message array is untouched, so the very next check re-derives the same inflated estimate from the same still-present content and can re-trigger immediately - the observed back-to-back "Compaction failed" then "Auto-compact failed" pattern is consistent with this, though the exact retry sequence that produced those two specific lines was not captured live and is not claimed as separately proven here.
 The `spawn claude ENOENT` fix above removes one concrete, now-eliminated way to produce the triggering zero-usage response, but the Pi-core divergence itself is unrelated to any one provider and remains reachable by any other cause of a zero/malformed-usage response; it is Pi-core code this task has no path to patch.
 
+A further live report of auto-compaction firing with no active worker or heavy turn in progress does not need a new mechanism: `agent-session.js` carries exactly one persistent flag across the compaction paths, `_overflowRecoveryAttempted` (grepped across the whole file), and it scopes only the separate overflow-recovery case (Case 1/2, a response that itself hit the model's context limit), resetting per turn; the threshold path this section reproduces (Case 3) reads no instance field at all; `shouldCompact()` takes only the arguments it is called with.
+So a light or trivial turn can still trigger this: the divergence depends only on whether *that turn's own* response has zero or malformed usage, and on how much untouched content already sits in the message array from earlier - not on how much work the triggering turn itself did.
+This specific incident's exact transcript (what the triggering response was, and why it had no usable usage) was not available to trace further here.
+
 ## `spawn claude ENOENT` and the spawning process's PATH
 
 A live session reported a `spawn claude ENOENT` error, the standard Node.js message when `child_process.spawn()` cannot resolve a bare command name against `PATH`.
