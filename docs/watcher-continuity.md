@@ -45,16 +45,6 @@ No adapter starts a replacement with shell `&`.
 
 The turn-end guard remains the final backstop rather than the normal continuity mechanism and cooperates with the auto-arm in its `--claude` mode.
 
-## Pi wake delivery timing
-
-`pi.sendUserMessage(..., {deliverAs: "followUp"})` always triggers a turn: `deliverAs` only changes queueing while the agent is already streaming, but an idle session falls straight into starting a brand-new run with no atomic check-and-set against a concurrently-submitted captain message.
-Pi's `prompt()` reads its streaming state, then awaits several extension hooks (`input`, compaction and auth checks, `before_agent_start`) before it actually commits to a new run, so two calls that both observe "idle" can both fall through to a concurrent run against the same session state.
-The watcher arm child's close event that triggers `fm-primary-pi-watch.ts`'s `sendWake` is fully decoupled from Pi's own turn lifecycle - it can fire at any wall-clock moment, including squarely mid-turn - so nothing there previously refused to call `sendUserMessage` while a captain turn (or an earlier wake's handling turn) was already active.
-The extension now tracks each generation's own busy window from `before_agent_start` to `agent_settled` (the same boundary `agent-session.js` uses for its internal streaming flag) and defers `sendUserMessage` until the turn genuinely settles when it fires mid-turn, delivering the most recently queued wake exactly once on settle.
-This closes the dominant, previously fully unguarded window down to the same narrow idle-vs-idle residual `fm-primary-turnend-guard.ts`'s own `agent_settled`-only followUp already accepts: a captain message typed in the exact same tick a settled session delivers its own queued wake can still race, because Pi's extension API exposes no hook that fires atomically with `prompt()`'s internal streaming check.
-That residual is a Pi SDK gap, not something firstmate's own tracked code can close without a full submission-serializing mutex, which carries its own regression risk and is out of scope here.
-`tests/fm-pi-watch-extension.test.sh`'s `test_pi_wake_delivery_defers_while_a_captain_turn_is_active` covers the deferral and flush-on-settle contract.
-
 ## Recovery episode acknowledgement
 
 A recovery episode is one generation of `state/.watcher-down`, and it is retired only by the generation-bound acknowledgement the drain prints as `WAKE_ACK_REQUIRED`.
