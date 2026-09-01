@@ -1145,7 +1145,7 @@ const settled = handlers.get("agent_settled");
 if (!settled) throw new Error("agent_settled handler was not registered");
 
 // Last conversational entry is an assistant message with a tool call and no
-// text: the reproduced race's visible signature (a dangling tool call, e.g.
+// text: the visible signature of the raced turn (a dangling tool call, e.g.
 // bin/fm-wake-drain.sh, left as the final transcript entry).
 const ctx = {
   sessionManager: {
@@ -1248,8 +1248,8 @@ const stuckCtx = {
 await settled({ type: "agent_settled" }, stuckCtx);
 if (prompts.length !== 1) throw new Error(`settle 1: expected 1 prompt, got ${prompts.length}`);
 
-// Settle 2: the latch absorbs the settle produced by that same follow-up's
-// own turn - repetition of the identical stuck state must not create a
+// Settle 2: the latch absorbs the settle produced by that same follow-up
+// turn itself - repetition of the identical stuck state must not create a
 // second turn here, even though the trailing entries are unchanged.
 await settled({ type: "agent_settled" }, stuckCtx);
 if (prompts.length !== 1) throw new Error(`settle 2 (latch-absorbed): expected still 1 prompt, got ${prompts.length}`);
@@ -1333,7 +1333,7 @@ const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
 const settled = handlers.get("agent_settled");
 
-// The transcript's last conversational entry is a user message (a delivered
+// The last conversational transcript entry is a user message (a delivered
 // watcher wake or a captain message) with no assistant reply at all - not
 // even a dangling tool call. This is the fully-dropped case.
 const ctx = {
@@ -1467,7 +1467,7 @@ const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
 const settled = handlers.get("agent_settled");
 
-// The reproduced race's real shape: one assistant message holding a short
+// The real shape of the reproduced race: one assistant message with a short
 // text preamble AND the tool call that never resolved. The preamble must not
 // pass as a finished reply.
 const ctx = {
@@ -1603,14 +1603,14 @@ await settled({ type: "agent_settled" }, stuckCtx);
 if (prompts.length !== 1) throw new Error(`settle A: expected the recovery follow-up, got ${prompts.length}`);
 if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`settle A: wrong prompt: ${prompts[0]}`);
 
-// Settle B: the recovery turn's own settle, but supervision went unhealthy in
-// the meantime, so the supervision guard claims this settle instead.
+// Settle B: the settle of the recovery turn itself, but supervision went
+// unhealthy in the meantime, so the supervision guard claims this settle.
 writeFileSync(verdict, "2\n");
 await settled({ type: "agent_settled" }, stuckCtx);
 if (prompts.length !== 2) throw new Error(`settle B: expected the supervision follow-up, got ${prompts.length}`);
 if (!prompts[1].includes("TURN WOULD END BLIND")) throw new Error(`settle B: wrong prompt: ${prompts[1]}`);
 
-// Settle C: absorbed by the supervision guard's own latch.
+// Settle C: absorbed by the latch of the supervision guard itself.
 rmSync(verdict);
 await settled({ type: "agent_settled" }, stuckCtx);
 if (prompts.length !== 2) throw new Error(`settle C (guard-latch-absorbed): expected still 2, got ${prompts.length}`);
@@ -1658,7 +1658,7 @@ const settled = handlers.get("agent_settled");
 if (!started) throw new Error("before_agent_start handler was not registered");
 
 // The reproduced race: the captain prompt and the watcher wake both observe an
-// idle session and both open a logical run. The loser's inner agent.prompt()
+// idle session and both open a logical run. The losing inner agent.prompt()
 // rejects at once, but its finally block still emits agent_settled while the
 // winner is mid-turn - so the transcript tail is a not-yet-resolved tool call
 // that is going to be answered by the still-running winner.
@@ -1674,7 +1674,7 @@ const midFlightCtx = {
 await started({ type: "before_agent_start" }, {});
 await started({ type: "before_agent_start" }, {});
 
-// The loser's spurious settle must be left entirely unevaluated: no recovery
+// The losing spurious settle must be left entirely unevaluated: no recovery
 // follow-up, and not even a supervision-guard run.
 await settled({ type: "agent_settled" }, midFlightCtx);
 if (prompts.length !== 0) throw new Error(`spurious mid-turn settle produced ${prompts.length} follow-ups`);
@@ -1682,7 +1682,7 @@ if (readFileSync(process.env.FM_GUARD_LOG, "utf8").trim() !== "") {
   throw new Error("spurious mid-turn settle still ran the supervision guard");
 }
 
-// The winner's own settle is terminal and is judged normally.
+// The settle of the winner itself is terminal and is judged normally.
 await settled({ type: "agent_settled" }, midFlightCtx);
 if (prompts.length !== 1) throw new Error(`genuine settle produced ${prompts.length} follow-ups, expected exactly 1`);
 if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[0]}`);
@@ -1720,7 +1720,7 @@ const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 
 // Same interleaving, but the winner goes on to answer properly. Nudging on the
-// loser's spurious settle would start an extra turn on top of an answer that
+// losing spurious settle would start an extra turn on top of an answer that
 // was already on its way - the duplicate answer the contract forbids.
 const midFlight = [
   { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "captain input", timestamp: 0 } },
@@ -1776,7 +1776,7 @@ const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 if (!input) throw new Error("input handler was not registered");
 
-// The watcher wake wins the race and answers normally. The captain's own
+// The watcher wake wins the race and answers normally. The captain side
 // prompt() call loses: pi-agent-core rejects it before normalizePromptInput,
 // so its message never becomes a transcript entry at all - the tail is
 // perfectly healthy and no tail inspection could ever see the loss.
@@ -1839,7 +1839,7 @@ const input = handlers.get("input");
 const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 
-// Negative control: the ordinary, unraced case. The captain's message reaches
+// Negative control: the ordinary, unraced case. The captain message reaches
 // the transcript and is answered, so nothing may be resubmitted.
 let entries = [];
 const ctx = { sessionManager: { getEntries: () => entries } };
@@ -1893,7 +1893,7 @@ const input = handlers.get("input");
 const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 
-// A turn is already streaming, so the captain's message is queued rather than
+// A turn is already streaming, so the captain message is queued rather than
 // starting a run: Pi reports that by setting streamingBehavior on the input
 // event. A queued message is only appended when the run consumes it, and
 // Escape clears the queue back into the editor instead - so its absence from
@@ -1959,7 +1959,7 @@ const input = handlers.get("input");
 const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 
-// Pi's prompt() emits the input event and only then validates the model and
+// The Pi prompt() emits the input event and only then validates the model and
 // auth, throwing before it ever reaches before_agent_start. Nothing is
 // appended, the captain sees the error, and resends from history.
 let entries = [
@@ -2027,10 +2027,10 @@ const input = handlers.get("input");
 const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 
-// The captain's prompt() emitted its input event and then threw before it
+// The captain prompt() emitted its input event and then threw before it
 // could start a run, so nothing was appended. The next run is a watcher wake,
-// entirely unrelated: its turn start quotes the wake text, not the captain's,
-// and must not adopt the captain's phantom recording.
+// entirely unrelated: its turn start quotes the wake text, not the captain
+// text, and must not adopt the phantom captain recording.
 let entries = [];
 const ctx = { sessionManager: { getEntries: () => entries } };
 
@@ -2091,7 +2091,7 @@ const input = handlers.get("input");
 const started = handlers.get("before_agent_start");
 const settled = handlers.get("agent_settled");
 
-// Losing the race is not silent for the captain: the loser's rejection escapes
+// Losing the race is not silent for the captain: the losing rejection escapes
 // prompt() into the interactive loop, which prints "Agent is already
 // processing a prompt..." as a chat error. The captain reacts by resending the
 // same instruction from history - so replaying the lost recording as well
@@ -2101,15 +2101,15 @@ let entries = [
 ];
 const ctx = { sessionManager: { getEntries: () => entries } };
 
-// The captain's message and a watcher wake both start from idle.
+// The captain message and a watcher wake both start from idle.
 await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
 await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
 await started({ type: "before_agent_start", prompt: "loesch den branch" }, ctx);
 
-// The captain's call loses and appends nothing; its settle is the spurious one
+// The captain call loses and appends nothing; its settle is the spurious one
 // the wake is still running behind.
 await settled({ type: "agent_settled" }, ctx);
-if (prompts.length !== 0) throw new Error(`the loser's settle acted: ${prompts.length} prompts`);
+if (prompts.length !== 0) throw new Error(`the losing settle acted: ${prompts.length} prompts`);
 
 // The captain sees the error and resends by hand. That resubmission runs and
 // is answered normally.
@@ -2121,7 +2121,7 @@ entries = [
   { type: "message", id: "e3", parentId: "e2", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Branch geloescht." }], stopReason: "stop", timestamp: 0 } },
 ];
 
-// The wake's own settle, then the resend's settle. Neither may replay the
+// The wake settle, then the resend settle. Neither may replay the
 // instruction the manual resend already carried out.
 await settled({ type: "agent_settled" }, ctx);
 await settled({ type: "agent_settled" }, ctx);
@@ -2199,7 +2199,7 @@ if (textParts.length !== 1) throw new Error(`expected exactly one text part, got
 if (!textParts[0].text.includes("CAPTAIN INPUT WAS LOST")) throw new Error(`not an input-recovery prompt: ${textParts[0].text}`);
 if (!textParts[0].text.includes("was ist das im Log?")) throw new Error(`the lost text was not carried: ${textParts[0].text}`);
 if (imageParts.length !== 1) throw new Error(`expected the screenshot to be carried, got ${imageParts.length} image parts`);
-if (imageParts[0].data !== screenshot.data) throw new Error("the carried image was not the captain's attachment");
+if (imageParts[0].data !== screenshot.data) throw new Error("the carried image was not the captain attachment");
 if (options?.deliverAs !== "followUp") throw new Error("recovery prompt was not a follow-up");
 EOF
 )
@@ -2253,7 +2253,7 @@ entries = [
   { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
 ];
 await settled({ type: "agent_settled" }, ctx);
-if (prompts.length !== 0) throw new Error(`the loser's settle acted: ${prompts.length} prompts`);
+if (prompts.length !== 0) throw new Error(`the losing settle acted: ${prompts.length} prompts`);
 
 writeFileSync(verdict, "2");
 await settled({ type: "agent_settled" }, ctx);
@@ -2321,9 +2321,9 @@ const stuckCtx = {
   },
 };
 
-// Pi's extension runner does not serialize separate settle emissions, so a
+// The Pi extension runner does not serialize separate settle emissions, so a
 // second run can start and settle while the first settle is still awaiting the
-// supervision guard's child process. Both would otherwise judge the same stuck
+// supervision guard child process. Both would otherwise judge the same stuck
 // state with their own stale latch snapshot and send two recovery turns.
 await started({ type: "before_agent_start" }, stuckCtx);
 const first = settled({ type: "agent_settled" }, stuckCtx);
@@ -2338,9 +2338,9 @@ if (prompts.length !== 1) {
 }
 if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[0]}`);
 
-// The latch must still absorb the recovery turn's own settle afterwards.
+// The latch must still absorb the own settle of the recovery turn afterwards.
 await settled({ type: "agent_settled" }, stuckCtx);
-if (prompts.length !== 1) throw new Error(`the recovery turn's settle was not absorbed, total ${prompts.length}`);
+if (prompts.length !== 1) throw new Error(`the settle of the recovery turn was not absorbed, total ${prompts.length}`);
 EOF
 )
   status=$?
@@ -2377,7 +2377,7 @@ const settled = handlers.get("agent_settled");
 
 // Pi clears its own run flag before emitting the settle, so a fresh prompt can
 // open a new logical run while the handler is still awaiting the supervision
-// guard's child process - and the transcript is only read after that await.
+// guard child process - and the transcript is only read after that await.
 // The timer below lands inside exactly that window.
 const ctx = {
   sessionManager: {
@@ -2395,9 +2395,9 @@ setTimeout(() => void started({ type: "before_agent_start" }, ctx), 0);
 await settlePromise;
 if (prompts.length !== 0) throw new Error(`nudged a healthy in-flight turn, got ${prompts.length} prompts`);
 
-// The new run's own settle is terminal and is judged normally.
+// The own settle of the new run is terminal and is judged normally.
 await settled({ type: "agent_settled" }, ctx);
-if (prompts.length !== 1) throw new Error(`the new run's genuine settle produced ${prompts.length} prompts, expected 1`);
+if (prompts.length !== 1) throw new Error(`the genuine settle of the new run produced ${prompts.length} prompts, expected 1`);
 if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[0]}`);
 EOF
 )
