@@ -101,23 +101,37 @@ let settleEvaluationActive = false;
 // so the resend can just as well arrive after recovery already went out, while
 // the recovered copy is still being carried out - and the recording it would
 // have superseded is gone by then. Recovery therefore keeps the text it just
-// resubmitted, and a captain submission of exactly that text is delivered with
-// the duplication stated in front of it instead of arriving as a second,
-// unrelated-looking order. The captain's own words are kept verbatim behind
-// that notice, because dropping their submission would be the same lost input
-// this whole mechanism exists to prevent.
+// resubmitted, and a captain submission of exactly that text is not delivered
+// to the model a second time at all: it is answered to the captain directly
+// instead. Delivering it - even behind a note asking for a single execution -
+// would put a second executable copy of that instruction in front of the
+// model, and prose cannot enforce idempotence, so a destructive instruction
+// could run twice. The instruction is not lost by that: the identical text is
+// already in the conversation verbatim and is being carried out, which is
+// exactly what the captain resent it to make happen.
+// Suppressing it silently would be the lost input this whole mechanism exists
+// to prevent, so the captain is told in the chat why the resend was not
+// needed, through the one channel the model never reads.
 // The window closes on the settle that ends the recovery turn: once an answer
 // to the recovered instruction exists, an identical submission after it is a
 // deliberate repeat and must reach the model untouched.
 const DUPLICATE_RECOVERED_INPUT_NOTICE =
-  "FIRSTMATE HARNESS NOTE - the instruction below was already delivered to you moments ago by automatic recovery, because Pi lost " +
-  "this exact submission at turn start, and that recovery is still being carried out. This is the captain sending the same text " +
-  "again by hand after seeing the error, not an order to do the work twice. Carry it out exactly once: if you have already done " +
-  "it, say so instead of repeating it. The captain's message follows verbatim.";
+  "Resend not sent again: this exact instruction was lost by Pi at turn start, automatic recovery already delivered it, and it is " +
+  "being carried out right now. Sending it a second time could execute it twice, so it was answered here instead. Wait for the " +
+  "running answer, or reword the instruction to submit it as a new one.";
 let recoveredCaptainInputText: string | null = null;
 
-function markDuplicateOfRecoveredInput(text: string): string {
-  return `${DUPLICATE_RECOVERED_INPUT_NOTICE}\n\n${text}`;
+// Captain-facing only: ctx.ui.notify appends a line to the chat scrollback and
+// never enters the model's context. Best effort - a headless or RPC context
+// may carry no UI at all, and the suppression is the safety property, not the
+// notice.
+function notifyDuplicateOfRecoveredInput(ctx: unknown): void {
+  const notify = (ctx as { ui?: { notify?: unknown } } | undefined)?.ui?.notify;
+  if (typeof notify !== "function") return;
+  try {
+    notify.call((ctx as { ui: unknown }).ui, DUPLICATE_RECOVERED_INPUT_NOTICE, "warning");
+  } catch {
+  }
 }
 
 type UserMessageContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
@@ -859,19 +873,21 @@ export default function (pi: ExtensionAPI) {
     const duplicatesRecovery = CAPTAIN_INPUT_SOURCES.has(source) &&
       recoveredCaptainInputText !== null &&
       trimmed === recoveredCaptainInputText;
-    const delivered = duplicatesRecovery ? markDuplicateOfRecoveredInput(text) : text;
-    const result = duplicatesRecovery
-      ? ({ action: "transform", text: delivered } as const)
-      : undefined;
-    if (!captainInputWorthTracking(source, text, streamingBehavior)) return result;
+    if (duplicatesRecovery) {
+      // Never delivered, so never appended either: tracking it would let the
+      // settle judge it lost and resubmit the very copy just suppressed.
+      notifyDuplicateOfRecoveredInput(ctx);
+      return { action: "handled" } as const;
+    }
+    if (!captainInputWorthTracking(source, text, streamingBehavior)) return undefined;
     const images = (event as { images?: unknown }).images;
     pendingCaptainInputs = pendingCaptainInputs.filter(
       (pending) => pending.committed && pending.text.trim() !== trimmed,
     );
-    // Recorded as it will be appended, not as it was typed, so the transcript
-    // comparison and the before_agent_start commit still match exactly.
+    // Recorded exactly as it will be appended, so the transcript comparison
+    // and the before_agent_start commit still match it.
     pendingCaptainInputs.push({
-      text: delivered,
+      text,
       images: Array.isArray(images) ? (images as UserMessagePart[]) : [],
       afterEntryId: lastEntryId(ctx),
       committed: false,
@@ -879,7 +895,7 @@ export default function (pi: ExtensionAPI) {
     if (pendingCaptainInputs.length > PENDING_CAPTAIN_INPUT_LIMIT) {
       pendingCaptainInputs = pendingCaptainInputs.slice(-PENDING_CAPTAIN_INPUT_LIMIT);
     }
-    return result;
+    return undefined;
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
