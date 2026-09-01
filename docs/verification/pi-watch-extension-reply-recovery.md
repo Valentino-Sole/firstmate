@@ -2,7 +2,7 @@
 
 Audience: maintainer verification.
 
-This record supports the turn-settle reply recovery guarantee in [`watcher-continuity.md`](../watcher-continuity.md#turn-settle-reply-recovery).
+This record supports the turn-settle input and reply recovery guarantee in [`watcher-continuity.md`](../watcher-continuity.md#turn-settle-input-and-reply-recovery).
 Mechanism, contract, and active limits remain in that linked guide.
 Task-specific chronology and the captain decision that chose detection-and-recovery over a submission-serializing mutex remain in private task evidence.
 
@@ -21,20 +21,25 @@ SDK_PATH=/home/vsole/.local/lib/node_modules/@earendil-works/pi-coding-agent/dis
 Observed output:
 
 ```
-1269.06ms captain call: prompt('real captain message') START
-1269.72ms emitBeforeAgentStart (simulating a real extension awaiting a child process)
-1269.99ms watcher wake: prompt('FIRSTMATE WATCHER WAKE...') START
-1270.02ms emitBeforeAgentStart (simulating a real extension awaiting a child process)
-1290.46ms _runAgentPrompt ENTER (concurrent=1) messages=[{"role":"user","content":[{"type":"text","text":"real capta
-1290.55ms _runAgentPrompt ENTER (concurrent=2) messages=[{"role":"user","content":[{"type":"text","text":"FIRSTMATE
-1290.59ms _runAgentPrompt EXIT -> _emitAgentSettled()
-1330.99ms _runAgentPrompt EXIT -> _emitAgentSettled()
+2134.05ms watcher wake: prompt('FIRSTMATE WATCHER WAKE...') START
+2134.44ms captain call: prompt('bitte den Stand zusammenfassen') START
+2134.71ms emitBeforeAgentStart (simulating a real extension awaiting a child process)
+2134.90ms emitBeforeAgentStart (simulating a real extension awaiting a child process)
+2155.86ms _runAgentPrompt ENTER (concurrent=1) messages=[{"role":"user","content":[{"type":"text","text":"FIRSTMATE
+2156.02ms _runAgentPrompt ENTER (concurrent=2) messages=[{"role":"user","content":[{"type":"text","text":"bitte den
+2156.07ms _runAgentPrompt EXIT -> _emitAgentSettled()
+2195.55ms _runAgentPrompt EXIT -> _emitAgentSettled()
 
 maxConcurrentRunAgentPromptCalls = 2
 extension event order: before_agent_start -> before_agent_start -> agent_settled(runsStillLive=1) -> agent_settled(runsStillLive=0)
 settlesWhileAnotherRunWasLive = 1
+
+captain input seen by the "input" event: true
+captain text present in the transcript: false
+transcript tail looks healthy: true
 REPRODUCED: two concurrent prompt() calls both reached _runAgentPrompt() concurrently.
 REPRODUCED: a spurious agent_settled fired while another logical run was still live.
+REPRODUCED: the captain's message was lost entirely while the transcript tail stayed healthy.
 exit=1
 ```
 
@@ -43,6 +48,9 @@ Two `prompt()` calls - one modeling a captain's interactive message, one modelin
 The losing call does not merely run concurrently: its inner `agent.prompt()` rejects at once with pi-agent-core's "Agent is already processing a prompt.", yet `_runAgentPrompt`'s `finally` block still clears `_isAgentRunActive` and emits `agent_settled` while the winning turn is mid-flight.
 The recorded extension event order is therefore `before_agent_start -> before_agent_start -> agent_settled(runsStillLive=1) -> agent_settled(runsStillLive=0)`: a settle is not proof the session is idle, and `_isAgentRunActive`/`isIdle()` cannot disambiguate because the race corrupts that same flag.
 `.pi/extensions/fm-primary-turnend-guard.ts` therefore counts logical runs in flight from `before_agent_start` and evaluates only the settle that drains that count.
+The same run drives the captain's own call into the losing position, which is the second, invisible outcome: `capturedCaptainInput` is true because `prompt()` emits its `input` event before the `isStreaming` check, yet `captainTextInTranscript` is false and the transcript tail is a healthy `stop` assistant reply.
+That is the documented BEFORE state for captain-input-loss recovery - the captain's message is simply gone, and no tail inspection can detect it.
+The AFTER state is asserted in `tests/fm-turnend-guard.test.sh`, which drives the real `agent_settled` handler through exactly this event order and transcript: exactly one resubmission fires, it carries the lost text, it is never repeated on later settles, and an ordinary delivered captain message produces none.
 The `emitBeforeAgentStart` delay in the stub (20ms) models a real, not contrived, async gap: `.pi/extensions/fm-primary-turnend-guard.ts`'s own `before_agent_start` handler spawns and awaits `bin/fm-sessionstart-run.sh` on session-start-classified generations, and any `before_agent_start` extension handler doing real async work opens the same window.
 
 ## Considered and rejected: prevention at the extension layer
@@ -55,5 +63,5 @@ That was rejected as disproportionate new risk (a novel synchronization primitiv
 
 ## Regression coverage
 
-`tests/fm-turnend-guard.test.sh`'s reply-recovery tests (`test_pi_reply_recovery_*`) exercise `.pi/extensions/fm-primary-turnend-guard.ts`'s `agent_settled` handler directly against a mocked `pi`/`ctx`, covering the dangling-tool-call and fully-unanswered detection cases (including the common shape where the same assistant message carries a text preamble beside the unresolved call), the healthy no-op case, the idempotent bounded-retry-then-notice sequence and its reset after a healthy settle, the session-start digest and flushed inline-bash exclusions, the captain-abort exclusion against a still-nudged error stop, the latch interleaving where a settle claimed by the supervision guard must not swallow the next unanswered episode, and the spurious mid-turn settle above - replayed as the exact recorded event order - which must be left entirely unevaluated whether the still-running winner ends up hanging or answering.
+`tests/fm-turnend-guard.test.sh`'s `test_pi_input_recovery_*` and `test_pi_reply_recovery_*` tests exercise `.pi/extensions/fm-primary-turnend-guard.ts`'s `input`, `before_agent_start`, `session_start` and `agent_settled` handlers directly against a mocked `pi`/`ctx`, covering the captain-input loss case with its delivered-message and extension-wake negative controls, a run that opens while the supervision guard's child process is still running, the per-generation attempt-budget reset, the dangling-tool-call and fully-unanswered detection cases (including the common shape where the same assistant message carries a text preamble beside the unresolved call), the healthy no-op case, the idempotent bounded-retry-then-notice sequence and its reset after a healthy settle, the session-start digest and flushed inline-bash exclusions, the captain-abort exclusion against a still-nudged error stop, the latch interleaving where a settle claimed by the supervision guard must not swallow the next unanswered episode, and the spurious mid-turn settle above - replayed as the exact recorded event order - which must be left entirely unevaluated whether the still-running winner ends up hanging or answering.
 Run: `bash tests/fm-turnend-guard.test.sh` (or `no-mistakes`-invoked `bin/fm-test-run.sh tests/fm-turnend-guard.test.sh`).

@@ -1102,6 +1102,8 @@ install_pi_reply_recovery_fixture() {  # <repo>
 #!/usr/bin/env bash
 cat >/dev/null
 [ -z "${FM_GUARD_LOG:-}" ] || printf 'run\n' >> "$FM_GUARD_LOG"
+delay="${FM_HOME:-}/state/.test-guard-delay"
+[ -f "$delay" ] && sleep "$(cat "$delay")"
 # Healthy by default; a test that needs the supervision branch writes the
 # desired exit code into state/.test-guard-verdict beforehand.
 verdict="${FM_HOME:-}/state/.test-guard-verdict"
@@ -1744,6 +1746,239 @@ EOF
   expect_code 0 "$status" "Pi guard must not nudge when the still-running winner goes on to answer"
   [ -z "$out" ] || fail "Pi reply-recovery spurious-healthy test printed output: $out"
   pass ".pi primary extension: a spurious mid-turn settle never doubles an answer the winner still delivers"
+}
+
+test_pi_input_recovery_resubmits_a_captain_message_lost_to_the_race() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-lost-root"
+  home="$TMP_ROOT/pi-input-lost-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message, options) {
+    prompts.push({ message, options });
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+if (!input) throw new Error("input handler was not registered");
+
+// The watcher wake wins the race and answers normally. The captain's own
+// prompt() call loses: pi-agent-core rejects it before normalizePromptInput,
+// so its message never becomes a transcript entry at all - the tail is
+// perfectly healthy and no tail inspection could ever see the loss.
+const entries = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: "bitte den Stand zusammenfassen", source: "interactive" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) throw new Error(`spurious settle acted: ${prompts.length} prompts`);
+
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) throw new Error(`expected exactly one recovery resubmission, got ${prompts.length}`);
+const [{ message, options }] = prompts;
+if (!message.startsWith("\u2063FIRSTMATE_OP: v1 turn-end-guard: ")) throw new Error(`untyped operational prompt: ${message}`);
+if (!message.includes("CAPTAIN INPUT WAS LOST")) throw new Error(`not an input-recovery prompt: ${message}`);
+if (message.includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`input recovery and reply recovery both fired: ${message}`);
+if (!message.includes("bitte den Stand zusammenfassen")) throw new Error(`the lost captain text was not carried: ${message}`);
+if (options?.deliverAs !== "followUp") throw new Error("recovery prompt was not a follow-up");
+
+// Idempotent: the same unchanged state must never resubmit it a second time.
+await settled({ type: "agent_settled" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) throw new Error(`lost input was resubmitted again, total ${prompts.length}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must resubmit a captain message the race dropped before it reached the transcript"
+  [ -z "$out" ] || fail "Pi input-recovery loss test printed output: $out"
+  pass ".pi primary extension: a captain message lost to the race is resubmitted exactly once"
+}
+
+test_pi_input_recovery_stays_silent_for_a_delivered_captain_message() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-delivered-root"
+  home="$TMP_ROOT/pi-input-delivered-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// Negative control: the ordinary, unraced case. The captain's message reaches
+// the transcript and is answered, so nothing may be resubmitted.
+let entries = [];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: "bitte den Stand zusammenfassen", source: "interactive" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+entries = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: [{ type: "text", text: "bitte den Stand zusammenfassen" }], timestamp: 0 } },
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Hier der Stand." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) throw new Error(`a delivered captain message triggered ${prompts.length} prompts`);
+
+// A watcher wake is extension-sourced and is never tracked as captain input,
+// so it can never be resubmitted even when it is missing from the transcript.
+await input({ type: "input", text: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", source: "extension" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) throw new Error(`an extension-sourced input was treated as captain input, ${prompts.length} prompts`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must not resubmit a captain message that reached the transcript"
+  [ -z "$out" ] || fail "Pi input-recovery negative-control test printed output: $out"
+  pass ".pi primary extension: a delivered captain message and an extension wake are never resubmitted"
+}
+
+test_pi_reply_recovery_skips_a_run_that_started_during_the_guard_check() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-reply-late-run-root"
+  home="$TMP_ROOT/pi-reply-late-run-home"
+  mkdir -p "$home/state"
+  printf '0.5\n' > "$home/state/.test-guard-delay"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// Pi clears its own run flag before emitting the settle, so a fresh prompt can
+// open a new logical run while the handler is still awaiting the supervision
+// guard's child process - and the transcript is only read after that await.
+// The timer below lands inside exactly that window.
+const ctx = {
+  sessionManager: {
+    getEntries: () => [
+      { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "weiter", timestamp: 0 } },
+    ],
+  },
+};
+
+await started({ type: "before_agent_start" }, ctx);
+const settlePromise = settled({ type: "agent_settled" }, ctx);
+// The fixture guard sleeps, so this timer lands while the handler is still
+// awaiting that child process - the window the re-check has to cover.
+setTimeout(() => void started({ type: "before_agent_start" }, ctx), 0);
+await settlePromise;
+if (prompts.length !== 0) throw new Error(`nudged a healthy in-flight turn, got ${prompts.length} prompts`);
+
+// The new run's own settle is terminal and is judged normally.
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) throw new Error(`the new run's genuine settle produced ${prompts.length} prompts, expected 1`);
+if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[0]}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must not judge a transcript a new run started appending to during the guard check"
+  [ -z "$out" ] || fail "Pi reply-recovery late-run test printed output: $out"
+  pass ".pi primary extension: a run opened during the supervision check suppresses that settle's judgement"
+}
+
+test_pi_reply_recovery_budget_resets_for_a_new_session_generation() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-reply-generation-root"
+  home="$TMP_ROOT/pi-reply-generation-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const sessionStart = handlers.get("session_start");
+const settled = handlers.get("agent_settled");
+if (!sessionStart) throw new Error("session_start handler was not registered");
+
+const stuckCtx = {
+  sessionManager: {
+    getEntries: () => [
+      { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "captain input", timestamp: 0 } },
+      { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash" }], stopReason: "toolUse", timestamp: 0 } },
+    ],
+  },
+};
+
+// Burn the whole budget in generation A: three attempts, then the one loud
+// "gave up" notice, then silence.
+for (let i = 0; i < 9; i += 1) await settled({ type: "agent_settled" }, stuckCtx);
+if (prompts.length !== 4) throw new Error(`generation A produced ${prompts.length} prompts, expected 3 attempts + 1 notice`);
+if (!prompts[3].includes("automatic recovery gave up")) throw new Error(`missing exhaustion notice: ${prompts[3]}`);
+await settled({ type: "agent_settled" }, stuckCtx);
+if (prompts.length !== 4) throw new Error(`generation A kept prompting, total ${prompts.length}`);
+
+// /new starts a fresh generation, which must not inherit the exhausted budget.
+await sessionStart({ type: "session_start", reason: "new" }, stuckCtx);
+await settled({ type: "agent_settled" }, stuckCtx);
+if (prompts.length !== 5) throw new Error(`a new generation did not get a fresh attempt, total ${prompts.length}`);
+if (!prompts[4].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[4]}`);
+if (prompts[4].includes("automatic recovery gave up")) throw new Error("a new generation reused the exhaustion notice");
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must give each session generation its own recovery attempt budget"
+  [ -z "$out" ] || fail "Pi reply-recovery generation-reset test printed output: $out"
+  pass ".pi primary extension: a new session generation gets a fresh recovery attempt budget"
 }
 
 # --- --claude cooperative mode -----------------------------------------------
@@ -2469,6 +2704,10 @@ test_pi_reply_recovery_never_restarts_an_aborted_turn
 test_pi_reply_recovery_latch_never_swallows_a_later_episode
 test_pi_reply_recovery_skips_a_spurious_mid_turn_settle
 test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
+test_pi_input_recovery_resubmits_a_captain_message_lost_to_the_race
+test_pi_input_recovery_stays_silent_for_a_delivered_captain_message
+test_pi_reply_recovery_skips_a_run_that_started_during_the_guard_check
+test_pi_reply_recovery_budget_resets_for_a_new_session_generation
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
 test_hook_claude_mode_allows_when_autoarm_owner_alive

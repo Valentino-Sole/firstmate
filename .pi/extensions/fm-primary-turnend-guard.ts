@@ -48,6 +48,35 @@ const CONVERSATIONAL_MESSAGE_ROLES = new Set(["user", "assistant", "toolResult"]
 // the eventual settle that drains the counter is judged normally.
 let inFlightAgentRuns = 0;
 
+// Monotonic count of logical runs ever started in this generation. A pending
+// captain input can only be judged once a run has started after it was
+// recorded, which keeps the window between prompt()'s `input` event and its
+// own `before_agent_start` from looking like a loss.
+let agentRunStarts = 0;
+
+// Captain-owned input recorded from prompt()'s `input` event, which fires
+// before the isStreaming check and therefore also for the prompt() call that
+// goes on to lose the race. That loser never appends anything: pi-agent-core's
+// Agent.prototype.prompt throws "Agent is already processing a prompt." ahead
+// of normalizePromptInput, so the captain's message is gone from the
+// transcript entirely and no tail inspection can see it.
+// Tracking is deliberately narrow. Only genuine captain sources are recorded
+// (never "extension", which is how watcher wakes and this file's own
+// follow-ups submit), and text that Pi expands after the event - a leading "/"
+// for a skill command, prompt template or extension command - is skipped,
+// because the appended message would then no longer contain the recorded text
+// and an ordinary command would look lost. Inline "!" bash is skipped for the
+// same reason. Plain captain prose, which is what the reported episodes lost,
+// is appended verbatim and matches exactly.
+type PendingCaptainInput = {
+  text: string;
+  afterEntryId: string | null;
+  startsAtRecord: number;
+};
+const CAPTAIN_INPUT_SOURCES = new Set(["interactive", "rpc"]);
+const PENDING_CAPTAIN_INPUT_LIMIT = 20;
+let pendingCaptainInputs: PendingCaptainInput[] = [];
+
 type LockOwnership = "owned" | "missing" | "other";
 
 const extensionFile = fileURLToPath(import.meta.url);
@@ -479,19 +508,94 @@ function isSessionMessageEntry(entry: SessionEntry): entry is SessionMessageEntr
   return entry.type === "message";
 }
 
-function messageHasVisibleText(message: unknown): boolean {
+function messagePlainText(message: unknown): string {
   const content = (message as { content?: unknown } | undefined)?.content;
-  if (!Array.isArray(content)) return false;
-  return content.some((part) => {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const part of content) {
     const candidate = part as { type?: unknown; text?: unknown };
-    return candidate?.type === "text" && typeof candidate.text === "string" && candidate.text.trim().length > 0;
-  });
+    if (candidate?.type === "text" && typeof candidate.text === "string") parts.push(candidate.text);
+  }
+  return parts.join("\n");
+}
+
+function messageHasVisibleText(message: unknown): boolean {
+  return messagePlainText(message).trim().length > 0;
 }
 
 function messageHasUnresolvedToolCall(message: unknown): boolean {
   const content = (message as { content?: unknown } | undefined)?.content;
   if (!Array.isArray(content)) return false;
   return content.some((part) => (part as { type?: unknown } | undefined)?.type === "toolCall");
+}
+
+function captainInputWorthTracking(source: string, text: string): boolean {
+  if (!CAPTAIN_INPUT_SOURCES.has(source)) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return !trimmed.startsWith("/") && !trimmed.startsWith("!");
+}
+
+function sessionEntries(ctx: ExtensionContext): SessionEntry[] | undefined {
+  try {
+    return ctx.sessionManager.getEntries();
+  } catch {
+    return undefined;
+  }
+}
+
+function lastEntryId(ctx: ExtensionContext): string | null {
+  const entries = sessionEntries(ctx);
+  if (!entries || entries.length === 0) return null;
+  return entries[entries.length - 1]?.id ?? null;
+}
+
+// An unknown anchor (a compaction rewrote it away) scans from the start, so a
+// message that is present is still found and never reported lost.
+function captainInputReachedTranscript(
+  entries: SessionEntry[],
+  pending: PendingCaptainInput,
+  claimed: Set<string>,
+): string | undefined {
+  const anchorIndex = pending.afterEntryId === null
+    ? -1
+    : entries.findIndex((entry) => entry.id === pending.afterEntryId);
+  for (let i = anchorIndex + 1; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (!isSessionMessageEntry(entry) || claimed.has(entry.id)) continue;
+    const role = (entry.message as { role?: unknown } | undefined)?.role;
+    if (role !== "user") continue;
+    if (!messagePlainText(entry.message).includes(pending.text)) continue;
+    return entry.id;
+  }
+  return undefined;
+}
+
+// Resolves every pending captain input that did reach the transcript and
+// returns the first one that did not, already removed from the pending list so
+// a later settle can never resubmit it twice.
+function takeLostCaptainInput(ctx: ExtensionContext): PendingCaptainInput | undefined {
+  if (pendingCaptainInputs.length === 0) return undefined;
+  const entries = sessionEntries(ctx);
+  if (!entries) return undefined;
+  const claimed = new Set<string>();
+  const stillPending: PendingCaptainInput[] = [];
+  let lost: PendingCaptainInput | undefined;
+  for (const pending of pendingCaptainInputs) {
+    if (lost || agentRunStarts <= pending.startsAtRecord) {
+      stillPending.push(pending);
+      continue;
+    }
+    const entryId = captainInputReachedTranscript(entries, pending, claimed);
+    if (entryId) {
+      claimed.add(entryId);
+      continue;
+    }
+    lost = pending;
+  }
+  pendingCaptainInputs = stillPending;
+  return lost;
 }
 
 // Detects the reproduced race's visible signature: the settled turn's last
@@ -613,6 +717,10 @@ export default function (pi: ExtensionAPI) {
       : { new: "clear", resume: "resume", fork: "fork" }[reason];
     markLoaded();
     inFlightAgentRuns = 0;
+    agentRunStarts = 0;
+    pendingCaptainInputs = [];
+    orphanedReplyAttempts = 0;
+    orphanedReplyExhaustedNotified = false;
     if (!source) return;
     registerSessionstartExitListener();
     sessionstartGeneration = createSessionstartGeneration(
@@ -623,6 +731,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on?.("before_agent_start", async (_event, ctx) => {
     inFlightAgentRuns += 1;
+    agentRunStarts += 1;
     const generation = sessionstartGeneration;
     if (!generation) return;
     const message = await claimSessionstartMessage(generation, ctx);
@@ -668,6 +777,20 @@ export default function (pi: ExtensionAPI) {
     return { block: true, reason: result.stderr.trim() || "denied by the watcher-arm PreToolUse seatbelt" };
   });
 
+  pi.on?.("input", (event, ctx) => {
+    const source = String((event as { source?: unknown }).source ?? "");
+    const text = String((event as { text?: unknown }).text ?? "");
+    if (!captainInputWorthTracking(source, text)) return;
+    pendingCaptainInputs.push({
+      text,
+      afterEntryId: lastEntryId(ctx),
+      startsAtRecord: agentRunStarts,
+    });
+    if (pendingCaptainInputs.length > PENDING_CAPTAIN_INPUT_LIMIT) {
+      pendingCaptainInputs = pendingCaptainInputs.slice(-PENDING_CAPTAIN_INPUT_LIMIT);
+    }
+  });
+
   pi.on("agent_settled", async (_event, ctx) => {
     inFlightAgentRuns = inFlightAgentRuns > 0 ? inFlightAgentRuns - 1 : 0;
     if (inFlightAgentRuns > 0) return;
@@ -701,9 +824,29 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
+    // runGuard() spawns and awaits a child process, and Pi clears its own
+    // run flag before emitting this settle, so a fresh prompt can open a new
+    // logical run during that await. Judging the transcript afterwards would
+    // read that new run's mid-flight tail.
+    if (inFlightAgentRuns > 0) return;
+
     // Only one follow-up ever fires per settle: the supervision guard above
-    // takes priority, and reply recovery below runs only once it is clean.
+    // takes priority, and the checks below run only once it is clean.
     if (replyFollowupSettle) return;
+
+    const lostCaptainInput = takeLostCaptainInput(ctx);
+    if (lostCaptainInput) {
+      const content = encodeFirstmateOperationalInput(
+        "turn-end-guard",
+        "CAPTAIN INPUT WAS LOST - the message quoted below was submitted by the captain and acknowledged in the interface, but it never " +
+          "reached the conversation at all, so no answer to it exists yet. This happens when a watcher wake and a captain message start a " +
+          "turn at the same moment and Pi drops one of them before it is recorded. Treat the quoted text as the captain's own message, " +
+          "arriving now, and answer it directly. Do not repeat any answer you already gave earlier in this conversation.\n\n" +
+          lostCaptainInput.text,
+      );
+      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      return;
+    }
 
     if (!lastConversationalTurnUnanswered(ctx)) {
       orphanedReplyAttempts = 0;

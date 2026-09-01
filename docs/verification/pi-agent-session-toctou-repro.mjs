@@ -22,6 +22,11 @@ const events = [];
 // winner is still running, so a settle is NOT proof that the session is idle.
 const extensionEvents = [];
 let settlesWhileAnotherRunWasLive = 0;
+// Everything the losing prompt() call manages to append. pi-agent-core's
+// Agent.prototype.prompt throws before normalizePromptInput/runPromptMessages,
+// so a losing captain message never becomes a transcript entry at all.
+const transcript = [];
+const capturedInputs = [];
 
 function log(label) {
   events.push(`${(performance.now()).toFixed(2)}ms ${label}`);
@@ -39,11 +44,15 @@ async function fakeRunAgentPrompt(messages) {
   try {
     if (isLoser) {
       // pi-agent-core Agent.prototype.prompt (dist/agent.js) rejects at once
-      // when activeRun is set: "Agent is already processing a prompt."
+      // when activeRun is set: "Agent is already processing a prompt." Nothing
+      // is appended, which is why the caller's message simply disappears.
       throw new Error("Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.");
     }
+    // Only the winner ever reaches the append path (message_end persistence).
+    for (const message of messages) transcript.push(message);
     // Simulate real inference/tool-call latency.
     await new Promise((r) => setTimeout(r, 40));
+    transcript.push({ role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop" });
   } finally {
     concurrentRunAgentPromptCalls--;
     // agent-session.js _runAgentPrompt's finally block runs _emitAgentSettled()
@@ -74,8 +83,14 @@ function makeStubSession() {
       isUsingOAuth: () => false,
     },
     _extensionRunner: {
-      hasHandlers: () => false,
-      emitInput: async () => ({ action: "pass" }),
+      // The turn-end guard registers an `input` handler, so this reports true
+      // and prompt() really does emit the event - before its isStreaming
+      // check, and therefore for the losing call too.
+      hasHandlers: (event) => event === "input",
+      emitInput: async (text, images, source) => {
+        capturedInputs.push({ text, source });
+        return { action: "pass" };
+      },
       // A REAL before_agent_start handler in this repo
       // (.pi/extensions/fm-primary-turnend-guard.ts) awaits a spawned child
       // process here. This delay stands in for that genuine async gap - it is
@@ -100,16 +115,20 @@ function makeStubSession() {
 
 const session = makeStubSession();
 
-log("captain call: prompt('real captain message') START");
-const captainCall = promptFn.call(session, "real captain message", { source: "interactive" });
-
-// Simulate fm-primary-pi-watch.ts's sendWake(): an unrelated background
-// watcher-close callback calls pi.sendUserMessage(..., {deliverAs:"followUp"})
-// with zero coordination with the interactive call above. sendUserMessage
-// forwards to prompt() with streamingBehavior: "followUp" (agent-session.js
-// sendUserMessage(), lines 1110-1138).
+// The watcher wake is started first here so the CAPTAIN's call is the one that
+// loses - the sub-case no tail inspection can detect, because the wake turn
+// answers normally and leaves a perfectly healthy transcript behind.
 log("watcher wake: prompt('FIRSTMATE WATCHER WAKE...') START");
 const wakeCall = promptFn.call(session, "FIRSTMATE WATCHER WAKE: stale", { streamingBehavior: "followUp", source: "extension" });
+
+// The wake above models fm-primary-pi-watch.ts's sendWake(): an unrelated
+// background watcher-close callback calling pi.sendUserMessage(...,
+// {deliverAs:"followUp"}) with zero coordination with the interactive call
+// below. sendUserMessage forwards to prompt() with streamingBehavior:
+// "followUp" and source: "extension" (agent-session.js sendUserMessage()).
+const CAPTAIN_TEXT = "bitte den Stand zusammenfassen";
+log(`captain call: prompt('${CAPTAIN_TEXT}') START`);
+const captainCall = promptFn.call(session, CAPTAIN_TEXT, { source: "interactive" });
 
 // allSettled, not all: the losing call rejects by design, exactly as the real
 // nested agent.prompt() does when it finds an active run.
@@ -119,6 +138,16 @@ console.log(events.join("\n"));
 console.log(`\nmaxConcurrentRunAgentPromptCalls = ${maxConcurrentRunAgentPromptCalls}`);
 console.log(`extension event order: ${extensionEvents.join(" -> ")}`);
 console.log(`settlesWhileAnotherRunWasLive = ${settlesWhileAnotherRunWasLive}`);
+
+const capturedCaptainInput = capturedInputs.some((i) => i.source === "interactive" && i.text === CAPTAIN_TEXT);
+const captainTextInTranscript = transcript.some(
+  (m) => m.role === "user" && JSON.stringify(m.content ?? "").includes(CAPTAIN_TEXT),
+);
+const transcriptTail = transcript[transcript.length - 1];
+const tailLooksHealthy = transcriptTail?.role === "assistant" && transcriptTail?.stopReason === "stop";
+console.log(`\ncaptain input seen by the "input" event: ${capturedCaptainInput}`);
+console.log(`captain text present in the transcript: ${captainTextInTranscript}`);
+console.log(`transcript tail looks healthy: ${tailLooksHealthy}`);
 if (maxConcurrentRunAgentPromptCalls > 1) {
   console.log("REPRODUCED: two concurrent prompt() calls both reached _runAgentPrompt() concurrently.");
   if (settlesWhileAnotherRunWasLive > 0) {
@@ -130,6 +159,20 @@ if (maxConcurrentRunAgentPromptCalls > 1) {
     // and test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
     // replay exactly this event order against the real handler.
     console.log("REPRODUCED: a spurious agent_settled fired while another logical run was still live.");
+  }
+  if (capturedCaptainInput && !captainTextInTranscript && tailLooksHealthy) {
+    // The BEFORE state for captain-input-loss recovery: the captain's message
+    // is gone from the transcript while the tail is a healthy assistant reply,
+    // so no tail inspection can detect it - but prompt()'s `input` event did
+    // see the message before the isStreaming check, which is what
+    // .pi/extensions/fm-primary-turnend-guard.ts records and resubmits.
+    // tests/fm-turnend-guard.test.sh's
+    // test_pi_input_recovery_resubmits_a_captain_message_lost_to_the_race
+    // drives the real handler through exactly this state (AFTER: exactly one
+    // resubmission carrying the lost text), and
+    // test_pi_input_recovery_stays_silent_for_a_delivered_captain_message is
+    // the negative control.
+    console.log("REPRODUCED: the captain's message was lost entirely while the transcript tail stayed healthy.");
   }
   process.exit(1);
 } else {
