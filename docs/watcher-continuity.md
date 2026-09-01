@@ -45,6 +45,23 @@ No adapter starts a replacement with shell `&`.
 
 The turn-end guard remains the final backstop rather than the normal continuity mechanism and cooperates with the auto-arm in its `--claude` mode.
 
+## Turn-settle reply recovery
+
+Pi's own `AgentSession.prototype.prompt()` (`agent-session.js`) has no atomic check-and-set between reading its `isStreaming` flag and committing to a new run: it awaits several extension hooks (`input`, compaction and auth checks, `before_agent_start`) before setting `_isAgentRunActive = true` inside `_runAgentPrompt`.
+Two `prompt()` calls that both observe "idle" - a captain message submitted through the interactive loop and a watcher wake delivered through `fm-primary-pi-watch.ts`'s `sendWake` via `pi.sendUserMessage(..., {deliverAs: "followUp"})` - can both fall through to a concurrent run against the same session state.
+That is a genuine Pi SDK gap: no extension hook fires early enough, or atomically enough with the internal check, to reliably prevent it from firstmate's own tracked code without a full submission-serializing mutex, which was rejected as disproportionate new risk for a rare race (`docs/verification/pi-watch-extension-reply-recovery.md` records the reproduction and that decision).
+The chosen mitigation detects the race's visible symptom instead of trying to prevent it: a turn that settles without ever producing a synthesized reply to its last conversational message, typically a dangling tool call (the `bin/fm-wake-drain.sh` run a wake instructs) or a message with no assistant response at all.
+
+`.pi/extensions/fm-primary-turnend-guard.ts`'s `agent_settled` handler owns this contract, alongside its existing supervision-guard `followUp`.
+On every settle where the supervision guard itself found nothing to say, it reads `ctx.sessionManager.getEntries()` and inspects the last `type: "message"` entry (skipping non-message entries such as the session-start digest, which carries no reply expectation of its own).
+The turn is healthy only when that entry is an assistant message whose content includes genuine text; anything else - a dangling tool call, a bare user or watcher-wake message with no reply, an error or aborted assistant message with no visible text - triggers exactly one recovery `followUp` instructing the model to check the transcript, finish any unresolved tool call, and answer the pending message without repeating an answer already given.
+A `orphanedReplyFollowupActive` latch, mirroring the existing `guardFollowupActive` pattern, absorbs the settle produced by that same recovery turn so repetition of an unchanged stuck state never creates a second turn.
+A per-generation bounded attempt counter (`ORPHANED_REPLY_ATTEMPT_LIMIT`, currently 3) stops the retry loop after repeated distinct failures and commits one loud, once-only "recovery gave up" notice instead of retrying forever; a later healthy settle resets both the counter and the notice so a fresh, unrelated unanswered episode still gets its own attempts.
+Only one `followUp` is ever sent per settle: the pre-existing supervision guard takes priority, and reply recovery runs only once that guard is clean, so the two mechanisms can never race each other's delivery.
+
+This remains a detection-and-recovery backstop, not a fix for the underlying SDK race, and is currently Pi-only because that is where the race was reproduced and where `agent_settled`/`sessionManager.getEntries()` are available to an extension; Claude, Codex, OpenCode, Grok, and Cursor are unaffected by this specific gap because none of them deliver an autonomous wake through the same in-process `sendUserMessage` primitive.
+`tests/fm-turnend-guard.test.sh`'s reply-recovery tests cover the dangling-tool-call and fully-unanswered detection cases, the healthy no-op case, the idempotent bounded-retry-then-notice sequence and its reset after a healthy settle, and the session-start digest exclusion.
+
 ## Recovery episode acknowledgement
 
 A recovery episode is one generation of `state/.watcher-down`, and it is retired only by the generation-bound acknowledgement the drain prints as `WAKE_ACK_REQUIRED`.

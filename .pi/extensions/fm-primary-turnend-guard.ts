@@ -3,13 +3,31 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, SessionEntry, SessionMessageEntry } from "@earendil-works/pi-coding-agent";
 import {
   classifyFirstmateCurrentOperationalText,
   encodeFirstmateOperationalInput,
 } from "./lib/fm-operational-input.ts";
 
 let guardFollowupActive = false;
+
+// Turn-settle reply recovery (docs/watcher-continuity.md "Turn-settle reply
+// recovery" is the authoritative contract). Pi's own AgentSession.prompt()
+// has no atomic check-and-set between reading isStreaming and committing to
+// a new run (agent-session.js), so two prompt() calls that both observe
+// "idle" - a captain message and a watcher wake delivered through
+// pi.sendUserMessage - can both fall through to a concurrent run against the
+// same session. That race is a Pi SDK gap firstmate cannot close from
+// extension code without a full submission-serializing mutex of its own
+// (rejected as disproportionate risk for a rare race). Detecting and
+// recovering from its visible symptom - a turn that settles without ever
+// producing a synthesized reply to the last conversational message - closes
+// the actual acceptance criteria (no lost captain input, no silent hang)
+// without needing to prevent the race itself.
+let orphanedReplyFollowupActive = false;
+let orphanedReplyAttempts = 0;
+const ORPHANED_REPLY_ATTEMPT_LIMIT = 3;
+let orphanedReplyExhaustedNotified = false;
 
 type LockOwnership = "owned" | "missing" | "other";
 
@@ -438,6 +456,45 @@ async function claimSessionstartMessage(
   return sessionstartMessage(generation, result);
 }
 
+function isSessionMessageEntry(entry: SessionEntry): entry is SessionMessageEntry {
+  return entry.type === "message";
+}
+
+function messageHasVisibleText(message: unknown): boolean {
+  const content = (message as { content?: unknown } | undefined)?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((part) => {
+    const candidate = part as { type?: unknown; text?: unknown };
+    return candidate?.type === "text" && typeof candidate.text === "string" && candidate.text.trim().length > 0;
+  });
+}
+
+// Detects the reproduced race's visible signature: the settled turn's last
+// conversational message-type entry (skipping non-message entries such as
+// the session-start digest, which carries no reply expectation) is not an
+// assistant message with genuine text content. That covers a dangling tool
+// call with no follow-up reply, and a user or watcher-wake message that
+// never received any answer at all. A healthy run only ever settles on a
+// final assistant text reply (or an error/aborted assistant message, which
+// this also flags - visible to the model, but still worth one recovery
+// nudge since nothing confirms the captain ever saw it either).
+function lastConversationalTurnUnanswered(ctx: ExtensionContext): boolean {
+  let entries: SessionEntry[];
+  try {
+    entries = ctx.sessionManager.getEntries();
+  } catch {
+    return false;
+  }
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    if (!isSessionMessageEntry(entry)) continue;
+    const role = (entry.message as { role?: unknown } | undefined)?.role;
+    if (role === "assistant") return !messageHasVisibleText(entry.message);
+    return true;
+  }
+  return false;
+}
+
 function runGuard(): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
     const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
@@ -574,26 +631,72 @@ export default function (pi: ExtensionAPI) {
     return { block: true, reason: result.stderr.trim() || "denied by the watcher-arm PreToolUse seatbelt" };
   });
 
-  pi.on("agent_settled", async () => {
+  pi.on("agent_settled", async (_event, ctx) => {
     if (guardFollowupActive) {
       guardFollowupActive = false;
       return;
     }
 
     const result = await runGuard();
-    if (result.code !== 2) return;
+    if (result.code === 2) {
+      guardFollowupActive = true;
+      try {
+        const content = encodeFirstmateOperationalInput(
+          "turn-end-guard",
+          "TURN WOULD END BLIND - supervision is off. " +
+            "The watcher cycle is missing, failed, or unhealthy. Follow the harness recovery instruction below before ending the turn.\n\n" +
+            result.stderr,
+        );
+        await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      } catch {
+        guardFollowupActive = false;
+      }
+      return;
+    }
 
-    guardFollowupActive = true;
+    // Only one follow-up ever fires per settle: the supervision guard above
+    // takes priority, and reply recovery below runs only once it is clean.
+    if (orphanedReplyFollowupActive) {
+      orphanedReplyFollowupActive = false;
+      return;
+    }
+
+    if (!lastConversationalTurnUnanswered(ctx)) {
+      orphanedReplyAttempts = 0;
+      orphanedReplyExhaustedNotified = false;
+      return;
+    }
+
+    if (orphanedReplyAttempts >= ORPHANED_REPLY_ATTEMPT_LIMIT) {
+      if (orphanedReplyExhaustedNotified) return;
+      orphanedReplyExhaustedNotified = true;
+      try {
+        const content = encodeFirstmateOperationalInput(
+          "turn-end-guard",
+          `TURN ENDED WITHOUT A REPLY - automatic recovery gave up after ${ORPHANED_REPLY_ATTEMPT_LIMIT} attempts. ` +
+            "The last message in this conversation still has no visible assistant answer. " +
+            "Check the transcript directly and answer the pending message by hand; do not repeat this recovery attempt automatically again for it.",
+        );
+        await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      } catch {
+        orphanedReplyExhaustedNotified = false;
+      }
+      return;
+    }
+
+    orphanedReplyAttempts += 1;
+    orphanedReplyFollowupActive = true;
     try {
       const content = encodeFirstmateOperationalInput(
         "turn-end-guard",
-        "TURN WOULD END BLIND - supervision is off. " +
-          "The watcher cycle is missing, failed, or unhealthy. Follow the harness recovery instruction below before ending the turn.\n\n" +
-          result.stderr,
+        "TURN ENDED WITHOUT A REPLY - the last message in this conversation (a captain message or a delivered watcher wake) has no visible " +
+          "assistant answer, and the turn already settled with nothing queued to continue it. This can happen when a watcher wake landed while " +
+          "another prompt was starting, racing Pi's own turn-start handling. Check the conversation history now: if a tool call is unresolved, " +
+          "finish it, then answer the pending message directly. Do not repeat any answer you already gave earlier in this conversation.",
       );
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
     } catch {
-      guardFollowupActive = false;
+      orphanedReplyFollowupActive = false;
     }
   });
 
