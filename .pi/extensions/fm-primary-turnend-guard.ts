@@ -89,6 +89,13 @@ let settleEvaluationActive = false;
 // recording drops any uncommitted predecessor, and a recording still
 // uncommitted when a settle arrives is dropped unjudged, because a call that
 // was going to commit reaches the hook well before any settle.
+// A recording is also superseded the moment the captain submits the same text
+// again. Losing the race is not silent for the captain: the loser's rejection
+// escapes prompt() into the interactive loop, which prints it as a chat error,
+// so the captain may simply resend. Recovering the earlier recording as well
+// would execute one instruction twice, and the resend carries it anyway.
+// Equivalence here is exact text, the only signal the events carry - a
+// reworded resend is not recognised as the same instruction.
 type UserMessageContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 type UserMessagePart = Exclude<UserMessageContent, string>[number];
 type PendingCaptainInput = {
@@ -822,7 +829,10 @@ export default function (pi: ExtensionAPI) {
     const streamingBehavior = (event as { streamingBehavior?: unknown }).streamingBehavior;
     if (!captainInputWorthTracking(source, text, streamingBehavior)) return;
     const images = (event as { images?: unknown }).images;
-    pendingCaptainInputs = pendingCaptainInputs.filter((pending) => pending.committed);
+    const trimmed = text.trim();
+    pendingCaptainInputs = pendingCaptainInputs.filter(
+      (pending) => pending.committed && pending.text.trim() !== trimmed,
+    );
     pendingCaptainInputs.push({
       text,
       images: Array.isArray(images) ? (images as UserMessagePart[]) : [],

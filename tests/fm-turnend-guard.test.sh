@@ -2065,6 +2065,89 @@ EOF
   pass ".pi primary extension: an unrelated run's turn start never adopts a captain recording"
 }
 
+test_pi_input_recovery_never_doubles_a_manual_resend_after_the_race() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-resend-race-root"
+  home="$TMP_ROOT/pi-input-resend-race-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// Losing the race is not silent for the captain: the loser's rejection escapes
+// prompt() into the interactive loop, which prints "Agent is already
+// processing a prompt..." as a chat error. The captain reacts by resending the
+// same instruction from history - so replaying the lost recording as well
+// would delete the branch twice.
+let entries = [
+  { type: "message", id: "e1", parentId: null, timestamp: "t", message: { role: "user", content: "vorher", timestamp: 0 } },
+];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+// The captain's message and a watcher wake both start from idle.
+await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
+await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
+await started({ type: "before_agent_start", prompt: "loesch den branch" }, ctx);
+
+// The captain's call loses and appends nothing; its settle is the spurious one
+// the wake is still running behind.
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) throw new Error(`the loser's settle acted: ${prompts.length} prompts`);
+
+// The captain sees the error and resends by hand. That resubmission runs and
+// is answered normally.
+await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
+await started({ type: "before_agent_start", prompt: "loesch den branch" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "e2", parentId: "e1", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "loesch den branch" }], timestamp: 0 } },
+  { type: "message", id: "e3", parentId: "e2", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Branch geloescht." }], stopReason: "stop", timestamp: 0 } },
+];
+
+// The wake's own settle, then the resend's settle. Neither may replay the
+// instruction the manual resend already carried out.
+await settled({ type: "agent_settled" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`the manually resent instruction was replayed: ${JSON.stringify(prompts)}`);
+}
+
+// And it stays dropped for good.
+await started({ type: "before_agent_start", prompt: "was steht an?" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "e4", parentId: "e3", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "was steht an?" }], timestamp: 0 } },
+  { type: "message", id: "e5", parentId: "e4", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Nichts offen." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`a later settle replayed the superseded recording: ${JSON.stringify(prompts)}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must never replay a captain instruction the captain already resent by hand"
+  [ -z "$out" ] || fail "Pi input-recovery manual-resend test printed output: $out"
+  pass ".pi primary extension: a manual resend after the race never doubles the instruction"
+}
+
 test_pi_input_recovery_carries_attached_images() {
   local repo home ext out status
   repo="$TMP_ROOT/pi-input-images-root"
@@ -3109,6 +3192,7 @@ test_pi_input_recovery_stays_silent_for_a_delivered_captain_message
 test_pi_input_recovery_never_replays_a_withdrawn_queued_message
 test_pi_input_recovery_never_replays_a_failed_submission_the_captain_resent
 test_pi_input_recovery_ignores_an_unrelated_runs_turn_start
+test_pi_input_recovery_never_doubles_a_manual_resend_after_the_race
 test_pi_input_recovery_carries_attached_images
 test_pi_input_recovery_detects_a_short_message_a_longer_one_contains
 test_pi_reply_recovery_never_doubles_on_overlapping_settles
