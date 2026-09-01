@@ -11,8 +11,8 @@ import {
 
 let guardFollowupActive = false;
 
-// Turn-settle reply recovery (docs/watcher-continuity.md "Turn-settle reply
-// recovery" is the authoritative contract). Pi's own AgentSession.prompt()
+// Turn-settle input and reply recovery (docs/watcher-continuity.md
+// "Turn-settle input and reply recovery" is the authoritative contract). Pi's own AgentSession.prompt()
 // has no atomic check-and-set between reading isStreaming and committing to
 // a new run (agent-session.js), so two prompt() calls that both observe
 // "idle" - a captain message and a watcher wake delivered through
@@ -48,6 +48,15 @@ const CONVERSATIONAL_MESSAGE_ROLES = new Set(["user", "assistant", "toolResult"]
 // the eventual settle that drains the counter is judged normally.
 let inFlightAgentRuns = 0;
 
+// Pi's extension runner awaits handlers only within a single emit, so two
+// settles can be inside this handler at once across its awaited guard child
+// process. One judgement runs at a time, which keeps the latch snapshot and
+// the attempt budget from being read and written by two overlapping
+// judgements of the same state. The claim is released the moment a follow-up
+// is actually delivered, so the settle that follow-up produces is judged
+// normally and absorbed by the latch it just set.
+let settleEvaluationActive = false;
+
 // Monotonic count of logical runs ever started in this generation. A pending
 // captain input can only be judged once a run has started after it was
 // recorded, which keeps the window between prompt()'s `input` event and its
@@ -68,6 +77,12 @@ let agentRunStarts = 0;
 // and an ordinary command would look lost. Inline "!" bash is skipped for the
 // same reason. Plain captain prose, which is what the reported episodes lost,
 // is appended verbatim and matches exactly.
+// A defined streamingBehavior is skipped too. Pi sets it only when the message
+// is queued into an already-active run, which is its own correct path and not
+// what the idle-vs-idle race loses - and a queued message is appended only
+// when the run consumes it, so Escape (which clears the queue back into the
+// editor) legitimately leaves it absent. Resubmitting that would replay an
+// instruction the captain withdrew.
 type PendingCaptainInput = {
   text: string;
   afterEntryId: string | null;
@@ -530,8 +545,13 @@ function messageHasUnresolvedToolCall(message: unknown): boolean {
   return content.some((part) => (part as { type?: unknown } | undefined)?.type === "toolCall");
 }
 
-function captainInputWorthTracking(source: string, text: string): boolean {
+function captainInputWorthTracking(
+  source: string,
+  text: string,
+  streamingBehavior: unknown,
+): boolean {
   if (!CAPTAIN_INPUT_SOURCES.has(source)) return false;
+  if (streamingBehavior !== undefined) return false;
   const trimmed = text.trim();
   if (!trimmed) return false;
   return !trimmed.startsWith("/") && !trimmed.startsWith("!");
@@ -780,7 +800,8 @@ export default function (pi: ExtensionAPI) {
   pi.on?.("input", (event, ctx) => {
     const source = String((event as { source?: unknown }).source ?? "");
     const text = String((event as { text?: unknown }).text ?? "");
-    if (!captainInputWorthTracking(source, text)) return;
+    const streamingBehavior = (event as { streamingBehavior?: unknown }).streamingBehavior;
+    if (!captainInputWorthTracking(source, text, streamingBehavior)) return;
     pendingCaptainInputs.push({
       text,
       afterEntryId: lastEntryId(ctx),
@@ -791,10 +812,24 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  const deliverFollowup = async (content: string): Promise<void> => {
+    settleEvaluationActive = false;
+    await pi.sendUserMessage(content, { deliverAs: "followUp" });
+  };
+
   pi.on("agent_settled", async (_event, ctx) => {
     inFlightAgentRuns = inFlightAgentRuns > 0 ? inFlightAgentRuns - 1 : 0;
     if (inFlightAgentRuns > 0) return;
+    if (settleEvaluationActive) return;
+    settleEvaluationActive = true;
+    try {
+      await evaluateSettle(ctx);
+    } finally {
+      settleEvaluationActive = false;
+    }
+  });
 
+  async function evaluateSettle(ctx: ExtensionContext): Promise<void> {
     if (guardFollowupActive) {
       guardFollowupActive = false;
       return;
@@ -817,7 +852,7 @@ export default function (pi: ExtensionAPI) {
             "The watcher cycle is missing, failed, or unhealthy. Follow the harness recovery instruction below before ending the turn.\n\n" +
             result.stderr,
         );
-        await pi.sendUserMessage(content, { deliverAs: "followUp" });
+        await deliverFollowup(content);
       } catch {
         guardFollowupActive = false;
       }
@@ -844,7 +879,7 @@ export default function (pi: ExtensionAPI) {
           "arriving now, and answer it directly. Do not repeat any answer you already gave earlier in this conversation.\n\n" +
           lostCaptainInput.text,
       );
-      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      await deliverFollowup(content);
       return;
     }
 
@@ -864,7 +899,7 @@ export default function (pi: ExtensionAPI) {
             "The last message in this conversation still has no visible assistant answer. " +
             "Check the transcript directly and answer the pending message by hand; do not repeat this recovery attempt automatically again for it.",
         );
-        await pi.sendUserMessage(content, { deliverAs: "followUp" });
+        await deliverFollowup(content);
       } catch {
         orphanedReplyExhaustedNotified = false;
       }
@@ -881,11 +916,11 @@ export default function (pi: ExtensionAPI) {
           "another prompt was starting, racing Pi's own turn-start handling. Check the conversation history now: if a tool call is unresolved, " +
           "finish it, then answer the pending message directly. Do not repeat any answer you already gave earlier in this conversation.",
       );
-      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      await deliverFollowup(content);
     } catch {
       orphanedReplyFollowupActive = false;
     }
-  });
+  }
 
   markLoaded();
 }

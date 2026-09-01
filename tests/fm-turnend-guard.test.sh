@@ -1088,7 +1088,8 @@ EOF
 # producing a synthesized reply (Pi's own prompt() has no atomic check-and-set
 # between reading isStreaming and committing to a new run, so a watcher wake
 # delivered through pi.sendUserMessage can race a concurrently-submitted
-# captain message; docs/watcher-continuity.md "Turn-settle reply recovery").
+# captain message; docs/watcher-continuity.md "Turn-settle input and reply
+# recovery").
 # Fixtures give bin/fm-turnend-guard.sh a healthy (exit 0) verdict so every
 # case here exercises the reply-recovery branch, never the supervision one.
 
@@ -1864,6 +1865,135 @@ EOF
   expect_code 0 "$status" "Pi guard must not resubmit a captain message that reached the transcript"
   [ -z "$out" ] || fail "Pi input-recovery negative-control test printed output: $out"
   pass ".pi primary extension: a delivered captain message and an extension wake are never resubmitted"
+}
+
+test_pi_input_recovery_never_replays_a_withdrawn_queued_message() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-withdrawn-root"
+  home="$TMP_ROOT/pi-input-withdrawn-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// A turn is already streaming, so the captain's message is queued rather than
+// starting a run: Pi reports that by setting streamingBehavior on the input
+// event. A queued message is only appended when the run consumes it, and
+// Escape clears the queue back into the editor instead - so its absence from
+// the transcript is a withdrawal, never a loss.
+let entries = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "erster auftrag", timestamp: 0 } },
+];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await started({ type: "before_agent_start" }, ctx);
+await input({ type: "input", text: "loesch den branch", source: "interactive", streamingBehavior: "steer" }, ctx);
+
+// Escape: the queue is cleared, the run aborts, and the queued text is back in
+// the editor without ever reaching the transcript.
+entries = [
+  ...entries,
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "" }], stopReason: "aborted", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+
+// A later, unrelated turn must not replay the withdrawn instruction.
+await started({ type: "before_agent_start" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "u2", parentId: "a1", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "was steht an?" }], timestamp: 0 } },
+  { type: "message", id: "a2", parentId: "u2", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Nichts offen." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`a withdrawn queued message was replayed: ${JSON.stringify(prompts)}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must never resubmit a queued captain message the captain withdrew"
+  [ -z "$out" ] || fail "Pi input-recovery withdrawal test printed output: $out"
+  pass ".pi primary extension: a queued captain message withdrawn with Escape is never replayed"
+}
+
+test_pi_reply_recovery_never_doubles_on_overlapping_settles() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-reply-overlap-root"
+  home="$TMP_ROOT/pi-reply-overlap-home"
+  mkdir -p "$home/state"
+  printf '0.5\n' > "$home/state/.test-guard-delay"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+const stuckCtx = {
+  sessionManager: {
+    getEntries: () => [
+      { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "captain input", timestamp: 0 } },
+      { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash" }], stopReason: "toolUse", timestamp: 0 } },
+    ],
+  },
+};
+
+// Pi's extension runner does not serialize separate settle emissions, so a
+// second run can start and settle while the first settle is still awaiting the
+// supervision guard's child process. Both would otherwise judge the same stuck
+// state with their own stale latch snapshot and send two recovery turns.
+await started({ type: "before_agent_start" }, stuckCtx);
+const first = settled({ type: "agent_settled" }, stuckCtx);
+setTimeout(async () => {
+  await started({ type: "before_agent_start" }, stuckCtx);
+  await settled({ type: "agent_settled" }, stuckCtx);
+}, 0);
+await first;
+await new Promise((r) => setTimeout(r, 900));
+if (prompts.length !== 1) {
+  throw new Error(`overlapping settles produced ${prompts.length} recovery turns, expected exactly 1`);
+}
+if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[0]}`);
+
+// The latch must still absorb the recovery turn's own settle afterwards.
+await settled({ type: "agent_settled" }, stuckCtx);
+if (prompts.length !== 1) throw new Error(`the recovery turn's settle was not absorbed, total ${prompts.length}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must judge one settle at a time so overlapping settles cannot double a recovery turn"
+  [ -z "$out" ] || fail "Pi reply-recovery overlap test printed output: $out"
+  pass ".pi primary extension: overlapping settles never produce two recovery turns for one episode"
 }
 
 test_pi_reply_recovery_skips_a_run_that_started_during_the_guard_check() {
@@ -2706,6 +2836,8 @@ test_pi_reply_recovery_skips_a_spurious_mid_turn_settle
 test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
 test_pi_input_recovery_resubmits_a_captain_message_lost_to_the_race
 test_pi_input_recovery_stays_silent_for_a_delivered_captain_message
+test_pi_input_recovery_never_replays_a_withdrawn_queued_message
+test_pi_reply_recovery_never_doubles_on_overlapping_settles
 test_pi_reply_recovery_skips_a_run_that_started_during_the_guard_check
 test_pi_reply_recovery_budget_resets_for_a_new_session_generation
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
