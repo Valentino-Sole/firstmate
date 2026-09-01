@@ -29,6 +29,12 @@ let orphanedReplyAttempts = 0;
 const ORPHANED_REPLY_ATTEMPT_LIMIT = 3;
 let orphanedReplyExhaustedNotified = false;
 
+// Roles that actually carry a reply expectation. Every other message role Pi
+// can append (bashExecution for an inline `!cmd`, extension-injected custom
+// messages, branch and compaction summaries) is bookkeeping and must not be
+// mistaken for an unanswered turn.
+const CONVERSATIONAL_MESSAGE_ROLES = new Set(["user", "assistant", "toolResult"]);
+
 type LockOwnership = "owned" | "missing" | "other";
 
 const extensionFile = fileURLToPath(import.meta.url);
@@ -469,15 +475,28 @@ function messageHasVisibleText(message: unknown): boolean {
   });
 }
 
+function messageHasUnresolvedToolCall(message: unknown): boolean {
+  const content = (message as { content?: unknown } | undefined)?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((part) => (part as { type?: unknown } | undefined)?.type === "toolCall");
+}
+
 // Detects the reproduced race's visible signature: the settled turn's last
-// conversational message-type entry (skipping non-message entries such as
-// the session-start digest, which carries no reply expectation) is not an
-// assistant message with genuine text content. That covers a dangling tool
-// call with no follow-up reply, and a user or watcher-wake message that
-// never received any answer at all. A healthy run only ever settles on a
-// final assistant text reply (or an error/aborted assistant message, which
-// this also flags - visible to the model, but still worth one recovery
-// nudge since nothing confirms the captain ever saw it either).
+// conversational message-type entry is not an assistant reply that both
+// carries genuine text and leaves no tool call unresolved. That covers a
+// dangling tool call with no follow-up reply - including the common shape
+// where the same assistant message holds a short text preamble plus the
+// unresolved call - and a user or watcher-wake message that never received
+// any answer at all.
+// Entries that carry no reply expectation of their own are skipped rather
+// than counted as unanswered: non-message entries such as the session-start
+// digest, and message entries whose role is not conversational (Pi flushes
+// its inline `!cmd` bashExecution messages into the session right before
+// agent_settled, and extensions can inject custom messages the same way).
+// An assistant message with stopReason "aborted" is a deliberate captain
+// stop and counts as healthy, so a turn the captain cancelled is never
+// auto-restarted; "error" still earns its one recovery nudge, because
+// nothing confirms the captain saw it and no human decided to stop there.
 function lastConversationalTurnUnanswered(ctx: ExtensionContext): boolean {
   let entries: SessionEntry[];
   try {
@@ -488,9 +507,12 @@ function lastConversationalTurnUnanswered(ctx: ExtensionContext): boolean {
   for (let i = entries.length - 1; i >= 0; i -= 1) {
     const entry = entries[i];
     if (!isSessionMessageEntry(entry)) continue;
-    const role = (entry.message as { role?: unknown } | undefined)?.role;
-    if (role === "assistant") return !messageHasVisibleText(entry.message);
-    return true;
+    const message = entry.message as { role?: unknown; stopReason?: unknown } | undefined;
+    const role = message?.role;
+    if (typeof role !== "string" || !CONVERSATIONAL_MESSAGE_ROLES.has(role)) continue;
+    if (role !== "assistant") return true;
+    if (message?.stopReason === "aborted") return false;
+    return !messageHasVisibleText(entry.message) || messageHasUnresolvedToolCall(entry.message);
   }
   return false;
 }
@@ -637,6 +659,13 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
+    // Consumed on every settle before any branching, so the reply latch can
+    // never outlive the settle it was meant to absorb - not even when that
+    // settle is instead claimed by the supervision guard below and a later,
+    // genuinely unanswered episode would otherwise be swallowed by it.
+    const replyFollowupSettle = orphanedReplyFollowupActive;
+    orphanedReplyFollowupActive = false;
+
     const result = await runGuard();
     if (result.code === 2) {
       guardFollowupActive = true;
@@ -656,10 +685,7 @@ export default function (pi: ExtensionAPI) {
 
     // Only one follow-up ever fires per settle: the supervision guard above
     // takes priority, and reply recovery below runs only once it is clean.
-    if (orphanedReplyFollowupActive) {
-      orphanedReplyFollowupActive = false;
-      return;
-    }
+    if (replyFollowupSettle) return;
 
     if (!lastConversationalTurnUnanswered(ctx)) {
       orphanedReplyAttempts = 0;
