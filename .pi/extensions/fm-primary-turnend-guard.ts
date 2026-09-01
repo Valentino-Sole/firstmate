@@ -52,16 +52,11 @@ let inFlightAgentRuns = 0;
 // settles can be inside this handler at once across its awaited guard child
 // process. One judgement runs at a time, which keeps the latch snapshot and
 // the attempt budget from being read and written by two overlapping
-// judgements of the same state. The claim is released the moment a follow-up
-// is actually delivered, so the settle that follow-up produces is judged
-// normally and absorbed by the latch it just set.
+// judgements of the same state. Both latches are still consumed ahead of the
+// claim, so a settle the claim drops can never leave one behind to swallow a
+// later, genuinely unanswered episode.
 let settleEvaluationActive = false;
 
-// Monotonic count of logical runs ever started in this generation. A pending
-// captain input can only be judged once a run has started after it was
-// recorded, which keeps the window between prompt()'s `input` event and its
-// own `before_agent_start` from looking like a loss.
-let agentRunStarts = 0;
 
 // Captain-owned input recorded from prompt()'s `input` event, which fires
 // before the isStreaming check and therefore also for the prompt() call that
@@ -83,10 +78,20 @@ let agentRunStarts = 0;
 // when the run consumes it, so Escape (which clears the queue back into the
 // editor) legitimately leaves it absent. Resubmitting that would replay an
 // instruction the captain withdrew.
+// A recording is only judged once its own prompt() call reached
+// `before_agent_start`, which is the boundary that separates a call that
+// committed to a run from one that died earlier: prompt() still throws for an
+// unselected model or failed auth well before that hook, appending nothing
+// while the captain sees an error and simply resends. Judging such a phantom
+// would replay an instruction that already ran under the resend. Each
+// `before_agent_start` commits at most the newest uncommitted recording, a
+// new recording drops any uncommitted predecessor, and any recording still
+// uncommitted when a settle arrives is dropped unjudged - by then its own
+// call would long since have reached the hook.
 type PendingCaptainInput = {
   text: string;
   afterEntryId: string | null;
-  startsAtRecord: number;
+  committed: boolean;
 };
 const CAPTAIN_INPUT_SOURCES = new Set(["interactive", "rpc"]);
 const PENDING_CAPTAIN_INPUT_LIMIT = 20;
@@ -571,6 +576,11 @@ function lastEntryId(ctx: ExtensionContext): string | null {
   return entries[entries.length - 1]?.id ?? null;
 }
 
+// Compared exactly, not by containment: a tracked recording never starts with
+// "/", so Pi's skill-command and prompt-template expansion both return the
+// text unchanged and the appended message carries it verbatim. Containment
+// would let a longer later message ("weiter mit dem PR") silently absorb a
+// genuinely lost short one ("weiter").
 // An unknown anchor (a compaction rewrote it away) scans from the start, so a
 // message that is present is still found and never reported lost.
 function captainInputReachedTranscript(
@@ -586,7 +596,7 @@ function captainInputReachedTranscript(
     if (!isSessionMessageEntry(entry) || claimed.has(entry.id)) continue;
     const role = (entry.message as { role?: unknown } | undefined)?.role;
     if (role !== "user") continue;
-    if (!messagePlainText(entry.message).includes(pending.text)) continue;
+    if (messagePlainText(entry.message).trim() !== pending.text.trim()) continue;
     return entry.id;
   }
   return undefined;
@@ -603,7 +613,7 @@ function takeLostCaptainInput(ctx: ExtensionContext): PendingCaptainInput | unde
   const stillPending: PendingCaptainInput[] = [];
   let lost: PendingCaptainInput | undefined;
   for (const pending of pendingCaptainInputs) {
-    if (lost || agentRunStarts <= pending.startsAtRecord) {
+    if (lost || !pending.committed) {
       stillPending.push(pending);
       continue;
     }
@@ -737,7 +747,6 @@ export default function (pi: ExtensionAPI) {
       : { new: "clear", resume: "resume", fork: "fork" }[reason];
     markLoaded();
     inFlightAgentRuns = 0;
-    agentRunStarts = 0;
     pendingCaptainInputs = [];
     orphanedReplyAttempts = 0;
     orphanedReplyExhaustedNotified = false;
@@ -751,7 +760,12 @@ export default function (pi: ExtensionAPI) {
 
   pi.on?.("before_agent_start", async (_event, ctx) => {
     inFlightAgentRuns += 1;
-    agentRunStarts += 1;
+    for (let i = pendingCaptainInputs.length - 1; i >= 0; i -= 1) {
+      const pending = pendingCaptainInputs[i];
+      if (pending.committed) continue;
+      pendingCaptainInputs[i] = { ...pending, committed: true };
+      break;
+    }
     const generation = sessionstartGeneration;
     if (!generation) return;
     const message = await claimSessionstartMessage(generation, ctx);
@@ -802,34 +816,22 @@ export default function (pi: ExtensionAPI) {
     const text = String((event as { text?: unknown }).text ?? "");
     const streamingBehavior = (event as { streamingBehavior?: unknown }).streamingBehavior;
     if (!captainInputWorthTracking(source, text, streamingBehavior)) return;
+    pendingCaptainInputs = pendingCaptainInputs.filter((pending) => pending.committed);
     pendingCaptainInputs.push({
       text,
       afterEntryId: lastEntryId(ctx),
-      startsAtRecord: agentRunStarts,
+      committed: false,
     });
     if (pendingCaptainInputs.length > PENDING_CAPTAIN_INPUT_LIMIT) {
       pendingCaptainInputs = pendingCaptainInputs.slice(-PENDING_CAPTAIN_INPUT_LIMIT);
     }
   });
 
-  const deliverFollowup = async (content: string): Promise<void> => {
-    settleEvaluationActive = false;
-    await pi.sendUserMessage(content, { deliverAs: "followUp" });
-  };
-
   pi.on("agent_settled", async (_event, ctx) => {
     inFlightAgentRuns = inFlightAgentRuns > 0 ? inFlightAgentRuns - 1 : 0;
+    pendingCaptainInputs = pendingCaptainInputs.filter((pending) => pending.committed);
     if (inFlightAgentRuns > 0) return;
-    if (settleEvaluationActive) return;
-    settleEvaluationActive = true;
-    try {
-      await evaluateSettle(ctx);
-    } finally {
-      settleEvaluationActive = false;
-    }
-  });
 
-  async function evaluateSettle(ctx: ExtensionContext): Promise<void> {
     if (guardFollowupActive) {
       guardFollowupActive = false;
       return;
@@ -842,6 +844,16 @@ export default function (pi: ExtensionAPI) {
     const replyFollowupSettle = orphanedReplyFollowupActive;
     orphanedReplyFollowupActive = false;
 
+    if (settleEvaluationActive) return;
+    settleEvaluationActive = true;
+    try {
+      await evaluateSettle(ctx, replyFollowupSettle);
+    } finally {
+      settleEvaluationActive = false;
+    }
+  });
+
+  async function evaluateSettle(ctx: ExtensionContext, replyFollowupSettle: boolean): Promise<void> {
     const result = await runGuard();
     if (result.code === 2) {
       guardFollowupActive = true;
@@ -852,7 +864,7 @@ export default function (pi: ExtensionAPI) {
             "The watcher cycle is missing, failed, or unhealthy. Follow the harness recovery instruction below before ending the turn.\n\n" +
             result.stderr,
         );
-        await deliverFollowup(content);
+        await pi.sendUserMessage(content, { deliverAs: "followUp" });
       } catch {
         guardFollowupActive = false;
       }
@@ -879,7 +891,7 @@ export default function (pi: ExtensionAPI) {
           "arriving now, and answer it directly. Do not repeat any answer you already gave earlier in this conversation.\n\n" +
           lostCaptainInput.text,
       );
-      await deliverFollowup(content);
+      await pi.sendUserMessage(content, { deliverAs: "followUp" });
       return;
     }
 
@@ -899,7 +911,7 @@ export default function (pi: ExtensionAPI) {
             "The last message in this conversation still has no visible assistant answer. " +
             "Check the transcript directly and answer the pending message by hand; do not repeat this recovery attempt automatically again for it.",
         );
-        await deliverFollowup(content);
+        await pi.sendUserMessage(content, { deliverAs: "followUp" });
       } catch {
         orphanedReplyExhaustedNotified = false;
       }
@@ -916,7 +928,7 @@ export default function (pi: ExtensionAPI) {
           "another prompt was starting, racing Pi's own turn-start handling. Check the conversation history now: if a tool call is unresolved, " +
           "finish it, then answer the pending message directly. Do not repeat any answer you already gave earlier in this conversation.",
       );
-      await deliverFollowup(content);
+      await pi.sendUserMessage(content, { deliverAs: "followUp" });
     } catch {
       orphanedReplyFollowupActive = false;
     }

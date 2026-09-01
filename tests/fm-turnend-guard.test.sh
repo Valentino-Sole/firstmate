@@ -1933,6 +1933,151 @@ EOF
   pass ".pi primary extension: a queued captain message withdrawn with Escape is never replayed"
 }
 
+test_pi_input_recovery_never_replays_a_failed_submission_the_captain_resent() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-resend-root"
+  home="$TMP_ROOT/pi-input-resend-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// Pi's prompt() emits the input event and only then validates the model and
+// auth, throwing before it ever reaches before_agent_start. Nothing is
+// appended, the captain sees the error, and resends from history.
+let entries = [
+  { type: "message", id: "e5", parentId: null, timestamp: "t", message: { role: "user", content: [{ type: "text", text: "vorher" }], timestamp: 0 } },
+];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
+// prompt() throws here: no before_agent_start, no transcript entry.
+
+await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "e6", parentId: "e5", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "loesch den branch" }], timestamp: 0 } },
+  { type: "message", id: "e7", parentId: "e6", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Branch geloescht." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`the resent instruction was replayed: ${JSON.stringify(prompts)}`);
+}
+
+// A later, unrelated run must not resurrect the failed submission either.
+await started({ type: "before_agent_start" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "e8", parentId: "e7", timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+  { type: "message", id: "e9", parentId: "e8", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`a later run resurrected the failed submission: ${JSON.stringify(prompts)}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must never replay a submission that failed before it started a run and was resent by hand"
+  [ -z "$out" ] || fail "Pi input-recovery resend test printed output: $out"
+  pass ".pi primary extension: a failed submission the captain resent is never replayed"
+}
+
+test_pi_input_recovery_detects_a_short_message_a_longer_one_contains() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-short-root"
+  home="$TMP_ROOT/pi-input-short-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { rmSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// "weiter" is lost to the race and never appended. Its judgement is deferred
+// because the next settle is claimed by the supervision guard, and by the time
+// it is judged the captain has sent "weiter mit dem PR", which was appended
+// normally. A containment match would pair the lost short message with that
+// longer entry and then declare the delivered longer message lost instead.
+const verdict = `${process.env.FM_HOME}/state/.test-guard-verdict`;
+let entries = [];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: "weiter", source: "interactive" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+entries = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) throw new Error(`the loser's settle acted: ${prompts.length} prompts`);
+
+writeFileSync(verdict, "2");
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) throw new Error(`expected the supervision follow-up, got ${prompts.length}`);
+rmSync(verdict);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) throw new Error(`guard-latch-absorbed settle acted, total ${prompts.length}`);
+
+await input({ type: "input", text: "weiter mit dem PR", source: "interactive" }, ctx);
+await started({ type: "before_agent_start" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "u2", parentId: "a1", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "weiter mit dem PR" }], timestamp: 0 } },
+  { type: "message", id: "a2", parentId: "u2", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "PR laeuft." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+
+if (prompts.length !== 2) {
+  throw new Error(`expected the lost short message to be recovered exactly once, got ${prompts.length - 1}`);
+}
+if (!prompts[1].includes("CAPTAIN INPUT WAS LOST")) throw new Error(`not an input-recovery prompt: ${prompts[1]}`);
+if (prompts[1].includes("weiter mit dem PR")) {
+  throw new Error(`the delivered longer message was resubmitted instead of the lost short one: ${prompts[1]}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must not let a longer later message absorb a genuinely lost short one"
+  [ -z "$out" ] || fail "Pi input-recovery short-message test printed output: $out"
+  pass ".pi primary extension: a lost short message is not absorbed by a longer later message"
+}
+
 test_pi_reply_recovery_never_doubles_on_overlapping_settles() {
   local repo home ext out status
   repo="$TMP_ROOT/pi-reply-overlap-root"
@@ -2837,6 +2982,8 @@ test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
 test_pi_input_recovery_resubmits_a_captain_message_lost_to_the_race
 test_pi_input_recovery_stays_silent_for_a_delivered_captain_message
 test_pi_input_recovery_never_replays_a_withdrawn_queued_message
+test_pi_input_recovery_never_replays_a_failed_submission_the_captain_resent
+test_pi_input_recovery_detects_a_short_message_a_longer_one_contains
 test_pi_reply_recovery_never_doubles_on_overlapping_settles
 test_pi_reply_recovery_skips_a_run_that_started_during_the_guard_check
 test_pi_reply_recovery_budget_resets_for_a_new_session_generation
