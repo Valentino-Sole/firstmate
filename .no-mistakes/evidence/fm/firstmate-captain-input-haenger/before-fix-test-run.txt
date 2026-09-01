@@ -1,0 +1,26 @@
+not ok - Pi guard must nudge once for a dangling tool call with no reply: expected exit 0, got 1
+UNEXPECTED PASS: test_pi_reply_recovery_stays_silent_for_a_healthy_reply
+ok - .pi primary extension: reply recovery stays silent for a healthy reply
+not ok - Pi guard reply recovery must be idempotent and bounded, resetting after a healthy settle: expected exit 0, got 1
+not ok - Pi guard must nudge once when the last message got no reply at all: expected exit 0, got 1
+UNEXPECTED PASS: test_pi_reply_recovery_ignores_the_session_start_digest
+ok - .pi primary extension: reply recovery ignores the session-start digest with no conversational history
+UNEXPECTED PASS: test_pi_reply_recovery_ignores_a_flushed_inline_bash_message
+ok - .pi primary extension: reply recovery ignores a flushed inline bash message after a healthy reply
+not ok - Pi guard must flag a dangling tool call even when the same message carries a text preamble: expected exit 0, got 1
+not ok - Pi guard must leave a captain-aborted turn alone while still nudging an errored one: expected exit 0, got 1
+not ok - Pi guard reply latch must not survive a settle claimed by the supervision guard: expected exit 0, got 1
+not ok - Pi guard must ignore a settle emitted while another logical run is still in flight: expected exit 0, got 1
+UNEXPECTED PASS: test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
+ok - .pi primary extension: a spurious mid-turn settle never doubles an answer the winner still delivers
+not ok - Pi guard must resubmit a captain message the race dropped before it reached the transcript: expected exit 0, got 1
+not ok - Pi guard must not resubmit a captain message that reached the transcript: expected exit 0, got 1
+not ok - Pi guard must never resubmit a queued captain message the captain withdrew: expected exit 0, got 1
+not ok - Pi guard must never replay a submission that failed before it started a run and was resent by hand: expected exit 0, got 1
+not ok - Pi guard must not let an unrelated run's turn start adopt a captain recording: expected exit 0, got 1
+not ok - Pi guard must never replay a captain instruction the captain already resent by hand: expected exit 0, got 1
+not ok - Pi guard must resubmit a lost captain message together with its attachments: expected exit 0, got 1
+not ok - Pi guard must not let a longer later message absorb a genuinely lost short one: expected exit 0, got 1
+not ok - Pi guard must judge one settle at a time so overlapping settles cannot double a recovery turn: expected exit 0, got 1
+not ok - Pi guard must not judge a transcript a new run started appending to during the guard check: expected exit 0, got 1
+not ok - Pi guard must give each session generation its own recovery attempt budget: expected exit 0, got 1

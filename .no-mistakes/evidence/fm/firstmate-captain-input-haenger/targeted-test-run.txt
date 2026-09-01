@@ -1,0 +1,24 @@
+ok - .pi primary extension: no-tool and multi-tool runs each inject exactly one guard follow-up
+ok - .pi primary extension: delivery failure resets the logical-run latch
+ok - .pi primary extension: reply recovery nudges once for a dangling tool call
+ok - .pi primary extension: reply recovery stays silent for a healthy reply
+ok - .pi primary extension: reply recovery is idempotent, bounded, and resets after a healthy settle
+ok - .pi primary extension: reply recovery flags a fully unanswered message
+ok - .pi primary extension: reply recovery ignores the session-start digest with no conversational history
+ok - .pi primary extension: reply recovery ignores a flushed inline bash message after a healthy reply
+ok - .pi primary extension: reply recovery flags a dangling tool call beside a text preamble
+ok - .pi primary extension: reply recovery never restarts a captain-aborted turn
+ok - .pi primary extension: reply latch never swallows a later unanswered episode
+ok - .pi primary extension: a spurious mid-turn settle is skipped and only the terminal settle is judged
+ok - .pi primary extension: a spurious mid-turn settle never doubles an answer the winner still delivers
+ok - .pi primary extension: a captain message lost to the race is resubmitted exactly once
+ok - .pi primary extension: a delivered captain message and an extension wake are never resubmitted
+ok - .pi primary extension: a queued captain message withdrawn with Escape is never replayed
+ok - .pi primary extension: a failed submission the captain resent is never replayed
+ok - .pi primary extension: an unrelated run's turn start never adopts a captain recording
+ok - .pi primary extension: a manual resend after the race never doubles the instruction
+ok - .pi primary extension: a lost captain message keeps its attached images
+ok - .pi primary extension: a lost short message is not absorbed by a longer later message
+ok - .pi primary extension: overlapping settles never produce two recovery turns for one episode
+ok - .pi primary extension: a run opened during the supervision check suppresses that settle's judgement
+ok - .pi primary extension: a new session generation gets a fresh recovery attempt budget

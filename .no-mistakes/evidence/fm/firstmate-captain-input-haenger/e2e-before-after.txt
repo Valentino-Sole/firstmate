@@ -1,0 +1,27 @@
+===== BEFORE (pre-fix extension, base commit 6c1d2db) =====
+extension events: before_agent_start -> before_agent_start -> agent_settled(runsStillLive=1) -> agent_settled(runsStillLive=0)
+
+--- chat transcript the captain sees ---
+  user      | [internal op] stale: 1 in-flight task, beacon 812s old - run bin/fm-wake-drain.sh
+  assistant | Wake abgearbeitet, Watcher wieder gesund.
+
+--- verdict ---
+captain's message present in the conversation : false
+recovery follow-ups sent by the extension     : 0
+extra follow-ups from 2 repeated settles      : 0
+final transcript tail                          : assistant/stop
+
+===== AFTER (fixed extension, target commit c331884) =====
+extension events: input(source=extension) -> input(source=interactive) -> before_agent_start -> before_agent_start -> agent_settled(runsStillLive=1) -> agent_settled(runsStillLive=0) -> input(source=extension) -> before_agent_start -> agent_settled(runsStillLive=0)
+
+--- chat transcript the captain sees ---
+  user      | [internal op] stale: 1 in-flight task, beacon 812s old - run bin/fm-wake-drain.sh
+  assistant | Wake abgearbeitet, Watcher wieder gesund.
+  user      | [internal op] CAPTAIN INPUT WAS LOST - the message quoted below was submitted by the captain and acknowledged in the interface, but it never reached the conversation at all, so no answer to 
+  assistant | Stand: der Gate-Lauf ist durch, Review offen.
+
+--- verdict ---
+captain's message present in the conversation : true
+recovery follow-ups sent by the extension     : 1
+extra follow-ups from 2 repeated settles      : 0
+final transcript tail                          : assistant/stop

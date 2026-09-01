@@ -1,0 +1,62 @@
+===== BEFORE - hanging tool call, pre-fix extension =====
+  settle #1: nothing sent
+  settle #2: nothing sent
+  settle #3: nothing sent
+  settle #4: nothing sent
+  settle #5: nothing sent
+  settle #6: nothing sent
+  settle #7: nothing sent
+  settle #8: nothing sent
+  settle #9: nothing sent
+
+--- what the captain sees after the hang ---
+  (nothing - the session stays silent)
+
+--- chat tail ---
+  user       | [internal op] stale: beacon 812s old - run bin/fm-wake-drain.sh
+  assistant  | [toolCall:bash]
+
+total follow-ups over 9 settles: 0
+
+===== AFTER - hanging tool call, recovery turn answers =====
+  settle #1: 1 follow-up sent
+  settle #2: nothing sent
+  settle #3: nothing sent
+  settle #4: nothing sent
+  settle #5: nothing sent
+  settle #6: nothing sent
+  settle #7: nothing sent
+  settle #8: nothing sent
+  settle #9: nothing sent
+
+--- what the captain sees after the hang ---
+  1. TURN ENDED WITHOUT A REPLY - the last message in this conversation (a captain message or a delivered watcher wake) has n
+
+--- chat tail ---
+  toolResult | wake queue drained
+  assistant  | Wake abgearbeitet. Stand: Gate-Lauf durch, Review offen.
+
+total follow-ups over 9 settles: 1
+
+===== AFTER - hanging tool call that never recovers (bounded retries) =====
+  settle #1: 1 follow-up sent
+  settle #2: 1 follow-up sent
+  settle #3: 1 follow-up sent
+  settle #4: 1 follow-up sent
+  settle #5: nothing sent
+  settle #6: nothing sent
+  settle #7: nothing sent
+  settle #8: nothing sent
+  settle #9: nothing sent
+
+--- what the captain sees after the hang ---
+  1. TURN ENDED WITHOUT A REPLY - the last message in this conversation (a captain message or a delivered watcher wake) has n
+  2. TURN ENDED WITHOUT A REPLY - the last message in this conversation (a captain message or a delivered watcher wake) has n
+  3. TURN ENDED WITHOUT A REPLY - the last message in this conversation (a captain message or a delivered watcher wake) has n
+  4. TURN ENDED WITHOUT A REPLY - automatic recovery gave up after 3 attempts. The last message in this conversation still ha
+
+--- chat tail ---
+  user       | [internal op] TURN ENDED WITHOUT A REPLY - the last message in this conversation (a captain message or a delivered watcher wake) has no visible assist
+  user       | [internal op] TURN ENDED WITHOUT A REPLY - automatic recovery gave up after 3 attempts. The last message in this conversation still has no visible ass
+
+total follow-ups over 9 settles: 4

@@ -1,0 +1,20 @@
+1823.96ms watcher wake: prompt('FIRSTMATE WATCHER WAKE...') START
+1824.32ms captain call: prompt('bitte den Stand zusammenfassen') START
+1824.67ms emitBeforeAgentStart (simulating a real extension awaiting a child process)
+1824.83ms emitBeforeAgentStart (simulating a real extension awaiting a child process)
+1845.38ms _runAgentPrompt ENTER (concurrent=1) messages=[{"role":"user","content":[{"type":"text","text":"FIRSTMATE 
+1845.54ms _runAgentPrompt ENTER (concurrent=2) messages=[{"role":"user","content":[{"type":"text","text":"bitte den 
+1845.59ms _runAgentPrompt EXIT -> _emitAgentSettled()
+1885.19ms _runAgentPrompt EXIT -> _emitAgentSettled()
+
+maxConcurrentRunAgentPromptCalls = 2
+extension event order: before_agent_start -> before_agent_start -> agent_settled(runsStillLive=1) -> agent_settled(runsStillLive=0)
+settlesWhileAnotherRunWasLive = 1
+
+captain input seen by the "input" event: true
+captain text present in the transcript: false
+transcript tail looks healthy: true
+REPRODUCED: two concurrent prompt() calls both reached _runAgentPrompt() concurrently.
+REPRODUCED: a spurious agent_settled fired while another logical run was still live.
+REPRODUCED: the captain's message was lost entirely while the transcript tail stayed healthy.
+exit=1
