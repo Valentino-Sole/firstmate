@@ -1101,6 +1101,7 @@ install_pi_reply_recovery_fixture() {  # <repo>
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
 #!/usr/bin/env bash
 cat >/dev/null
+[ -z "${FM_GUARD_LOG:-}" ] || printf 'run\n' >> "$FM_GUARD_LOG"
 # Healthy by default; a test that needs the supervision branch writes the
 # desired exit code into state/.test-guard-verdict beforehand.
 verdict="${FM_HOME:-}/state/.test-guard-verdict"
@@ -1622,6 +1623,127 @@ EOF
   expect_code 0 "$status" "Pi guard reply latch must not survive a settle claimed by the supervision guard"
   [ -z "$out" ] || fail "Pi reply-recovery latch-interleaving test printed output: $out"
   pass ".pi primary extension: reply latch never swallows a later unanswered episode"
+}
+
+test_pi_reply_recovery_skips_a_spurious_mid_turn_settle() {
+  local repo home log ext out status
+  repo="$TMP_ROOT/pi-reply-spurious-root"
+  home="$TMP_ROOT/pi-reply-spurious-home"
+  log="$TMP_ROOT/pi-reply-spurious-guard.log"
+  mkdir -p "$home/state"
+  : > "$log"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" FM_GUARD_LOG="$log" node --input-type=module 2>&1 <<'EOF'
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+if (!started) throw new Error("before_agent_start handler was not registered");
+
+// The reproduced race: the captain prompt and the watcher wake both observe an
+// idle session and both open a logical run. The loser's inner agent.prompt()
+// rejects at once, but its finally block still emits agent_settled while the
+// winner is mid-turn - so the transcript tail is a not-yet-resolved tool call
+// that is going to be answered by the still-running winner.
+const midFlightCtx = {
+  sessionManager: {
+    getEntries: () => [
+      { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "captain input", timestamp: 0 } },
+      { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash" }], stopReason: "toolUse", timestamp: 0 } },
+    ],
+  },
+};
+
+await started({ type: "before_agent_start" }, {});
+await started({ type: "before_agent_start" }, {});
+
+// The loser's spurious settle must be left entirely unevaluated: no recovery
+// follow-up, and not even a supervision-guard run.
+await settled({ type: "agent_settled" }, midFlightCtx);
+if (prompts.length !== 0) throw new Error(`spurious mid-turn settle produced ${prompts.length} follow-ups`);
+if (readFileSync(process.env.FM_GUARD_LOG, "utf8").trim() !== "") {
+  throw new Error("spurious mid-turn settle still ran the supervision guard");
+}
+
+// The winner's own settle is terminal and is judged normally.
+await settled({ type: "agent_settled" }, midFlightCtx);
+if (prompts.length !== 1) throw new Error(`genuine settle produced ${prompts.length} follow-ups, expected exactly 1`);
+if (!prompts[0].includes("TURN ENDED WITHOUT A REPLY")) throw new Error(`unexpected prompt: ${prompts[0]}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must ignore a settle emitted while another logical run is still in flight"
+  [ -z "$out" ] || fail "Pi reply-recovery spurious-settle test printed output: $out"
+  pass ".pi primary extension: a spurious mid-turn settle is skipped and only the terminal settle is judged"
+}
+
+test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-reply-spurious-healthy-root"
+  home="$TMP_ROOT/pi-reply-spurious-healthy-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+let prompts = 0;
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage() {
+    prompts += 1;
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// Same interleaving, but the winner goes on to answer properly. Nudging on the
+// loser's spurious settle would start an extra turn on top of an answer that
+// was already on its way - the duplicate answer the contract forbids.
+const midFlight = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "captain input", timestamp: 0 } },
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash" }], stopReason: "toolUse", timestamp: 0 } },
+];
+let entries = midFlight;
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await started({ type: "before_agent_start" }, {});
+await started({ type: "before_agent_start" }, {});
+await settled({ type: "agent_settled" }, ctx);
+if (prompts !== 0) throw new Error(`spurious mid-turn settle produced ${prompts} follow-ups`);
+
+entries = [
+  ...midFlight,
+  { type: "message", id: "r1", parentId: "a1", timestamp: "t", message: { role: "toolResult", toolCallId: "tc1", toolName: "bash", content: "drained", isError: false, timestamp: 0 } },
+  { type: "message", id: "a2", parentId: "r1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts !== 0) throw new Error(`the winner answered, yet ${prompts} follow-ups were sent`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must not nudge when the still-running winner goes on to answer"
+  [ -z "$out" ] || fail "Pi reply-recovery spurious-healthy test printed output: $out"
+  pass ".pi primary extension: a spurious mid-turn settle never doubles an answer the winner still delivers"
 }
 
 # --- --claude cooperative mode -----------------------------------------------
@@ -2345,6 +2467,8 @@ test_pi_reply_recovery_ignores_a_flushed_inline_bash_message
 test_pi_reply_recovery_flags_a_tool_call_beside_a_text_preamble
 test_pi_reply_recovery_never_restarts_an_aborted_turn
 test_pi_reply_recovery_latch_never_swallows_a_later_episode
+test_pi_reply_recovery_skips_a_spurious_mid_turn_settle
+test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
 test_hook_claude_mode_allows_when_autoarm_owner_alive

@@ -35,6 +35,19 @@ let orphanedReplyExhaustedNotified = false;
 // mistaken for an unanswered turn.
 const CONVERSATIONAL_MESSAGE_ROLES = new Set(["user", "assistant", "toolResult"]);
 
+// Logical agent runs currently in flight. Pi emits `before_agent_start` only
+// on prompt()'s not-streaming branch, never when a message is queued into an
+// already-active run through steer or followUp, so this counts independent
+// runs and not ordinary mid-turn continuations. It matters because the losing
+// side of the reproduced race still reaches _runAgentPrompt, has its inner
+// agent.prompt() reject at once with "Agent is already processing a prompt.",
+// and its finally block emits `agent_settled` while the winning turn is still
+// streaming. That settle is not terminal, and `_isAgentRunActive`/`isIdle()`
+// cannot be used to recognise it because the race corrupts that same flag.
+// A settle that still leaves a run in flight is therefore left unevaluated;
+// the eventual settle that drains the counter is judged normally.
+let inFlightAgentRuns = 0;
+
 type LockOwnership = "owned" | "missing" | "other";
 
 const extensionFile = fileURLToPath(import.meta.url);
@@ -599,6 +612,7 @@ export default function (pi: ExtensionAPI) {
       ? startupRebuildSource(ctx) ?? "startup"
       : { new: "clear", resume: "resume", fork: "fork" }[reason];
     markLoaded();
+    inFlightAgentRuns = 0;
     if (!source) return;
     registerSessionstartExitListener();
     sessionstartGeneration = createSessionstartGeneration(
@@ -608,6 +622,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on?.("before_agent_start", async (_event, ctx) => {
+    inFlightAgentRuns += 1;
     const generation = sessionstartGeneration;
     if (!generation) return;
     const message = await claimSessionstartMessage(generation, ctx);
@@ -654,6 +669,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
+    inFlightAgentRuns = inFlightAgentRuns > 0 ? inFlightAgentRuns - 1 : 0;
+    if (inFlightAgentRuns > 0) return;
+
     if (guardFollowupActive) {
       guardFollowupActive = false;
       return;

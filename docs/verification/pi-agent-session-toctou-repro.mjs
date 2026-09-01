@@ -17,6 +17,11 @@ const promptFn = AgentSession.prototype.prompt;
 let concurrentRunAgentPromptCalls = 0;
 let maxConcurrentRunAgentPromptCalls = 0;
 const events = [];
+// Extension-visible event order, exactly as .pi/extensions/fm-primary-turnend-guard.ts
+// receives it. The losing prompt() call emits a settle of its own while the
+// winner is still running, so a settle is NOT proof that the session is idle.
+const extensionEvents = [];
+let settlesWhileAnotherRunWasLive = 0;
 
 function log(label) {
   events.push(`${(performance.now()).toFixed(2)}ms ${label}`);
@@ -29,14 +34,25 @@ async function fakeRunAgentPrompt(messages) {
   this._isAgentRunActive = true;
   concurrentRunAgentPromptCalls++;
   maxConcurrentRunAgentPromptCalls = Math.max(maxConcurrentRunAgentPromptCalls, concurrentRunAgentPromptCalls);
+  const isLoser = concurrentRunAgentPromptCalls > 1;
   log(`_runAgentPrompt ENTER (concurrent=${concurrentRunAgentPromptCalls}) messages=${JSON.stringify(messages).slice(0, 60)}`);
   try {
+    if (isLoser) {
+      // pi-agent-core Agent.prototype.prompt (dist/agent.js) rejects at once
+      // when activeRun is set: "Agent is already processing a prompt."
+      throw new Error("Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.");
+    }
     // Simulate real inference/tool-call latency.
     await new Promise((r) => setTimeout(r, 40));
   } finally {
     concurrentRunAgentPromptCalls--;
+    // agent-session.js _runAgentPrompt's finally block runs _emitAgentSettled()
+    // unconditionally, which clears _isAgentRunActive and emits agent_settled
+    // to every extension - even for a run that never produced anything.
     this._isAgentRunActive = false;
-    log(`_runAgentPrompt EXIT`);
+    log(`_runAgentPrompt EXIT -> _emitAgentSettled()`);
+    if (concurrentRunAgentPromptCalls > 0) settlesWhileAnotherRunWasLive++;
+    extensionEvents.push(`agent_settled(runsStillLive=${concurrentRunAgentPromptCalls})`);
   }
 }
 
@@ -67,6 +83,7 @@ function makeStubSession() {
       // watcher wake (fm-primary-pi-watch.ts sendWake) races against.
       emitBeforeAgentStart: async () => {
         log("emitBeforeAgentStart (simulating a real extension awaiting a child process)");
+        extensionEvents.push("before_agent_start");
         await new Promise((r) => setTimeout(r, 20));
         return undefined;
       },
@@ -94,12 +111,26 @@ const captainCall = promptFn.call(session, "real captain message", { source: "in
 log("watcher wake: prompt('FIRSTMATE WATCHER WAKE...') START");
 const wakeCall = promptFn.call(session, "FIRSTMATE WATCHER WAKE: stale", { streamingBehavior: "followUp", source: "extension" });
 
-await Promise.all([captainCall, wakeCall]);
+// allSettled, not all: the losing call rejects by design, exactly as the real
+// nested agent.prompt() does when it finds an active run.
+await Promise.allSettled([captainCall, wakeCall]);
 
 console.log(events.join("\n"));
 console.log(`\nmaxConcurrentRunAgentPromptCalls = ${maxConcurrentRunAgentPromptCalls}`);
+console.log(`extension event order: ${extensionEvents.join(" -> ")}`);
+console.log(`settlesWhileAnotherRunWasLive = ${settlesWhileAnotherRunWasLive}`);
 if (maxConcurrentRunAgentPromptCalls > 1) {
   console.log("REPRODUCED: two concurrent prompt() calls both reached _runAgentPrompt() concurrently.");
+  if (settlesWhileAnotherRunWasLive > 0) {
+    // This is what the extension has to survive: it sees two
+    // before_agent_start events and then a settle that is NOT terminal. It
+    // counts logical runs in flight and leaves such a settle unevaluated, so
+    // only the trailing settle - the one that drains the counter - is judged.
+    // tests/fm-turnend-guard.test.sh's test_pi_reply_recovery_skips_a_spurious_mid_turn_settle
+    // and test_pi_reply_recovery_spurious_settle_never_doubles_a_healthy_answer
+    // replay exactly this event order against the real handler.
+    console.log("REPRODUCED: a spurious agent_settled fired while another logical run was still live.");
+  }
   process.exit(1);
 } else {
   console.log("NOT REPRODUCED this run (race is timing-dependent).");
