@@ -1339,7 +1339,7 @@ const settled = handlers.get("agent_settled");
 const ctx = {
   sessionManager: {
     getEntries: () => [
-      { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "⁣FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+      { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
     ],
   },
 };
@@ -2146,6 +2146,101 @@ EOF
   expect_code 0 "$status" "Pi guard must never replay a captain instruction the captain already resent by hand"
   [ -z "$out" ] || fail "Pi input-recovery manual-resend test printed output: $out"
   pass ".pi primary extension: a manual resend after the race never doubles the instruction"
+}
+
+test_pi_input_recovery_marks_a_resend_that_races_its_own_recovery() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-resend-window-root"
+  home="$TMP_ROOT/pi-input-resend-window-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message, options) {
+    prompts.push({ message, options });
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// The chat error the losing prompt() prints is the captain reason to resend by
+// hand, and that reaction is not bound to arrive before the settle picks the
+// lost recording up. Here recovery goes first and the resend lands while the
+// recovered copy is still being carried out.
+const captainText = "loesch den branch";
+let entries = [
+  { type: "message", id: "e1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+  { type: "message", id: "e2", parentId: "e1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: captainText, source: "interactive" }, ctx);
+await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
+await started({ type: "before_agent_start", prompt: captainText }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) throw new Error(`expected exactly one recovery resubmission, got ${prompts.length}`);
+const recoveryEnvelope = prompts[0].message;
+
+// The captain retypes the same instruction before the recovery turn is done.
+const resend = await input({ type: "input", text: captainText, source: "interactive" }, ctx);
+if (resend?.action !== "transform") {
+  throw new Error(`the resend was delivered as an unrelated second order: ${JSON.stringify(resend)}`);
+}
+if (!resend.text.includes(captainText)) throw new Error(`the captain words were dropped: ${resend.text}`);
+if (!resend.text.includes("FIRSTMATE HARNESS NOTE")) throw new Error(`the duplication was not stated: ${resend.text}`);
+if (!resend.text.includes("exactly once")) throw new Error(`the resend did not state a single execution: ${resend.text}`);
+if (resend.text === captainText) throw new Error("the resend was left unmarked");
+
+// Both the recovery follow-up and that resend run and are answered. The
+// resend reaches the transcript as it was delivered, so it must not be
+// judged lost and recovered a second time.
+await started({ type: "before_agent_start", prompt: recoveryEnvelope }, ctx);
+await started({ type: "before_agent_start", prompt: resend.text }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "e3", parentId: "e2", timestamp: "t", message: { role: "user", content: [{ type: "text", text: recoveryEnvelope }], timestamp: 0 } },
+  { type: "message", id: "e4", parentId: "e3", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Branch geloescht." }], stopReason: "stop", timestamp: 0 } },
+  { type: "message", id: "e5", parentId: "e4", timestamp: "t", message: { role: "user", content: [{ type: "text", text: resend.text }], timestamp: 0 } },
+  { type: "message", id: "e6", parentId: "e5", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Der Branch ist schon geloescht." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) {
+  throw new Error(`the marked resend was recovered again: ${JSON.stringify(prompts)}`);
+}
+
+// Once an answer to the recovered instruction exists, the same text is a
+// deliberate repeat and must reach the model untouched.
+const later = await input({ type: "input", text: captainText, source: "interactive" }, ctx);
+if (later !== undefined) throw new Error(`a deliberate repeat was marked as a duplicate: ${JSON.stringify(later)}`);
+await started({ type: "before_agent_start", prompt: captainText }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "e7", parentId: "e6", timestamp: "t", message: { role: "user", content: [{ type: "text", text: captainText }], timestamp: 0 } },
+  { type: "message", id: "e8", parentId: "e7", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Erneut geprueft." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 1) {
+  throw new Error(`the deliberate repeat produced a recovery: ${JSON.stringify(prompts)}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must mark a captain resend that races the recovery it already sent"
+  [ -z "$out" ] || fail "Pi input-recovery resend-window test printed output: $out"
+  pass ".pi primary extension: a resend racing its own recovery is delivered marked, not doubled"
 }
 
 test_pi_input_recovery_carries_attached_images() {
@@ -3193,6 +3288,7 @@ test_pi_input_recovery_never_replays_a_withdrawn_queued_message
 test_pi_input_recovery_never_replays_a_failed_submission_the_captain_resent
 test_pi_input_recovery_ignores_an_unrelated_runs_turn_start
 test_pi_input_recovery_never_doubles_a_manual_resend_after_the_race
+test_pi_input_recovery_marks_a_resend_that_races_its_own_recovery
 test_pi_input_recovery_carries_attached_images
 test_pi_input_recovery_detects_a_short_message_a_longer_one_contains
 test_pi_reply_recovery_never_doubles_on_overlapping_settles

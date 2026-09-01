@@ -96,6 +96,30 @@ let settleEvaluationActive = false;
 // would execute one instruction twice, and the resend carries it anyway.
 // Equivalence here is exact text, the only signal the events carry - a
 // reworded resend is not recognised as the same instruction.
+// That supersession only reaches a resend the captain submits before a settle
+// picked the recording up. The chat error is theirs to react to at any moment,
+// so the resend can just as well arrive after recovery already went out, while
+// the recovered copy is still being carried out - and the recording it would
+// have superseded is gone by then. Recovery therefore keeps the text it just
+// resubmitted, and a captain submission of exactly that text is delivered with
+// the duplication stated in front of it instead of arriving as a second,
+// unrelated-looking order. The captain's own words are kept verbatim behind
+// that notice, because dropping their submission would be the same lost input
+// this whole mechanism exists to prevent.
+// The window closes on the settle that ends the recovery turn: once an answer
+// to the recovered instruction exists, an identical submission after it is a
+// deliberate repeat and must reach the model untouched.
+const DUPLICATE_RECOVERED_INPUT_NOTICE =
+  "FIRSTMATE HARNESS NOTE - the instruction below was already delivered to you moments ago by automatic recovery, because Pi lost " +
+  "this exact submission at turn start, and that recovery is still being carried out. This is the captain sending the same text " +
+  "again by hand after seeing the error, not an order to do the work twice. Carry it out exactly once: if you have already done " +
+  "it, say so instead of repeating it. The captain's message follows verbatim.";
+let recoveredCaptainInputText: string | null = null;
+
+function markDuplicateOfRecoveredInput(text: string): string {
+  return `${DUPLICATE_RECOVERED_INPUT_NOTICE}\n\n${text}`;
+}
+
 type UserMessageContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 type UserMessagePart = Exclude<UserMessageContent, string>[number];
 type PendingCaptainInput = {
@@ -759,6 +783,7 @@ export default function (pi: ExtensionAPI) {
     markLoaded();
     inFlightAgentRuns = 0;
     pendingCaptainInputs = [];
+    recoveredCaptainInputText = null;
     orphanedReplyAttempts = 0;
     orphanedReplyExhaustedNotified = false;
     if (!source) return;
@@ -827,14 +852,26 @@ export default function (pi: ExtensionAPI) {
     const source = String((event as { source?: unknown }).source ?? "");
     const text = String((event as { text?: unknown }).text ?? "");
     const streamingBehavior = (event as { streamingBehavior?: unknown }).streamingBehavior;
-    if (!captainInputWorthTracking(source, text, streamingBehavior)) return;
-    const images = (event as { images?: unknown }).images;
     const trimmed = text.trim();
+    // Judged for every captain submission, not only a tracked one: the resend
+    // that races an in-flight recovery is typically queued into that very
+    // turn, which sets streamingBehavior and takes it out of tracking.
+    const duplicatesRecovery = CAPTAIN_INPUT_SOURCES.has(source) &&
+      recoveredCaptainInputText !== null &&
+      trimmed === recoveredCaptainInputText;
+    const delivered = duplicatesRecovery ? markDuplicateOfRecoveredInput(text) : text;
+    const result = duplicatesRecovery
+      ? ({ action: "transform", text: delivered } as const)
+      : undefined;
+    if (!captainInputWorthTracking(source, text, streamingBehavior)) return result;
+    const images = (event as { images?: unknown }).images;
     pendingCaptainInputs = pendingCaptainInputs.filter(
       (pending) => pending.committed && pending.text.trim() !== trimmed,
     );
+    // Recorded as it will be appended, not as it was typed, so the transcript
+    // comparison and the before_agent_start commit still match exactly.
     pendingCaptainInputs.push({
-      text,
+      text: delivered,
       images: Array.isArray(images) ? (images as UserMessagePart[]) : [],
       afterEntryId: lastEntryId(ctx),
       committed: false,
@@ -842,6 +879,7 @@ export default function (pi: ExtensionAPI) {
     if (pendingCaptainInputs.length > PENDING_CAPTAIN_INPUT_LIMIT) {
       pendingCaptainInputs = pendingCaptainInputs.slice(-PENDING_CAPTAIN_INPUT_LIMIT);
     }
+    return result;
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
@@ -863,6 +901,14 @@ export default function (pi: ExtensionAPI) {
 
     if (settleEvaluationActive) return;
     settleEvaluationActive = true;
+    // The duplicate-resend window belongs to the recovery turn, and this is
+    // the settle that ends it: from here on an identical captain submission
+    // is a deliberate repeat and is delivered untouched. Unlike the latches
+    // above it is closed after the claim rather than before, because it
+    // suppresses nothing - a settle dropped here is concurrent with the very
+    // evaluation that may still be opening the window, and closing it from
+    // there would reopen the double execution it exists to prevent.
+    recoveredCaptainInputText = null;
     try {
       await evaluateSettle(ctx, replyFollowupSettle);
     } finally {
@@ -911,7 +957,15 @@ export default function (pi: ExtensionAPI) {
       const payload: UserMessageContent = lostCaptainInput.images.length === 0
         ? content
         : [{ type: "text", text: content }, ...lostCaptainInput.images];
-      await pi.sendUserMessage(payload, { deliverAs: "followUp" });
+      // Opened before the delivery await, because the captain can resend
+      // during it, and closed again if the delivery never happened.
+      recoveredCaptainInputText = lostCaptainInput.text.trim();
+      try {
+        await pi.sendUserMessage(payload, { deliverAs: "followUp" });
+      } catch (error) {
+        recoveredCaptainInputText = null;
+        throw error;
+      }
       return;
     }
 
