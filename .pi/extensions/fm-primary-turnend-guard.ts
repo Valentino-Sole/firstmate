@@ -57,7 +57,6 @@ let inFlightAgentRuns = 0;
 // later, genuinely unanswered episode.
 let settleEvaluationActive = false;
 
-
 // Captain-owned input recorded from prompt()'s `input` event, which fires
 // before the isStreaming check and therefore also for the prompt() call that
 // goes on to lose the race. That loser never appends anything: pi-agent-core's
@@ -83,13 +82,18 @@ let settleEvaluationActive = false;
 // committed to a run from one that died earlier: prompt() still throws for an
 // unselected model or failed auth well before that hook, appending nothing
 // while the captain sees an error and simply resends. Judging such a phantom
-// would replay an instruction that already ran under the resend. Each
-// `before_agent_start` commits at most the newest uncommitted recording, a
-// new recording drops any uncommitted predecessor, and any recording still
-// uncommitted when a settle arrives is dropped unjudged - by then its own
-// call would long since have reached the hook.
+// would replay an instruction that already ran under the resend. The hook's
+// own event carries the prompt it is starting, and expansion is a no-op for a
+// tracked recording, so a recording is committed only by a start that quotes
+// it back verbatim - an unrelated run's start leaves it alone. A new
+// recording drops any uncommitted predecessor, and a recording still
+// uncommitted when a settle arrives is dropped unjudged, because a call that
+// was going to commit reaches the hook well before any settle.
+type UserMessageContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
+type UserMessagePart = Exclude<UserMessageContent, string>[number];
 type PendingCaptainInput = {
   text: string;
+  images: UserMessagePart[];
   afterEntryId: string | null;
   committed: boolean;
 };
@@ -758,11 +762,12 @@ export default function (pi: ExtensionAPI) {
     );
   });
 
-  pi.on?.("before_agent_start", async (_event, ctx) => {
+  pi.on?.("before_agent_start", async (event, ctx) => {
     inFlightAgentRuns += 1;
+    const startedPrompt = String((event as { prompt?: unknown }).prompt ?? "").trim();
     for (let i = pendingCaptainInputs.length - 1; i >= 0; i -= 1) {
       const pending = pendingCaptainInputs[i];
-      if (pending.committed) continue;
+      if (pending.committed || pending.text.trim() !== startedPrompt) continue;
       pendingCaptainInputs[i] = { ...pending, committed: true };
       break;
     }
@@ -816,9 +821,11 @@ export default function (pi: ExtensionAPI) {
     const text = String((event as { text?: unknown }).text ?? "");
     const streamingBehavior = (event as { streamingBehavior?: unknown }).streamingBehavior;
     if (!captainInputWorthTracking(source, text, streamingBehavior)) return;
+    const images = (event as { images?: unknown }).images;
     pendingCaptainInputs = pendingCaptainInputs.filter((pending) => pending.committed);
     pendingCaptainInputs.push({
       text,
+      images: Array.isArray(images) ? (images as UserMessagePart[]) : [],
       afterEntryId: lastEntryId(ctx),
       committed: false,
     });
@@ -891,7 +898,10 @@ export default function (pi: ExtensionAPI) {
           "arriving now, and answer it directly. Do not repeat any answer you already gave earlier in this conversation.\n\n" +
           lostCaptainInput.text,
       );
-      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      const payload: UserMessageContent = lostCaptainInput.images.length === 0
+        ? content
+        : [{ type: "text", text: content }, ...lostCaptainInput.images];
+      await pi.sendUserMessage(payload, { deliverAs: "followUp" });
       return;
     }
 

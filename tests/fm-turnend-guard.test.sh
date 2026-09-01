@@ -1787,8 +1787,8 @@ const entries = [
 const ctx = { sessionManager: { getEntries: () => entries } };
 
 await input({ type: "input", text: "bitte den Stand zusammenfassen", source: "interactive" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
+await started({ type: "before_agent_start", prompt: "bitte den Stand zusammenfassen" }, ctx);
 await settled({ type: "agent_settled" }, ctx);
 if (prompts.length !== 0) throw new Error(`spurious settle acted: ${prompts.length} prompts`);
 
@@ -1845,7 +1845,7 @@ let entries = [];
 const ctx = { sessionManager: { getEntries: () => entries } };
 
 await input({ type: "input", text: "bitte den Stand zusammenfassen", source: "interactive" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "bitte den Stand zusammenfassen" }, ctx);
 entries = [
   { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: [{ type: "text", text: "bitte den Stand zusammenfassen" }], timestamp: 0 } },
   { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Hier der Stand." }], stopReason: "stop", timestamp: 0 } },
@@ -1903,7 +1903,7 @@ let entries = [
 ];
 const ctx = { sessionManager: { getEntries: () => entries } };
 
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "erster auftrag" }, ctx);
 await input({ type: "input", text: "loesch den branch", source: "interactive", streamingBehavior: "steer" }, ctx);
 
 // Escape: the queue is cleared, the run aborts, and the queued text is back in
@@ -1915,7 +1915,7 @@ entries = [
 await settled({ type: "agent_settled" }, ctx);
 
 // A later, unrelated turn must not replay the withdrawn instruction.
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "was steht an?" }, ctx);
 entries = [
   ...entries,
   { type: "message", id: "u2", parentId: "a1", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "was steht an?" }], timestamp: 0 } },
@@ -1971,7 +1971,7 @@ await input({ type: "input", text: "loesch den branch", source: "interactive" },
 // prompt() throws here: no before_agent_start, no transcript entry.
 
 await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "loesch den branch" }, ctx);
 entries = [
   ...entries,
   { type: "message", id: "e6", parentId: "e5", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "loesch den branch" }], timestamp: 0 } },
@@ -1999,6 +1999,131 @@ EOF
   expect_code 0 "$status" "Pi guard must never replay a submission that failed before it started a run and was resent by hand"
   [ -z "$out" ] || fail "Pi input-recovery resend test printed output: $out"
   pass ".pi primary extension: a failed submission the captain resent is never replayed"
+}
+
+test_pi_input_recovery_ignores_an_unrelated_runs_turn_start() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-unrelated-root"
+  home="$TMP_ROOT/pi-input-unrelated-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(message) {
+    prompts.push(message);
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// The captain's prompt() emitted its input event and then threw before it
+// could start a run, so nothing was appended. The next run is a watcher wake,
+// entirely unrelated: its turn start quotes the wake text, not the captain's,
+// and must not adopt the captain's phantom recording.
+let entries = [];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: "loesch den branch", source: "interactive" }, ctx);
+
+await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
+entries = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`an unrelated run adopted the phantom recording: ${JSON.stringify(prompts)}`);
+}
+
+// And it stays dropped: a later run must not resurrect it either.
+await started({ type: "before_agent_start", prompt: "was steht an?" }, ctx);
+entries = [
+  ...entries,
+  { type: "message", id: "u2", parentId: "a1", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "was steht an?" }], timestamp: 0 } },
+  { type: "message", id: "a2", parentId: "u2", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Nichts offen." }], stopReason: "stop", timestamp: 0 } },
+];
+await settled({ type: "agent_settled" }, ctx);
+if (prompts.length !== 0) {
+  throw new Error(`a later run resurrected the phantom recording: ${JSON.stringify(prompts)}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must not let an unrelated run's turn start adopt a captain recording"
+  [ -z "$out" ] || fail "Pi input-recovery unrelated-start test printed output: $out"
+  pass ".pi primary extension: an unrelated run's turn start never adopts a captain recording"
+}
+
+test_pi_input_recovery_carries_attached_images() {
+  local repo home ext out status
+  repo="$TMP_ROOT/pi-input-images-root"
+  home="$TMP_ROOT/pi-input-images-home"
+  mkdir -p "$home/state"
+  install_pi_reply_recovery_fixture "$repo"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  out=$(PLUGIN="$ext" FM_HOME="$home" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+const prompts = [];
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  async sendUserMessage(content, options) {
+    prompts.push({ content, options });
+  },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const input = handlers.get("input");
+const started = handlers.get("before_agent_start");
+const settled = handlers.get("agent_settled");
+
+// The captain pasted a screenshot with the question. Recovering the sentence
+// without the attachment would make the model answer about something it
+// cannot see.
+const screenshot = { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" };
+const entries = [
+  { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
+  { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
+];
+const ctx = { sessionManager: { getEntries: () => entries } };
+
+await input({ type: "input", text: "was ist das im Log?", source: "interactive", images: [screenshot] }, ctx);
+await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
+await started({ type: "before_agent_start", prompt: "was ist das im Log?" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+await settled({ type: "agent_settled" }, ctx);
+
+if (prompts.length !== 1) throw new Error(`expected one recovery resubmission, got ${prompts.length}`);
+const [{ content, options }] = prompts;
+if (!Array.isArray(content)) throw new Error(`the attachment was dropped, content was a bare string: ${content}`);
+const textParts = content.filter((part) => part.type === "text");
+const imageParts = content.filter((part) => part.type === "image");
+if (textParts.length !== 1) throw new Error(`expected exactly one text part, got ${textParts.length}`);
+if (!textParts[0].text.includes("CAPTAIN INPUT WAS LOST")) throw new Error(`not an input-recovery prompt: ${textParts[0].text}`);
+if (!textParts[0].text.includes("was ist das im Log?")) throw new Error(`the lost text was not carried: ${textParts[0].text}`);
+if (imageParts.length !== 1) throw new Error(`expected the screenshot to be carried, got ${imageParts.length} image parts`);
+if (imageParts[0].data !== screenshot.data) throw new Error("the carried image was not the captain's attachment");
+if (options?.deliverAs !== "followUp") throw new Error("recovery prompt was not a follow-up");
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi guard must resubmit a lost captain message together with its attachments"
+  [ -z "$out" ] || fail "Pi input-recovery image test printed output: $out"
+  pass ".pi primary extension: a lost captain message keeps its attached images"
 }
 
 test_pi_input_recovery_detects_a_short_message_a_longer_one_contains() {
@@ -2038,8 +2163,8 @@ let entries = [];
 const ctx = { sessionManager: { getEntries: () => entries } };
 
 await input({ type: "input", text: "weiter", source: "interactive" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "\u2063FIRSTMATE_OP: v1 watcher: stale: ..." }, ctx);
+await started({ type: "before_agent_start", prompt: "weiter" }, ctx);
 entries = [
   { type: "message", id: "u1", parentId: null, timestamp: "t", message: { role: "user", content: "\u2063FIRSTMATE_OP: v1 watcher: stale: ...", timestamp: 0 } },
   { type: "message", id: "a1", parentId: "u1", timestamp: "t", message: { role: "assistant", content: [{ type: "text", text: "Wake abgearbeitet." }], stopReason: "stop", timestamp: 0 } },
@@ -2055,7 +2180,7 @@ await settled({ type: "agent_settled" }, ctx);
 if (prompts.length !== 1) throw new Error(`guard-latch-absorbed settle acted, total ${prompts.length}`);
 
 await input({ type: "input", text: "weiter mit dem PR", source: "interactive" }, ctx);
-await started({ type: "before_agent_start" }, ctx);
+await started({ type: "before_agent_start", prompt: "weiter mit dem PR" }, ctx);
 entries = [
   ...entries,
   { type: "message", id: "u2", parentId: "a1", timestamp: "t", message: { role: "user", content: [{ type: "text", text: "weiter mit dem PR" }], timestamp: 0 } },
@@ -2983,6 +3108,8 @@ test_pi_input_recovery_resubmits_a_captain_message_lost_to_the_race
 test_pi_input_recovery_stays_silent_for_a_delivered_captain_message
 test_pi_input_recovery_never_replays_a_withdrawn_queued_message
 test_pi_input_recovery_never_replays_a_failed_submission_the_captain_resent
+test_pi_input_recovery_ignores_an_unrelated_runs_turn_start
+test_pi_input_recovery_carries_attached_images
 test_pi_input_recovery_detects_a_short_message_a_longer_one_contains
 test_pi_reply_recovery_never_doubles_on_overlapping_settles
 test_pi_reply_recovery_skips_a_run_that_started_during_the_guard_check
