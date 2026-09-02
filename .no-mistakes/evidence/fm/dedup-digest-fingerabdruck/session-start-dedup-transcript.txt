@@ -1,0 +1,190 @@
+############################################################
+# 1) FIRST session start - no marker yet -> FULL block per task
+############################################################
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-alpha
+endpoint: alive (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status):
+working: refactoring the wake drain
+
+--- task-beta ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-beta
+endpoint: alive (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status):
+working: writing tests
+
+
+state/ markers now present:
+  .session-start-seen-task-alpha
+  .session-start-seen-task-beta
+
+############################################################
+# 2) SECOND session start - nothing changed -> COMPACT line
+############################################################
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha --- unchanged since last session start; compact (delete /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-alpha to force the full block)
+endpoint: alive (backend=tmux window=fm-sess:live) · last known verb: working · full status log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status
+read /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.meta directly when this task needs its identity fields; the read-once contract allows that for a compacted task
+
+--- task-beta --- unchanged since last session start; compact (delete /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-beta to force the full block)
+endpoint: alive (backend=tmux window=fm-sess:live) · last known verb: working · full status log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status
+read /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.meta directly when this task needs its identity fields; the read-once contract allows that for a compacted task
+
+
+############################################################
+# 3) task-beta writes a new status line, task-alpha untouched
+#    -> task-beta full again, task-alpha stays compact
+############################################################
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha --- unchanged since last session start; compact (delete /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-alpha to force the full block)
+endpoint: alive (backend=tmux window=fm-sess:live) · last known verb: working · full status log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status
+read /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.meta directly when this task needs its identity fields; the read-once contract allows that for a compacted task
+
+--- task-beta ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-beta
+endpoint: alive (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status):
+working: writing tests
+needs-decision: which branch to base on?
+
+
+############################################################
+# 4) task-alpha's pane dies (no status line written)
+#    -> alive->dead flip restores the full block
+############################################################
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-alpha
+endpoint: dead (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status):
+working: refactoring the wake drain
+
+--- task-beta ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-beta
+endpoint: dead (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status):
+working: writing tests
+needs-decision: which branch to base on?
+
+
+############################################################
+# 5) captain deletes the named marker to force the full block
+############################################################
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha --- unchanged since last session start; compact (delete /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-alpha to force the full block)
+endpoint: alive (backend=tmux window=fm-sess:live) · last known verb: working · full status log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status
+read /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.meta directly when this task needs its identity fields; the read-once contract allows that for a compacted task
+
+--- task-beta --- unchanged since last session start; compact (delete /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-beta to force the full block)
+endpoint: alive (backend=tmux window=fm-sess:live) · last known verb: needs-decision · full status log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status
+read /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.meta directly when this task needs its identity fields; the read-once contract allows that for a compacted task
+
+
+$ rm /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-alpha
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-alpha
+endpoint: alive (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status):
+working: refactoring the wake drain
+
+--- task-beta --- unchanged since last session start; compact (delete /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/.session-start-seen-task-beta to force the full block)
+endpoint: alive (backend=tmux window=fm-sess:live) · last known verb: needs-decision · full status log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status
+read /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.meta directly when this task needs its identity fields; the read-once contract allows that for a compacted task
+
+
+############################################################
+# 6) --reemit never compacts (a re-emit lost the full block)
+############################################################
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-alpha ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-alpha
+endpoint: alive (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-alpha.status):
+working: refactoring the wake drain
+
+--- task-beta ---
+window=fm-sess:live
+kind=ship
+harness=claude
+branch=fm/task-beta
+endpoint: alive (backend=tmux window=fm-sess:live)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /tmp/fm-session-start-tests.JZ5M1x/demo/home/state/task-beta.status):
+working: writing tests
+needs-decision: which branch to base on?
+
+
+############################################################
+# 7) READ-ONCE CONTRACT wording the captain is handed
+############################################################
+READ-ONCE CONTRACT
+================================================================================
+Everything below is printed in full for this session start: a compact
+data/backlog.md listing, data/projects.md, data/secondmates.md,
+data/captain.md, data/captain-shared.md, data/learnings.md, and - for every
+task that CHANGED since the last session start - that task's whole
+state/*.meta with a bounded tail of its state/*.status.
+A task whose .meta, status log, and endpoint verdict are all unchanged since
+the last session start is printed as ONE compact line instead (endpoint, last
+known verb, full status log path, its state/<id>.meta path, and the marker to
+delete to force the full block back). For such a compacted task, reading that
+named .meta and status log directly IS allowed - the compact line names both
+paths precisely so you can.
+Do NOT re-read any of them after reading this digest, and do NOT bulk-read
+data/backlog.md or state/*.status: re-reading everything defeats the entire
+point of this command.
+
+Go to a source directly only when:
+  - this digest flagged it ABSENT (then rebuild or create it per AGENTS.md),
+  - its contents looked unparseable or corrupt,
+  - an individual full status log is needed for older wake-event history, or a
+    status line was capped and its tail matters (each task's full log path is
+    printed with its tail),
+  - a task was printed as a compact "unchanged since last session start" line
+    and this turn needs its identity fields or its status history (that line
+    names both its state/<id>.meta and its full status log path),
+  - a full task body is needed (tasks-axi show <id> --full, or data/backlog.md),
+  - the backlog listing disclosed omitted queued items and this turn needs them,
+  - the NETWORK CHECKS section reported its checks still IN PROGRESS and this
+    turn needs their verdict (bin/fm-startup-network.sh report),
+  - or a STARTUP TRUNCATED banner named the stage that would have printed it, in
+    which case that stage's sources were never emitted and must be reconciled.
+
+================================================================================
+FLEET STATE
