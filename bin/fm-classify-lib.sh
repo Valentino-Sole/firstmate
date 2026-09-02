@@ -1098,7 +1098,7 @@ status_outcome_backstop_cursor_offset() {  # <status-file>
   state=${f%/*}
   task=${f##*/}; task=${task%.status}
   manifest="$state/.status-presentation-cursor"
-  [ -e "$manifest" ] || { printf '0'; return 0; }
+  [ -e "$manifest" ] || [ -L "$manifest" ] || { printf '0'; return 0; }
   if [ ! -f "$manifest" ] || [ ! -r "$manifest" ] || [ -L "$manifest" ]; then
     _fm_status_presentation_manifest_error "$manifest" "not a readable regular file"
     return 1

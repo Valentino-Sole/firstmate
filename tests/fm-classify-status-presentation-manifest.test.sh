@@ -459,6 +459,29 @@ test_retire_reports_a_failed_rewrite_write_instead_of_failing_silently() {
   pass "a rewrite file that cannot be written names the manifest on stderr instead of returning 1 in silence"
 }
 
+# A manifest path that is a symlink to a path that does not exist. `-e`
+# follows the link, so the backstop reader's "no manifest yet" fast path
+# claimed this state and returned backstop 0 with rc=0 - a wrong value with no
+# diagnostic, which bin/fm-wake-drain.sh then treats as "nothing acknowledged"
+# and status_commit_presentation_snapshot writes back as the backstop column.
+test_dangling_symlink_manifest_is_loud_for_the_backstop_reader() {
+  local dir state f manifest err out rc=0
+  dir=$(case_dir dangling-symlink-manifest)
+  state="$dir/state"
+  f="$state/task-r.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  ln -s "$dir/never-created" "$manifest"
+  err="$dir/err"; out="$dir/out"
+
+  status_outcome_backstop_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] \
+    || fail "the backstop reader accepted a dangling symlink manifest (rc=$rc, backstop=$(cat "$out"))"
+  grep -qF "$manifest" "$err" \
+    || fail "a dangling symlink manifest produced no diagnostic naming the file: $(cat "$err")"
+  pass "the backstop reader also fails closed loudly on a manifest symlink whose target does not exist"
+}
+
 test_extra_column_fails_loudly_and_names_the_row
 test_missing_field_fails_loudly_and_names_the_row
 test_non_numeric_offset_fails_loudly_and_names_the_row
@@ -476,3 +499,4 @@ test_a_malformed_row_is_reported_only_once
 test_colon_in_offset_fails_loudly_like_any_non_numeric_offset
 test_colon_in_backstop_fails_loudly_instead_of_degrading_to_zero
 test_retire_reports_a_failed_rewrite_write_instead_of_failing_silently
+test_dangling_symlink_manifest_is_loud_for_the_backstop_reader
