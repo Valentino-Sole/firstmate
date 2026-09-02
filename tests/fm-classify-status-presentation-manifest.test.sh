@@ -368,6 +368,97 @@ test_a_malformed_row_is_reported_only_once() {
   pass "one malformed row is reported exactly once, even on the path that validates the manifest twice"
 }
 
+# An offset or backstop made of digits and colons ("1:2", "::") is not a byte
+# offset. Validating both columns as one ":"-joined string let such a value
+# through, so the cursor reader returned it verbatim with rc=0 and the backstop
+# reader degraded to 0 - both without the promised diagnostic.
+test_colon_in_offset_fails_loudly_like_any_non_numeric_offset() {
+  local dir state f manifest err out rc=0
+  dir=$(case_dir colon-in-offset)
+  state="$dir/state"
+  f="$state/task-n.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-n\tident-n\t1:2\t0\n' > "$manifest"
+  err="$dir/err"; out="$dir/out"
+
+  status_presentation_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "an offset with an embedded colon did not fail closed (rc=$rc, offset=$(cat "$out"))"
+  [ -z "$(cat "$out")" ] || fail "a malformed offset was still handed to the caller: $(cat "$out")"
+  grep -qF "$manifest:1:" "$err" \
+    || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'non-numeric' "$err" \
+    || fail "the error did not name the reason (non-numeric offset): $(cat "$err")"
+  grep -qi 'integer expression expected' "$err" \
+    && fail "a raw bash arithmetic error leaked instead of the manifest diagnostic: $(cat "$err")"
+  pass "an offset with an embedded colon fails closed with the same diagnostic as any other non-numeric offset"
+}
+
+test_colon_in_backstop_fails_loudly_instead_of_degrading_to_zero() {
+  local dir state f manifest err out rc=0
+  dir=$(case_dir colon-in-backstop)
+  state="$dir/state"
+  f="$state/task-o.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-o\tident-o\t0\t3:4\n' > "$manifest"
+  err="$dir/err"; out="$dir/out"
+
+  status_outcome_backstop_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "a backstop with an embedded colon did not fail closed (rc=$rc, backstop=$(cat "$out"))"
+  grep -qF "$manifest:1:" "$err" \
+    || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'non-numeric' "$err" \
+    || fail "the error did not name the reason (non-numeric backstop): $(cat "$err")"
+  pass "a backstop with an embedded colon fails closed loudly instead of silently degrading to 0"
+}
+
+# The locked rewrite loop's append was the last silent rc=1 at the manifest:
+# a full disk or quota left bin/fm-teardown.sh exiting 1 with an empty stderr,
+# the exact reported symptom. The child creates the symlink at the very path
+# the function will use as its rewrite file, so writing a carried-over row
+# fails with ENOSPC while creating/truncating that file still succeeds.
+run_retire_with_failing_rewrite() {  # <state> <task> <out> <err>
+  local state=$1 task=$2 out=$3 err=$4 rc=0
+  FM_STATE_OVERRIDE="$state" bash -c '
+    # shellcheck disable=SC1090,SC1091
+    . "$1"
+    # shellcheck disable=SC1090,SC1091
+    . "$2"
+    ln -s /dev/full "$3/.status-presentation-cursor.tmp.$$" || exit 99
+    status_retire_presentation_task "$3" "$4"
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$ROOT/bin/fm-classify-lib.sh" "$state" "$task" \
+    > "$out" 2> "$err" || rc=$?
+  return "$rc"
+}
+
+test_retire_reports_a_failed_rewrite_write_instead_of_failing_silently() {
+  local dir state f other manifest ident out err rc=0
+  [ -c /dev/full ] || { echo "skip: /dev/full not available"; return 0; }
+  dir=$(case_dir retire-rewrite-write-failure)
+  state="$dir/state"
+  f="$state/task-p.status"
+  other="$state/task-q.status"
+  printf 'done: ready\n' > "$f"
+  printf 'working: still here\n' > "$other"
+  ident=$(file_ident "$f") || fail "could not compute a fixture ident"
+  manifest="$state/.status-presentation-cursor"
+  { printf 'task-p\t%s\t4\t0\n' "$ident"; printf 'task-q\tident-q\t2\t0\n'; } > "$manifest"
+  out="$dir/out"; err="$dir/err"
+
+  run_retire_with_failing_rewrite "$state" task-p "$out" "$err" && rc=0 || rc=$?
+  [ "$rc" -ne 99 ] || fail "could not stage the failing rewrite file"
+  [ "$rc" -eq 1 ] || fail "a failed rewrite write did not fail closed (rc=$rc): $(cat "$err")"
+  grep -qF "$manifest" "$err" \
+    || fail "a failed rewrite write produced no diagnostic naming the manifest: $(cat "$err")"
+  grep -qi 'rewrite file' "$err" \
+    || fail "the error did not name the rewrite file as the reason: $(cat "$err")"
+  [ -f "$f" ] || fail "a failed rewrite must not delete the retired task's status file"
+  grep -qF 'task-q' "$manifest" \
+    || fail "a failed rewrite must leave the original manifest untouched: $(cat "$manifest")"
+  pass "a rewrite file that cannot be written names the manifest on stderr instead of returning 1 in silence"
+}
+
 test_extra_column_fails_loudly_and_names_the_row
 test_missing_field_fails_loudly_and_names_the_row
 test_non_numeric_offset_fails_loudly_and_names_the_row
@@ -382,3 +473,6 @@ test_retire_upgrades_a_legacy_three_field_row_of_another_task
 test_symlinked_manifest_fails_loudly_and_deletes_nothing
 test_symlinked_manifest_is_loud_for_the_cursor_reader_too
 test_a_malformed_row_is_reported_only_once
+test_colon_in_offset_fails_loudly_like_any_non_numeric_offset
+test_colon_in_backstop_fails_loudly_instead_of_degrading_to_zero
+test_retire_reports_a_failed_rewrite_write_instead_of_failing_silently

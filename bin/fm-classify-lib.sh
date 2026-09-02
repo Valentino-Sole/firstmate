@@ -1019,8 +1019,15 @@ _fm_status_presentation_row_parse() {  # <manifest> <line-no> <row>
     _fm_status_presentation_row_error "$manifest" "$lineno" "missing backstop field" "$row"
     return 1
   fi
-  case "$FM_STATUS_PRESENTATION_ROW_OFFSET:$FM_STATUS_PRESENTATION_ROW_BACKSTOP" in
-    *[!0-9:]*)
+  case "$FM_STATUS_PRESENTATION_ROW_OFFSET" in
+    *[!0-9]*)
+      _fm_status_presentation_row_error "$manifest" "$lineno" \
+        "non-numeric offset or backstop" "$row"
+      return 1
+      ;;
+  esac
+  case "$FM_STATUS_PRESENTATION_ROW_BACKSTOP" in
+    *[!0-9]*)
       _fm_status_presentation_row_error "$manifest" "$lineno" \
         "non-numeric offset or backstop" "$row"
       return 1
@@ -1325,7 +1332,7 @@ EOF
         if [ "$row_task" != "$task" ]; then
           printf '%s\t%s\t%s\t%s\n' "$row_task" "$FM_STATUS_PRESENTATION_ROW_IDENT" \
             "$FM_STATUS_PRESENTATION_ROW_OFFSET" "$FM_STATUS_PRESENTATION_ROW_BACKSTOP" >> "$tmp" \
-            || { rc=1; break; }
+            || { _fm_status_presentation_manifest_error "$manifest" "could not be written to the rewrite file $tmp"; rc=1; break; }
         fi
       done <<EOF
 $data
