@@ -784,10 +784,14 @@ clear_write_tracking() {  # <window-key>
 # (bin/fm-guard.sh): a continuing wedge is one episode, keyed to the window. Any
 # genuine state change opens a fresh episode by dropping this function's
 # .wedge-resurfaced-<key> throttle before the next round runs - the pane going
-# busy again, a hash change, and a declared pause clear it alongside the
-# escalation counter at their own reset sites, and a worktree write clears it in
-# wedge_defer_writing (the counter deliberately survives there) - so this
-# function itself never has to tell episodes apart by reason text.
+# busy again below its BUSY_TURN_MAX_SECS turn bound, a hash change, and a
+# declared pause clear it alongside the escalation counter at their own reset
+# sites, and a worktree write clears it in wedge_defer_writing (the counter
+# deliberately survives there) - so this function itself never has to tell
+# episodes apart by reason text. A pane that renders busy while ALREADY past that
+# turn bound is deliberately not a new episode: busy_turn_bound_check routes it
+# straight back here with the throttle intact, so a hung foreground call cannot
+# flicker its busy signature to win a fresh report every round.
 # Within one episode, a full wake fires immediately on the FIRST
 # crossing (n=1) and again once FM_WEDGE_DEMAND_INSPECT_COUNT is reached, but
 # every other round is throttled to one resurface per PAUSE_RESURFACE_SECS via

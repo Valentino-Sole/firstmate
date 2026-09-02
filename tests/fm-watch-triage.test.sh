@@ -2350,12 +2350,14 @@ test_secondmate_unpause_clears_pause_tracking() {
   : > "$state/.stale-$key"
   : > "$state/.stale-since-$key"
   : > "$state/.wedge-escalations-$key"
+  : > "$state/.wedge-resurfaced-$key"
   watch_bg "$state" "$fakebin" "$out"
   pid=$!
   wait_poll_cycle "$state" "$pid" || fail "watcher exited while reconciling a resumed secondmate: $(cat "$out")"
   [ ! -e "$state/.paused-$key" ] || { reap "$pid"; fail "resumed secondmate retained the pause marker"; }
   [ ! -e "$state/.stale-$key" ] || { reap "$pid"; fail "resumed secondmate retained stale tracking"; }
   [ ! -e "$state/.wedge-escalations-$key" ] || { reap "$pid"; fail "resumed secondmate retained wedge tracking"; }
+  [ ! -e "$state/.wedge-resurfaced-$key" ] || { reap "$pid"; fail "resumed secondmate retained the wedge resurface throttle, so the episode did not end"; }
   reap "$pid"
   pass "a resumed secondmate clears pause and stale tracking before stale exemption"
 }
