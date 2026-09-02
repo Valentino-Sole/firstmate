@@ -214,6 +214,160 @@ test_teardown_retire_succeeds_on_a_well_formed_manifest() {
   pass "retirement over the current 4-field manifest format still succeeds and stays silent"
 }
 
+# An extra column hidden BEHIND an empty column. Reading a row with
+# `IFS=$'\t' read -r task ident offset backstop extra` merges the two adjacent
+# TABs, so this 5-field row parsed as a well-formed 4-field one whose offset
+# silently came from the backstop column - and the next rewrite wrote it back
+# as 4 fields, dropping the trailing column. It must fail exactly like a plain
+# extra column does.
+test_extra_column_behind_an_empty_field_fails_loudly() {
+  local dir state f manifest err rc=0
+  dir=$(case_dir extra-column-behind-empty-field)
+  state="$dir/state"
+  f="$state/task-h.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  # 5 fields, the offset column empty: task, ident, "", 7, 0.
+  printf 'task-h\tident-h\t\t7\t0\n' > "$manifest"
+  err="$dir/err"
+
+  status_presentation_cursor_offset "$f" > /dev/null 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "an extra column behind an empty field did not fail closed (rc=$rc)"
+  grep -qF "$manifest:1:" "$err" \
+    || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'extra field' "$err" \
+    || fail "the error did not name the reason (extra field): $(cat "$err")"
+  pass "a surplus column hidden behind an empty column fails closed like any other extra column"
+}
+
+test_retire_never_drops_a_column_behind_an_empty_field() {
+  local dir state f manifest out err rc=0
+  dir=$(case_dir retire-extra-column-behind-empty-field)
+  state="$dir/state"
+  f="$state/task-i.status"
+  printf 'done: ready\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-i\tident-i\t\t7\t0\n' > "$manifest"
+  out="$dir/out"; err="$dir/err"
+
+  run_retire "$state" task-i "$out" "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "retirement over a row with a hidden surplus column did not fail closed (rc=$rc)"
+  grep -qi 'extra field' "$err" \
+    || fail "retirement gave no diagnostic for the hidden surplus column: $(cat "$err")"
+  [ -f "$f" ] || fail "a malformed manifest must never cause the status file to be deleted"
+  [ "$(cat "$manifest")" = "$(printf 'task-i\tident-i\t\t7\t0')" ] \
+    || fail "the manifest was rewritten and lost a column: $(cat "$manifest" | cat -A)"
+  pass "retirement never silently rewrites away a column hidden behind an empty column"
+}
+
+# The one deliberate tolerance the header comment documents: a pre-d977128
+# 3-field row (task, ident, offset) is read as backstop 0 and upgraded to the
+# full 4-field shape on the next rewrite, losing nothing.
+test_legacy_three_field_row_is_read_and_upgraded_losslessly() {
+  local dir state f manifest ident offset backstop err
+  dir=$(case_dir legacy-three-field-row)
+  state="$dir/state"
+  f="$state/task-j.status"
+  printf 'working: setup\nworking: more\n' > "$f"
+  ident=$(file_ident "$f") || fail "could not compute a fixture ident"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-j\t%s\t7\n' "$ident" > "$manifest"
+  err="$dir/err"
+
+  offset=$(status_presentation_cursor_offset "$f" 2> "$err") \
+    || fail "the legacy 3-field row was rejected: $(cat "$err")"
+  [ -z "$(cat "$err")" ] || fail "the legacy 3-field row printed a diagnostic: $(cat "$err")"
+  [ "$offset" = 7 ] || fail "the legacy row's offset was not read through: got '$offset'"
+  backstop=$(status_outcome_backstop_cursor_offset "$f" 2> "$err") \
+    || fail "the legacy 3-field row was rejected by the backstop reader: $(cat "$err")"
+  [ "$backstop" = 0 ] || fail "a legacy row without a backstop column must read as 0: got '$backstop'"
+  pass "a pre-d977128 3-field row is still read, silently, as backstop 0"
+}
+
+test_retire_upgrades_a_legacy_three_field_row_of_another_task() {
+  local dir state f manifest ident out err rc=0
+  dir=$(case_dir legacy-three-field-row-rewrite)
+  state="$dir/state"
+  f="$state/task-k.status"
+  printf 'done: ready\n' > "$f"
+  ident=$(file_ident "$f") || fail "could not compute a fixture ident"
+  manifest="$state/.status-presentation-cursor"
+  {
+    printf 'task-k\t%s\t4\t0\n' "$ident"
+    printf 'task-legacy\tident-legacy\t3\n'
+  } > "$manifest"
+  out="$dir/out"; err="$dir/err"
+
+  run_retire "$state" task-k "$out" "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || fail "retirement alongside a legacy 3-field row failed (rc=$rc): $(cat "$err")"
+  [ -z "$(cat "$err")" ] || fail "a legacy 3-field row printed a diagnostic on retirement: $(cat "$err")"
+  [ "$(cat "$manifest")" = "$(printf 'task-legacy\tident-legacy\t3\t0')" ] \
+    || fail "the surviving legacy row was not carried through as a full 4-field row: $(cat "$manifest")"
+  pass "retirement carries an unrelated legacy 3-field row through, upgraded to 4 fields, losing nothing"
+}
+
+# --- manifest-level (file, not row) failures --------------------------------
+
+test_symlinked_manifest_fails_loudly_and_deletes_nothing() {
+  local dir state f manifest out err rc=0
+  dir=$(case_dir symlinked-manifest)
+  state="$dir/state"
+  f="$state/task-l.status"
+  printf 'done: ready\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-l\tident-l\t4\t0\n' > "$dir/elsewhere"
+  ln -s "$dir/elsewhere" "$manifest"
+  out="$dir/out"; err="$dir/err"
+
+  run_retire "$state" task-l "$out" "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "a symlinked manifest did not fail closed (rc=$rc)"
+  grep -qF "$manifest" "$err" \
+    || fail "a symlinked manifest failed with no diagnostic naming it: $(cat "$err")"
+  grep -qi 'regular file' "$err" \
+    || fail "the diagnostic did not name the reason (not a regular file): $(cat "$err")"
+  [ -f "$f" ] || fail "an unusable manifest must never cause the status file to be deleted"
+  [ -L "$manifest" ] || fail "an unusable manifest must be left exactly as found"
+  pass "a symlinked manifest fails closed with a stderr line naming the file and reason, deleting nothing"
+}
+
+test_symlinked_manifest_is_loud_for_the_cursor_reader_too() {
+  local dir state f manifest err rc=0
+  dir=$(case_dir symlinked-manifest-reader)
+  state="$dir/state"
+  f="$state/task-m.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-m\tident-m\t4\t0\n' > "$dir/elsewhere"
+  ln -s "$dir/elsewhere" "$manifest"
+  err="$dir/err"
+
+  status_presentation_cursor_offset "$f" > /dev/null 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "the cursor reader accepted a symlinked manifest (rc=$rc)"
+  grep -qF "$manifest" "$err" \
+    || fail "the cursor reader gave no diagnostic for a symlinked manifest: $(cat "$err")"
+  pass "the cursor reader also names an unusable manifest file on stderr instead of returning 1 in silence"
+}
+
+# The remote-home retire path validates the manifest twice (once unlocked to
+# prove there is nothing to retire, once under the lock to rewrite it). One
+# malformed row must still read as one finding for the operator.
+test_a_malformed_row_is_reported_only_once() {
+  local dir state manifest out err rc=0 count
+  dir=$(case_dir single-diagnostic)
+  state="$dir/state"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-other\tident-o\t1\t0\tstray\n' > "$manifest"
+  out="$dir/out"; err="$dir/err"
+
+  run_retire "$state" task-ghost "$out" "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "retiring a task with no status log over a malformed manifest did not fail closed (rc=$rc)"
+  count=$(grep -c 'malformed status-presentation-cursor row' "$err") || count=0
+  [ "$count" -eq 1 ] \
+    || fail "one malformed row produced $count diagnostics, not 1: $(cat "$err")"
+  [ -f "$manifest" ] || fail "a malformed manifest must never be deleted outright"
+  pass "one malformed row is reported exactly once, even on the path that validates the manifest twice"
+}
+
 test_extra_column_fails_loudly_and_names_the_row
 test_missing_field_fails_loudly_and_names_the_row
 test_non_numeric_offset_fails_loudly_and_names_the_row
@@ -221,3 +375,10 @@ test_a_malformed_row_for_another_task_still_blocks_this_lookup
 test_the_reported_four_field_row_is_valid_today
 test_teardown_retire_surfaces_the_error_and_deletes_nothing
 test_teardown_retire_succeeds_on_a_well_formed_manifest
+test_extra_column_behind_an_empty_field_fails_loudly
+test_retire_never_drops_a_column_behind_an_empty_field
+test_legacy_three_field_row_is_read_and_upgraded_losslessly
+test_retire_upgrades_a_legacy_three_field_row_of_another_task
+test_symlinked_manifest_fails_loudly_and_deletes_nothing
+test_symlinked_manifest_is_loud_for_the_cursor_reader_too
+test_a_malformed_row_is_reported_only_once
