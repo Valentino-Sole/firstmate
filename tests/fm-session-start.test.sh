@@ -1448,6 +1448,31 @@ EOF
   pass "the compact line reads past blank trailing status lines the way every other fleet surface does"
 }
 
+test_fleet_state_fingerprint_blank_terminated_append_forces_full_block() {
+  local rec root home fakebin out
+  rec=$(new_world fingerprint-blank-terminated-append)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+
+  printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-j.meta"
+  printf 'working: step 1\n\n' > "$home/state/task-j.status"
+  FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+
+  printf 'working: step 1\n\nneeds-decision: which branch?\n\n' > "$home/state/task-j.status"
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  assert_not_contains "$out" "--- task-j --- unchanged" \
+    "a new status line under a blank-terminated log was incorrectly reported as unchanged"
+  assert_contains "$out" "needs-decision: which branch?" \
+    "a new status line under a blank-terminated log was never shown"
+
+  pass "a new status line restores the full block even when the writer terminates its log with a blank line"
+}
+
 # --- session-start secondmate recovery boundary -----------------------------
 
 test_session_start_relaunches_missing_pi_secondmate() {
@@ -2860,6 +2885,7 @@ test_fleet_state_fingerprint_compact_line_caps_its_verb
 test_fleet_state_fingerprint_compact_verb_matches_the_fleet_normalization
 test_fleet_state_fingerprint_compact_line_names_an_absent_status_log
 test_fleet_state_fingerprint_compact_verb_skips_blank_trailing_lines
+test_fleet_state_fingerprint_blank_terminated_append_forces_full_block
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts

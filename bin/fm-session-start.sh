@@ -577,7 +577,7 @@ fleet_state_seen_marker() {
 fleet_state_fingerprint() {
   local meta=$1 status=$2 tail_bound=$3 last_line='' digest
   if [ -n "$status" ] && [ -f "$status" ]; then
-    last_line=$(tail -n 1 "$status" 2>/dev/null)
+    last_line=$(last_status_line "$status")
   fi
   if command -v shasum >/dev/null 2>&1; then
     digest=$( { cat "$meta" 2>/dev/null; printf '\nstatus-tail=%s\n%s\n' "$tail_bound" "$last_line"; } | shasum -a 256 2>/dev/null | awk '{print $1}')
@@ -893,9 +893,9 @@ for meta in "$STATE"/*.meta; do
   if [ -n "$window" ]; then
     backend=$(fm_backend_of_meta "$meta")
     if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
-      endpoint_line=$(printf 'endpoint: alive (backend=%s window=%s)' "$backend" "$window")
+      endpoint_line="endpoint: alive (backend=$backend window=$window)"
     else
-      endpoint_line=$(printf 'endpoint: dead (backend=%s window=%s)' "$backend" "$window")
+      endpoint_line="endpoint: dead (backend=$backend window=$window)"
     fi
   else
     endpoint_line='endpoint: unknown (no window recorded)'
@@ -909,13 +909,13 @@ for meta in "$STATE"/*.meta; do
   FP_OK=1
   NEW_FP=$(fleet_state_fingerprint "$meta" "$status" "$STATUS_TAIL") || FP_OK=0
   OLD_FP=
-  [ -f "$SEEN_MARKER" ] && OLD_FP=$(cat "$SEEN_MARKER" 2>/dev/null)
+  [ -f "$SEEN_MARKER" ] && { read -r OLD_FP < "$SEEN_MARKER" 2>/dev/null || true; }
 
   if [ "$FP_OK" -eq 1 ] && [ -n "$OLD_FP" ] && [ "$NEW_FP" = "$OLD_FP" ]; then
     verb='-'
-    status_ref=$(printf '(no status file yet: %s)' "$status")
+    status_ref="(no status file yet: $status)"
     if [ -f "$status" ]; then
-      status_ref=$(printf 'full status log: %s' "$status")
+      status_ref="full status log: $status"
       # fm-classify-lib.sh owns both "the last status line" (blank trailing
       # lines filtered) and leading-verb normalization for the whole fleet, so
       # a bracketed key or a corr= token is stripped here exactly as it is on
