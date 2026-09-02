@@ -1,0 +1,22 @@
+==============================================================================
+ 5) GPU-Exklusivitaet auf dem ECHTEN Heim-PC (ssh Valentino, RTX 4080 Super)
+    Nur lesende Sonden: Get-NetTCPConnection (Port 7414), Get-Process ollama,
+    nvidia-smi --query-gpu=memory.used - alles in EINEM begrenzten SSH-Roundtrip.
+==============================================================================
+
+$ bin/fm-resgate.sh gpu status
+  owner=qwen
+  voice_port=no
+  process(ollama)=yes
+  gpu_used_mb=14896
+  gpu_busy_threshold_mb=4096
+
+$ bin/fm-resgate.sh gpu allow qwen; echo "exit=$?"
+  allow=yes
+  reason=Qwen already holds the GPU
+  exit=0
+
+$ bin/fm-resgate.sh gpu allow voice; echo "exit=$?"
+  allow=no
+  reason=GPU is reserved for Qwen; JARVIS voice must not start
+  exit=1

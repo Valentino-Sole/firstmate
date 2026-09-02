@@ -1,0 +1,55 @@
+==============================================================================
+ firstmate fleet resource governance - captain-facing CLI transcript
+ repo: firstmate   branch: fm/fm-ressourcen-steuerung
+ Every reading below comes from bin/fm-resgate.sh; the clock is pinned with
+ FM_RESGATE_NOW_OVERRIDE="<dow 1=Mo..7=So> HH MM" so the whole week is shown.
+==============================================================================
+
+--- 1) Arbeits-PC (work): frei Mo-Fr 19:30-10:00 und das ganze Wochenende,
+---    Mo-Fr 10:00-19:30 hoechstens 50 Prozent
+
+Zeitpunkt              Kapazit. Grund
+---------------------- -------- ------------------------------------------
+Mo 09:59               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Mo 10:00               50%      Mo-Fr 10:00-19:30 on the work PC (captain working hours)
+Mo 14:00               50%      Mo-Fr 10:00-19:30 on the work PC (captain working hours)
+Mo 19:29               50%      Mo-Fr 10:00-19:30 on the work PC (captain working hours)
+Mo 19:30               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Mo 23:00               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Mi 03:00               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Fr 19:29               50%      Mo-Fr 10:00-19:30 on the work PC (captain working hours)
+Fr 19:30               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Fr 23:59               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Sa 12:00               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+So 12:00               100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+Mo 09:59 (Wochenende endet) 100%     outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+
+--- 2) Heim-PC (home): frei Mo-Fr 04:00-19:00, sonst hoechstens 50 Prozent
+
+Zeitpunkt              Kapazit. Grund
+---------------------- -------- ------------------------------------------
+Mo 03:59               50%      outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)
+Mo 04:00               100%     Mo-Fr 04:00-19:00 on the home PC
+Di 12:00               100%     Mo-Fr 04:00-19:00 on the home PC
+Di 18:59               100%     Mo-Fr 04:00-19:00 on the home PC
+Di 19:00               50%      outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)
+Mi 01:00               50%      outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)
+Fr 20:00               50%      outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)
+Sa 10:00               50%      outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)
+So 15:00               50%      outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)
+
+==============================================================================
+ 2b) Die wiederverwendbare Prozent-Primitive auf einen Rohbestand angewandt
+     fm_resgate_capacity_pct + fm_resgate_apply_pct (bin/fm-resgate-lib.sh)
+==============================================================================
+
+Rolle        Zeitpunkt              Proz.  von 7 Roh-Slots erlaubt
+-----------  ---------------------- -----  -----------------------
+work         Di 14:00               50%    3
+work         Di 21:00               100%   7
+work         Sa 14:00               100%   7
+home         Di 14:00               100%   7
+home         Di 21:00               50%    3
+home         So 14:00               50%    3
+
+  (Ganzzahlige Abrundung: 50 Prozent von 7 sind 3, nie 3,5 oder 4.)

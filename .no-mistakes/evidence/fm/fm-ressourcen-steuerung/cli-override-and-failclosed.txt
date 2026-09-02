@@ -1,0 +1,61 @@
+==============================================================================
+ 3) Manueller Override - Captain sagt "Kappung" / "Kappung auf" im Chat
+    Marker: state/.resgate-cap-work / state/.resgate-cap-home (wie state/.afk)
+==============================================================================
+
+Ausgangslage: Dienstag 08:00 - beide Rechner ausserhalb ihrer Kappungsfenster.
+  cap work -> pct=100 state=uncapped reason=outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend) 
+  cap home -> pct=100 state=uncapped reason=Mo-Fr 04:00-19:00 on the home PC 
+
+$ # Captain: "Kappung"  -> firstmate armt beide Marker
+$ bin/fm-resgate.sh override set both
+  (exit 0)
+$ bin/fm-resgate.sh override status both
+  work=armed
+  home=armed
+$ ls -a state/
+  .resgate-cap-home
+  .resgate-cap-work
+$ cat state/.resgate-cap-work
+  armed_at=2026-09-03T00:56:54+0200
+  note=Kappung
+
+Gleicher Zeitpunkt, Dienstag 08:00 - sofort gekappt, unabhaengig vom Fenster:
+  cap work -> pct=50 state=capped reason=manual override armed (Kappung); forced capped regardless of the clock window 
+  cap home -> pct=50 state=capped reason=manual override armed (Kappung); forced capped regardless of the clock window 
+
+$ # Captain: "Kappung auf Valentino-Arbeit" -> nur der Arbeits-PC wird freigegeben
+$ bin/fm-resgate.sh override clear work
+  (exit 0)
+  work=clear
+  home=armed
+  cap work -> pct=100 state=uncapped reason=outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend) 
+  cap home -> pct=50 state=capped reason=manual override armed (Kappung); forced capped regardless of the clock window 
+
+$ # Captain: "Kappung auf" -> beide frei
+  (exit 0)
+  work=clear
+  home=clear
+
+==============================================================================
+ 4) Fail-closed: unlesbare Uhr / nicht aufloesbare Zeitzone -> 0 Prozent
+==============================================================================
+
+$ TZDIR=/nonexistent bin/fm-resgate.sh cap work    # Europe/Berlin nicht aufloesbar
+  pct=0
+  state=blocked
+  reason=authoritative clock unreadable; refusing to guess the schedule window
+
+$ # Selbst mit armiertem "Kappung" bleibt eine unlesbare Uhr bei 0%, nie bei 50%
+  pct=0
+  state=blocked
+  reason=authoritative clock unreadable; refusing to guess the schedule window
+
+$ # Echte Uhr, echte Zone (dieser Hetzner-Host, nach Europe/Berlin gezwungen):
+  jetzt in Berlin: Thu 2026-09-03 00:56 CEST +0200
+  pct=100
+  state=uncapped
+  reason=outside Mo-Fr 10:00-19:30 on the work PC (evening, night, or weekend)
+  pct=50
+  state=capped
+  reason=outside Mo-Fr 04:00-19:00 on the home PC (evening, night, or weekend)

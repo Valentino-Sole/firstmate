@@ -1,0 +1,42 @@
+==============================================================================
+ 6) Die Gegenrichtung und der Ausfall - Heim-PC durch einen Stellvertreter
+    ersetzt (PATH-Shim fuer ssh), der exakt die PowerShell-Ausgabe des echten
+    Rechners liefert, inklusive CRLF. Die JARVIS-Stimme laesst sich auf dem
+    echten Rechner nicht gefahrlos starten, nur um sie zu messen.
+==============================================================================
+
+--- Szenario: Stimme haelt die Karte (Port 7414 lauscht)
+  owner=voice
+  voice_port=yes
+  process(ollama)=unknown
+  gpu_used_mb=11000
+  gpu_busy_threshold_mb=4096
+  gpu allow qwen  -> exit=1  GPU is reserved for JARVIS voice; Qwen must not start
+  gpu allow voice -> exit=0  JARVIS voice already holds the GPU
+
+--- Szenario: Karte frei (kein ollama, 812 MiB)
+  owner=none
+  voice_port=no
+  process(ollama)=no
+  gpu_used_mb=812
+  gpu_busy_threshold_mb=4096
+  gpu allow qwen  -> exit=0  GPU is free
+  gpu allow voice -> exit=0  GPU is free
+
+--- Szenario: nvidia-smi-Messung fehlgeschlagen
+  owner=unknown
+  voice_port=no
+  process(ollama)=yes
+  gpu_used_mb=unknown
+  gpu_busy_threshold_mb=4096
+  gpu allow qwen  -> exit=1  GPU ownership could not be measured; refusing rather than guessing
+  gpu allow voice -> exit=1  GPU ownership could not be measured; refusing rather than guessing
+
+--- Szenario: Heim-PC nicht erreichbar (ssh exit 255)
+  owner=unknown
+  voice_port=unknown
+  process(ollama)=unknown
+  gpu_used_mb=unknown
+  gpu_busy_threshold_mb=4096
+  gpu allow qwen  -> exit=1  GPU ownership could not be measured; refusing rather than guessing
+  gpu allow voice -> exit=1  GPU ownership could not be measured; refusing rather than guessing
