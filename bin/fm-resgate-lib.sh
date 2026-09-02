@@ -41,7 +41,10 @@
 # Manual override: state/.resgate-cap-<role> is a plain presence-based marker,
 # written the same way state/.afk is (mktemp + mv, so a reader never observes
 # a half-written file). Its presence forces capped state immediately,
-# independent of the schedule computation. docs/configuration.md
+# independent of which window the clock lands in - but strictly BELOW the
+# fail-closed rule above: an unreadable clock stays blocked at 0% even with the
+# marker armed, because a control whose whole purpose is to restrict must never
+# be able to hand out capacity no measurement supports. docs/configuration.md
 # "Fleet resource governance" owns the exact marker paths, the "Kappung" /
 # "Kappung auf" trigger words, and which host each form arms.
 #
@@ -110,6 +113,16 @@ fm_resgate_ssh_alias() { # <role>
 fm_resgate_is_uint() {
   case "${1:-}" in '' | *[!0-9]*) return 1 ;; esac
   return 0
+}
+
+# A plausible TCP port. Every tunable that reaches a measurement is validated
+# before it is used, so a mistyped session pin cannot silently turn into a
+# permissive reading (an invalid threshold that makes the -ge comparison error
+# out, or an invalid port that probes something other than the gateway).
+fm_resgate_is_port() {
+  fm_resgate_is_uint "${1:-}" || return 1
+  [ "${#1}" -le 5 ] || return 1
+  [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
 }
 
 # Sets FM_RESGATE_NOW_DOW (1=Monday..7=Sunday) and FM_RESGATE_NOW_MOD (minutes
@@ -229,17 +242,29 @@ fm_resgate_override_clear() { # <state-dir> <role>
 }
 
 # Effective state for <role>: an active override forces "capped" immediately,
-# regardless of what the schedule computation would otherwise say. Sets
-# FM_RESGATE_STATE and FM_RESGATE_REASON.
+# regardless of which window a READABLE clock lands in. Sets FM_RESGATE_STATE
+# and FM_RESGATE_REASON.
+#
+# The schedule is computed FIRST and "blocked" wins outright, because the
+# override and the fail-closed rule collide when the authoritative clock is
+# unreadable: the override loosens 0% to 50%, and the whole point of the
+# override is to restrict, never to grant capacity a measurement could not
+# justify. Fail-closed takes precedence, so arming the cap can only ever
+# tighten the gate.
 # shellcheck disable=SC2034
 fm_resgate_effective_state() { # <state-dir> <role>
   local state=$1 role=$2
+  fm_resgate_schedule_state "$role"
+  if [ "$FM_RESGATE_SCHEDULE_STATE" = blocked ]; then
+    FM_RESGATE_STATE=$FM_RESGATE_SCHEDULE_STATE
+    FM_RESGATE_REASON=$FM_RESGATE_SCHEDULE_REASON
+    return 0
+  fi
   if fm_resgate_override_active "$state" "$role"; then
     FM_RESGATE_STATE=capped
     FM_RESGATE_REASON='manual override armed (Kappung); forced capped regardless of the clock window'
     return 0
   fi
-  fm_resgate_schedule_state "$role"
   FM_RESGATE_STATE=$FM_RESGATE_SCHEDULE_STATE
   FM_RESGATE_REASON=$FM_RESGATE_SCHEDULE_REASON
   return 0
@@ -294,15 +319,36 @@ fm_resgate_gpu_busy_mb() {
 # Qwen-identifying named process, and aggregate GPU memory used (see the file
 # header for why aggregate memory + named process, not per-process
 # compute-apps attribution). Every line is emitted unconditionally, including
-# on failure (gpu_used_mb=probe-failed), so absorption can tell "this specific
+# on failure (<reading>=probe-failed), so absorption can tell "this specific
 # reading failed" apart from "no probe output arrived at all".
+#
+# All three readings run under -ErrorAction Stop inside try/catch rather than
+# -ErrorAction SilentlyContinue, because silencing the error makes an absent
+# result indistinguishable from a failed measurement: a missing NetTCPIP
+# module or an unhealthy CIM service would otherwise read as the fully
+# permissive "voice_port=not-listening" while the gateway is in fact up. Only
+# the one error identity that genuinely means "nothing matched"
+# (CmdletizationQuery_NotFound* for the port, NoProcessFoundForGivenName* for
+# the process) is reported as a negative reading; every other failure,
+# including the cmdlet not existing at all, reports probe-failed, which
+# absorption maps to unknown and the owner decision fails closed on.
 fm_resgate_home_gpu_probe_cmd() { # <port> <process-name>
   local port=$1 proc=$2 cmd
   cmd=$(cat <<'CMD'
-$conn = Get-NetTCPConnection -LocalPort @PORT@ -State Listen -ErrorAction SilentlyContinue
-if ($conn) { Write-Output 'FM_RESGATE voice_port=listening' } else { Write-Output 'FM_RESGATE voice_port=not-listening' }
-$proc = Get-Process -Name '@PROCESS@' -ErrorAction SilentlyContinue
-if ($proc) { Write-Output 'FM_RESGATE gpu_process=running' } else { Write-Output 'FM_RESGATE gpu_process=not-running' }
+try {
+  $conn = Get-NetTCPConnection -LocalPort @PORT@ -State Listen -ErrorAction Stop
+  if ($conn) { Write-Output 'FM_RESGATE voice_port=listening' } else { Write-Output 'FM_RESGATE voice_port=not-listening' }
+} catch {
+  if ($_.FullyQualifiedErrorId -like 'CmdletizationQuery_NotFound*') { Write-Output 'FM_RESGATE voice_port=not-listening' }
+  else { Write-Output 'FM_RESGATE voice_port=probe-failed' }
+}
+try {
+  $proc = Get-Process -Name '@PROCESS@' -ErrorAction Stop
+  if ($proc) { Write-Output 'FM_RESGATE gpu_process=running' } else { Write-Output 'FM_RESGATE gpu_process=not-running' }
+} catch {
+  if ($_.FullyQualifiedErrorId -like 'NoProcessFoundForGivenName*') { Write-Output 'FM_RESGATE gpu_process=not-running' }
+  else { Write-Output 'FM_RESGATE gpu_process=probe-failed' }
+}
 try {
   $used = & nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>$null
   if ($LASTEXITCODE -eq 0 -and $used) { Write-Output ('FM_RESGATE gpu_used_mb=' + ($used | Select-Object -First 1).Trim()) }
@@ -370,14 +416,17 @@ EOF
 # GPU memory clears FM_RESGATE_GPU_BUSY_MB - see the file header for why
 # either signal alone is insufficient. "unknown" fails closed and covers
 # every unmeasurable case: an unreachable host, a probe that returned no
-# lines at all, or any individual reading coming back unknown (a failed
-# nvidia-smi call, an unparsable port or process check) - a partial reading
-# is never completed with a guess. "conflict" means voice and Qwen both read
+# lines at all, an out-of-range FM_RESGATE_VOICE_PORT or non-numeric
+# FM_RESGATE_GPU_BUSY_MB (which would otherwise probe the wrong port or make
+# the threshold comparison error out and read as free), or any individual
+# reading coming back unknown (a failed nvidia-smi call, a port or process
+# check that could not be performed) - a partial reading is never completed
+# with a guess. "conflict" means voice and Qwen both read
 # active at once, which the policy says must never happen; it is reported,
 # never silently resolved in favour of either side.
 # shellcheck disable=SC2034
 fm_resgate_home_gpu_owner() {
-  local host out qwen_active
+  local host out qwen_active port busy
   FM_RESGATE_GPU_OWNER=unknown
   FM_RESGATE_GPU_VOICE=
   FM_RESGATE_GPU_PROCESS=
@@ -385,9 +434,13 @@ fm_resgate_home_gpu_owner() {
   if [ "${FM_RESGATE_SKIP_REMOTE:-}" = 1 ]; then
     return 1
   fi
+  port=$(fm_resgate_voice_port)
+  busy=$(fm_resgate_gpu_busy_mb)
+  fm_resgate_is_port "$port" || return 1
+  fm_resgate_is_uint "$busy" || return 1
   host=$(fm_resgate_ssh_alias home)
   out=$(fm_resgate_ssh_raw "$host" \
-    "$(fm_resgate_home_gpu_probe_cmd "$(fm_resgate_voice_port)" "$FM_RESGATE_GPU_PROCESS_NAME")" \
+    "$(fm_resgate_home_gpu_probe_cmd "$port" "$FM_RESGATE_GPU_PROCESS_NAME")" \
     2>/dev/null) || out=
   fm_resgate_absorb_gpu_probe "$out" || return 1
   case "$FM_RESGATE_GPU_VOICE" in yes | no) ;; *) return 1 ;; esac
@@ -395,7 +448,7 @@ fm_resgate_home_gpu_owner() {
   fm_resgate_is_uint "${FM_RESGATE_GPU_USED_MB:-}" || return 1
   qwen_active=no
   if [ "$FM_RESGATE_GPU_PROCESS" = yes ] \
-    && [ "$FM_RESGATE_GPU_USED_MB" -ge "$(fm_resgate_gpu_busy_mb)" ]; then
+    && [ "$FM_RESGATE_GPU_USED_MB" -ge "$busy" ]; then
     qwen_active=yes
   fi
   if [ "$FM_RESGATE_GPU_VOICE" = yes ] && [ "$qwen_active" = yes ]; then

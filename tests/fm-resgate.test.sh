@@ -197,6 +197,18 @@ test_override_forces_capped_regardless_of_schedule() {
   pass "an armed override forces capped state independent of the clock window"
 }
 
+test_blocked_clock_beats_armed_override() {
+  local state
+  state=$(fm_test_tmproot resgate-override-vs-blocked)
+  fm_resgate_override_set "$state" work Kappung || fail "override_set must succeed"
+  FM_RESGATE_NOW_OVERRIDE="garbage" fm_resgate_capacity_pct "$state" work
+  [ "$FM_RESGATE_PCT" = 0 ] \
+    || fail "an armed override must not lift an unreadable clock's 0% to 50% (got $FM_RESGATE_PCT)"
+  [ "$FM_RESGATE_STATE" = blocked ] \
+    || fail "an unreadable clock must stay blocked even with the override armed (got $FM_RESGATE_STATE)"
+  pass "an unreadable clock stays blocked at 0%: the override can only tighten the gate, never loosen it"
+}
+
 # --- percentage arithmetic ------------------------------------------------------
 
 test_apply_pct_arithmetic() {
@@ -354,6 +366,148 @@ test_gpu_owner_unknown_on_probe_failure_field() {
   pass "a single failed probe field fails the whole GPU reading closed, never a partial guess"
 }
 
+test_gpu_owner_unknown_on_voice_port_probe_failure() {
+  local tmp fakebin out
+  tmp=$(fm_test_tmproot resgate-gpu-portfail)
+  fakebin=$(fm_fakebin "$tmp")
+  # The port measurement itself failed (missing NetTCPIP module, unhealthy CIM
+  # service). That must never be indistinguishable from "not-listening": the
+  # voice gateway may well be up, and reading it as free would let Qwen start
+  # on the card beside it - the exact simultaneity this gate exists to prevent.
+  out='FM_RESGATE voice_port=probe-failed\r\nFM_RESGATE gpu_process=not-running\r\nFM_RESGATE gpu_used_mb=1200\r\n'
+  fake_ssh_returning "$fakebin" "$out"
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    fm_resgate_home_gpu_owner && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    [ -z "$FM_RESGATE_GPU_VOICE" ] || exit 1
+    fm_resgate_gpu_available_for qwen && exit 1
+    fm_resgate_gpu_available_for voice && exit 1
+    exit 0
+  ) || fail "a failed voice-port reading must fail closed to unknown, never read as not-listening"
+  pass "a failed voice-port reading fails the GPU decision closed for both workloads"
+}
+
+test_gpu_owner_unknown_on_process_probe_failure() {
+  local tmp fakebin out
+  tmp=$(fm_test_tmproot resgate-gpu-procfail)
+  fakebin=$(fm_fakebin "$tmp")
+  out='FM_RESGATE voice_port=not-listening\r\nFM_RESGATE gpu_process=probe-failed\r\nFM_RESGATE gpu_used_mb=9046\r\n'
+  fake_ssh_returning "$fakebin" "$out"
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    fm_resgate_home_gpu_owner && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    exit 0
+  ) || fail "a failed process reading must fail closed to unknown, never read as not-running"
+  pass "a failed process reading fails the GPU decision closed"
+}
+
+test_gpu_owner_unknown_on_unusable_tunables() {
+  local tmp fakebin out
+  tmp=$(fm_test_tmproot resgate-gpu-tunables)
+  fakebin=$(fm_fakebin "$tmp")
+  # Fully healthy probe output: only the mistyped session pin is wrong. A bad
+  # threshold makes the -ge comparison error out (reading the card as free) and
+  # a bad port probes something that is not the gateway; both must fail closed.
+  out='FM_RESGATE voice_port=not-listening\r\nFM_RESGATE gpu_process=running\r\nFM_RESGATE gpu_used_mb=9046\r\n'
+  fake_ssh_returning "$fakebin" "$out"
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    FM_RESGATE_GPU_BUSY_MB=lots fm_resgate_home_gpu_owner 2>/dev/null && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    FM_RESGATE_VOICE_PORT=99999 fm_resgate_home_gpu_owner 2>/dev/null && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    FM_RESGATE_VOICE_PORT=notaport fm_resgate_home_gpu_owner 2>/dev/null && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    fm_resgate_home_gpu_owner || exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = qwen ] || exit 1
+    exit 0
+  ) || fail "an unusable threshold or port must fail the GPU reading closed, not read the card as free"
+  pass "an unusable GPU threshold or voice port fails the reading closed to unknown"
+}
+
+# --- GPU probe script: executed by its real consumer (PowerShell) --------------
+#
+# fm_resgate_home_gpu_probe_cmd emits a PowerShell program that runs on the home
+# host; its error discrimination (which failures mean "nothing matched" and which
+# mean "the measurement itself failed") is only meaningful when PowerShell itself
+# evaluates it, so these run the generated program under pwsh with the failure
+# modes stubbed in, rather than inspecting its text.
+
+run_probe_under_pwsh() { # <prelude> -> probe stdout
+  local prelude=$1 tmp script
+  tmp=$(fm_test_tmproot resgate-probe-pwsh)
+  script="$tmp/probe.ps1"
+  {
+    printf '%s\n' "$prelude"
+    fm_resgate_home_gpu_probe_cmd 7414 definitely-no-such-proc-xyz
+  } > "$script"
+  pwsh -NoProfile -NonInteractive -File "$script" 2>/dev/null
+}
+
+test_probe_script_reports_port_probe_failure_distinctly() {
+  local out
+  command -v pwsh > /dev/null 2>&1 || { echo "skip - pwsh not installed"; return 0; }
+
+  # No Get-NetTCPConnection at all: the NetTCPIP module is unavailable, the
+  # real-world failure this must not report as a free port.
+  out=$(run_probe_under_pwsh '')
+  case "$out" in
+    *voice_port=probe-failed*) ;;
+    *) fail "a missing Get-NetTCPConnection must report probe-failed, got: $out" ;;
+  esac
+
+  # The CIM/WMI path itself errors while the gateway may well be listening.
+  out=$(run_probe_under_pwsh \
+    "function Get-NetTCPConnection { [CmdletBinding()] param([int]\$LocalPort,[string]\$State) throw 'CIM server unavailable' }")
+  case "$out" in
+    *voice_port=probe-failed*) ;;
+    *) fail "a failing CIM query must report probe-failed, got: $out" ;;
+  esac
+
+  # Genuinely nothing bound to the port: the one error identity that really
+  # does mean "no match" must still read as a negative, not a failure.
+  out=$(run_probe_under_pwsh \
+    "function Get-NetTCPConnection { [CmdletBinding()] param([int]\$LocalPort,[string]\$State) Write-Error -Message 'no match' -ErrorId 'CmdletizationQuery_NotFound_LocalPort' -Category ObjectNotFound }")
+  case "$out" in
+    *voice_port=not-listening*) ;;
+    *) fail "a genuine no-match must still read as not-listening, got: $out" ;;
+  esac
+
+  out=$(run_probe_under_pwsh \
+    "function Get-NetTCPConnection { [CmdletBinding()] param([int]\$LocalPort,[string]\$State) [pscustomobject]@{ LocalPort = \$LocalPort } }")
+  case "$out" in
+    *voice_port=listening*) ;;
+    *) fail "a returned connection must read as listening, got: $out" ;;
+  esac
+  pass "the generated probe separates a failed port measurement from a genuinely free port"
+}
+
+test_probe_script_reports_process_reading_from_real_cmdlet() {
+  local out
+  command -v pwsh > /dev/null 2>&1 || { echo "skip - pwsh not installed"; return 0; }
+
+  # Real Get-Process, real absent process: must be the negative reading, not a
+  # failure - otherwise every ordinary idle host would read unknown forever.
+  out=$(run_probe_under_pwsh '')
+  case "$out" in
+    *gpu_process=not-running*) ;;
+    *) fail "a genuinely absent process must read not-running, got: $out" ;;
+  esac
+
+  out=$(run_probe_under_pwsh \
+    "function Get-Process { [CmdletBinding()] param([string]\$Name) throw 'process enumeration failed' }")
+  case "$out" in
+    *gpu_process=probe-failed*) ;;
+    *) fail "a failing process enumeration must report probe-failed, got: $out" ;;
+  esac
+  pass "the generated probe separates a failed process measurement from a genuinely absent process"
+}
+
 test_gpu_owner_unknown_when_ssh_unreachable() {
   local tmp fakebin
   tmp=$(fm_test_tmproot resgate-gpu-unreachable)
@@ -438,6 +592,7 @@ test_schedule_blocked_on_unreadable_clock
 test_capacity_pct_zero_on_unreadable_clock
 test_override_set_active_clear_roundtrip
 test_override_forces_capped_regardless_of_schedule
+test_blocked_clock_beats_armed_override
 test_apply_pct_arithmetic
 test_apply_pct_fails_closed_on_bad_input
 test_gpu_owner_qwen_when_process_and_memory_both_active
@@ -447,6 +602,11 @@ test_gpu_owner_conflict_when_both_active
 test_gpu_available_for_blocks_the_other_side
 test_gpu_owner_unknown_on_crlf_lines_still_parses_correctly
 test_gpu_owner_unknown_on_probe_failure_field
+test_gpu_owner_unknown_on_voice_port_probe_failure
+test_gpu_owner_unknown_on_process_probe_failure
+test_gpu_owner_unknown_on_unusable_tunables
+test_probe_script_reports_port_probe_failure_distinctly
+test_probe_script_reports_process_reading_from_real_cmdlet
 test_gpu_owner_unknown_when_ssh_unreachable
 test_gpu_skip_remote_never_probes
 test_cli_schedule_and_cap

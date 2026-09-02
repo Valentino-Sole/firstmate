@@ -213,13 +213,14 @@ bin/fm-resgate.sh gpu allow qwen           # exit 0/1: may Qwen start or keep ru
 ```
 
 Manual override: `state/.resgate-cap-<work|home>` is a plain presence-based marker, written atomically like `state/.afk`.
-While it exists, that role reads capped (50%) immediately, regardless of what the clock window would otherwise say.
-Firstmate arms it the moment the captain says "Kappung" in chat (case-insensitive): bare `Kappung` arms both roles, `Kappung <hostname or role>` arms only that one, matching `Valentino-Arbeit`/`work`/`Arbeits-PC` to `work` and `Valentino`/`home`/`Heim-PC` to `home`.
-Firstmate clears both markers on "Kappung auf".
+While it exists, that role reads capped (50%) immediately, regardless of which window the clock lands in - but the marker can only ever tighten the gate, never loosen it: an unreadable clock stays `blocked` at 0% even with the marker armed, because a control whose purpose is to restrict must not hand out capacity no measurement supports.
+Firstmate matches the captain's chat wording case-insensitively, and checks the release form FIRST: "Kappung auf" always means release both markers, never an arming instruction, because bare `Kappung` is a substring of it and would otherwise be misread as "arm both".
+Only when the message is not the release form does firstmate arm: bare `Kappung` arms both roles, `Kappung <hostname or role>` arms only that one, matching `Valentino-Arbeit`/`work`/`Arbeits-PC` to `work` and `Valentino`/`home`/`Heim-PC` to `home` (`auf` is not a hostname and never resolves to a role).
 This is a plain state file firstmate touches directly (`bin/fm-resgate.sh override set|clear <work|home|both>`, or an equivalent direct write following `fm_resgate_override_set`/`fm_resgate_override_clear`'s header contract in `bin/fm-resgate-lib.sh`), not a skill, and not wired into spawn or dispatch plumbing beyond this marker.
 
 Fail-closed discipline: every measurement this surface cannot read - the authoritative clock, an SSH probe, the voice port, the GPU reading - yields the most restrictive answer, never a guess.
-A schedule read that cannot happen at all reports 0% (`blocked`), stricter than the ordinary 50% cap, and a GPU reading that cannot be completed reports `unknown`, which refuses both Qwen and JARVIS voice rather than picking a side.
+A schedule read that cannot happen at all reports 0% (`blocked`), stricter than the ordinary 50% cap and stricter than an armed override, and a GPU reading that cannot be completed reports `unknown`, which refuses both Qwen and JARVIS voice rather than picking a side.
+An out-of-range `FM_RESGATE_VOICE_PORT` or non-numeric `FM_RESGATE_GPU_BUSY_MB` is treated the same way: the GPU reading reports `unknown` instead of probing the wrong port or comparing against an unusable threshold.
 
 GPU exclusivity: JARVIS voice is detected by its gateway port (currently `7414`, see `data/learnings.md`), never by process name, because process-name detection has broken this fleet's integration before.
 Qwen is detected by a named-process check (`ollama`, the currently live identity) corroborated by aggregate GPU memory clearing a threshold, not by `nvidia-smi --query-compute-apps` per-process attribution: live-tested against the real home host, that query lists every ordinary desktop GPU context (window compositor, open browsers) with no per-process memory field left to filter the noise by, so it cannot isolate a genuine workload there.
