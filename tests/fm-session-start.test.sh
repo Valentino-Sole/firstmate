@@ -1286,6 +1286,80 @@ EOF
   pass "a missing fingerprint marker always falls back to the full block, never a silent compact form"
 }
 
+test_fleet_state_fingerprint_read_only_session_records_no_marker() {
+  local rec root home fakebin out marker holder_pid
+  rec=$(new_world fingerprint-read-only)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+  marker="$home/state/.session-start-seen-task-e"
+
+  printf 'window=fm-sess:live\nkind=ship\nharness=claude\n' > "$home/state/task-e.meta"
+  printf 'working: step 1\n' > "$home/state/task-e.status"
+
+  sleep 300 &
+  holder_pid=$!
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+  out=$(FM_FAKE_HARNESS_PID=$$ FM_FAKE_LIVE_HOLDER_PID="$holder_pid" \
+    run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+
+  assert_contains "$out" "READ-ONLY SESSION" "lock-refusal fixture did not enter read-only mode"
+  assert_contains "$out" "--- task-e ---" "the read-only session did not print task-e's full block"
+  assert_absent "$marker" "a lock-refused read-only session recorded a fingerprint marker"
+
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_not_contains "$out" "--- task-e --- unchanged" \
+    "a read-only session consumed the lock owner's first full print of task-e"
+  assert_contains "$out" "harness=claude" "the lock-owning session start did not print the full .meta content"
+  assert_present "$marker" "the lock-owning session start did not record a fingerprint marker"
+
+  pass "a lock-refused session compares the fingerprint but records none, so the lock owner still gets the full block"
+}
+
+test_fleet_state_fingerprint_compact_line_caps_its_verb() {
+  local rec root home fakebin out compact verb
+  rec=$(new_world fingerprint-verb-cap)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+
+  printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-f.meta"
+  {
+    printf 'sailing onward without a colon'
+    awk 'BEGIN { while (i++ < 400) printf " padding" }'
+    printf '\n'
+  } > "$home/state/task-f.status"
+
+  FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  compact=$(printf '%s\n' "$out" | grep 'last known verb: ' || true)
+  [ -n "$compact" ] || fail "an unchanged task-f did not produce a compact line: $out"
+  assert_contains "$compact" "sailing onward without a colon" \
+    "the verb cap discarded the lede of the last known status line"
+  assert_contains "$compact" "$home/state/task-f.status" \
+    "the compact line dropped the full log path that recovers the rest"
+
+  verb=${compact#*last known verb: }
+  verb=${verb%% · full status log:*}
+  [ "${#verb}" -le 220 ] \
+    || fail "the compact line's verb ran ${#verb} characters past the 220-character cap: $verb"
+  case "$verb" in
+    *' [truncated]') : ;;
+    *) fail "an over-long colon-less status line was not marked as truncated on the compact line: $verb" ;;
+  esac
+
+  pass "the compact line caps an unbounded status verb the way the status tail caps its lines"
+}
+
 # --- session-start secondmate recovery boundary -----------------------------
 
 test_session_start_relaunches_missing_pi_secondmate() {
@@ -2693,6 +2767,8 @@ test_fleet_state_fingerprint_first_start_full_then_unchanged_compact
 test_fleet_state_fingerprint_meta_change_forces_full_block
 test_fleet_state_fingerprint_new_status_line_forces_full_block
 test_fleet_state_fingerprint_missing_marker_forces_full_block
+test_fleet_state_fingerprint_read_only_session_records_no_marker
+test_fleet_state_fingerprint_compact_line_caps_its_verb
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts

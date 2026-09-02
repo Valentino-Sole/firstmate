@@ -174,6 +174,9 @@
 # status lines as wake EVENTS rather than current state (above); it never
 # suppresses the wake queue, OPEN DECISIONS, or UNREAD STATUS, and any real
 # change to .meta or the last status line always restores the full block.
+# The compact line's verb carries the same per-line cap as the status tail,
+# and a lock-refused read-only session compares an existing marker but writes
+# none, so it never consumes the lock owner's first full print of a task.
 #
 # RUNTIME BOUND: the digest is now executed through a native session-open
 # adapter (see bin/fm-sessionstart-run.sh), which blocks either hook-driven
@@ -904,6 +907,8 @@ for meta in "$STATE"/*.meta; do
         '') verb='-' ;;
         *) verb=$last_line ;;
       esac
+      fm_cap_line_var "$verb"
+      verb=$FM_LINE_CAP_LINE
     fi
     printf '\n--- %s --- unchanged since last session start; compact (delete %s to force the full block)\n' \
       "$id" "$SEEN_MARKER"
@@ -919,7 +924,7 @@ for meta in "$STATE"/*.meta; do
     fi
   fi
 
-  [ "$FP_OK" -eq 1 ] && write_fleet_state_seen_marker "$id" "$NEW_FP"
+  [ "$READ_ONLY" -eq 0 ] && [ "$FP_OK" -eq 1 ] && write_fleet_state_seen_marker "$id" "$NEW_FP"
 done
 [ "$META_FOUND" -eq 1 ] || printf '(none)\n'
 

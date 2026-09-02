@@ -85,6 +85,7 @@ Separately, the session-start digest's own "Work under way" subsection (`bin/fm-
 Each task gets a fingerprint marker at `state/.session-start-seen-<task>`, a digest of that task's `.meta` content plus its last status line.
 A matching fingerprint at the next session start prints one compact line (task id, endpoint alive/dead, last known status verb) instead of the full `.meta` block and status tail; a missing, unreadable, or mismatched marker - including a task's first session start - always falls back to the full block.
 This is a repeat-print optimization only: it never touches the wake queue, OPEN DECISIONS, or UNREAD STATUS, and `bin/fm-teardown.sh` removes the marker with the rest of a retired task's per-id state.
+A session refused the fleet lock still compares an existing marker to choose compact or full, but records none of its own, so a read-only session never consumes the lock owner's first full print of a task.
 
 On a Pi primary, supervision is default-on: the watcher extension can hand eligible task-local rows from an ordinary actionable wake, plus selected fleet-wide heartbeat reviews, to a persistent in-process supervision conversation while main-only rows remain on the captain-facing path.
 The branch handles those rows, stores the outcome durably, and merges it back into main.
