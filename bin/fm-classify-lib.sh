@@ -929,8 +929,35 @@ status_snapshot_latest_event() {  # <status-file> <captured-endpoint> <captured-
   FM_STATUS_SNAPSHOT_EVENT_ENDPOINT=$event_endpoint
 }
 
+# $state/.status-presentation-cursor is the durable fleet-wide manifest this
+# file owns: one row per task, TAB-separated, exactly 4 fields per row -
+#   <task-id>\t<ident>\t<offset>\t<backstop>
+# - task-id: the status file's basename with ".status" stripped.
+# - ident: _fm_open_decisions_file_ident's identity string for that status
+#   file (device:inode plus birth time where available); a row whose ident no
+#   longer matches the live file is stale and its cached offset is discarded.
+# - offset: the byte offset through which this task's status log has been
+#   presented fleet-wide (status_presentation_cursor_offset).
+# - backstop: the byte offset status_outcome_backstop_cursor_offset falls
+#   back to when no newer supervision-branch outcome covers this task's
+#   latest event.
+# This is the ONLY schema every reader and writer below may assume; a row with
+# more, fewer, or non-numeric fields is a malformed manifest, and every reader
+# below fails closed (returns 1, deletes nothing) rather than guessing at a
+# partial or newer/older format. See _fm_status_presentation_row_error.
+
+# Print one diagnostic line to stderr for a malformed $state/.status-
+# presentation-cursor row instead of failing silently. Every caller here still
+# returns 1 right after calling this (or breaks a rewrite loop with rc=1) -
+# this only makes that existing fail-closed behavior visible; it changes no
+# control flow and deletes nothing itself.
+_fm_status_presentation_row_error() {  # <manifest> <line-no> <reason> <row>
+  printf 'error: %s:%s: malformed status-presentation-cursor row: %s (expected 4 TAB-separated fields: task, ident, offset, backstop): %s\n' \
+    "$1" "$2" "$3" "$4" >&2
+}
+
 status_presentation_cursor_offset() {  # <status-file>
-  local f=$1 state task manifest data row_task offset ident backstop extra cur_ident size legacy
+  local f=$1 state task manifest data row_task offset ident backstop extra cur_ident size legacy lineno
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   state=${f%/*}
   task=${f##*/}; task=${task%.status}
@@ -939,13 +966,31 @@ status_presentation_cursor_offset() {  # <status-file>
     [ -f "$manifest" ] && [ -r "$manifest" ] && [ ! -L "$manifest" ] || return 1
     data=$(LC_ALL=C command cat "$manifest" 2>/dev/null) || return 1
     offset=
+    lineno=0
     while IFS=$(printf '\t') read -r row_task ident legacy backstop extra; do
+      lineno=$((lineno + 1))
       [ -n "$row_task" ] || continue
-      [ -z "$extra" ] || return 1
-      case "$legacy:$backstop" in *[!0-9:]*) return 1 ;; esac
-      [ -n "$legacy" ] && [ -n "$ident" ] || return 1
+      if [ -n "$extra" ]; then
+        _fm_status_presentation_row_error "$manifest" "$lineno" "unexpected extra field" \
+          "$(printf '%s\t%s\t%s\t%s\t%s' "$row_task" "$ident" "$legacy" "$backstop" "$extra")"
+        return 1
+      fi
+      case "$legacy:$backstop" in *[!0-9:]*)
+        _fm_status_presentation_row_error "$manifest" "$lineno" "non-numeric offset or backstop" \
+          "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$legacy" "$backstop")"
+        return 1 ;;
+      esac
+      if [ -z "$legacy" ] || [ -z "$ident" ]; then
+        _fm_status_presentation_row_error "$manifest" "$lineno" "missing ident or offset field" \
+          "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$legacy" "$backstop")"
+        return 1
+      fi
       if [ "$row_task" = "$task" ]; then
-        [ -z "$offset" ] || return 1
+        if [ -n "$offset" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "duplicate row for task $task" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$legacy" "$backstop")"
+          return 1
+        fi
         offset=$legacy
         cur_ident=$ident
       fi
@@ -975,7 +1020,7 @@ EOF
 }
 
 status_outcome_backstop_cursor_offset() {  # <status-file>
-  local f=$1 state task manifest data row_task ident presented row_backstop backstop extra current size
+  local f=$1 state task manifest data row_task ident presented row_backstop backstop extra current size lineno
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   state=${f%/*}
   task=${f##*/}; task=${task%.status}
@@ -984,11 +1029,25 @@ status_outcome_backstop_cursor_offset() {  # <status-file>
   [ -f "$manifest" ] && [ -r "$manifest" ] && [ ! -L "$manifest" ] || return 1
   data=$(LC_ALL=C command cat "$manifest" 2>/dev/null) || return 1
   backstop=0
+  lineno=0
   while IFS=$(printf '\t') read -r row_task ident presented row_backstop extra; do
+    lineno=$((lineno + 1))
     [ -n "$row_task" ] || continue
-    [ -z "$extra" ] || return 1
-    case "$presented:$row_backstop" in *[!0-9:]*) return 1 ;; esac
-    [ -n "$presented" ] && [ -n "$ident" ] || return 1
+    if [ -n "$extra" ]; then
+      _fm_status_presentation_row_error "$manifest" "$lineno" "unexpected extra field" \
+        "$(printf '%s\t%s\t%s\t%s\t%s' "$row_task" "$ident" "$presented" "$row_backstop" "$extra")"
+      return 1
+    fi
+    case "$presented:$row_backstop" in *[!0-9:]*)
+      _fm_status_presentation_row_error "$manifest" "$lineno" "non-numeric offset or backstop" \
+        "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$presented" "$row_backstop")"
+      return 1 ;;
+    esac
+    if [ -z "$presented" ] || [ -z "$ident" ]; then
+      _fm_status_presentation_row_error "$manifest" "$lineno" "missing ident or offset field" \
+        "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$presented" "$row_backstop")"
+      return 1
+    fi
     if [ "$row_task" = "$task" ]; then
       current=$(_fm_open_decisions_file_ident "$f") || return 1
       size=$(_fm_status_file_size "$f") || return 1
@@ -1139,7 +1198,7 @@ status_presentation_marker_commit() {
 }
 
 status_retire_presentation_task() {  # <state> <task-id>
-  local state=$1 task=$2 lock manifest tmp data row_task ident offset backstop extra rc=0 found=0
+  local state=$1 task=$2 lock manifest tmp data row_task ident offset backstop extra rc=0 found=0 lineno
   local signal_marker heartbeat_marker daemon_marker
   lock="$state/.status-presentation-lock"
   manifest="$state/.status-presentation-cursor"
@@ -1164,11 +1223,30 @@ status_retire_presentation_task() {  # <state> <task-id>
     fi
     if [ -f "$manifest" ] && [ -r "$manifest" ] && [ ! -L "$manifest" ] \
       && data=$(LC_ALL=C command cat "$manifest" 2>/dev/null); then
+      lineno=0
       while IFS=$(printf '\t') read -r row_task ident offset backstop extra; do
+        lineno=$((lineno + 1))
         [ -n "$row_task" ] || continue
-        if [ -n "$extra" ] || [ -z "$ident" ]; then rc=1; break; fi
-        case "$offset:$backstop" in *[!0-9:]*) rc=1; break ;; esac
-        [ -n "$offset" ] || { rc=1; break; }
+        if [ -n "$extra" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "unexpected extra field" \
+            "$(printf '%s\t%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop" "$extra")"
+          rc=1; break
+        fi
+        if [ -z "$ident" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "missing ident field" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop")"
+          rc=1; break
+        fi
+        case "$offset:$backstop" in *[!0-9:]*)
+          _fm_status_presentation_row_error "$manifest" "$lineno" "non-numeric offset or backstop" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop")"
+          rc=1; break ;;
+        esac
+        if [ -z "$offset" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "missing offset field" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop")"
+          rc=1; break
+        fi
         [ "$row_task" != "$task" ] || found=1
       done <<EOF
 $data
@@ -1187,11 +1265,30 @@ EOF
     elif ! : > "$tmp"; then
       rc=1
     else
+      lineno=0
       while IFS=$(printf '\t') read -r row_task ident offset backstop extra; do
+        lineno=$((lineno + 1))
         [ -n "$row_task" ] || continue
-        if [ -n "$extra" ] || [ -z "$ident" ]; then rc=1; break; fi
-        case "$offset:$backstop" in *[!0-9:]*) rc=1; break ;; esac
-        [ -n "$offset" ] || { rc=1; break; }
+        if [ -n "$extra" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "unexpected extra field" \
+            "$(printf '%s\t%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop" "$extra")"
+          rc=1; break
+        fi
+        if [ -z "$ident" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "missing ident field" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop")"
+          rc=1; break
+        fi
+        case "$offset:$backstop" in *[!0-9:]*)
+          _fm_status_presentation_row_error "$manifest" "$lineno" "non-numeric offset or backstop" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop")"
+          rc=1; break ;;
+        esac
+        if [ -z "$offset" ]; then
+          _fm_status_presentation_row_error "$manifest" "$lineno" "missing offset field" \
+            "$(printf '%s\t%s\t%s\t%s' "$row_task" "$ident" "$offset" "$backstop")"
+          rc=1; break
+        fi
         if [ "$row_task" != "$task" ]; then
           printf '%s\t%s\t%s\t%s\n' "$row_task" "$ident" "$offset" "${backstop:-0}" >> "$tmp" \
             || { rc=1; break; }
