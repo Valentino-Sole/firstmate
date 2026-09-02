@@ -28,13 +28,23 @@
 #                          applies does the log's last line decide:
 #                          terminal (captain-relevant) or non-terminal (no verb),
 #                          both surfaced at once. A provably-working stale past the
-#                          wedge threshold also surfaces, with an "escalation N"
-#                          count in the reason; at FM_WEDGE_DEMAND_INSPECT_COUNT
-#                          consecutive escalations on the SAME pane, the reason
-#                          also carries a "demand-deep-inspection" marker so the
-#                          wake payload itself, not just repetition, forces a
-#                          closer look instead of another routine supervision
-#                          resume. Unless afk is active. A pane whose own task
+#                          wedge threshold surfaces once immediately, with an
+#                          "escalation N" count in the reason, and keeps that
+#                          same episode's key while it stays wedged: an
+#                          unbroken run of consecutive escalations on the SAME
+#                          pane counts up underneath every FM_STALE_ESCALATE_SECS,
+#                          but only two counted moments re-surface a full wake -
+#                          the first crossing and reaching
+#                          FM_WEDGE_DEMAND_INSPECT_COUNT, when the reason also
+#                          carries a "demand-deep-inspection" marker so the wake
+#                          payload itself, not just repetition, forces a closer
+#                          look instead of another routine supervision resume.
+#                          Every escalation past that point re-surfaces on the
+#                          same bounded PAUSE_RESURFACE_SECS cadence a declared
+#                          wait uses, not on every poll, so a still-wedged pane
+#                          keeps getting a bounded recheck instead of a
+#                          repeated, ever-changing wake. Unless afk is active.
+#                          A pane whose own task
 #                          worktree was written during the quiet window is
 #                          deferred rather than escalated (wedge_defer_writing),
 #                          because files appearing there are liveness the pane and
@@ -313,11 +323,11 @@ window_label() {
 # The ONE derivation of a window's per-window marker key: `:`, `/` and `.` become
 # `_` so a window name is usable as a filename suffix. Every per-window file the
 # watcher keeps is named by it (.hash-, .count-, .stale-, .stale-since-,
-# .wedge-escalations-, .paused-*, .writing-*), and live homes hold those markers on
-# disk under the current format, so the format lives here alone: a second copy is
-# how a future change to it silently orphans a window's markers instead of clearing
-# them. The helpers below take the derived key rather than re-deriving it, so one
-# poll of one window derives it once.
+# .wedge-escalations-, .wedge-resurfaced-, .paused-*, .writing-*), and live homes
+# hold those markers on disk under the current format, so the format lives here
+# alone: a second copy is how a future change to it silently orphans a window's
+# markers instead of clearing them. The helpers below take the derived key
+# rather than re-deriving it, so one poll of one window derives it once.
 window_key() {  # <window>
   local key=${1//:/_}
   key=${key//\//_}
@@ -578,7 +588,7 @@ signal_turnend_panes_churned() {  # <file> ...
     return 1
   done
   for key in "${churned_keys[@]}"; do
-    if ! rm -f "$STATE/.stale-$key" "$STATE/.wedge-escalations-$key"; then
+    if ! rm -f "$STATE/.stale-$key" "$STATE/.wedge-escalations-$key" "$STATE/.wedge-resurfaced-$key"; then
       for created in "${created_keys[@]}"; do
         rm -f "$STATE/.churn-since-$created"
       done
@@ -683,14 +693,17 @@ EOF
 
 # Consecutive wedge-escalation count for a window past FM_WEDGE_DEMAND_INSPECT_COUNT
 # (default 3): a pane that keeps re-wedging on the SAME stale hash - each
-# escalation gets absorbed again as "still validating" one poll later, since the
-# hash never changes - can otherwise repeat forever with no signal that this is
-# no longer a one-off. At the threshold, wedge_timer_check appends a
+# recheck still finds "still validating" one FM_STALE_ESCALATE_SECS later, since
+# the hash never changes - would otherwise repeat forever with no signal that
+# this is no longer a one-off. At the threshold, wedge_timer_check appends a
 # "demand-deep-inspection" marker to the wake payload so the wake reason itself
 # (not just repetition the supervisor has to notice on its own) forces a closer
-# look instead of another routine supervision resume. Reset wherever a window's
-# pane/hash state resets to genuinely active (see the two rm-on-reset call sites
-# below).
+# look instead of another routine supervision resume. This count is bumped every
+# FM_STALE_ESCALATE_SECS regardless of whether that round actually wakes anyone
+# (see wedge_timer_check's own header for the episode-keyed PAUSE_RESURFACE_SECS
+# gate that decides), so it stays an accurate measure of how long the episode has
+# run even while most rounds stay silent. Reset wherever a window's pane/hash
+# state resets to genuinely active (see the rm-on-reset call sites below).
 FM_WEDGE_DEMAND_INSPECT_COUNT=${FM_WEDGE_DEMAND_INSPECT_COUNT:-3}
 
 # One bounded re-surface for a pane the watcher is deliberately absorbing, so no
@@ -760,8 +773,22 @@ clear_write_tracking() {  # <window-key>
 # The worktree write probe runs ONLY here, inside the at-threshold branch that is
 # about to escalate: at most one bounded walk per window per STALE_ESCALATE_SECS,
 # never per poll.
+# Wake-emission cadence, modeled on fm_guard_stale_episode_key
+# (bin/fm-guard.sh): a continuing wedge is one episode, keyed to the window
+# (clear_write_tracking's callers already open a fresh episode on any genuine
+# state change - the pane going busy again, a hash change, a declared pause, or
+# a worktree write - by clearing this function's escalation and resurface
+# markers, so this function itself never has to tell episodes apart by reason
+# text). Within one episode, a full wake fires immediately on the FIRST
+# crossing (n=1) and again once FM_WEDGE_DEMAND_INSPECT_COUNT is reached, but
+# every other round is throttled to one resurface per PAUSE_RESURFACE_SECS via
+# the .wedge-resurfaced-<key> marker, instead of a brand new "escalation N" wake
+# every STALE_ESCALATE_SECS forever. The escalation counter itself still
+# advances every round regardless of whether that round wakes anyone, so the
+# count and the demand-deep-inspection marker stay accurate once a throttled
+# round does resurface.
 wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-file> <task>
-  local win=$1 since_file=$2 label=$3 escalation_file=$4 task=$5 since age n reason
+  local win=$1 since_file=$2 label=$3 escalation_file=$4 task=$5 since age n reason key rf
   since=$(cat "$since_file" 2>/dev/null || true)
   case "$since" in
     ''|*[!0-9]*)
@@ -778,16 +805,26 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
           wedge_defer_writing "$win" "$since_file" "$label" "$age"
           return 0
         fi
+        key=$(window_key "$win")
+        rf="$STATE/.wedge-resurfaced-$key"
         n=$(( $(cat "$escalation_file" 2>/dev/null || echo 0) + 1 ))
         echo "$n" > "$escalation_file"
         reason="stale: $win (idle ${age}s, possible wedge, escalation $n)"
         if [ "$n" -ge "$FM_WEDGE_DEMAND_INSPECT_COUNT" ]; then
           reason="stale: $win (idle ${age}s, possible wedge, escalation $n, demand-deep-inspection: same pane has wedge-escalated $n times in a row - do not re-absorb on the run-step/pane state alone)"
         fi
-        fm_wake_append stale "$win" "$reason" || exit 1
-        rm -f "$since_file"
-        clear_write_tracking "$(window_key "$win")"
-        wake "$reason"
+        if [ "$n" -eq 1 ] || [ "$n" -eq "$FM_WEDGE_DEMAND_INSPECT_COUNT" ] \
+          || [ "$(age_of "$rf")" -ge "$PAUSE_RESURFACE_SECS" ]; then
+          fm_wake_append stale "$win" "$reason" || exit 1
+          date +%s > "$rf"
+          rm -f "$since_file"
+          clear_write_tracking "$key"
+          wake "$reason"
+        else
+          rm -f "$since_file"
+          clear_write_tracking "$key"
+          triage_log "absorbed wedge escalation $n (same episode, rechecked on a long cadence not every poll): $win"
+        fi
       fi
       ;;
   esac
@@ -827,7 +864,7 @@ handle_paused_stale() {  # <window> <task> <hash>
   key=$(window_key "$win")
   printf '%s' "$h" > "$STATE/.stale-$key"
   : > "$STATE/.paused-$key"
-  rm -f "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+  rm -f "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key" "$STATE/.wedge-resurfaced-$key"
   clear_write_tracking "$key"
   statusf="$STATE/$task.status"
   mtime=$(stat_mtime "$statusf")
@@ -885,7 +922,7 @@ busy_turn_bound_check() {  # <window> <task> <hash> <since-file> <escalation-fil
       # pause tracking stays unwritten here, exactly as the idle away-mode handoff
       # leaves it, because the daemon owns that bookkeeping.
       key=$(window_key "$win")
-      rm -f "$since_file" "$escalation_file"
+      rm -f "$since_file" "$escalation_file" "$STATE/.wedge-resurfaced-$key"
       clear_write_tracking "$key"
       declared="declared:$(fm_wake_signal_sig "$statusf" || true)"
       if [ "$(cat "$STATE/.stale-$key" 2>/dev/null || true)" != "$declared" ]; then
@@ -914,7 +951,8 @@ clear_pause_state() {  # <window-key>
 clear_stale_hash_tracking() {  # <window-key>
   local key=$1
   clear_write_tracking "$key"
-  rm -f "$STATE/.stale-$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+  rm -f "$STATE/.stale-$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key" \
+    "$STATE/.wedge-resurfaced-$key"
 }
 
 clear_pause_tracking() {  # <window-key>
@@ -1962,7 +2000,7 @@ EOF
         if [ "$busy_now" -eq 0 ] && busy_turn_over_age "$task"; then
           busy_turn_bound_check "$w" "$task" "$h" "$ssf" "$ewf" && paused_bound=0
         else
-          rm -f "$ssf" "$ewf"
+          rm -f "$ssf" "$ewf" "$STATE/.wedge-resurfaced-$key"
           clear_write_tracking "$key"
         fi
         # A busy pane normally means real work resumed, so stale pause bookkeeping
@@ -1980,7 +2018,7 @@ EOF
       if [ "$busy_now" -eq 0 ] && busy_turn_over_age "$task"; then
         busy_turn_bound_check "$w" "$task" "$h" "$ssf" "$ewf" && paused_bound=0
       else
-        rm -f "$ssf" "$ewf"
+        rm -f "$ssf" "$ewf" "$STATE/.wedge-resurfaced-$key"
         clear_write_tracking "$key"
       fi
       task=$(window_to_task "$w" "$STATE")

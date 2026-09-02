@@ -2490,17 +2490,26 @@ test_paused_authoritative_working_preserves_wedge_timer() {
 
 # --- consecutive wedge escalations on the same pane demand deep inspection ----
 # Root cause of the PR #252 incident's ~20 minutes of unnoticed green: each
-# wedge escalation fires, gets classified as "still validating" one poll later
-# (the timer restarts, see wedge_timer_check), and repeats forever on a pane
-# that never changes. A single escalation reason looks identical every round,
-# so nothing in the payload itself signals "this has now happened N times in a
+# wedge escalation fired, got classified as "still validating" one poll later
+# (the timer restarted, see wedge_timer_check), and repeated forever on a pane
+# that never changes. A single escalation reason looked identical every round,
+# so nothing in the payload itself signaled "this has now happened N times in a
 # row" - that judgment call was left entirely to the supervisor noticing the
-# repetition on its own. This is the safety-net fix: past
+# repetition on its own. Part of the fix is unchanged: past
 # FM_WEDGE_DEMAND_INSPECT_COUNT consecutive escalations on the SAME pane, the
-# wake reason itself carries a "demand-deep-inspection" marker.
+# wake reason itself carries a "demand-deep-inspection" marker. The other part
+# is new (wachmeldung-dedup scout report, mechanism A): a still-wedged pane
+# used to reopen its 240s timer and append a brand-new wake every single round
+# forever, so a task that had already finished and recommended ending the
+# session kept re-escalating at the raw poll cadence. Escalations between the
+# two counted moments (the first crossing, and reaching the threshold) now
+# stay silent - see test_wedge_escalation_stays_silent_within_pause_window_then_resurfaces
+# below for the companion half of that fix: the same still-wedged episode
+# remains visible on the bounded PAUSE_RESURFACE_SECS cadence once that window
+# elapses, so a genuinely stuck task never goes quiet forever.
 
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
-  local dir state fakebin out capture_file window key pane_hash sig pid n
+  local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case wedge-escalation); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
   window="test:fm-wedged"
@@ -2528,30 +2537,137 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
   reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional wedge priming stop"
 
-  n=1
-  while [ "$n" -le 3 ]; do
-    # Backdate the wedge timer past the threshold before each round, mirroring
-    # the existing wedge-escalation tests' Phase B (the subsequent-sight timer
-    # path does not re-read the crew state).
-    echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
-    : > "$out"
-    PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-      FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
-      FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
-    pid=$!
-    wait_for_exit "$pid" 100 || fail "watcher did not escalate on consecutive wedge round $n: $(cat "$out")"
-    grep -F "escalation $n" "$out" >/dev/null || fail "round $n did not report escalation count $n: $(cat "$out")"
-    if [ "$n" -lt 3 ]; then
-      grep -F "demand-deep-inspection" "$out" >/dev/null && fail "round $n escalated to demand-deep-inspection before the threshold: $(cat "$out")"
-    else
-      grep -F "demand-deep-inspection" "$out" >/dev/null || fail "round $n (threshold) did not demand deep inspection: $(cat "$out")"
-    fi
-    ack_stopped_cycle "$state" || fail "could not acknowledge wedge escalation round $n"
-    n=$((n + 1))
-  done
+  # Round 1: the FIRST crossing of the wedge threshold always fires a full wake.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "watcher did not escalate on the first wedge crossing: $(cat "$out")"
+  grep -F "escalation 1" "$out" >/dev/null || fail "round 1 did not report escalation count 1: $(cat "$out")"
+  grep -F "demand-deep-inspection" "$out" >/dev/null && fail "round 1 escalated to demand-deep-inspection before the threshold: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge wedge escalation round 1"
+
+  # Round 2: the SAME still-wedged episode, well inside PAUSE_RESURFACE_SECS
+  # (default 1h) since round 1's resurface - a genuinely identical repeat, so
+  # it must stay silent even though the escalation count keeps advancing.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "round 2 (inside the resurface window) surfaced a duplicate wedge wake: $(cat "$out")"
+  fi
+  [ ! -s "$out" ] || fail "round 2 (inside the resurface window) printed a wake reason: $(cat "$out")"
+  reap "$pid"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the silent round 2 watcher stop"
+  [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 2 ] || fail "round 2 did not advance the escalation counter while staying silent"
+
+  # Round 3: reaching FM_WEDGE_DEMAND_INSPECT_COUNT (default 3) always fires a
+  # full wake too, even though round 2 stayed silent in between.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "watcher did not escalate on reaching the demand-deep-inspection threshold: $(cat "$out")"
+  grep -F "escalation 3" "$out" >/dev/null || fail "round 3 (threshold) did not report escalation count 3: $(cat "$out")"
+  grep -F "demand-deep-inspection" "$out" >/dev/null || fail "round 3 (threshold) did not demand deep inspection: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge wedge escalation round 3"
+
   [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 3 ] || fail "escalation counter did not persist across consecutive rounds"
   unset FM_FAKE_CREW_STATE
-  pass "consecutive wedge escalations on the same pane accumulate and demand deep inspection at the threshold"
+  pass "consecutive wedge escalations on the same pane accumulate, stay silent between the two counted moments, and demand deep inspection at the threshold"
+}
+
+# --- wedge dedup: a still-wedged episode resurfaces once per bounded --------
+# --- PAUSE_RESURFACE_SECS window, never every STALE_ESCALATE_SECS poll ------
+# Wachmeldung-dedup scout report, mechanism A, hard requirement: a genuinely
+# still-wedged task must never go quieter than before - only the repeat RATE
+# may drop. This pins both halves in one fixture: identical repeats inside the
+# resurface window are dropped (round 2, proven above too), and the SAME
+# continuing episode still reaches the captain once PAUSE_RESURFACE_SECS has
+# elapsed since its last resurface (round 3 here, forced by backdating the
+# .wedge-resurfaced-<key> marker rather than waiting a real hour).
+# FM_WEDGE_DEMAND_INSPECT_COUNT is set far out of reach so only the
+# first-crossing rule (round 1) and the resurface-window rule (round 3) can
+# explain a fire - never the demand-deep-inspection threshold rule.
+test_wedge_escalation_stays_silent_within_pause_window_then_resurfaces() {
+  local dir state fakebin out capture_file window key pane_hash sig pid resurfaced
+  dir=$(make_case wedge-dedup-resurface); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"
+  window="test:fm-wedged-resurface"
+  printf 'idle building output' > "$capture_file"
+  printf 'window=%s\nkind=ship\n' "$window" > "$state/wedged-resurface.meta"
+  printf 'working: still monitoring ci\n' > "$state/wedged-resurface.status"
+  sig=$(seen_sig "$state/wedged-resurface.status"); printf '%s' "$sig" > "$state/.seen-wedged-resurface_status"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  pane_hash=$(hash_text "idle building output")
+  printf '%s' "$pane_hash" > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+  resurfaced="$state/.wedge-resurfaced-$key"
+  export FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
+
+  # Priming round, exactly as the demand-deep-inspection fixture above.
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "watcher exited on the priming round (should absorb): $(cat "$out")"
+  fi
+  reap "$pid"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the intentional wedge priming stop"
+
+  # Round 1: first crossing fires and records the resurface marker.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "watcher did not escalate on the first wedge crossing: $(cat "$out")"
+  grep -F "escalation 1" "$out" >/dev/null || fail "round 1 did not report escalation count 1: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge wedge escalation round 1"
+  [ -e "$resurfaced" ] || fail "round 1 did not record a .wedge-resurfaced-<key> marker"
+
+  # Round 2: same episode, still well inside PAUSE_RESURFACE_SECS since round 1
+  # - a genuinely identical repeat, must stay silent (the dedup half of the fix).
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "round 2 (inside the resurface window) surfaced a duplicate wedge wake: $(cat "$out")"
+  fi
+  [ ! -s "$out" ] || fail "round 2 (inside the resurface window) printed a wake reason: $(cat "$out")"
+  reap "$pid"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the silent round 2 watcher stop"
+
+  # A genuinely stuck task must not go quiet forever: backdate the resurface
+  # marker past PAUSE_RESURFACE_SECS (simulating an hour of continued wedging
+  # without waiting a real hour) and confirm the SAME still-wedged episode
+  # reaches the captain again - the visibility half of the fix.
+  set_mtime "$(( $(date +%s) - 4000 ))" "$resurfaced"
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "a genuinely stuck task did not resurface once its PAUSE_RESURFACE_SECS window elapsed: $(cat "$out")"
+  grep -F "escalation 3" "$out" >/dev/null || fail "the resurfaced reminder did not report the current escalation count: $(cat "$out")"
+  grep -F "demand-deep-inspection" "$out" >/dev/null && fail "the resurfaced reminder wrongly fired the demand-deep-inspection rule instead of the resurface-window rule: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the resurfaced wedge reminder"
+
+  unset FM_FAKE_CREW_STATE
+  pass "a still-wedged episode stays silent for identical repeats inside PAUSE_RESURFACE_SECS but remains visible once that window elapses"
 }
 
 test_wedge_escalation_resets_when_pane_becomes_active() {
@@ -2567,8 +2683,11 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
   pane_hash=$(hash_text "idle building output")
   printf '%s' "$pane_hash" > "$state/.hash-$key"
   printf '1\n' > "$state/.count-$key"
-  # Pre-seed one escalation as if a prior wedge round already fired.
+  # Pre-seed one escalation, as if a prior wedge round already fired and
+  # resurfaced, as if a prior episode was already under way and had already
+  # sent its first wake.
   printf '1\n' > "$state/.wedge-escalations-$key"
+  : > "$state/.wedge-resurfaced-$key"
   export FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
 
   # The pane content changes (the crew is active again): the hash no longer
@@ -2582,9 +2701,10 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
     reap "$pid"; fail "watcher exited on a fresh (changed) pane hash: $(cat "$out")"
   fi
   [ ! -e "$state/.wedge-escalations-$key" ] || fail "a changed pane hash did not reset the wedge-escalation counter"
+  [ ! -e "$state/.wedge-resurfaced-$key" ] || fail "a changed pane hash did not reset the wedge-resurface marker"
   reap "$pid"
   unset FM_FAKE_CREW_STATE
-  pass "a pane becoming active again resets the consecutive wedge-escalation counter"
+  pass "a pane becoming active again resets the consecutive wedge-escalation counter and its resurface marker"
 }
 
 # --- busy pane duration bound: a completed-turn age gate on top of busy -----
@@ -2748,7 +2868,7 @@ test_busy_pane_turn_end_touch_resets_age() {
 }
 
 test_busy_pane_repeated_escalation_reaches_demand_deep_inspection() {
-  local dir state fakebin out capture_file window key pane_hash sig pid n
+  local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case busy-turn-age-demand-inspect); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-demand-inspect"
   printf 'Working...' > "$capture_file"
@@ -2775,26 +2895,49 @@ test_busy_pane_repeated_escalation_reaches_demand_deep_inspection() {
   reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional busy-wedge priming stop"
 
-  n=1
-  while [ "$n" -le 3 ]; do
-    echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
-    : > "$out"
-    PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-      FM_STATE_OVERRIDE="$state" FM_BUSY_TURN_MAX_SECS=1 FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
-      FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
-    pid=$!
-    wait_for_exit "$pid" 100 || fail "busy turn-age escalation round $n did not escalate: $(cat "$out")"
-    grep -F "escalation $n" "$out" >/dev/null || fail "busy turn-age round $n did not report escalation count $n: $(cat "$out")"
-    if [ "$n" -lt 3 ]; then
-      grep -F "demand-deep-inspection" "$out" >/dev/null && fail "busy turn-age round $n escalated to demand-deep-inspection before the threshold: $(cat "$out")"
-    else
-      grep -F "demand-deep-inspection" "$out" >/dev/null || fail "busy turn-age round $n (threshold) did not demand deep inspection: $(cat "$out")"
-    fi
-    ack_stopped_cycle "$state" || fail "could not acknowledge busy turn-age escalation round $n"
-    n=$((n + 1))
-  done
+  # Round 1: the FIRST crossing of the wedge threshold always fires a full wake.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_BUSY_TURN_MAX_SECS=1 FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "busy turn-age escalation did not fire on the first wedge crossing: $(cat "$out")"
+  grep -F "escalation 1" "$out" >/dev/null || fail "busy turn-age round 1 did not report escalation count 1: $(cat "$out")"
+  grep -F "demand-deep-inspection" "$out" >/dev/null && fail "busy turn-age round 1 escalated to demand-deep-inspection before the threshold: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge busy turn-age escalation round 1"
+
+  # Round 2: same still-wedged episode, well inside PAUSE_RESURFACE_SECS since
+  # round 1 - a genuinely identical repeat, must stay silent.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_BUSY_TURN_MAX_SECS=1 FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "busy turn-age round 2 (inside the resurface window) surfaced a duplicate wedge wake: $(cat "$out")"
+  fi
+  [ ! -s "$out" ] || fail "busy turn-age round 2 (inside the resurface window) printed a wake reason: $(cat "$out")"
+  reap "$pid"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the silent busy turn-age round 2 watcher stop"
+  [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 2 ] || fail "busy turn-age round 2 did not advance the escalation counter while staying silent"
+
+  # Round 3: reaching FM_WEDGE_DEMAND_INSPECT_COUNT (default 3) always fires a
+  # full wake too, even though round 2 stayed silent in between.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_BUSY_TURN_MAX_SECS=1 FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "busy turn-age escalation did not fire on reaching the demand-deep-inspection threshold: $(cat "$out")"
+  grep -F "escalation 3" "$out" >/dev/null || fail "busy turn-age round 3 (threshold) did not report escalation count 3: $(cat "$out")"
+  grep -F "demand-deep-inspection" "$out" >/dev/null || fail "busy turn-age round 3 (threshold) did not demand deep inspection: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge busy turn-age escalation round 3"
+
   [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 3 ] || fail "busy turn-age escalation counter did not persist across consecutive rounds"
-  pass "repeated busy turn-age escalations reuse the existing escalation counter and demand deep inspection at the threshold"
+  pass "repeated busy turn-age escalations reuse the existing escalation counter, stay silent between the two counted moments, and demand deep inspection at the threshold"
 }
 
 # --- declared pause + busy pane: the busy-turn bound must honor the declaration
@@ -4041,6 +4184,7 @@ test_terminal_stale_surfaced
 test_stale_terminal_status_overridden_by_active_run
 test_nonterminal_stale_provably_working_absorbed_then_escalated
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold
+test_wedge_escalation_stays_silent_within_pause_window_then_resurfaces
 test_wedge_escalation_resets_when_pane_becomes_active
 test_busy_pane_below_turn_age_bound_is_absorbed
 test_busy_pane_stable_hash_escalates_past_turn_age_bound
