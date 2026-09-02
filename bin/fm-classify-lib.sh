@@ -965,8 +965,8 @@ status_snapshot_latest_event() {  # <status-file> <captured-endpoint> <captured-
 # this only makes that existing fail-closed behavior visible; it changes no
 # control flow and deletes nothing itself.
 _fm_status_presentation_row_error() {  # <manifest> <line-no> <reason> <row>
-  printf 'error: %s:%s: malformed status-presentation-cursor row: %s (expected 4 TAB-separated fields: task, ident, offset, backstop): %s\n' \
-    "$1" "$2" "$3" "$4" >&2
+  printf 'error: %s:%s: malformed status-presentation-cursor row: %s (expected 4 TAB-separated fields: task, ident, offset, backstop, where offset and backstop are decimal byte counts of at most %s digits without a leading zero): %s\n' \
+    "$1" "$2" "$3" "$FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS" "$4" >&2
 }
 
 # The same for a refusal that concerns the manifest file itself rather than one
@@ -984,14 +984,27 @@ _fm_status_presentation_manifest_error() {  # <manifest> <reason>
 FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS=18
 
 # True for a canonical decimal byte count: digits only, no leading zero, and
-# narrow enough for shell integer comparison.
+# narrow enough for shell integer comparison. On refusal, names the rule the
+# value broke in FM_STATUS_PRESENTATION_OFFSET_ERROR - a value like "010" or a
+# 25-digit one is numeric, so reporting it as non-numeric would send the
+# operator looking for the wrong defect.
 _fm_status_presentation_offset_is_canonical() {  # <value>
+  FM_STATUS_PRESENTATION_OFFSET_ERROR=
   case "$1" in
-    ''|*[!0-9]*) return 1 ;;
+    ''|*[!0-9]*)
+      FM_STATUS_PRESENTATION_OFFSET_ERROR="non-numeric offset or backstop"
+      return 1
+      ;;
     0) return 0 ;;
-    0*) return 1 ;;
+    0*)
+      FM_STATUS_PRESENTATION_OFFSET_ERROR="offset or backstop has a leading zero"
+      return 1
+      ;;
   esac
-  [ "${#1}" -le "$FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS" ]
+  if [ "${#1}" -gt "$FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS" ]; then
+    FM_STATUS_PRESENTATION_OFFSET_ERROR="offset or backstop is wider than $FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS digits"
+    return 1
+  fi
 }
 
 # Split one raw manifest row into FM_STATUS_PRESENTATION_ROW_{TASK,IDENT,OFFSET,
@@ -1043,12 +1056,12 @@ _fm_status_presentation_row_parse() {  # <manifest> <line-no> <row>
   fi
   if ! _fm_status_presentation_offset_is_canonical "$FM_STATUS_PRESENTATION_ROW_OFFSET"; then
     _fm_status_presentation_row_error "$manifest" "$lineno" \
-      "non-numeric offset or backstop" "$row"
+      "$FM_STATUS_PRESENTATION_OFFSET_ERROR" "$row"
     return 1
   fi
   if ! _fm_status_presentation_offset_is_canonical "$FM_STATUS_PRESENTATION_ROW_BACKSTOP"; then
     _fm_status_presentation_row_error "$manifest" "$lineno" \
-      "non-numeric offset or backstop" "$row"
+      "$FM_STATUS_PRESENTATION_OFFSET_ERROR" "$row"
     return 1
   fi
 }

@@ -501,11 +501,13 @@ test_out_of_range_offset_fails_loudly_like_any_non_numeric_offset() {
   [ -z "$(cat "$out")" ] || fail "an out-of-range offset was still handed to the caller: $(cat "$out")"
   grep -qF "$manifest:1:" "$err" \
     || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'wider than 18 digits' "$err" \
+    || fail "the error did not name the rule the value broke (digit width): $(cat "$err")"
   grep -qi 'non-numeric' "$err" \
-    || fail "the error did not name the reason (non-numeric offset): $(cat "$err")"
+    && fail "a numeric but too-wide offset was reported as non-numeric: $(cat "$err")"
   grep -qi 'integer expression expected' "$err" \
     && fail "a raw bash arithmetic error leaked instead of the manifest diagnostic: $(cat "$err")"
-  pass "an offset too wide for shell integer comparison fails closed with the same diagnostic as any other non-numeric offset"
+  pass "an offset too wide for shell integer comparison fails closed naming the digit-width rule, not \"non-numeric\""
 }
 
 test_out_of_range_backstop_fails_loudly_instead_of_degrading_to_zero() {
@@ -521,8 +523,8 @@ test_out_of_range_backstop_fails_loudly_instead_of_degrading_to_zero() {
   status_outcome_backstop_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
   [ "$rc" -eq 1 ] \
     || fail "an out-of-range backstop did not fail closed (rc=$rc, backstop=$(cat "$out"))"
-  grep -qi 'non-numeric' "$err" \
-    || fail "the error did not name the reason (non-numeric backstop): $(cat "$err")"
+  grep -qi 'wider than 18 digits' "$err" \
+    || fail "the error did not name the rule the value broke (digit width): $(cat "$err")"
   grep -qi 'integer expression expected' "$err" \
     && fail "a raw bash arithmetic error leaked instead of the manifest diagnostic: $(cat "$err")"
   pass "a backstop too wide for shell integer comparison fails closed loudly instead of silently degrading to 0"
@@ -547,9 +549,11 @@ test_leading_zero_offset_fails_loudly() {
   [ -z "$(cat "$out")" ] || fail "an offset with a leading zero was still handed to the caller: $(cat "$out")"
   grep -qF "$manifest:1:" "$err" \
     || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'leading zero' "$err" \
+    || fail "the error did not name the rule the value broke (leading zero): $(cat "$err")"
   grep -qi 'non-numeric' "$err" \
-    || fail "the error did not name the reason: $(cat "$err")"
-  pass "an offset with a leading zero fails closed instead of being read as octal by one consumer and decimal by another"
+    && fail "a numeric offset with a leading zero was reported as non-numeric: $(cat "$err")"
+  pass "an offset with a leading zero fails closed naming the leading-zero rule, not \"non-numeric\""
 }
 
 # A plain "0" is the ordinary value of both columns and must stay valid.
@@ -571,6 +575,30 @@ test_zero_offset_and_backstop_stay_valid() {
   [ "$rc" -eq 0 ] || fail "a plain 0 backstop was rejected (rc=$rc): $(cat "$err")"
   [ "$(cat "$out")" = 0 ] || fail "a plain 0 backstop did not read back as 0: $(cat "$out")"
   pass "a plain 0 stays a valid offset and backstop under the canonical-decimal rule"
+}
+
+# A row diagnostic has to state the format the operator should restore, not
+# only the reason this row broke it - and the offset rule is part of that
+# format, not just the column count.
+test_row_diagnostic_states_the_offset_format_rule() {
+  local dir state f manifest err rc=0
+  dir=$(case_dir offset-format-in-diagnostic)
+  state="$dir/state"
+  f="$state/task-w.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-w\tident-w\tNaN\t0\n' > "$manifest"
+  err="$dir/err"
+
+  status_presentation_cursor_offset "$f" > /dev/null 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "a non-numeric offset did not fail closed (rc=$rc)"
+  grep -qF 'task, ident, offset, backstop' "$err" \
+    || fail "the error dropped the expected column list: $(cat "$err")"
+  grep -qi 'without a leading zero' "$err" \
+    || fail "the expected format did not state the offset canonical-form rule: $(cat "$err")"
+  grep -qi '18 digits' "$err" \
+    || fail "the expected format did not state the offset digit limit: $(cat "$err")"
+  pass "a row diagnostic states the offset and backstop format rule alongside the expected column list"
 }
 
 test_extra_column_fails_loudly_and_names_the_row
@@ -595,3 +623,4 @@ test_out_of_range_offset_fails_loudly_like_any_non_numeric_offset
 test_out_of_range_backstop_fails_loudly_instead_of_degrading_to_zero
 test_leading_zero_offset_fails_loudly
 test_zero_offset_and_backstop_stay_valid
+test_row_diagnostic_states_the_offset_format_rule
