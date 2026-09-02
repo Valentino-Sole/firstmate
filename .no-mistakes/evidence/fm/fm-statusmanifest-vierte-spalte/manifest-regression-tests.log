@@ -1,0 +1,23 @@
+ok - a manifest row with one column too many fails closed with a stderr line naming the manifest, line, and expected format
+ok - a manifest row with a missing field fails closed with a stderr line naming the manifest, line, and expected format
+ok - a manifest row with a non-numeric offset fails closed with a stderr line naming the manifest, line, and expected format
+ok - one malformed row blocks every task's lookup against the shared manifest, matching the reported blast radius
+ok - the exact 4-field shape from the reported incident is the current valid format and stays silent
+ok - fm-teardown.sh's own retire call surfaces a manifest error on stderr and leaves the status file and manifest untouched
+ok - retirement over the current 4-field manifest format still succeeds and stays silent
+ok - a surplus column hidden behind an empty column fails closed like any other extra column
+ok - retirement never silently rewrites away a column hidden behind an empty column
+ok - a pre-d977128 3-field row is still read, silently, as backstop 0
+ok - retirement carries an unrelated legacy 3-field row through, upgraded to 4 fields, losing nothing
+ok - a symlinked manifest fails closed with a stderr line naming the file and reason, deleting nothing
+ok - the cursor reader also names an unusable manifest file on stderr instead of returning 1 in silence
+ok - one malformed row is reported exactly once, even on the path that validates the manifest twice
+ok - an offset with an embedded colon fails closed with the same diagnostic as any other non-numeric offset
+ok - a backstop with an embedded colon fails closed loudly instead of silently degrading to 0
+ok - a rewrite file that cannot be written names the manifest on stderr instead of returning 1 in silence
+ok - the backstop reader also fails closed loudly on a manifest symlink whose target does not exist
+ok - an offset too wide for shell integer comparison fails closed naming the digit-width rule, not "non-numeric"
+ok - a backstop too wide for shell integer comparison fails closed loudly instead of silently degrading to 0
+ok - an offset with a leading zero fails closed naming the leading-zero rule, not "non-numeric"
+ok - a plain 0 stays a valid offset and backstop under the canonical-decimal rule
+ok - a row diagnostic states the offset and backstop format rule alongside the expected column list
