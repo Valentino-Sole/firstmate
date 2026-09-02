@@ -444,6 +444,12 @@ The skill owns the daemon procedure; these safety facts remain inline:
 - Away mode never expands approval authority for merges, ask-user findings, destructive actions, irreversible actions, or security-sensitive choices.
 - Bias ambiguous input toward exit because a present captain takes precedence.
 
+### Resource-cap trigger
+
+Arm `state/.resgate-cap-<role>` the moment the captain says "Kappung" in chat, matched case-insensitively: bare "Kappung" arms both roles, `Kappung <hostname or role>` arms only that one.
+"Kappung auf" releases the same way, bare for both markers and `Kappung auf <hostname or role>` for that one alone.
+docs/configuration.md "Fleet resource governance" owns the marker paths, the release-form-first and longest-hostname-first matching precedence, and the rest of the mechanism.
+
 ### Stuck-worker trigger
 
 Load `stuck-crewmate-recovery` after a stale wake, looping or confused pane, answered-by-brief question, unresponsive worker, or failed steer.
