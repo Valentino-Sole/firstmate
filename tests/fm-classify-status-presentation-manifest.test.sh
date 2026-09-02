@@ -482,6 +482,97 @@ test_dangling_symlink_manifest_is_loud_for_the_backstop_reader() {
   pass "the backstop reader also fails closed loudly on a manifest symlink whose target does not exist"
 }
 
+# An offset made only of digits still passes a digits-only check while being
+# far too wide for shell integer comparison: `[ "$offset" -gt "$size" ]` then
+# aborts with "integer expression expected" instead of comparing, the clamp to
+# 0 never runs, and the reader hands the unusable value back with rc=0.
+test_out_of_range_offset_fails_loudly_like_any_non_numeric_offset() {
+  local dir state f manifest err out rc=0
+  dir=$(case_dir out-of-range-offset)
+  state="$dir/state"
+  f="$state/task-s.status"
+  printf 'needs-decision: pick one\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-s\tident-s\t9999999999999999999999999\t0\n' > "$manifest"
+  err="$dir/err"; out="$dir/out"
+
+  status_presentation_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "an out-of-range offset did not fail closed (rc=$rc, offset=$(cat "$out"))"
+  [ -z "$(cat "$out")" ] || fail "an out-of-range offset was still handed to the caller: $(cat "$out")"
+  grep -qF "$manifest:1:" "$err" \
+    || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'non-numeric' "$err" \
+    || fail "the error did not name the reason (non-numeric offset): $(cat "$err")"
+  grep -qi 'integer expression expected' "$err" \
+    && fail "a raw bash arithmetic error leaked instead of the manifest diagnostic: $(cat "$err")"
+  pass "an offset too wide for shell integer comparison fails closed with the same diagnostic as any other non-numeric offset"
+}
+
+test_out_of_range_backstop_fails_loudly_instead_of_degrading_to_zero() {
+  local dir state f manifest err out rc=0
+  dir=$(case_dir out-of-range-backstop)
+  state="$dir/state"
+  f="$state/task-t.status"
+  printf 'working: setup\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-t\tident-t\t5\t9999999999999999999999999\n' > "$manifest"
+  err="$dir/err"; out="$dir/out"
+
+  status_outcome_backstop_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] \
+    || fail "an out-of-range backstop did not fail closed (rc=$rc, backstop=$(cat "$out"))"
+  grep -qi 'non-numeric' "$err" \
+    || fail "the error did not name the reason (non-numeric backstop): $(cat "$err")"
+  grep -qi 'integer expression expected' "$err" \
+    && fail "a raw bash arithmetic error leaked instead of the manifest diagnostic: $(cat "$err")"
+  pass "a backstop too wide for shell integer comparison fails closed loudly instead of silently degrading to 0"
+}
+
+# A leading zero makes the two consumers of the same field disagree:
+# `[ "$offset" -lt "$size" ]` reads "010" as decimal 10, while the
+# `$((size - offset))` beside it reads it as octal 8, so the span length and
+# the span start no longer describe the same byte range.
+test_leading_zero_offset_fails_loudly() {
+  local dir state f manifest err out rc=0
+  dir=$(case_dir leading-zero-offset)
+  state="$dir/state"
+  f="$state/task-u.status"
+  printf 'needs-decision: pick one\nnote: hello\n' > "$f"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-u\tident-u\t010\t0\n' > "$manifest"
+  err="$dir/err"; out="$dir/out"
+
+  status_presentation_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "an offset with a leading zero did not fail closed (rc=$rc, offset=$(cat "$out"))"
+  [ -z "$(cat "$out")" ] || fail "an offset with a leading zero was still handed to the caller: $(cat "$out")"
+  grep -qF "$manifest:1:" "$err" \
+    || fail "the error did not name the manifest and line number: $(cat "$err")"
+  grep -qi 'non-numeric' "$err" \
+    || fail "the error did not name the reason: $(cat "$err")"
+  pass "an offset with a leading zero fails closed instead of being read as octal by one consumer and decimal by another"
+}
+
+# A plain "0" is the ordinary value of both columns and must stay valid.
+test_zero_offset_and_backstop_stay_valid() {
+  local dir state f manifest ident out err rc=0
+  dir=$(case_dir zero-offset-backstop)
+  state="$dir/state"
+  f="$state/task-v.status"
+  printf 'working: setup\n' > "$f"
+  ident=$(file_ident "$f") || fail "could not compute a fixture ident"
+  manifest="$state/.status-presentation-cursor"
+  printf 'task-v\t%s\t0\t0\n' "$ident" > "$manifest"
+  out="$dir/out"; err="$dir/err"
+
+  status_presentation_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || fail "a plain 0 offset was rejected (rc=$rc): $(cat "$err")"
+  [ "$(cat "$out")" = 0 ] || fail "a plain 0 offset did not read back as 0: $(cat "$out")"
+  status_outcome_backstop_cursor_offset "$f" > "$out" 2> "$err" && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || fail "a plain 0 backstop was rejected (rc=$rc): $(cat "$err")"
+  [ "$(cat "$out")" = 0 ] || fail "a plain 0 backstop did not read back as 0: $(cat "$out")"
+  pass "a plain 0 stays a valid offset and backstop under the canonical-decimal rule"
+}
+
 test_extra_column_fails_loudly_and_names_the_row
 test_missing_field_fails_loudly_and_names_the_row
 test_non_numeric_offset_fails_loudly_and_names_the_row
@@ -500,3 +591,7 @@ test_colon_in_offset_fails_loudly_like_any_non_numeric_offset
 test_colon_in_backstop_fails_loudly_instead_of_degrading_to_zero
 test_retire_reports_a_failed_rewrite_write_instead_of_failing_silently
 test_dangling_symlink_manifest_is_loud_for_the_backstop_reader
+test_out_of_range_offset_fails_loudly_like_any_non_numeric_offset
+test_out_of_range_backstop_fails_loudly_instead_of_degrading_to_zero
+test_leading_zero_offset_fails_loudly
+test_zero_offset_and_backstop_stay_valid

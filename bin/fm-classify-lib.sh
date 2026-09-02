@@ -948,7 +948,12 @@ status_snapshot_latest_event() {  # <status-file> <captured-endpoint> <captured-
 # the task - and is rewritten as a full 4-field row on the next rewrite, so
 # accepting it loses nothing in either rollout direction.
 # Anything else is a malformed manifest: more than 4 fields, fewer than 3, an
-# empty task/ident/offset/backstop, or a non-numeric offset or backstop. Every
+# empty task/ident/offset/backstop, or an offset or backstop that is not a
+# canonical decimal byte count - it must be digits only, at most
+# FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS of them so shell integer comparison
+# still holds, and without a leading zero, which `$((size - offset))` would
+# read as octal while the `[ -lt ]` beside it reads the same digits as
+# decimal. Every
 # reader below then fails closed (returns 1, deletes nothing) rather than
 # guessing at a partial or newer format, because a rewrite has to carry every
 # other task's columns through untouched. See _fm_status_presentation_row_parse
@@ -970,6 +975,23 @@ _fm_status_presentation_row_error() {  # <manifest> <line-no> <reason> <row>
 _fm_status_presentation_manifest_error() {  # <manifest> <reason>
   printf 'error: %s: unusable status-presentation-cursor manifest: %s (expected TAB-separated rows: task, ident, offset, backstop)\n' \
     "$1" "$2" >&2
+}
+
+# The widest offset a manifest row may carry. A byte count this large is not a
+# real status file, and beyond 19 digits `[ "$offset" -gt "$size" ]` aborts
+# with "integer expression expected" instead of comparing, which would leave
+# the reader returning an unusable offset with rc=0.
+FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS=18
+
+# True for a canonical decimal byte count: digits only, no leading zero, and
+# narrow enough for shell integer comparison.
+_fm_status_presentation_offset_is_canonical() {  # <value>
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+    0) return 0 ;;
+    0*) return 1 ;;
+  esac
+  [ "${#1}" -le "$FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS" ]
 }
 
 # Split one raw manifest row into FM_STATUS_PRESENTATION_ROW_{TASK,IDENT,OFFSET,
@@ -1019,20 +1041,16 @@ _fm_status_presentation_row_parse() {  # <manifest> <line-no> <row>
     _fm_status_presentation_row_error "$manifest" "$lineno" "missing backstop field" "$row"
     return 1
   fi
-  case "$FM_STATUS_PRESENTATION_ROW_OFFSET" in
-    *[!0-9]*)
-      _fm_status_presentation_row_error "$manifest" "$lineno" \
-        "non-numeric offset or backstop" "$row"
-      return 1
-      ;;
-  esac
-  case "$FM_STATUS_PRESENTATION_ROW_BACKSTOP" in
-    *[!0-9]*)
-      _fm_status_presentation_row_error "$manifest" "$lineno" \
-        "non-numeric offset or backstop" "$row"
-      return 1
-      ;;
-  esac
+  if ! _fm_status_presentation_offset_is_canonical "$FM_STATUS_PRESENTATION_ROW_OFFSET"; then
+    _fm_status_presentation_row_error "$manifest" "$lineno" \
+      "non-numeric offset or backstop" "$row"
+    return 1
+  fi
+  if ! _fm_status_presentation_offset_is_canonical "$FM_STATUS_PRESENTATION_ROW_BACKSTOP"; then
+    _fm_status_presentation_row_error "$manifest" "$lineno" \
+      "non-numeric offset or backstop" "$row"
+    return 1
+  fi
 }
 
 status_presentation_cursor_offset() {  # <status-file>
