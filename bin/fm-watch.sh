@@ -742,9 +742,16 @@ resurface_absorbed() {  # <window> <throttle-marker> <age> <reason> [scope]
 # counter is left alone: it is neither advanced (this is not an escalation) nor
 # reset (a later genuine escalation must still carry the demand-deep-inspection
 # history it had already earned).
+# A worktree write IS a real state change, though, so it opens a fresh wedge
+# episode exactly as a busy pane or a declared pause does: the
+# .wedge-resurfaced-<key> throttle is dropped here, so whenever the writing
+# stops and the pane turns out to be genuinely wedged after all, that first
+# escalation reports immediately instead of riding out the previous episode's
+# PAUSE_RESURFACE_SECS clock in silence.
 wedge_defer_writing() {  # <window> <since-file> <triage-label> <idle-age>
   local win=$1 since_file=$2 label=$3 age=$4 key wsf wage
   key=$(window_key "$win")
+  rm -f "$STATE/.wedge-resurfaced-$key"
   wsf="$STATE/.writing-since-$key"
   [ -e "$wsf" ] || date +%s > "$wsf"
   wage=$(age_of "$wsf")
@@ -774,12 +781,14 @@ clear_write_tracking() {  # <window-key>
 # about to escalate: at most one bounded walk per window per STALE_ESCALATE_SECS,
 # never per poll.
 # Wake-emission cadence, modeled on fm_guard_stale_episode_key
-# (bin/fm-guard.sh): a continuing wedge is one episode, keyed to the window
-# (clear_write_tracking's callers already open a fresh episode on any genuine
-# state change - the pane going busy again, a hash change, a declared pause, or
-# a worktree write - by clearing this function's escalation and resurface
-# markers, so this function itself never has to tell episodes apart by reason
-# text). Within one episode, a full wake fires immediately on the FIRST
+# (bin/fm-guard.sh): a continuing wedge is one episode, keyed to the window. Any
+# genuine state change opens a fresh episode by dropping this function's
+# .wedge-resurfaced-<key> throttle before the next round runs - the pane going
+# busy again, a hash change, and a declared pause clear it alongside the
+# escalation counter at their own reset sites, and a worktree write clears it in
+# wedge_defer_writing (the counter deliberately survives there) - so this
+# function itself never has to tell episodes apart by reason text.
+# Within one episode, a full wake fires immediately on the FIRST
 # crossing (n=1) and again once FM_WEDGE_DEMAND_INSPECT_COUNT is reached, but
 # every other round is throttled to one resurface per PAUSE_RESURFACE_SECS via
 # the .wedge-resurfaced-<key> marker, instead of a brand new "escalation N" wake
@@ -787,6 +796,13 @@ clear_write_tracking() {  # <window-key>
 # advances every round regardless of whether that round wakes anyone, so the
 # count and the demand-deep-inspection marker stay accurate once a throttled
 # round does resurface.
+# Known, accepted side effect, deliberately deferred rather than fixed here:
+# wake() resets state/.heartbeat-streak only on an actual wake, so an otherwise
+# idle fleet whose only activity was a wedged pane waking every
+# STALE_ESCALATE_SECS now lets that streak climb through the throttled rounds and
+# the heartbeat scan interval backs off toward FM_HEARTBEAT_MAX. The wedge
+# reminders themselves keep their PAUSE_RESURFACE_SECS cadence; only the
+# fleet-wide heartbeat backstop runs less often in that one scenario.
 wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-file> <task>
   local win=$1 since_file=$2 label=$3 escalation_file=$4 task=$5 since age n reason key rf
   since=$(cat "$since_file" 2>/dev/null || true)

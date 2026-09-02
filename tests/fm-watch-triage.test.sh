@@ -3451,6 +3451,78 @@ test_write_deferral_resurfaces_on_the_bounded_cadence() {
   pass "a write deferral re-surfaces once on the bounded pause cadence, so a churning worktree cannot stay invisible"
 }
 
+# A worktree write is a real state change, so it ends the current wedge episode
+# and opens a new one. Without that, a pane that deferred on write evidence kept
+# riding the OLD episode's .wedge-resurfaced-<key> throttle: when the writes
+# stopped and the pane turned out to be genuinely wedged after all, the next
+# escalation stayed silent until the previous episode's PAUSE_RESURFACE_SECS
+# clock ran out, which is quieter than the pre-episode behavior the fix promised
+# never to regress. FM_WEDGE_DEMAND_INSPECT_COUNT is set far out of reach and the
+# escalation counter is pre-seeded past 1, so neither the first-crossing rule nor
+# the demand-deep-inspection rule can explain the wake in phase B - only a fresh
+# episode can.
+test_worktree_write_opens_a_fresh_wedge_episode() {
+  local dir state fakebin out capture_file window key pane_hash sig pid wt back
+  dir=$(make_case wedge-write-new-episode); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"
+  window="test:fm-write-episode"; wt="$dir/wt"
+  mkdir -p "$wt/src"
+  printf 'idle building output' > "$capture_file"
+  printf 'window=%s\nkind=ship\nworktree=%s\n' "$window" "$wt" > "$state/writeep.meta"
+  printf 'working: implementing\n' > "$state/writeep.status"
+  sig=$(seen_sig "$state/writeep.status"); printf '%s' "$sig" > "$state/.seen-writeep_status"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  pane_hash=$(hash_text "idle building output")
+  printf '%s' "$pane_hash" > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+  printf '%s' "$pane_hash" > "$state/.stale-$key"
+  back=$(( $(date +%s) - 500 ))
+  echo "$back" > "$state/.stale-since-$key"
+  set_mtime "$back" "$state/.stale-since-$key"
+  # An episode that is already several escalations deep and resurfaced just now,
+  # so its throttle is fresh: any wake in phase B has to come from a NEW episode.
+  printf '5\n' > "$state/.wedge-escalations-$key"
+  : > "$state/.wedge-resurfaced-$key"
+
+  # Phase A: the crew writes its worktree. Deferred and silent, the escalation
+  # count keeps the deep-inspection history it earned, but the episode's
+  # resurface throttle is dropped.
+  printf 'int main(void) { return 0; }\n' > "$wt/src/main.c"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 \
+    FM_PAUSE_RESURFACE_SECS=999 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "watcher wedge-escalated a quiet pane whose worktree was being written: $(cat "$out")"
+  fi
+  [ ! -s "$out" ] || { reap "$pid"; fail "a written-worktree deferral printed a wake reason: $(cat "$out")"; }
+  [ ! -e "$state/.wedge-resurfaced-$key" ] \
+    || { reap "$pid"; fail "a worktree write did not open a fresh wedge episode: the resurface throttle survived the deferral"; }
+  [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 5 ] \
+    || { reap "$pid"; fail "a deferral changed the wedge escalation counter instead of leaving its earned history alone"; }
+  reap "$pid"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the intentional phase-A watcher stop"
+
+  # Phase B: the writes stopped and the pane really is wedged. Well inside the
+  # old episode's PAUSE_RESURFACE_SECS window, so the pre-fix code stayed silent
+  # here; the fresh episode must report at once.
+  set_mtime "$(( $(date +%s) - 900 ))" "$wt/src/main.c"
+  echo "$back" > "$state/.stale-since-$key"
+  set_mtime "$back" "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 \
+    FM_PAUSE_RESURFACE_SECS=999 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "a pane that went from deferred-writing back to wedged stayed silent on the old episode's throttle: $(cat "$out")"
+  grep -F "possible wedge" "$out" >/dev/null || fail "the resumed wedge did not flag a possible wedge: $(cat "$out")"
+  grep -F "escalation 6" "$out" >/dev/null || fail "the resumed wedge did not carry the preserved escalation history: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the resumed wedge escalation"
+  pass "a worktree write opens a fresh wedge episode, so a pane that stops writing and stays wedged reports at once"
+}
+
 # The worktree recorded for a secondmate is a provisioned firstmate home, and that
 # home runs its OWN supervision inside itself: its watcher beacon, pane hashes and
 # heartbeats keep state/ churning whether or not the mate produced anything. Reading
@@ -4210,6 +4282,7 @@ test_paused_authoritative_working_preserves_wedge_timer
 test_nonterminal_stale_repairs_missing_or_corrupt_timer
 test_wedge_escalation_deferred_while_worktree_is_written
 test_write_deferral_resurfaces_on_the_bounded_cadence
+test_worktree_write_opens_a_fresh_wedge_episode
 test_secondmate_home_supervision_churn_is_not_write_evidence
 test_timer_repair_drops_a_finished_write_deferral_chain
 test_terminal_first_sight_drops_a_finished_write_deferral_chain
