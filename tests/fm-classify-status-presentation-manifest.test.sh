@@ -16,14 +16,14 @@
 # contract from the outside, through the real reader functions, never through
 # the manifest's raw bytes.
 #
-# These tests cover the three malformed-row shapes named in the task brief -
-# an unexpected extra column, a missing field, and a non-numeric offset -
-# recalibrated to the CURRENT valid 4-field width (an extra column today means
-# a 5th field, since 4 is the current, correct shape; see the positive control
-# test below). Every case asserts BOTH halves of the fix: a stderr line naming
-# the manifest path, the row's line number, and the expected format (never a
-# silent `return 1`), and that nothing is deleted or rewritten - the existing
-# fail-closed safety this task must not weaken.
+# These tests cover the three malformed-row shapes that class of incident can
+# take - an unexpected extra column, a missing field, and a non-numeric offset -
+# at the CURRENT valid 4-field width (an extra column today means a 5th field,
+# since 4 is the current, correct shape; see the positive control test below).
+# Every case asserts BOTH halves of the contract: a stderr line naming the
+# manifest path, the row's line number, and the expected format (never a silent
+# `return 1`), and that nothing is deleted or rewritten - the fail-closed safety
+# that must survive every later change here.
 set -u
 
 # shellcheck source=tests/lib.sh

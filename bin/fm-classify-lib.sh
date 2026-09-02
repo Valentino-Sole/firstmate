@@ -953,11 +953,14 @@ status_snapshot_latest_event() {  # <status-file> <captured-endpoint> <captured-
 # FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS of them so shell integer comparison
 # still holds, and without a leading zero, which `$((size - offset))` would
 # read as octal while the `[ -lt ]` beside it reads the same digits as
-# decimal. Every
-# reader below then fails closed (returns 1, deletes nothing) rather than
+# decimal.
+# Every reader below then fails closed (returns 1, deletes nothing) rather than
 # guessing at a partial or newer format, because a rewrite has to carry every
-# other task's columns through untouched. See _fm_status_presentation_row_parse
-# and _fm_status_presentation_row_error.
+# other task's columns through untouched, and says why on stderr rather than
+# refusing in silence. See _fm_status_presentation_row_parse and
+# _fm_status_presentation_row_error for a row, and
+# _fm_status_presentation_manifest_error for a refusal about the manifest file
+# itself.
 
 # Print one diagnostic line to stderr for a malformed $state/.status-
 # presentation-cursor row instead of failing silently. Every caller here still
@@ -978,9 +981,11 @@ _fm_status_presentation_manifest_error() {  # <manifest> <reason>
 }
 
 # The widest offset a manifest row may carry. A byte count this large is not a
-# real status file, and beyond 19 digits `[ "$offset" -gt "$size" ]` aborts
-# with "integer expression expected" instead of comparing, which would leave
-# the reader returning an unusable offset with rc=0.
+# real status file, and once a value leaves the shell's signed 64-bit range -
+# which a 19-digit value already can - `[ "$offset" -gt "$size" ]` aborts with
+# "integer expression expected" instead of comparing, which would leave the
+# reader returning an unusable offset with rc=0. Every 18-digit value is inside
+# that range.
 FM_STATUS_PRESENTATION_MAX_OFFSET_DIGITS=18
 
 # True for a canonical decimal byte count: digits only, no leading zero, and
