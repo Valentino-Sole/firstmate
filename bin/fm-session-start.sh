@@ -162,6 +162,19 @@
 # status log path, and AGENTS.md section 8 treats a status line as a wake EVENT
 # rather than current state - bin/fm-crew-state.sh owns current state.
 #
+# FINGERPRINT DEDUP: a task's full block (.meta plus status tail) prints again
+# only when its fingerprint - a digest of .meta content plus the last status
+# line - differs from the one recorded in state/.session-start-seen-<task> at
+# the previous session start, or when that marker is missing, unreadable, or
+# otherwise fails to match (including the task's very first session start).
+# A matching fingerprint prints one compact line instead: task id, endpoint
+# alive/dead, and the last known status verb, plus the full status log path
+# and the exact marker to delete to force the full block back on. This is
+# purely a repeat-print optimization for a digest that already documents
+# status lines as wake EVENTS rather than current state (above); it never
+# suppresses the wake queue, OPEN DECISIONS, or UNREAD STATUS, and any real
+# change to .meta or the last status line always restores the full block.
+#
 # RUNTIME BOUND: the digest is now executed through a native session-open
 # adapter (see bin/fm-sessionstart-run.sh), which blocks either hook-driven
 # session initialization or Pi's first provider preflight while it runs, so an
@@ -534,6 +547,48 @@ print_status_tail() {
   done < <(tail -n "$STATUS_TAIL" "$status")
 }
 
+# fleet_state_seen_marker <task-id> -> path of this task's per-home "already
+# shown, unchanged" marker (see the STATUS TAILS comment above).
+fleet_state_seen_marker() {
+  printf '%s/.session-start-seen-%s' "$STATE" "$1"
+}
+
+# fleet_state_fingerprint <meta-file> <status-file-or-empty> -> a digest of
+# that task's .meta content plus its last status line, or a non-zero return
+# when no hashing tool is available. This is a cache key only, never state
+# truth: any mismatch, including "cannot compute one", falls back to the full
+# block.
+fleet_state_fingerprint() {
+  local meta=$1 status=$2 last_line='' digest
+  if [ -n "$status" ] && [ -f "$status" ]; then
+    last_line=$(tail -n 1 "$status" 2>/dev/null)
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    digest=$( { cat "$meta" 2>/dev/null; printf '\n%s\n' "$last_line"; } | shasum -a 256 2>/dev/null | awk '{print $1}')
+  elif command -v sha256sum >/dev/null 2>&1; then
+    digest=$( { cat "$meta" 2>/dev/null; printf '\n%s\n' "$last_line"; } | sha256sum 2>/dev/null | awk '{print $1}')
+  else
+    return 1
+  fi
+  [ -n "$digest" ] || return 1
+  printf '%s\n' "$digest"
+}
+
+# write_fleet_state_seen_marker <task-id> <fingerprint>: atomic tmp-then-mv
+# write, mirroring write_agents_baseline below. Best-effort: a failed write
+# only costs one extra full block at the next session start, never a wrongly
+# suppressed one.
+write_fleet_state_seen_marker() {
+  local id=$1 fingerprint=$2 tmp
+  tmp=$(mktemp "$STATE/.session-start-seen-$id.XXXXXX" 2>/dev/null) || return 1
+  if printf '%s\n' "$fingerprint" > "$tmp" 2>/dev/null \
+    && mv -f "$tmp" "$(fleet_state_seen_marker "$id")" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null || true
+  return 1
+}
+
 hash_file_sha256() {
   local file=$1 digest
   [ -f "$file" ] || return 1
@@ -815,28 +870,56 @@ for meta in "$STATE"/*.meta; do
   [ -f "$meta" ] || continue
   META_FOUND=1
   id=$(basename "$meta" .meta)
-  printf '\n--- %s ---\n' "$id"
-  cat "$meta"
+  status="$STATE/$id.status"
 
   window=$(fm_meta_get "$meta" window)
   target=$(fm_backend_target_of_meta "$meta")
   if [ -n "$window" ]; then
     backend=$(fm_backend_of_meta "$meta")
     if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
-      printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"
+      endpoint_line=$(printf 'endpoint: alive (backend=%s window=%s)' "$backend" "$window")
     else
-      printf 'endpoint: dead (backend=%s window=%s)\n' "$backend" "$window"
+      endpoint_line=$(printf 'endpoint: dead (backend=%s window=%s)' "$backend" "$window")
     fi
   else
-    printf 'endpoint: unknown (no window recorded)\n'
+    endpoint_line='endpoint: unknown (no window recorded)'
   fi
 
-  status="$STATE/$id.status"
-  if [ -f "$status" ]; then
-    print_status_tail "$status"
+  # Unchanged since the last session start (same fingerprint marker) ->
+  # one compact line instead of the full .meta + status-tail block. A
+  # missing, unreadable, or stale marker never matches, so it always falls
+  # back to the full block below - see the STATUS TAILS comment above.
+  SEEN_MARKER=$(fleet_state_seen_marker "$id")
+  FP_OK=1
+  NEW_FP=$(fleet_state_fingerprint "$meta" "$status") || FP_OK=0
+  OLD_FP=
+  [ -f "$SEEN_MARKER" ] && OLD_FP=$(cat "$SEEN_MARKER" 2>/dev/null)
+
+  if [ "$FP_OK" -eq 1 ] && [ -n "$OLD_FP" ] && [ "$NEW_FP" = "$OLD_FP" ]; then
+    verb='-'
+    if [ -f "$status" ]; then
+      last_line=$(tail -n 1 "$status" 2>/dev/null)
+      case "$last_line" in
+        *:*) verb=${last_line%%:*} ;;
+        '') verb='-' ;;
+        *) verb=$last_line ;;
+      esac
+    fi
+    printf '\n--- %s --- unchanged since last session start; compact (delete %s to force the full block)\n' \
+      "$id" "$SEEN_MARKER"
+    printf '%s · last known verb: %s · full status log: %s\n' "$endpoint_line" "$verb" "$status"
   else
-    printf 'status tail: (no status file yet: %s)\n' "$status"
+    printf '\n--- %s ---\n' "$id"
+    cat "$meta"
+    printf '%s\n' "$endpoint_line"
+    if [ -f "$status" ]; then
+      print_status_tail "$status"
+    else
+      printf 'status tail: (no status file yet: %s)\n' "$status"
+    fi
   fi
+
+  [ "$FP_OK" -eq 1 ] && write_fleet_state_seen_marker "$id" "$NEW_FP"
 done
 [ "$META_FOUND" -eq 1 ] || printf '(none)\n'
 
