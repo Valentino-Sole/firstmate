@@ -1089,11 +1089,13 @@ EOF
   assert_contains "$out" "$home/state/task-a.status" "digest did not print the full status log path for a deeper read"
   assert_contains "$out" "a bounded tail of every state/*.status" "read-once contract does not distinguish bounded status tails"
 
-  # task-a is unchanged since the run above, so the fleet-state fingerprint
-  # dedup would otherwise collapse it to a compact line; force the full block
-  # back on to keep testing the tail bound itself, not the dedup.
-  rm -f "$home/state/.session-start-seen-task-a"
+  # task-a is otherwise unchanged since the run above, so this also proves a
+  # different tail bound outranks the fleet-state fingerprint dedup: the run
+  # asks for a different block, so it gets the full one, not the compact line
+  # the previous bound left behind.
   out=$(FM_SESSION_START_STATUS_TAIL=2 run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_not_contains "$out" "--- task-a --- unchanged" \
+    "a changed FM_SESSION_START_STATUS_TAIL was silently answered with the previous bound's compact line"
   assert_contains "$out" "working: step 7" "FM_SESSION_START_STATUS_TAIL=2 tail missing the most recent line"
   assert_not_contains "$out" "working: step 5" "FM_SESSION_START_STATUS_TAIL=2 did not bound the tail to 2 lines"
 
@@ -1358,6 +1360,66 @@ EOF
   esac
 
   pass "the compact line caps an unbounded status verb the way the status tail caps its lines"
+}
+
+test_fleet_state_fingerprint_compact_verb_matches_the_fleet_normalization() {
+  local rec root home fakebin out compact
+  rec=$(new_world fingerprint-verb-normalization)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+
+  printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-g.meta"
+  # The shape bin/fm-pending-reply-lib.sh writes: a bracketed key, and a
+  # correlation token, ahead of the first colon.
+  printf 'resolved [key=pending-reply-77] corr=00112233445566778899aabbccddeeff: pending-reply-resolved: task=task-g\n' \
+    > "$home/state/task-g.status"
+
+  FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  compact=$(printf '%s\n' "$out" | grep 'last known verb: ' || true)
+  [ -n "$compact" ] || fail "an unchanged task-g did not produce a compact line: $out"
+  assert_contains "$compact" "last known verb: resolved ·" \
+    "the compact line did not report the same leading verb every other fleet surface reports"
+  assert_not_contains "$compact" "key=pending-reply-77" \
+    "the compact line leaked a bracketed status key into the verb"
+  assert_not_contains "$compact" "corr=00112233445566778899aabbccddeeff" \
+    "the compact line leaked a correlation token into the verb"
+
+  pass "the compact line's verb is normalized by the fleet's own status-verb owner"
+}
+
+test_fleet_state_fingerprint_compact_line_names_an_absent_status_log() {
+  local rec root home fakebin out compact
+  rec=$(new_world fingerprint-no-status)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+
+  # A freshly spawned task: .meta present, no status line written yet.
+  printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-h.meta"
+  rm -f "$home/state/task-h.status"
+
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "status tail: (no status file yet: $home/state/task-h.status)" \
+    "the full block did not report the absent status file for a freshly spawned task"
+
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  compact=$(printf '%s\n' "$out" | grep 'last known verb: ' || true)
+  [ -n "$compact" ] || fail "an unchanged task-h did not produce a compact line: $out"
+  assert_contains "$compact" "(no status file yet: $home/state/task-h.status)" \
+    "the compact line did not mirror the full block's wording for an absent status file"
+  assert_not_contains "$compact" "full status log:" \
+    "the compact line advertised a full status log that does not exist"
+
+  pass "the compact line names an absent status log the same way the full block does"
 }
 
 # --- session-start secondmate recovery boundary -----------------------------
@@ -2769,6 +2831,8 @@ test_fleet_state_fingerprint_new_status_line_forces_full_block
 test_fleet_state_fingerprint_missing_marker_forces_full_block
 test_fleet_state_fingerprint_read_only_session_records_no_marker
 test_fleet_state_fingerprint_compact_line_caps_its_verb
+test_fleet_state_fingerprint_compact_verb_matches_the_fleet_normalization
+test_fleet_state_fingerprint_compact_line_names_an_absent_status_log
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts

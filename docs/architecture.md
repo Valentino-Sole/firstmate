@@ -82,8 +82,8 @@ The fleet snapshot and Bearings paths use the concurrent remote-ledger collectio
 The script header owns the exact JSON schema.
 
 Separately, the session-start digest's own "Work under way" subsection (`bin/fm-session-start.sh`) dedups its per-task display across session starts, not just its computation cost.
-Each task gets a fingerprint marker at `state/.session-start-seen-<task>`, a digest of that task's `.meta` content plus its last status line.
-A matching fingerprint at the next session start prints one compact line (task id, endpoint alive/dead, last known status verb) instead of the full `.meta` block and status tail; a missing, unreadable, or mismatched marker - including a task's first session start - always falls back to the full block.
+Each task gets a fingerprint marker at `state/.session-start-seen-<task>`, a digest of that task's `.meta` content plus its last status line, keyed by the `FM_SESSION_START_STATUS_TAIL` bound that decides how much of the status log a full block would show.
+A matching fingerprint at the next session start prints one compact line (task id, endpoint alive/dead, last known status verb) instead of the full `.meta` block and status tail; a missing, unreadable, or mismatched marker - including a task's first session start, and including a run that asks for a different tail bound - always falls back to the full block.
 This is a repeat-print optimization only: it never touches the wake queue, OPEN DECISIONS, or UNREAD STATUS, and `bin/fm-teardown.sh` removes the marker with the rest of a retired task's per-id state.
 A session refused the fleet lock still compares an existing marker to choose compact or full, but records none of its own, so a read-only session never consumes the lock owner's first full print of a task.
 
