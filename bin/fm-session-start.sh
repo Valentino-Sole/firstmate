@@ -916,10 +916,11 @@ for meta in "$STATE"/*.meta; do
     status_ref=$(printf '(no status file yet: %s)' "$status")
     if [ -f "$status" ]; then
       status_ref=$(printf 'full status log: %s' "$status")
-      last_line=$(tail -n 1 "$status" 2>/dev/null)
-      # fm-classify-lib.sh owns leading-verb normalization for the whole fleet,
-      # so a bracketed key or a corr= token is stripped here exactly as it is
-      # on every other surface.
+      # fm-classify-lib.sh owns both "the last status line" (blank trailing
+      # lines filtered) and leading-verb normalization for the whole fleet, so
+      # a bracketed key or a corr= token is stripped here exactly as it is on
+      # every other surface.
+      last_line=$(last_status_line "$status")
       verb=$(status_line_verb "$last_line")
       [ -n "$verb" ] || verb='-'
       fm_cap_line_var "$verb"

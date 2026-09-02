@@ -1422,6 +1422,32 @@ EOF
   pass "the compact line names an absent status log the same way the full block does"
 }
 
+test_fleet_state_fingerprint_compact_verb_skips_blank_trailing_lines() {
+  local rec root home fakebin out compact
+  rec=$(new_world fingerprint-blank-tail)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+
+  printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-i.meta"
+  # A crewmate writes its own status lines, so a trailing blank line is its
+  # to produce; every other fleet surface still reports the done: verb.
+  printf 'done: shipped\n\n' > "$home/state/task-i.status"
+
+  FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  compact=$(printf '%s\n' "$out" | grep 'last known verb: ' || true)
+  [ -n "$compact" ] || fail "an unchanged task-i did not produce a compact line: $out"
+  assert_contains "$compact" "last known verb: done ·" \
+    "a blank trailing status line hid the task's last known verb behind a placeholder"
+
+  pass "the compact line reads past blank trailing status lines the way every other fleet surface does"
+}
+
 # --- session-start secondmate recovery boundary -----------------------------
 
 test_session_start_relaunches_missing_pi_secondmate() {
@@ -2833,6 +2859,7 @@ test_fleet_state_fingerprint_read_only_session_records_no_marker
 test_fleet_state_fingerprint_compact_line_caps_its_verb
 test_fleet_state_fingerprint_compact_verb_matches_the_fleet_normalization
 test_fleet_state_fingerprint_compact_line_names_an_absent_status_log
+test_fleet_state_fingerprint_compact_verb_skips_blank_trailing_lines
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts
