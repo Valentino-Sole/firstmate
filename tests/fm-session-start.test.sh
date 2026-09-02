@@ -1473,6 +1473,37 @@ EOF
   pass "a new status line restores the full block even when the writer terminates its log with a blank line"
 }
 
+test_fleet_state_fingerprint_unreadable_marker_falls_back_quietly() {
+  local rec root home fakebin out err marker
+  rec=$(new_world fingerprint-unreadable-marker)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_tmux "$fakebin" "fm-sess:live"
+  marker="$home/state/.session-start-seen-task-k"
+
+  printf 'window=fm-sess:live\nkind=ship\nharness=claude\n' > "$home/state/task-k.meta"
+  printf 'working: step 1\n' > "$home/state/task-k.status"
+  FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  assert_present "$marker" "the first session start did not leave a fingerprint marker to make unreadable"
+
+  chmod 000 "$marker"
+  err="$home/unreadable-marker.err"
+  out=$(FM_FAKE_HARNESS_PID=$$ run_session_start "$home" "$root" "$fakebin:$BASE_PATH" 2>"$err")
+  chmod 644 "$marker" 2>/dev/null || true
+
+  assert_contains "$out" "--- task-k ---" "an unreadable fingerprint marker did not fall back to the full block"
+  assert_contains "$out" "harness=claude" "an unreadable fingerprint marker did not restore the full .meta content"
+  assert_not_contains "$out" "--- task-k --- unchanged" \
+    "an unreadable fingerprint marker was incorrectly reported as unchanged"
+  assert_not_contains "$(cat "$err")" "$marker" \
+    "an unreadable fingerprint marker leaked a raw shell error naming it"
+
+  pass "an unreadable fingerprint marker falls back to the full block without leaking a shell error"
+}
+
 # --- session-start secondmate recovery boundary -----------------------------
 
 test_session_start_relaunches_missing_pi_secondmate() {
@@ -2886,6 +2917,7 @@ test_fleet_state_fingerprint_compact_verb_matches_the_fleet_normalization
 test_fleet_state_fingerprint_compact_line_names_an_absent_status_log
 test_fleet_state_fingerprint_compact_verb_skips_blank_trailing_lines
 test_fleet_state_fingerprint_blank_terminated_append_forces_full_block
+test_fleet_state_fingerprint_unreadable_marker_falls_back_quietly
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts

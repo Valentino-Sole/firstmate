@@ -565,20 +565,21 @@ fleet_state_seen_marker() {
   printf '%s/.session-start-seen-%s' "$STATE" "$1"
 }
 
-# fleet_state_fingerprint <meta-file> <status-file-or-empty> <status-tail-bound>
+# fleet_state_fingerprint <meta-file> <last-status-line> <status-tail-bound>
 # -> a digest of that task's .meta content plus its last status line, keyed by
 # the tail bound that decides how much of the status log the full block would
-# show, or a non-zero return when no hashing tool is available. This is a cache
+# show, or a non-zero return when no hashing tool is available. The caller
+# hands in the line that fm-classify-lib.sh's last_status_line selected, so the
+# key and the rendered verb always agree and one status-log scan serves both -
+# the status log is an unbounded append-only log on a startup-blocking path.
+# This is a cache
 # key only, never state truth: any mismatch, including "cannot compute one",
 # falls back to the full block. The tail bound belongs in the key because a
 # session start run with a different FM_SESSION_START_STATUS_TAIL asks for a
 # different block, so the previous run's compact line would answer the wrong
 # question.
 fleet_state_fingerprint() {
-  local meta=$1 status=$2 tail_bound=$3 last_line='' digest
-  if [ -n "$status" ] && [ -f "$status" ]; then
-    last_line=$(last_status_line "$status")
-  fi
+  local meta=$1 last_line=$2 tail_bound=$3 digest
   if command -v shasum >/dev/null 2>&1; then
     digest=$( { cat "$meta" 2>/dev/null; printf '\nstatus-tail=%s\n%s\n' "$tail_bound" "$last_line"; } | shasum -a 256 2>/dev/null | awk '{print $1}')
   elif command -v sha256sum >/dev/null 2>&1; then
@@ -905,22 +906,24 @@ for meta in "$STATE"/*.meta; do
   # one compact line instead of the full .meta + status-tail block. A
   # missing, unreadable, or stale marker never matches, so it always falls
   # back to the full block below - see the STATUS TAILS comment above.
+  # fm-classify-lib.sh owns both "the last status line" (blank trailing lines
+  # filtered) and leading-verb normalization for the whole fleet, so a
+  # bracketed key or a corr= token is stripped here exactly as it is on every
+  # other surface. One scan per task feeds both the key and the rendered verb.
+  last_line=
+  [ -f "$status" ] && last_line=$(last_status_line "$status")
+
   SEEN_MARKER=$(fleet_state_seen_marker "$id")
   FP_OK=1
-  NEW_FP=$(fleet_state_fingerprint "$meta" "$status" "$STATUS_TAIL") || FP_OK=0
+  NEW_FP=$(fleet_state_fingerprint "$meta" "$last_line" "$STATUS_TAIL") || FP_OK=0
   OLD_FP=
-  [ -f "$SEEN_MARKER" ] && { read -r OLD_FP < "$SEEN_MARKER" 2>/dev/null || true; }
+  [ -f "$SEEN_MARKER" ] && { read -r OLD_FP 2>/dev/null < "$SEEN_MARKER" || true; }
 
   if [ "$FP_OK" -eq 1 ] && [ -n "$OLD_FP" ] && [ "$NEW_FP" = "$OLD_FP" ]; then
     verb='-'
     status_ref="(no status file yet: $status)"
     if [ -f "$status" ]; then
       status_ref="full status log: $status"
-      # fm-classify-lib.sh owns both "the last status line" (blank trailing
-      # lines filtered) and leading-verb normalization for the whole fleet, so
-      # a bracketed key or a corr= token is stripped here exactly as it is on
-      # every other surface.
-      last_line=$(last_status_line "$status")
       verb=$(status_line_verb "$last_line")
       [ -n "$verb" ] || verb='-'
       fm_cap_line_var "$verb"
@@ -940,7 +943,8 @@ for meta in "$STATE"/*.meta; do
     fi
   fi
 
-  [ "$READ_ONLY" -eq 0 ] && [ "$FP_OK" -eq 1 ] && write_fleet_state_seen_marker "$id" "$NEW_FP"
+  [ "$READ_ONLY" -eq 0 ] && [ "$FP_OK" -eq 1 ] && [ "$NEW_FP" != "$OLD_FP" ] \
+    && write_fleet_state_seen_marker "$id" "$NEW_FP"
 done
 [ "$META_FOUND" -eq 1 ] || printf '(none)\n'
 
