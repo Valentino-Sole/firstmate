@@ -97,6 +97,8 @@ FM_RESGATE_HOME_FREE_END_MIN=$((19 * 60))        # 19:00
 FM_RESGATE_CAPPED_PCT=50
 FM_RESGATE_UNCAPPED_PCT=100
 FM_RESGATE_BLOCKED_PCT=0
+FM_RESGATE_BERLIN_STANDARD='CET +0100'
+FM_RESGATE_BERLIN_SUMMER='CEST +0200'
 
 fm_resgate_role_ok() {
   case "${1:-}" in work | home) return 0 ;; esac
@@ -130,6 +132,16 @@ fm_resgate_is_port() {
 # between day-of-week and time-of-day cannot be observed straddling midnight.
 # Returns 1 on any unreadable or malformed clock; callers must fail closed on
 # that, never fall back to a default time.
+#
+# The same read also carries the resolved zone abbreviation and UTC offset,
+# because a non-zero exit is NOT the failure mode that matters here: `date`
+# never fails on a zone it cannot resolve, it silently falls back to UTC and
+# exits 0. On a host without tzdata the gate would then read Berlin 10:30 CEST
+# as 08:30, land outside the work PC's 10:00-19:30 window, and hand the fleet
+# 100% of the captain's machine in the middle of his working hours - a wrong
+# permissive answer from an effectively unreadable clock. Requiring the
+# abbreviation and offset to be a matching Europe/Berlin pair proves the zone
+# database entry actually loaded; anything else is unreadable and fails closed.
 fm_resgate_now_fields() {
   local raw dow hh mm
   FM_RESGATE_NOW_DOW=
@@ -137,7 +149,15 @@ fm_resgate_now_fields() {
   if [ -n "${FM_RESGATE_NOW_OVERRIDE:-}" ]; then
     raw=$FM_RESGATE_NOW_OVERRIDE
   else
-    raw=$(TZ=Europe/Berlin date +'%u %H %M' 2>/dev/null) || return 1
+    raw=$(TZ=Europe/Berlin date +'%u %H %M %Z %z' 2>/dev/null) || return 1
+    # shellcheck disable=SC2086
+    set -- $raw
+    [ "$#" -eq 5 ] || return 1
+    case "$4 $5" in
+      "$FM_RESGATE_BERLIN_STANDARD" | "$FM_RESGATE_BERLIN_SUMMER") ;;
+      *) return 1 ;;
+    esac
+    raw="$1 $2 $3"
   fi
   # shellcheck disable=SC2086
   set -- $raw
@@ -233,12 +253,16 @@ fm_resgate_override_set() { # <state-dir> <role> [note]
   return 1
 }
 
+# Release the manual override for <role>. Returns 1 when the marker is still
+# there afterwards (an unwritable state directory, a stale mount): reporting a
+# clear that did not happen would leave the role pinned at the 50% cap while
+# everyone believes "Kappung auf" took effect.
 fm_resgate_override_clear() { # <state-dir> <role>
   local path
   fm_resgate_role_ok "$2" || return 1
   path=$(fm_resgate_override_path "$1" "$2")
   rm -f "$path" 2>/dev/null
-  return 0
+  [ ! -e "$path" ]
 }
 
 # Effective state for <role>: an active override forces "capped" immediately,

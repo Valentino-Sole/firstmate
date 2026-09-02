@@ -164,6 +164,94 @@ test_capacity_pct_zero_on_unreadable_clock() {
   pass "capacity_pct fails closed to 0% on an unreadable clock"
 }
 
+# --- fail-closed clock: the zone must actually have resolved ---------------------
+#
+# `date` exits 0 on a zone it cannot resolve and silently reports UTC, so these
+# shadow `date` on PATH to hand fm_resgate_now_fields each reading a real host
+# could produce and assert the resulting schedule verdict.
+
+fake_date_at() { # <fakebin-dir> <dow> <HH> <MM> <zone-abbrev> <utc-offset>
+  local fakebin=$1
+  # Substitutes the requested specifiers rather than echoing a fixed line, so
+  # the stub answers whatever format the library asks for - the reading it
+  # returns is what varies here, never the shape of the call.
+  cat > "$fakebin/date" <<SH
+#!/usr/bin/env bash
+fmt=\${1#+}
+fmt=\${fmt//%u/$2}
+fmt=\${fmt//%H/$3}
+fmt=\${fmt//%M/$4}
+fmt=\${fmt//%Z/$5}
+fmt=\${fmt//%z/$6}
+printf '%s\n' "\$fmt"
+SH
+  chmod +x "$fakebin/date"
+}
+
+test_schedule_blocked_when_berlin_zone_did_not_resolve() {
+  local tmp fakebin
+  tmp=$(fm_test_tmproot resgate-tz-unresolved)
+  fakebin=$(fm_fakebin "$tmp")
+  # Real Berlin time is Monday 10:30 CEST - squarely inside the work PC's
+  # capped window - but tzdata is missing, so the read comes back as UTC.
+  # Trusting it would report "uncapped" and hand the fleet 100% of the
+  # captain's work PC in the middle of his working hours.
+  fake_date_at "$fakebin" 1 08 30 UTC +0000
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    unset FM_RESGATE_NOW_OVERRIDE
+    fm_resgate_now_fields && exit 1
+    fm_resgate_schedule_state work
+    [ "$FM_RESGATE_SCHEDULE_STATE" = blocked ] || exit 1
+    exit 0
+  ) || fail "a UTC fallback from an unresolvable Europe/Berlin must fail closed to blocked, not read as Berlin time"
+  pass "an unresolved Europe/Berlin zone fails closed to blocked instead of silently reading UTC"
+}
+
+test_schedule_blocked_when_zone_and_offset_disagree() {
+  local tmp fakebin
+  tmp=$(fm_test_tmproot resgate-tz-mismatch)
+  fakebin=$(fm_fakebin "$tmp")
+  fake_date_at "$fakebin" 1 10 30 CEST +0100
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    unset FM_RESGATE_NOW_OVERRIDE
+    fm_resgate_schedule_state work
+    [ "$FM_RESGATE_SCHEDULE_STATE" = blocked ] || exit 1
+    exit 0
+  ) || fail "an abbreviation and offset that do not belong together must fail closed"
+  pass "a zone abbreviation contradicting its UTC offset fails closed to blocked"
+}
+
+test_schedule_reads_a_genuinely_resolved_berlin_clock() {
+  local tmp fakebin
+  tmp=$(fm_test_tmproot resgate-tz-resolved)
+  fakebin=$(fm_fakebin "$tmp")
+  # Both real Europe/Berlin pairs must still be accepted, or the zone check
+  # would have turned the gate into a permanent 0%.
+  fake_date_at "$fakebin" 1 10 30 CEST +0200
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    unset FM_RESGATE_NOW_OVERRIDE
+    fm_resgate_schedule_state work
+    [ "$FM_RESGATE_SCHEDULE_STATE" = capped ] || exit 1
+    exit 0
+  ) || fail "summer time (CEST +0200) must be accepted and read as Monday 10:30, inside the capped window"
+  fake_date_at "$fakebin" 1 10 30 CET +0100
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    unset FM_RESGATE_NOW_OVERRIDE
+    fm_resgate_schedule_state work
+    [ "$FM_RESGATE_SCHEDULE_STATE" = capped ] || exit 1
+    exit 0
+  ) || fail "standard time (CET +0100) must be accepted and read as Monday 10:30, inside the capped window"
+  pass "both real Europe/Berlin zone pairs are accepted and drive the ordinary schedule verdict"
+}
+
 # --- manual override -----------------------------------------------------------
 
 test_override_set_active_clear_roundtrip() {
@@ -185,6 +273,7 @@ test_override_set_active_clear_roundtrip() {
   pass "override marker set/active/clear roundtrips per role, atomically"
 }
 
+# shellcheck disable=SC2031
 test_override_forces_capped_regardless_of_schedule() {
   local state
   state=$(fm_test_tmproot resgate-override-forces)
@@ -197,6 +286,7 @@ test_override_forces_capped_regardless_of_schedule() {
   pass "an armed override forces capped state independent of the clock window"
 }
 
+# shellcheck disable=SC2031
 test_blocked_clock_beats_armed_override() {
   local state
   state=$(fm_test_tmproot resgate-override-vs-blocked)
@@ -207,6 +297,37 @@ test_blocked_clock_beats_armed_override() {
   [ "$FM_RESGATE_STATE" = blocked ] \
     || fail "an unreadable clock must stay blocked even with the override armed (got $FM_RESGATE_STATE)"
   pass "an unreadable clock stays blocked at 0%: the override can only tighten the gate, never loosen it"
+}
+
+test_override_clear_reports_failure_when_the_marker_survives() {
+  local state rc out
+  [ "$(id -u)" -ne 0 ] || { echo "skip - running as root, an unwritable directory cannot be simulated"; return 0; }
+  state=$(fm_test_tmproot resgate-clear-fails)
+  fm_resgate_override_set "$state" work Kappung || fail "override_set must succeed"
+  chmod 555 "$state" || fail "could not make the state directory unwritable"
+
+  rc=0
+  fm_resgate_override_clear "$state" work || rc=$?
+  [ "$rc" -ne 0 ] \
+    || fail "a clear that left the marker in place must not report success"
+  fm_resgate_override_active "$state" work \
+    || fail "the marker must still be armed - the precondition for this test"
+
+  rc=0
+  out=$(FM_STATE_OVERRIDE="$state" "$CLI" override clear work 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] \
+    || fail "the CLI must exit non-zero when the cap could not actually be released"
+  case "$out" in
+    *"could not clear override for work"*) ;;
+    *) fail "the CLI must say the release failed, got: $out" ;;
+  esac
+
+  chmod 755 "$state"
+  fm_resgate_override_clear "$state" work \
+    || fail "a clear that really removes the marker must report success"
+  fm_resgate_override_active "$state" work \
+    && fail "the marker must be gone after a successful clear"
+  pass "a failed override clear is reported, never mistaken for a lifted cap"
 }
 
 # --- percentage arithmetic ------------------------------------------------------
@@ -590,9 +711,13 @@ test_home_free_ends_at_boundary
 test_home_capped_all_weekend
 test_schedule_blocked_on_unreadable_clock
 test_capacity_pct_zero_on_unreadable_clock
+test_schedule_blocked_when_berlin_zone_did_not_resolve
+test_schedule_blocked_when_zone_and_offset_disagree
+test_schedule_reads_a_genuinely_resolved_berlin_clock
 test_override_set_active_clear_roundtrip
 test_override_forces_capped_regardless_of_schedule
 test_blocked_clock_beats_armed_override
+test_override_clear_reports_failure_when_the_marker_survives
 test_apply_pct_arithmetic
 test_apply_pct_fails_closed_on_bad_input
 test_gpu_owner_qwen_when_process_and_memory_both_active
