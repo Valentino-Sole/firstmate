@@ -417,19 +417,27 @@ test_gpu_owner_voice_when_port_listening() {
   pass "GPU owner is voice when the gateway port is listening"
 }
 
-test_gpu_owner_conflict_when_both_active() {
+test_gpu_owner_voice_wins_over_resident_qwen_signal() {
   local tmp fakebin out
-  tmp=$(fm_test_tmproot resgate-gpu-conflict)
+  tmp=$(fm_test_tmproot resgate-gpu-voice-wins)
   fakebin=$(fm_fakebin "$tmp")
+  # The home PC's likely normal state: the voice worker holds the card (port
+  # listening, its own VRAM on the meter) while the ollama service sits started
+  # but idle. Aggregate memory cannot say whose memory it is, so crediting it to
+  # Qwen here would refuse the voice worker the card it already holds - JARVIS
+  # blocking itself. The port is authoritative and decides alone.
   out='FM_RESGATE voice_port=listening\r\nFM_RESGATE gpu_process=running\r\nFM_RESGATE gpu_used_mb=9046\r\n'
   fake_ssh_returning "$fakebin" "$out"
   # shellcheck disable=SC2030,SC2031
   ( PATH="$fakebin:$PATH"
     . "$ROOT/bin/fm-resgate-lib.sh"
-    fm_resgate_home_gpu_owner
-    [ "$FM_RESGATE_GPU_OWNER" = conflict ]
-  ) || fail "both signals active at once must read owner=conflict, never pick a side"
-  pass "GPU owner is conflict when voice and Qwen both read active, never silently resolved"
+    fm_resgate_home_gpu_owner || exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = voice ] || exit 1
+    fm_resgate_gpu_available_for voice || exit 1
+    fm_resgate_gpu_available_for qwen && exit 1
+    exit 0
+  ) || fail "a listening voice port must read owner=voice even with the Qwen process and card memory active, allowing voice and refusing qwen"
+  pass "a listening voice port owns the GPU outright; a resident Qwen signal never blocks the voice worker"
 }
 
 test_gpu_available_for_blocks_the_other_side() {
@@ -524,6 +532,32 @@ test_gpu_owner_unknown_on_process_probe_failure() {
     exit 0
   ) || fail "a failed process reading must fail closed to unknown, never read as not-running"
   pass "a failed process reading fails the GPU decision closed"
+}
+
+test_gpu_owner_unknown_on_unusable_ssh_timeout() {
+  local tmp fakebin out
+  tmp=$(fm_test_tmproot resgate-gpu-sshtimeout)
+  fakebin=$(fm_fakebin "$tmp")
+  # A healthy probe reachable through a fake ssh: only the timeout pin is bad.
+  # bin/fm-timeout-lib.sh's header states a non-positive bound is not a bound -
+  # it disables the deadline - so 0 and a negative pin (which the +5 arithmetic
+  # turns into exactly 0) must refuse to probe rather than probe unbounded.
+  out='FM_RESGATE voice_port=not-listening\r\nFM_RESGATE gpu_process=running\r\nFM_RESGATE gpu_used_mb=9046\r\n'
+  fake_ssh_returning "$fakebin" "$out"
+  # shellcheck disable=SC2030,SC2031
+  ( PATH="$fakebin:$PATH"
+    . "$ROOT/bin/fm-resgate-lib.sh"
+    FM_RESGATE_SSH_TIMEOUT=-5 fm_resgate_home_gpu_owner 2>/dev/null && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    FM_RESGATE_SSH_TIMEOUT=0 fm_resgate_home_gpu_owner 2>/dev/null && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    FM_RESGATE_SSH_TIMEOUT=soon fm_resgate_home_gpu_owner 2>/dev/null && exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = unknown ] || exit 1
+    fm_resgate_home_gpu_owner || exit 1
+    [ "$FM_RESGATE_GPU_OWNER" = qwen ] || exit 1
+    exit 0
+  ) || fail "a zero, negative, or non-numeric SSH timeout must fail the GPU reading closed instead of probing with a disabled deadline"
+  pass "an unusable FM_RESGATE_SSH_TIMEOUT fails the GPU reading closed to unknown"
 }
 
 test_gpu_owner_unknown_on_unusable_tunables() {
@@ -723,13 +757,14 @@ test_apply_pct_fails_closed_on_bad_input
 test_gpu_owner_qwen_when_process_and_memory_both_active
 test_gpu_owner_none_when_process_running_but_memory_idle
 test_gpu_owner_voice_when_port_listening
-test_gpu_owner_conflict_when_both_active
+test_gpu_owner_voice_wins_over_resident_qwen_signal
 test_gpu_available_for_blocks_the_other_side
 test_gpu_owner_unknown_on_crlf_lines_still_parses_correctly
 test_gpu_owner_unknown_on_probe_failure_field
 test_gpu_owner_unknown_on_voice_port_probe_failure
 test_gpu_owner_unknown_on_process_probe_failure
 test_gpu_owner_unknown_on_unusable_tunables
+test_gpu_owner_unknown_on_unusable_ssh_timeout
 test_probe_script_reports_port_probe_failure_distinctly
 test_probe_script_reports_process_reading_from_real_cmdlet
 test_gpu_owner_unknown_when_ssh_unreachable

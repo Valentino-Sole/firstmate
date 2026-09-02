@@ -208,7 +208,7 @@ Two fixed roles, `work` and `home`, evaluated once against THIS host's own clock
 ```sh
 bin/fm-resgate.sh schedule work            # clock-window verdict alone (uncapped/capped/blocked)
 bin/fm-resgate.sh cap home                 # effective percentage (100/50/0), folding in a manual override
-bin/fm-resgate.sh gpu status               # freshly probed home-PC GPU owner: none/qwen/voice/conflict/unknown
+bin/fm-resgate.sh gpu status               # freshly probed home-PC GPU owner: none/qwen/voice/unknown
 bin/fm-resgate.sh gpu allow qwen           # exit 0/1: may Qwen start or keep running on the GPU right now
 ```
 
@@ -223,9 +223,10 @@ Arming and releasing can both fail (an unwritable `state/`), and both report it:
 Fail-closed discipline: every measurement this surface cannot read - the authoritative clock, an SSH probe, the voice port, the GPU reading - yields the most restrictive answer, never a guess.
 "Cannot read" includes a clock that answers confidently with the wrong zone: `date` does not fail when `Europe/Berlin` is unresolvable (missing tzdata on a slim image), it silently falls back to UTC, so the read is accepted only when the zone abbreviation and UTC offset it returns are a matching Europe/Berlin pair, and is otherwise treated exactly like an unreadable clock.
 A schedule read that cannot happen at all reports 0% (`blocked`), stricter than the ordinary 50% cap and stricter than an armed override, and a GPU reading that cannot be completed reports `unknown`, which refuses both Qwen and JARVIS voice rather than picking a side.
-An out-of-range `FM_RESGATE_VOICE_PORT` or non-numeric `FM_RESGATE_GPU_BUSY_MB` is treated the same way: the GPU reading reports `unknown` instead of probing the wrong port or comparing against an unusable threshold.
+An out-of-range `FM_RESGATE_VOICE_PORT`, a non-numeric `FM_RESGATE_GPU_BUSY_MB`, or a `FM_RESGATE_SSH_TIMEOUT` that is not a positive integer is treated the same way: the GPU reading reports `unknown` instead of probing the wrong port, comparing against an unusable threshold, or running the probe with a bound of zero seconds, which disables the deadline rather than bounding it.
 
 GPU exclusivity: JARVIS voice is detected by its gateway port (currently `7414`, see `data/learnings.md`), never by process name, because process-name detection has broken this fleet's integration before.
+That port reading is authoritative and is decided first: a listening gateway means `owner=voice` and the Qwen signals are never consulted, because aggregate card memory cannot say whose memory it is - an idle-but-resident Qwen model plus the voice worker's own VRAM would otherwise misread as contention and refuse the genuinely-running voice worker the card it already holds.
 Qwen is detected by a named-process check (`ollama`, the currently live identity) corroborated by aggregate GPU memory clearing a threshold, not by `nvidia-smi --query-compute-apps` per-process attribution: live-tested against the real home host, that query lists every ordinary desktop GPU context (window compositor, open browsers) with no per-process memory field left to filter the noise by, so it cannot isolate a genuine workload there.
 Both signals for the process-plus-memory check, and the port check, come from one bounded SSH round trip to the home host.
 

@@ -50,7 +50,14 @@
 #
 # GPU exclusivity (home PC only): JARVIS voice is detected by its gateway PORT
 # (currently 7414, data/learnings.md 23.08.2026), never by process name -
-# process-name detection has broken this fleet's integration before.
+# process-name detection has broken this fleet's integration before. That port
+# reading is AUTHORITATIVE and is decided first: a listening gateway means the
+# voice worker owns the card, full stop, and the Qwen signals below are never
+# even consulted. The aggregate memory reading cannot say WHOSE memory it is,
+# so an idle-but-resident Qwen service plus the voice worker's own VRAM would
+# otherwise read as contention and refuse the very workload that legitimately
+# holds the card - blocking JARVIS voice against itself. Deciding on the port
+# first is what makes that misreading impossible rather than merely unlikely.
 #
 # Qwen detection does NOT use `nvidia-smi --query-compute-apps`, even though
 # that looks like the stabler per-process signal on paper. Live-verified
@@ -78,7 +85,7 @@
 #   FM_RESGATE_NOW_OVERRIDE
 #   FM_RESGATE_VOICE_PORT (default 7414)
 #   FM_RESGATE_GPU_BUSY_MB (default 4096)
-#   FM_RESGATE_SSH_TIMEOUT (seconds, default 5)
+#   FM_RESGATE_SSH_TIMEOUT (seconds, default 5; must be a positive integer)
 #   FM_RESGATE_SKIP_REMOTE=1 (never probe, always fail closed - tests only)
 
 _FM_RESGATE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,6 +96,7 @@ FM_RESGATE_WORK_SSH_DEFAULT=Valentino-Arbeit
 FM_RESGATE_HOME_SSH_DEFAULT=Valentino
 FM_RESGATE_VOICE_PORT_DEFAULT=7414
 FM_RESGATE_GPU_BUSY_MB_DEFAULT=4096
+FM_RESGATE_SSH_TIMEOUT_DEFAULT=5
 FM_RESGATE_GPU_PROCESS_NAME=ollama
 FM_RESGATE_WORK_CAP_START_MIN=$((10 * 60))       # 10:00
 FM_RESGATE_WORK_CAP_END_MIN=$((19 * 60 + 30))    # 19:30
@@ -323,12 +331,26 @@ fm_resgate_voice_port() {
   printf '%s\n' "${FM_RESGATE_VOICE_PORT:-$FM_RESGATE_VOICE_PORT_DEFAULT}"
 }
 
+# The validated SSH connect timeout in seconds, or exit 1 when the pin is
+# unusable. Zero is rejected alongside the non-numeric and negative forms
+# because bin/fm-timeout-lib.sh's header states a non-positive bound is not a
+# bound at all - `timeout 0` and the perl fallback's `alarm 0` both DISABLE the
+# deadline - so a pin of 0 or -5 would compute a bound of 5 or 0 seconds and
+# hand an unreachable host an unbounded probe instead of a bounded one.
+fm_resgate_ssh_timeout() {
+  local secs=${FM_RESGATE_SSH_TIMEOUT:-$FM_RESGATE_SSH_TIMEOUT_DEFAULT}
+  fm_resgate_is_uint "$secs" || return 1
+  [ "$secs" -ge 1 ] || return 1
+  printf '%s\n' "$secs"
+}
+
 fm_resgate_ssh_raw() { # <host> <remote-cmd>
-  local host=$1 cmd=$2 bound
-  bound=$((${FM_RESGATE_SSH_TIMEOUT:-5} + 5))
+  local host=$1 cmd=$2 bound secs
+  secs=$(fm_resgate_ssh_timeout) || return 1
+  bound=$((secs + 5))
   fm_run_timed "$bound" ssh \
     -o BatchMode=yes \
-    -o ConnectTimeout="${FM_RESGATE_SSH_TIMEOUT:-5}" \
+    -o ConnectTimeout="$secs" \
     -o ServerAliveInterval=2 \
     -o ServerAliveCountMax=2 \
     -o ForwardAgent=no \
@@ -435,19 +457,28 @@ EOF
 }
 
 # Which workload currently owns the home PC's GPU, from a fresh probe. Sets
-# FM_RESGATE_GPU_OWNER to one of: none, qwen, voice, conflict, unknown.
-# Qwen is "active" only when BOTH the named process is running AND aggregate
+# FM_RESGATE_GPU_OWNER to one of: none, qwen, voice, unknown.
+#
+# The voice gateway port decides first and alone: a listening port means
+# owner=voice, and the Qwen signals are neither computed nor consulted (see
+# the file header for why attributing aggregate card memory to Qwen while the
+# voice worker holds the card would block that worker against itself). Only
+# with the port readably NOT listening does Qwen's own signal decide, and Qwen
+# is "active" then only when BOTH the named process is running AND aggregate
 # GPU memory clears FM_RESGATE_GPU_BUSY_MB - see the file header for why
-# either signal alone is insufficient. "unknown" fails closed and covers
-# every unmeasurable case: an unreachable host, a probe that returned no
-# lines at all, an out-of-range FM_RESGATE_VOICE_PORT or non-numeric
-# FM_RESGATE_GPU_BUSY_MB (which would otherwise probe the wrong port or make
-# the threshold comparison error out and read as free), or any individual
-# reading coming back unknown (a failed nvidia-smi call, a port or process
-# check that could not be performed) - a partial reading is never completed
-# with a guess. "conflict" means voice and Qwen both read
-# active at once, which the policy says must never happen; it is reported,
-# never silently resolved in favour of either side.
+# either signal alone is insufficient. There is therefore no "both active at
+# once" reading to report: the two signals are consulted in order, never
+# weighed against each other.
+#
+# "unknown" fails closed and covers every unmeasurable case: an unreachable
+# host, a probe that returned no lines at all, an out-of-range
+# FM_RESGATE_VOICE_PORT, a non-numeric FM_RESGATE_GPU_BUSY_MB, or a
+# non-positive FM_RESGATE_SSH_TIMEOUT (which would otherwise probe the wrong
+# port, make the threshold comparison error out and read as free, or run the
+# probe unbounded), or any individual reading that the decision still needs
+# coming back unknown (a failed nvidia-smi call, a port or process check that
+# could not be performed) - a partial reading is never completed with a
+# guess.
 # shellcheck disable=SC2034
 fm_resgate_home_gpu_owner() {
   local host out qwen_active port busy
@@ -462,12 +493,17 @@ fm_resgate_home_gpu_owner() {
   busy=$(fm_resgate_gpu_busy_mb)
   fm_resgate_is_port "$port" || return 1
   fm_resgate_is_uint "$busy" || return 1
+  fm_resgate_ssh_timeout > /dev/null || return 1
   host=$(fm_resgate_ssh_alias home)
   out=$(fm_resgate_ssh_raw "$host" \
     "$(fm_resgate_home_gpu_probe_cmd "$port" "$FM_RESGATE_GPU_PROCESS_NAME")" \
     2>/dev/null) || out=
   fm_resgate_absorb_gpu_probe "$out" || return 1
   case "$FM_RESGATE_GPU_VOICE" in yes | no) ;; *) return 1 ;; esac
+  if [ "$FM_RESGATE_GPU_VOICE" = yes ]; then
+    FM_RESGATE_GPU_OWNER=voice
+    return 0
+  fi
   case "$FM_RESGATE_GPU_PROCESS" in yes | no) ;; *) return 1 ;; esac
   fm_resgate_is_uint "${FM_RESGATE_GPU_USED_MB:-}" || return 1
   qwen_active=no
@@ -475,11 +511,7 @@ fm_resgate_home_gpu_owner() {
     && [ "$FM_RESGATE_GPU_USED_MB" -ge "$busy" ]; then
     qwen_active=yes
   fi
-  if [ "$FM_RESGATE_GPU_VOICE" = yes ] && [ "$qwen_active" = yes ]; then
-    FM_RESGATE_GPU_OWNER=conflict
-  elif [ "$FM_RESGATE_GPU_VOICE" = yes ]; then
-    FM_RESGATE_GPU_OWNER=voice
-  elif [ "$qwen_active" = yes ]; then
+  if [ "$qwen_active" = yes ]; then
     FM_RESGATE_GPU_OWNER=qwen
   else
     FM_RESGATE_GPU_OWNER=none
@@ -488,9 +520,9 @@ fm_resgate_home_gpu_owner() {
 }
 
 # May <workload> (qwen|voice) start or keep running on the home PC's GPU right
-# now? Sets FM_RESGATE_GPU_REASON. Fails closed (returns 1) on conflict or
-# unknown: an ambiguous reading must never be read as permission, and must
-# never let one side quietly work around the other's reservation.
+# now? Sets FM_RESGATE_GPU_REASON. Fails closed (returns 1) on unknown: an
+# unmeasurable reading must never be read as permission, and must never let one
+# side quietly work around the other's reservation.
 # shellcheck disable=SC2034
 fm_resgate_gpu_available_for() { # <qwen|voice>
   local want=$1
@@ -515,10 +547,6 @@ fm_resgate_gpu_available_for() { # <qwen|voice>
         return 0
       fi
       FM_RESGATE_GPU_REASON='GPU is reserved for JARVIS voice; Qwen must not start'
-      return 1
-      ;;
-    conflict)
-      FM_RESGATE_GPU_REASON='Qwen and JARVIS voice both read active at once; refusing rather than picking a side'
       return 1
       ;;
     *)
