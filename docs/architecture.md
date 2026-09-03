@@ -82,6 +82,15 @@ The fleet snapshot and Bearings paths use the concurrent remote-ledger collectio
 `bin/fm-fleet-view.sh` renders that snapshot as Markdown for humans, while `bin/fm-bearings-snapshot.sh` provides the bounded bearings projection, so both views consume one structured contract instead of reparsing raw fleet files.
 The script header owns the exact JSON schema.
 
+Separately, the session-start digest's own "Work under way" subsection (`bin/fm-session-start.sh`) dedups its per-task display across session starts, not just its computation cost.
+Each task gets a fingerprint marker at `state/.session-start-seen-<task>`, a digest of that task's `.meta` content, its last status line, its status log's size in bytes, and its endpoint alive/dead/unknown verdict, keyed by the `FM_SESSION_START_STATUS_TAIL` bound that decides how much of the status log a full block would show.
+The log size is part of the key so an append-only log that returns to the same last line (`working` -> `failed` -> `working`) is not mistaken for unchanged, and the endpoint verdict is part of it so a pane that dies between session starts - writing no status line at all - is never labelled unchanged.
+A matching fingerprint at the next session start prints one compact line (task id, endpoint alive/dead, last known status verb, the full status log path, the task's own `state/<id>.meta` path, and the marker to delete) instead of the full `.meta` block and status tail; a missing, unreadable, or mismatched marker - including a task's first session start, and including a run that asks for a different tail bound - always falls back to the full block.
+A `--reemit` is excluded from the compact path outright, because a re-emit is by definition a session that lost the context in which the full block was printed, so it reprints every task in full regardless of its marker.
+The read-once contract states the compact form and permits reading a compacted task's named `.meta` and status log directly.
+This is a repeat-print optimization only: it never touches the wake queue, OPEN DECISIONS, or UNREAD STATUS, and `bin/fm-teardown.sh` removes the marker with the rest of a retired task's per-id state.
+A session refused the fleet lock still compares an existing marker to choose compact or full, but records none of its own, so a read-only session never consumes the lock owner's first full print of a task.
+
 On a Pi primary, supervision is default-on: the watcher extension can hand eligible task-local rows from an ordinary actionable wake, plus selected fleet-wide heartbeat reviews, to a persistent in-process supervision conversation while main-only rows remain on the captain-facing path.
 The branch handles those rows, stores the outcome durably, and merges it back into main.
 A captain-facing outcome persists as one exact, sequence-keyed visible transcript entry and then opens one sequence-keyed processing turn on main, which only main's sequence-bound acknowledgement closes.
