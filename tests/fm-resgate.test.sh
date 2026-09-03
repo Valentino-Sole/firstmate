@@ -705,15 +705,41 @@ test_cli_schedule_and_cap() {
 test_cli_override_both_arms_and_clears_two_files() {
   local state
   state=$(fm_test_tmproot resgate-cli-override-both)
-  FM_STATE_OVERRIDE="$state" "$CLI" override set both \
+  FM_STATE_OVERRIDE="$state" "$CLI" override set both > /dev/null \
     || fail "CLI override set both must exit 0"
   [ -e "$state/.resgate-cap-work" ] || fail "override set both must arm the work marker"
   [ -e "$state/.resgate-cap-home" ] || fail "override set both must arm the home marker"
-  FM_STATE_OVERRIDE="$state" "$CLI" override clear both \
+  FM_STATE_OVERRIDE="$state" "$CLI" override clear both > /dev/null \
     || fail "CLI override clear both must exit 0"
   [ -e "$state/.resgate-cap-work" ] && fail "override clear both must remove the work marker"
   [ -e "$state/.resgate-cap-home" ] && fail "override clear both must remove the home marker"
   pass "CLI override set/clear both arms and releases the markers for both roles"
+}
+
+test_cli_override_both_reports_each_role_when_only_one_applies() {
+  local state out rc=0
+  state=$(fm_test_tmproot resgate-cli-override-partial)
+  FM_STATE_OVERRIDE="$state" "$CLI" override set both > /dev/null \
+    || fail "arming both roles is this test's precondition"
+  # Stage a marker that cannot be released: `rm -f` refuses a directory, so
+  # home's clear fails while work's succeeds - the half-applied `both` run
+  # the captain has to be able to read off the output.
+  rm -f "$state/.resgate-cap-home"
+  mkdir "$state/.resgate-cap-home" || fail "could not stage an unremovable home marker"
+
+  out=$(FM_STATE_OVERRIDE="$state" "$CLI" override clear both 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a half-applied clear must exit non-zero, got 0: $out"
+  case "$out" in
+    *work=clear*) ;;
+    *) fail "the released host must be reported as clear, got: $out" ;;
+  esac
+  case "$out" in
+    *home=armed*) ;;
+    *) fail "the host that stayed capped must be reported as armed, got: $out" ;;
+  esac
+  fm_resgate_override_active "$state" work \
+    && fail "work's marker must really be gone after the reported release"
+  pass "a half-applied override both reports each host's real state, not only the failure"
 }
 
 test_cli_gpu_allow_exit_codes() {
@@ -771,4 +797,5 @@ test_gpu_owner_unknown_when_ssh_unreachable
 test_gpu_skip_remote_never_probes
 test_cli_schedule_and_cap
 test_cli_override_both_arms_and_clears_two_files
+test_cli_override_both_reports_each_role_when_only_one_applies
 test_cli_gpu_allow_exit_codes
