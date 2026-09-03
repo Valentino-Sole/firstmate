@@ -1,0 +1,81 @@
+Wedge-Episode-Deduplizierung - Ende-zu-Ende-Nachweis
+====================================================
+
+Szenario: EIN echt haengender Auftrag. Die Crew meldet weiterhin "working"
+(run-step laeuft), der Pane-Inhalt aendert sich nie, der Worktree wird nie
+beschrieben. Der echte bin/fm-watch.sh wird ueber 20 aufeinanderfolgende
+Wedge-Runden zu je FM_STALE_ESCALATE_SECS=240s getrieben (simulierte ~80
+Minuten). FM_WEDGE_DEMAND_INSPECT_COUNT=3, PAUSE_RESURFACE_SECS auf dem
+Standardwert 3600s (1 Stunde).
+
+Gezeigt wird, was der Kapitaen tatsaechlich bekommt: die per
+bin/fm-wake-drain.sh geleerte Wake-Queue - die Oberflaeche, ueber die der
+First Mate geweckt wird.
+
+
+=== BEFORE - base 5fb0ce7 (a fresh wake every wedge poll) ===
+round  elapsed    what the captain receives (drained wake queue)
+---------------------------------------------------------------------------
+1      4m         WAKE  stale: test:fm-hung-task (idle 502s, possible wedge, escalation 1)
+2      8m         WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 2)
+3      12m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 3, demand-deep-inspection: same pane has wedge-escalated 3 times in a row - do not re-absorb on the run-step/pane state alone)
+4      16m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 4, demand-deep-inspection: same pane has wedge-escalated 4 times in a row - do not re-absorb on the run-step/pane state alone)
+5      20m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 5, demand-deep-inspection: same pane has wedge-escalated 5 times in a row - do not re-absorb on the run-step/pane state alone)
+6      24m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 6, demand-deep-inspection: same pane has wedge-escalated 6 times in a row - do not re-absorb on the run-step/pane state alone)
+7      28m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 7, demand-deep-inspection: same pane has wedge-escalated 7 times in a row - do not re-absorb on the run-step/pane state alone)
+8      32m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 8, demand-deep-inspection: same pane has wedge-escalated 8 times in a row - do not re-absorb on the run-step/pane state alone)
+9      36m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 9, demand-deep-inspection: same pane has wedge-escalated 9 times in a row - do not re-absorb on the run-step/pane state alone)
+10     40m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 10, demand-deep-inspection: same pane has wedge-escalated 10 times in a row - do not re-absorb on the run-step/pane state alone)
+11     44m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 11, demand-deep-inspection: same pane has wedge-escalated 11 times in a row - do not re-absorb on the run-step/pane state alone)
+12     48m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 12, demand-deep-inspection: same pane has wedge-escalated 12 times in a row - do not re-absorb on the run-step/pane state alone)
+13     52m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 13, demand-deep-inspection: same pane has wedge-escalated 13 times in a row - do not re-absorb on the run-step/pane state alone)
+14     56m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 14, demand-deep-inspection: same pane has wedge-escalated 14 times in a row - do not re-absorb on the run-step/pane state alone)
+15     60m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 15, demand-deep-inspection: same pane has wedge-escalated 15 times in a row - do not re-absorb on the run-step/pane state alone)
+16     64m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 16, demand-deep-inspection: same pane has wedge-escalated 16 times in a row - do not re-absorb on the run-step/pane state alone)
+17     68m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 17, demand-deep-inspection: same pane has wedge-escalated 17 times in a row - do not re-absorb on the run-step/pane state alone)
+18     72m        WAKE  stale: test:fm-hung-task (idle 502s, possible wedge, escalation 18, demand-deep-inspection: same pane has wedge-escalated 18 times in a row - do not re-absorb on the run-step/pane state alone)
+19     76m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 19, demand-deep-inspection: same pane has wedge-escalated 19 times in a row - do not re-absorb on the run-step/pane state alone)
+20     80m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 20, demand-deep-inspection: same pane has wedge-escalated 20 times in a row - do not re-absorb on the run-step/pane state alone)
+---------------------------------------------------------------------------
+total captain wakes over ~80 simulated minutes of one hung task: 20
+
+
+=== AFTER - 0d150b7 (episode-keyed: two counted moments, then hourly reminders) ===
+round  elapsed    what the captain receives (drained wake queue)
+---------------------------------------------------------------------------
+1      4m         WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 1)
+2      8m          --   (absorbed, no wake)
+3      12m        WAKE  stale: test:fm-hung-task (idle 501s, possible wedge, escalation 3, demand-deep-inspection: same pane has wedge-escalated 3 times in a row - do not re-absorb on the run-step/pane state alone)
+4      16m         --   (absorbed, no wake)
+5      20m         --   (absorbed, no wake)
+6      24m         --   (absorbed, no wake)
+7      28m         --   (absorbed, no wake)
+8      32m         --   (absorbed, no wake)
+9      36m         --   (absorbed, no wake)
+10     40m         --   (absorbed, no wake)
+11     44m         --   (absorbed, no wake)
+12     48m         --   (absorbed, no wake)
+13     52m         --   (absorbed, no wake)
+14     56m         --   (absorbed, no wake)
+15     60m         --   (absorbed, no wake)
+16     64m         --   (absorbed, no wake)
+17     68m         --   (absorbed, no wake)
+18     72m        WAKE  stale: test:fm-hung-task (idle 502s, possible wedge, escalation 18, demand-deep-inspection: same pane has wedge-escalated 18 times in a row - do not re-absorb on the run-step/pane state alone)
+19     76m         --   (absorbed, no wake)
+20     80m         --   (absorbed, no wake)
+---------------------------------------------------------------------------
+total captain wakes over ~80 simulated minutes of one hung task: 3
+
+Ergebnis
+--------
+BEFORE: 20 Wakes in 80 Minuten - bei jedem Poll ein neuer, immer anderer
+        "escalation N"-Text.
+AFTER:   3 Wakes in 80 Minuten - volle Meldung beim ersten Ueberschreiten der
+        Schwelle (escalation 1, Minute 4), volle Meldung beim Erreichen von
+        FM_WEDGE_DEMAND_INSPECT_COUNT (escalation 3, Minute 12, mit
+        demand-deep-inspection), danach die stuendliche Erinnerung (Minute 72
+        = genau 60 Minuten nach der letzten Meldung, escalation 18, mit
+        erhaltener demand-deep-inspection-Historie).
+
+Der haengende Auftrag wird also nicht leiser: er bleibt sichtbar, die
+Meldungen verschwinden nicht, nur die Wiederholrate sinkt von 240s auf 3600s.
