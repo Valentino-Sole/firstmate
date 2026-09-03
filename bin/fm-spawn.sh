@@ -3229,16 +3229,19 @@ fi
 # would be deleted out of ~/.config/fish/fish_variables and stay deleted long
 # after the pane is gone. Such a universal is machine-wide operator config
 # rather than a foreign home leaking through the launching process tree, so it
-# deliberately survives the reset. Only
-# stderr is discarded, and deliberately so: a csh pane parses a second
-# redirection on one command as an ambiguous redirect and would drop the whole
-# launch line, which costs a fish pane one printed path and costs no pane its
+# deliberately survives the reset. Every command in the reset discards its own
+# stderr, and only stderr: `unset` is as foreign to fish as `status` is to a
+# POSIX shell, so without those redirections a fish pane would take fish's
+# unknown-command diagnostic on every spawn. Discarding stdout as well would
+# take a second redirection on one command, which a csh pane parses as an
+# ambiguous redirect and would drop the whole launch line over, so a fish pane
+# still takes the one path `status fish-path` prints - which costs no pane its
 # launch. Both spellings stay statement prefixes rather than an `env -u`
 # command prefix so that a non-simple raw launch command from the crew-dispatch
 # escape hatch (`cmd-a && cmd-b`) runs entirely under the reset instead of only
 # its first word.
 SPAWN_OVERRIDE_RESET_VARS='FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE'
-LAUNCH="unset $SPAWN_OVERRIDE_RESET_VARS; status fish-path 2>/dev/null && set --erase --global $SPAWN_OVERRIDE_RESET_VARS 2>/dev/null; $LAUNCH"
+LAUNCH="unset $SPAWN_OVERRIDE_RESET_VARS 2>/dev/null; status fish-path 2>/dev/null && set --erase --global $SPAWN_OVERRIDE_RESET_VARS 2>/dev/null; $LAUNCH"
 if [ -z "$SPAWN_TRACEPARENT" ] && [ "$RELAUNCH" -eq 1 ]; then
   LAUNCH="unset TRACEPARENT; $LAUNCH"
 fi

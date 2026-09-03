@@ -53,7 +53,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC2034
 FM_TEST_SPAWN_RESET_VARS='FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE'
 # shellcheck disable=SC2034
-FM_TEST_SPAWN_RESET_POSIX="unset $FM_TEST_SPAWN_RESET_VARS;"
+FM_TEST_SPAWN_RESET_POSIX="unset $FM_TEST_SPAWN_RESET_VARS 2>/dev/null;"
 # shellcheck disable=SC2034
 FM_TEST_SPAWN_RESET_PREFIX="$FM_TEST_SPAWN_RESET_POSIX status fish-path 2>/dev/null && set --erase --global $FM_TEST_SPAWN_RESET_VARS 2>/dev/null;"
 

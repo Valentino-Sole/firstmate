@@ -229,7 +229,7 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
 # stop. Replay the REAL captured launch line under fish and demand the same
 # result the bash replay above demands.
 test_fish_pane_launch_line_clears_overrides() {
-  local probe_out
+  local probe_out bare with without
   command -v fish >/dev/null 2>&1 || { echo "skip: fish not found (fish pane replay)"; return 0; }
   # A launch line uses `"$(...)"` to type the brief pointer, which fish only
   # parses from 3.4 on; an older fish would fail the line for an unrelated
@@ -243,7 +243,21 @@ test_fish_pane_launch_line_clears_overrides() {
   assert_overrides_absent "$probe_out" "fish pane"
   assert_contains "$probe_out" "FM_HOME=present:$SHIP_HOME" \
     "fish pane must still hand the launching firstmate's FM_HOME to the worker"
-  pass "a fish pane's launch line unsets FM_*_OVERRIDE for the launched process"
+
+  # The POSIX half of the reset is no more a fish builtin than `status` is a
+  # POSIX one, so it has to swallow its own diagnostic too: otherwise every
+  # single spawn writes fish's unknown-command error into the pane the operator
+  # watches. Measured the same way as the POSIX pane above - the identical
+  # launch line with the reset prefix stripped is the baseline, so what is
+  # compared is the reset's own contribution.
+  bare=${SHIP_LINE#"$FM_TEST_SPAWN_RESET_PREFIX" }
+  [ "$bare" != "$SHIP_LINE" ] \
+    || fail "the captured launch line does not start with the reset prefix: $SHIP_LINE"
+  with=$(run_launch_stderr "$SHIP_PROBE" "$SHIP_HOME" "$SHIP_LINE" fish -c)
+  without=$(run_launch_stderr "$SHIP_PROBE" "$SHIP_HOME" "$bare" fish -c)
+  [ "$with" = "$without" ] \
+    || fail "the reset wrote its own diagnostic into a fish pane: ${with#"$without"}"
+  pass "a fish pane's launch line unsets FM_*_OVERRIDE quietly for the launched process"
 }
 
 # The fish spelling rides behind a `status` guard, and `status` is a builtin no
