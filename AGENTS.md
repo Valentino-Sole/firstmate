@@ -132,6 +132,7 @@ state/               runtime records and signals; gitignored
   .<id>.open-decisions-cursor  per-task byte cursor and folded open-decision set bounding the OPEN DECISIONS scan's cost to new status-log appends; written only by fm-classify-lib.sh's status_open_decisions_incremental, removed by teardown, safe to delete (forces one full re-fold)
   .status-presentation-cursor .status-presentation-lock  fleet-wide per-task status identity plus independent annotation and outcome-backstop byte offsets, with a serialization lock preventing already-presented lines from replaying while preserving delayed signal annotations; owned by fm-classify-lib.sh, with each task's row retired by teardown
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
+  .resgate-cap-work .resgate-cap-home  durable manual resource-cap override markers forcing the 50% weekly-schedule cap immediately on the work or home PC regardless of the clock window; set and cleared by firstmate on the section 8 "Kappung" trigger (docs/configuration.md "Fleet resource governance")
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
   .claude-autoarm.lock .claude-autoarm-epoch .claude-autoarm-failure-notified .claude-autoarm-failure-alarmed .turnend-claude-blocks .turnend-claude-blocks.lock   Claude Stop auto-arm single-flight, epoch, failure-episode, attended-alarm, guard-budget, and budget-lock records; never touch
   .cursor-park-owner .cursor-park-owner.lock .turnend-cursor-blocks   Cursor stop-hook owner record, publication and commit lock, and bounded repair-nag budget; never touch
@@ -446,6 +447,12 @@ The skill owns the daemon procedure; these safety facts remain inline:
 - Any other unmarked message means the captain returned; load `/afk`, run the return owner, and do not process that message as ordinary work until its durable catch-up gate clears.
 - Away mode never expands approval authority for merges, ask-user findings, destructive actions, irreversible actions, or security-sensitive choices.
 - Bias ambiguous input toward exit because a present captain takes precedence.
+
+### Resource-cap trigger
+
+Arm `state/.resgate-cap-<role>` the moment the captain says "Kappung" in chat, matched case-insensitively: bare "Kappung" arms both roles, `Kappung <hostname or role>` arms only that one.
+"Kappung auf" releases the same way, bare for both markers and `Kappung auf <hostname or role>` for that one alone.
+docs/configuration.md "Fleet resource governance" owns the marker paths, the release-form-first and longest-hostname-first matching precedence, and the rest of the mechanism.
 
 ### Stuck-worker trigger
 

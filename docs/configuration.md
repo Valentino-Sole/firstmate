@@ -198,6 +198,40 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Fleet resource governance (state/.resgate-cap-work, state/.resgate-cap-home)
+
+`bin/fm-resgate.sh` (CLI) and `bin/fm-resgate-lib.sh` (the primitives it wraps) protect the captain's own use of the work PC (`Valentino-Arbeit`) and home PC (`Valentino`, RTX 4080 Super) from the fleet, and keep Qwen and the JARVIS voice worker off the home PC's GPU at the same time.
+The exact schedule windows, the percentage-cap arithmetic, the fail-closed rules, and the GPU-detection signals are owned by `bin/fm-resgate-lib.sh`'s header; this section covers only where the surface lives and how the captain controls it.
+
+Two fixed roles, `work` and `home`, evaluated once against THIS host's own clock forced into `Europe/Berlin` - never a remote host's clock, which could be wrong or drifted and must never be able to loosen or defeat the gate:
+
+```sh
+bin/fm-resgate.sh schedule work            # clock-window verdict alone (uncapped/capped/blocked)
+bin/fm-resgate.sh cap home                 # effective percentage (100/50/0), folding in a manual override
+bin/fm-resgate.sh gpu status               # freshly probed home-PC GPU owner: none/qwen/voice/unknown
+bin/fm-resgate.sh gpu allow qwen           # exit 0/1: may Qwen start or keep running on the GPU right now
+```
+
+Manual override: `state/.resgate-cap-<work|home>` is a plain presence-based marker, written atomically like `state/.afk`.
+While it exists, that role reads capped (50%) immediately, regardless of which window the clock lands in - but the marker can only ever tighten the gate, never loosen it: an unreadable clock stays `blocked` at 0% even with the marker armed, because a control whose purpose is to restrict must not hand out capacity no measurement supports.
+Firstmate matches the captain's chat wording case-insensitively, and checks the release form FIRST: "Kappung auf" always means release, never an arming instruction, because bare `Kappung` is a substring of it and would otherwise be misread as "arm both".
+Bare "Kappung auf" releases both markers, and "Kappung auf <hostname or role>" releases only that one, resolved by the same hostname matching as the arming form below.
+Only when the message is not the release form does firstmate arm: bare `Kappung` arms both roles, `Kappung <hostname or role>` arms only that one, matching `Valentino-Arbeit`/`work`/`Arbeits-PC` to `work` and `Valentino`/`home`/`Heim-PC` to `home` (`auf` is not a hostname and never resolves to a role).
+The hostname tokens are matched longest-first for the same substring reason: `Valentino` is a substring of `Valentino-Arbeit`, so `Valentino-Arbeit` and `Arbeits-PC` must both be ruled out before bare `Valentino` is considered, or "Kappung Valentino-Arbeit" caps the home PC and leaves the work PC - the machine the captain actually asked to protect - uncapped through his working hours.
+This is a plain state file firstmate touches directly (`bin/fm-resgate.sh override set|clear <work|home|both>`, or an equivalent direct write following `fm_resgate_override_set`/`fm_resgate_override_clear`'s header contract in `bin/fm-resgate-lib.sh`), not a skill, and not wired into spawn or dispatch plumbing beyond this marker.
+Arming and releasing can both fail (an unwritable `state/`), and both report it: the CLI prints `could not arm/clear override for <role>` and exits non-zero, so a release that did not actually happen is never mistaken for a lifted cap.
+`set`, `clear`, and `status` all print one `<role>=armed|clear` line per role they touched, re-read from the marker after the operation rather than assumed from its exit status, and a failing role never aborts the remaining ones: when a `both` run only half applies, the output still names which host is capped and which is released, instead of leaving a single error line and no way to tell what happened to the other host.
+
+Fail-closed discipline: every measurement this surface cannot read - the authoritative clock, an SSH probe, the voice port, the GPU reading - yields the most restrictive answer, never a guess.
+"Cannot read" includes a clock that answers confidently with the wrong zone: `date` does not fail when `Europe/Berlin` is unresolvable (missing tzdata on a slim image), it silently falls back to UTC, so the read is accepted only when the zone abbreviation and UTC offset it returns are a matching Europe/Berlin pair, and is otherwise treated exactly like an unreadable clock.
+A schedule read that cannot happen at all reports 0% (`blocked`), stricter than the ordinary 50% cap and stricter than an armed override, and a GPU reading that cannot be completed reports `unknown`, which refuses both Qwen and JARVIS voice rather than picking a side.
+An out-of-range `FM_RESGATE_VOICE_PORT`, a non-numeric `FM_RESGATE_GPU_BUSY_MB`, or a `FM_RESGATE_SSH_TIMEOUT` that is not a positive integer is treated the same way: the GPU reading reports `unknown` instead of probing the wrong port, comparing against an unusable threshold, or running the probe with a bound of zero seconds, which disables the deadline rather than bounding it.
+
+GPU exclusivity: JARVIS voice is detected by its gateway port (currently `7414`, see `data/learnings.md`), never by process name, because process-name detection has broken this fleet's integration before.
+That port reading is authoritative and is decided first: a listening gateway means `owner=voice` and the Qwen signals are never consulted, because aggregate card memory cannot say whose memory it is - an idle-but-resident Qwen model plus the voice worker's own VRAM would otherwise misread as contention and refuse the genuinely-running voice worker the card it already holds.
+Qwen is detected by a named-process check (`ollama`, the currently live identity) corroborated by aggregate GPU memory clearing a threshold, not by `nvidia-smi --query-compute-apps` per-process attribution: live-tested against the real home host, that query lists every ordinary desktop GPU context (window compositor, open browsers) with no per-process memory field left to filter the noise by, so it cannot isolate a genuine workload there.
+Both signals for the process-plus-memory check, and the port check, come from one bounded SSH round trip to the home host.
+
 ## Gate defaults (.no-mistakes.yaml)
 
 The tracked `.no-mistakes.yaml` sets `test.evidence.store_in_repo: true` and pins `commands.lint` to `bin/fm-lint.sh` so local lint matches CI.
