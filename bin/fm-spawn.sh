@@ -3230,7 +3230,7 @@ fi
 # escape hatch (`cmd-a && cmd-b`) runs entirely under the reset instead of only
 # its first word.
 SPAWN_OVERRIDE_RESET_VARS='FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE'
-LAUNCH="unset $SPAWN_OVERRIDE_RESET_VARS; status fish-path 2>/dev/null && set --erase $SPAWN_OVERRIDE_RESET_VARS 2>/dev/null; $LAUNCH"
+LAUNCH="unset $SPAWN_OVERRIDE_RESET_VARS; status fish-path 2>/dev/null && set --erase --global $SPAWN_OVERRIDE_RESET_VARS 2>/dev/null; $LAUNCH"
 if [ -z "$SPAWN_TRACEPARENT" ] && [ "$RELAUNCH" -eq 1 ]; then
   LAUNCH="unset TRACEPARENT; $LAUNCH"
 fi
