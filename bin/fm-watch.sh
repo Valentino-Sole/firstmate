@@ -769,6 +769,19 @@ clear_write_tracking() {  # <window-key>
   rm -f "$STATE/.writing-since-$key" "$STATE/.writing-resurfaced-$key"
 }
 
+# Open a fresh wedge episode for a window: the single definition of what a
+# genuine state change resets. The wedge timer, the escalation count, the
+# episode's .wedge-resurfaced-<key> throttle and the write-deferral chain belong
+# to one episode and must reset together - a hand-copied tuple at each reset
+# site is how a later marker silently ends up orphaned at one of them.
+# wedge_defer_writing deliberately does NOT use this: a worktree write opens a
+# new episode while keeping the escalation history it had already earned.
+clear_wedge_episode() {  # <window-key> <since-file> <escalation-file>
+  local key=$1 since_file=$2 escalation_file=$3
+  rm -f "$since_file" "$escalation_file" "$STATE/.wedge-resurfaced-$key"
+  clear_write_tracking "$key"
+}
+
 # Repeat-poll wedge-timer bookkeeping for an already-classified stale hash
 # absorbed as provably-working - repairs a missing/corrupt timer (self-heals a
 # watcher restart between recording the hash and recording the timer), or
@@ -884,8 +897,7 @@ handle_paused_stale() {  # <window> <task> <hash>
   key=$(window_key "$win")
   printf '%s' "$h" > "$STATE/.stale-$key"
   : > "$STATE/.paused-$key"
-  rm -f "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key" "$STATE/.wedge-resurfaced-$key"
-  clear_write_tracking "$key"
+  clear_wedge_episode "$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
   statusf="$STATE/$task.status"
   mtime=$(stat_mtime "$statusf")
   case "$mtime" in ''|*[!0-9]*) mtime=$(date +%s) ;; esac
@@ -942,8 +954,7 @@ busy_turn_bound_check() {  # <window> <task> <hash> <since-file> <escalation-fil
       # pause tracking stays unwritten here, exactly as the idle away-mode handoff
       # leaves it, because the daemon owns that bookkeeping.
       key=$(window_key "$win")
-      rm -f "$since_file" "$escalation_file" "$STATE/.wedge-resurfaced-$key"
-      clear_write_tracking "$key"
+      clear_wedge_episode "$key" "$since_file" "$escalation_file"
       declared="declared:$(fm_wake_signal_sig "$statusf" || true)"
       if [ "$(cat "$STATE/.stale-$key" 2>/dev/null || true)" != "$declared" ]; then
         fm_wake_append stale "$win" "stale: $win" || exit 1
@@ -970,9 +981,8 @@ clear_pause_state() {  # <window-key>
 # recheck, and re-surface throttle - can still reset the per-hash half alone.
 clear_stale_hash_tracking() {  # <window-key>
   local key=$1
-  clear_write_tracking "$key"
-  rm -f "$STATE/.stale-$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key" \
-    "$STATE/.wedge-resurfaced-$key"
+  clear_wedge_episode "$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+  rm -f "$STATE/.stale-$key"
 }
 
 clear_pause_tracking() {  # <window-key>
@@ -2020,8 +2030,7 @@ EOF
         if [ "$busy_now" -eq 0 ] && busy_turn_over_age "$task"; then
           busy_turn_bound_check "$w" "$task" "$h" "$ssf" "$ewf" && paused_bound=0
         else
-          rm -f "$ssf" "$ewf" "$STATE/.wedge-resurfaced-$key"
-          clear_write_tracking "$key"
+          clear_wedge_episode "$key" "$ssf" "$ewf"
         fi
         # A busy pane normally means real work resumed, so stale pause bookkeeping
         # is cleared - but not in the same poll the declared-pause cadence just
@@ -2038,8 +2047,7 @@ EOF
       if [ "$busy_now" -eq 0 ] && busy_turn_over_age "$task"; then
         busy_turn_bound_check "$w" "$task" "$h" "$ssf" "$ewf" && paused_bound=0
       else
-        rm -f "$ssf" "$ewf" "$STATE/.wedge-resurfaced-$key"
-        clear_write_tracking "$key"
+        clear_wedge_episode "$key" "$ssf" "$ewf"
       fi
       task=$(window_to_task "$w" "$STATE")
       if ! afk_present && status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")" && [ "$busy_now" -ne 0 ]; then
