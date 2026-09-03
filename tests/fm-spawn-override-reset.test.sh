@@ -17,8 +17,16 @@
 #
 # These tests drive a REAL fm-spawn.sh ship spawn (and a real secondmate
 # spawn) against a fake tmux pane that logs the literal `send-keys -l`
-# payload, exactly as tests/fm-trace-context-spawn.test.sh does, and inspect
-# the captured launch line.
+# payload, exactly as tests/fm-trace-context-spawn.test.sh does, and then
+# REPLAY that captured launch line through a fake agent that reports its own
+# environment - a launch line that merely mentions the variables proves
+# nothing, only the launched process's environment does.
+#
+# The replay runs under each pane shell family the backends recognize
+# (bin/backends/tmux.sh shell classification): the POSIX family, where the
+# reset must clear every override without writing a word into the pane, and
+# fish, where `unset` is not a builtin at all and a POSIX-only reset would
+# silently leave the pane inheriting the overrides.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -28,7 +36,7 @@ SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-override-reset)
 export FM_BACKEND=tmux
 
-RESET_PREFIX='unset FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE;'
+RESET_PREFIX='unset FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE; status fish-path 2>/dev/null && set --erase FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE 2>/dev/null;'
 
 write_ship_brief() {  # <file> <id>
   cat > "$1" <<EOF
@@ -108,13 +116,31 @@ SH
 
 # Runs a captured launch line in a shell whose environment carries the given
 # override values, and echoes the probe's report of what the launched process
-# actually received.
-run_launch_under_probe() {  # <probe-dir> <home> <launch-line>
+# actually received. The pane's shell is whichever login shell the operator
+# runs, so the interpreter is a parameter: every shell the backends recognize
+# as a pane shell has to reach the same result.
+run_launch_under_probe() {  # <probe-dir> <home> <launch-line> [shell-argv...]
   local probe=$1 home=$2 line=$3
+  shift 3
+  [ "$#" -gt 0 ] || set -- bash -c
   env FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    PATH="$probe:$PATH" bash -c "$line" 2>&1
+    PATH="$probe:$SHIP_FAKEBIN:$PATH" "$@" "$line" 2>&1
+}
+
+# Same run, but echoes only what the launch line wrote to STDERR. The reset has
+# to stay quiet on a pane whose shell is not fish: the fish spelling is reached
+# through a `status` guard that no POSIX shell provides, and an unsuppressed
+# "command not found" would land in the pane the operator watches.
+run_launch_stderr() {  # <probe-dir> <home> <launch-line> [shell-argv...]
+  local probe=$1 home=$2 line=$3
+  shift 3
+  [ "$#" -gt 0 ] || set -- bash -c
+  { env FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
+    PATH="$probe:$SHIP_FAKEBIN:$PATH" "$@" "$line" >/dev/null; } 2>&1
 }
 
 assert_overrides_absent() {  # <probe-output> <label>
@@ -125,14 +151,11 @@ assert_overrides_absent() {  # <probe-output> <label>
   done
 }
 
-# A ship spawn: the launching (parent) environment carries live, non-empty
-# FM_*_OVERRIDE values that correctly resolve fm-spawn.sh's own home, exactly
-# as an ordinary crewmate spawn's invoking environment does. The captured
-# launch line must still clear all five, proving the reset does not depend on
-# KIND.
-test_ship_spawn_clears_overrides_set_in_parent_env() {
-  local case_dir home proj wt fakebin launchlog id out status log_line probe probe_out
-  case_dir="$TMP_ROOT/ship"
+# Drives one real ship spawn in <case-dir> and publishes what the cross-shell
+# tests below replay: SHIP_HOME (the launching firstmate's home), SHIP_LINE
+# (the captured launch line) and SHIP_PROBE (the env-reporting fake agent).
+spawn_ship_case() {  # <case-dir> <id>
+  local case_dir=$1 id=$2 home proj wt fakebin launchlog out status
   home="$case_dir/home"
   proj="$case_dir/project"
   wt="$case_dir/wt"
@@ -141,9 +164,8 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
   printf 'claude\n' > "$home/config/crew-harness"
   printf '%s\n' "$$" > "$home/state/.lock"
-  fm_git_worktree "$proj" "$wt" "wt-ship"
+  fm_git_worktree "$proj" "$wt" "wt-$id"
   touch "$home/state/.last-watcher-beat"
-  id=ship-override-z1
   mkdir -p "$home/data/$id"
   write_ship_brief "$home/data/$id/brief.md" "$id"
   : > "$launchlog"
@@ -160,9 +182,28 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
   status=$?
   expect_code 0 "$status" "ship spawn with parent-env overrides set should succeed"
   assert_contains "$out" "spawned $id" "ship spawn should report success"
-
   [ -s "$launchlog" ] || fail "ship spawn logged no launch line"
-  log_line=$(cat "$launchlog")
+
+  SHIP_HOME="$home"
+  SHIP_FAKEBIN="$fakebin"
+  # The pane receives several literal lines (a treehouse get, the GOTMPDIR
+  # export, then the launch command). The launch command is the last of them
+  # and the only one this file is about.
+  SHIP_LINE=$(tail -n 1 "$launchlog")
+  SHIP_PROBE=$(make_env_probe "$case_dir")
+}
+
+# A ship spawn: the launching (parent) environment carries live, non-empty
+# FM_*_OVERRIDE values that correctly resolve fm-spawn.sh's own home, exactly
+# as an ordinary crewmate spawn's invoking environment does. The captured
+# launch line must still clear all five, proving the reset does not depend on
+# KIND.
+test_ship_spawn_clears_overrides_set_in_parent_env() {
+  local home log_line probe probe_out
+  spawn_ship_case "$TMP_ROOT/ship" ship-override-z1
+  home="$SHIP_HOME"
+  log_line="$SHIP_LINE"
+  probe="$SHIP_PROBE"
   assert_contains "$log_line" "$RESET_PREFIX" \
     "ship spawn's launch line must clear all five FM_*_OVERRIDE variables even though the parent environment set them"
   assert_not_contains "$log_line" "FM_ROOT_OVERRIDE=$ROOT" \
@@ -174,13 +215,64 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
   # overrides as ABSENT (an empty assignment prefix would leave them present),
   # while FM_HOME - which a ship worker is meant to resolve exactly as its
   # launching firstmate does - must still come through.
-  probe=$(make_env_probe "$case_dir")
   probe_out=$(run_launch_under_probe "$probe" "$home" "$log_line") \
     || fail "ship launch line did not run: $probe_out"
   assert_overrides_absent "$probe_out" "ship spawn"
   assert_contains "$probe_out" "FM_HOME=present:$home" \
     "ship spawn must still hand the launching firstmate's FM_HOME to the worker"
   pass "ship spawn unsets FM_*_OVERRIDE for the launched process regardless of what the parent environment set"
+}
+
+# The pane runs whichever login shell the operator uses, and the backends
+# recognize a fish pane next to the POSIX family (bin/backends/tmux.sh shell
+# classification). `unset` is not a fish builtin, so a launch line carrying
+# only the POSIX spelling clears nothing on a fish pane and leaves that pane
+# inheriting a foreign home's overrides - the very failure this reset exists to
+# stop. Replay the REAL captured launch line under fish and demand the same
+# result the bash replay above demands.
+test_fish_pane_launch_line_clears_overrides() {
+  local probe_out
+  command -v fish >/dev/null 2>&1 || { echo "skip: fish not found (fish pane replay)"; return 0; }
+  # A launch line uses `"$(...)"` to type the brief pointer, which fish only
+  # parses from 3.4 on; an older fish would fail the line for an unrelated
+  # reason and say nothing about the reset.
+  # shellcheck disable=SC2016  # fish, not this shell, must expand the probe.
+  fish -c 'set -l probe "$(printf ok)"; test "$probe" = ok' >/dev/null 2>&1 \
+    || { echo "skip: fish too old for \"\$(...)\" (fish pane replay)"; return 0; }
+
+  probe_out=$(run_launch_under_probe "$SHIP_PROBE" "$SHIP_HOME" "$SHIP_LINE" fish -c) \
+    || fail "ship launch line did not run under fish: $probe_out"
+  assert_overrides_absent "$probe_out" "fish pane"
+  assert_contains "$probe_out" "FM_HOME=present:$SHIP_HOME" \
+    "fish pane must still hand the launching firstmate's FM_HOME to the worker"
+  pass "a fish pane's launch line unsets FM_*_OVERRIDE for the launched process"
+}
+
+# The fish spelling rides behind a `status` guard, and `status` is a builtin no
+# POSIX shell has. On a POSIX pane the guard must therefore fail quietly and
+# leave the POSIX `unset` as the only reset that runs: nothing extra written
+# into the pane the operator watches, and no `set --erase` reaching a shell
+# that would read shell options out of that word. The comparison run is the
+# same launch line with the reset prefix stripped off, so what is measured is
+# the reset's own contribution rather than whatever the launched command says.
+test_posix_pane_reset_is_quiet_and_complete() {
+  local sh probe_out bare with without
+  bare=${SHIP_LINE#"$RESET_PREFIX" }
+  [ "$bare" != "$SHIP_LINE" ] \
+    || fail "the captured launch line does not start with the reset prefix: $SHIP_LINE"
+  for sh in sh dash bash; do
+    command -v "$sh" >/dev/null 2>&1 || continue
+    probe_out=$(run_launch_under_probe "$SHIP_PROBE" "$SHIP_HOME" "$SHIP_LINE" "$sh" -c) \
+      || fail "ship launch line did not run under $sh: $probe_out"
+    assert_overrides_absent "$probe_out" "$sh pane"
+    assert_contains "$probe_out" "FM_HOME=present:$SHIP_HOME" \
+      "$sh pane must still hand the launching firstmate's FM_HOME to the worker"
+    with=$(run_launch_stderr "$SHIP_PROBE" "$SHIP_HOME" "$SHIP_LINE" "$sh" -c)
+    without=$(run_launch_stderr "$SHIP_PROBE" "$SHIP_HOME" "$bare" "$sh" -c)
+    [ "$with" = "$without" ] \
+      || fail "the reset wrote its own diagnostic into a $sh pane: ${with#"$without"}"
+  done
+  pass "the reset clears every override and stays silent on a POSIX pane shell"
 }
 
 # A secondmate spawn: the same five-variable reset must still apply, AND the
@@ -238,6 +330,8 @@ test_secondmate_spawn_still_clears_overrides_and_redirects_home() {
 }
 
 test_ship_spawn_clears_overrides_set_in_parent_env
+test_posix_pane_reset_is_quiet_and_complete
+test_fish_pane_launch_line_clears_overrides
 test_secondmate_spawn_still_clears_overrides_and_redirects_home
 
 echo "# all fm-spawn-override-reset tests passed"
