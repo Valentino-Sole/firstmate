@@ -44,7 +44,7 @@ The branch's role stays bounded exactly as the captain-approved architecture set
 Homes on any other primary harness never load this feature and are entirely unaffected.
 `AGENTS.md`'s `state/` inventory routes the branch's runtime files to their format and lifecycle owners.
 A captain-facing (verdict `captain`) branch outcome persists as one exact, sequence-keyed visible transcript entry and then opens one sequence-keyed processing turn on main, which stays open until main acknowledges that sequence through its `fm_branch_processed` tool.
-The branch prompt owns the unconditional explicit-request rule and the distinction between captain-facing, unsolicited routine, and unchanged-review outcomes.
+The branch prompt's "Verdict: routine or captain" section owns the distinction between captain-facing, unsolicited routine, and unchanged-review outcomes.
 The generated [Pi supervision protocol](supervision-protocols/pi.md) owns main's event ownership, acknowledgement duty, and conversational treatment for merged outcomes, while the persisted entry itself owns captain visibility.
 A no-change heartbeat outcome explicitly reported with `task=fleet` and `silent=true` is delivered silently with no rendered note, while every other routine outcome still appends a rendered, sailboat-prefixed note.
 
@@ -93,7 +93,7 @@ When the default backend is selected and compatible `tasks-axi` is on `PATH`, fi
 When the automatic transition gate applies, dispatch and completion are not separate operator actions: each moves its work item inside the same run that creates or removes the task's record, so the ordinary successful path cannot leave the backlog and live task set out of sync ([`bin/fm-backlog-transition-lib.sh`](../bin/fm-backlog-transition-lib.sh)).
 Under that gate, dispatch accepts only an unheld, unblocked Queued or In flight item in this home; a missing, Done, held, or dependency-blocked item is refused before any endpoint or local copy is created.
 Completion refuses to report success until the item is closed, and session start reconciles this home's own books after an interrupted run.
-Automatic transitions address the configured `<data>/backlog.md` explicitly from the data directory's parent, keeping relocated backlog configuration, archives, and relative scout-report links together.
+Automatic transition mutations address the configured `<data>/backlog.md` explicitly from the data directory's parent, keeping relocated backlog configuration, archives, and relative scout-report links together.
 The gate does not apply to persistent secondmates, manual-backend homes, or homes without a backlog file, preserving their existing persistent-agent, manual, or ad-hoc lifecycle behavior.
 On an automatic-backend home with a backlog, missing or incompatible `tasks-axi`, an unresolvable configured data directory, or one containing a control byte fails lifecycle work before mutation.
 Secondmate handoffs bypass that routine-backend choice: `fm-backlog-handoff.sh` keeps only its own fleet-level validation, delegates the item move to `tasks-axi mv`, and requires a verified receiver wake after a new move becomes durable.
@@ -270,7 +270,7 @@ Each seed writes an `.fm-secondmate-home` identity marker at the home root, alon
 The tracked root `.gitignore` ignores both markers, so validation can read them without making a freshly seeded home appear dirty to porcelain-based safety checks.
 This does not relax protection for any other untracked file.
 An existing linked-worktree home that predates this rule advances through its marker-only state during its next bootstrap or spawn local sync, after which Git ignores the marker normally.
-A standalone-clone home cannot receive a primary-local commit through that no-fetch sync, so it receives the rule through `/updatefirstmate`'s origin refresh instead.
+A local standalone-clone home cannot receive a primary-local commit through that no-fetch sync, so it receives the rule through `/updatefirstmate`'s origin refresh instead.
 
 ## FM_HOME
 
