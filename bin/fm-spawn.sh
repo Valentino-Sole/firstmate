@@ -3221,7 +3221,15 @@ fi
 # builtin everywhere, and a shell that reads `-e` out of that word would turn
 # on errexit in the pane. `status` is a fish builtin that no POSIX shell
 # provides, so `status fish-path` fails (silently - the diagnostic is
-# discarded) on every non-fish pane and the erase never runs there. Only
+# discarded) on every non-fish pane and the erase never runs there. The erase
+# is `--global` scoped because global is where fish lands a variable it
+# imported from the pane's inherited environment, which is the only copy this
+# reset is entitled to touch: unscoped, fish erases the smallest scope holding
+# the name, so an operator's persisted universal (`set -Ux FM_ROOT_OVERRIDE`)
+# would be deleted out of ~/.config/fish/fish_variables and stay deleted long
+# after the pane is gone. Such a universal is machine-wide operator config
+# rather than a foreign home leaking through the launching process tree, so it
+# deliberately survives the reset. Only
 # stderr is discarded, and deliberately so: a csh pane parses a second
 # redirection on one command as an ambiguous redirect and would drop the whole
 # launch line, which costs a fish pane one printed path and costs no pane its

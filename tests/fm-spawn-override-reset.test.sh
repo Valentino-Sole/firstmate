@@ -36,8 +36,6 @@ SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-override-reset)
 export FM_BACKEND=tmux
 
-RESET_PREFIX='unset FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE; status fish-path 2>/dev/null && set --erase --global FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE 2>/dev/null;'
-
 write_ship_brief() {  # <file> <id>
   cat > "$1" <<EOF
 # Task
@@ -204,7 +202,7 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
   home="$SHIP_HOME"
   log_line="$SHIP_LINE"
   probe="$SHIP_PROBE"
-  assert_contains "$log_line" "$RESET_PREFIX" \
+  assert_contains "$log_line" "$FM_TEST_SPAWN_RESET_PREFIX" \
     "ship spawn's launch line must clear all five FM_*_OVERRIDE variables even though the parent environment set them"
   assert_not_contains "$log_line" "FM_ROOT_OVERRIDE=$ROOT" \
     "ship spawn's launch line must not carry the parent's FM_ROOT_OVERRIDE value into the pane"
@@ -257,7 +255,7 @@ test_fish_pane_launch_line_clears_overrides() {
 # the reset's own contribution rather than whatever the launched command says.
 test_posix_pane_reset_is_quiet_and_complete() {
   local sh probe_out bare with without
-  bare=${SHIP_LINE#"$RESET_PREFIX" }
+  bare=${SHIP_LINE#"$FM_TEST_SPAWN_RESET_PREFIX" }
   [ "$bare" != "$SHIP_LINE" ] \
     || fail "the captured launch line does not start with the reset prefix: $SHIP_LINE"
   for sh in sh dash bash; do
@@ -313,7 +311,7 @@ test_secondmate_spawn_still_clears_overrides_and_redirects_home() {
 
   [ -s "$launchlog" ] || fail "secondmate spawn logged no launch line"
   log_line=$(cat "$launchlog")
-  assert_contains "$log_line" "$RESET_PREFIX" \
+  assert_contains "$log_line" "$FM_TEST_SPAWN_RESET_PREFIX" \
     "secondmate spawn's launch line must still clear all five FM_*_OVERRIDE variables"
   assert_contains "$log_line" "FM_HOME='$sm'" \
     "secondmate spawn's launch line must still redirect FM_HOME to the secondmate's own home"
