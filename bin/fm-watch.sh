@@ -821,7 +821,7 @@ clear_wedge_episode() {  # <window-key> <since-file> <escalation-file>
 # reminders themselves keep their PAUSE_RESURFACE_SECS cadence; only the
 # fleet-wide heartbeat backstop runs less often in that one scenario.
 wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-file> <task>
-  local win=$1 since_file=$2 label=$3 escalation_file=$4 task=$5 since age n reason key rf
+  local win=$1 since_file=$2 label=$3 escalation_file=$4 task=$5 since age n reason key rf fires
   since=$(cat "$since_file" 2>/dev/null || true)
   case "$since" in
     ''|*[!0-9]*)
@@ -846,16 +846,18 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
         if [ "$n" -ge "$FM_WEDGE_DEMAND_INSPECT_COUNT" ]; then
           reason="stale: $win (idle ${age}s, possible wedge, escalation $n, demand-deep-inspection: same pane has wedge-escalated $n times in a row - do not re-absorb on the run-step/pane state alone)"
         fi
+        fires=0
         if [ "$n" -eq 1 ] || [ "$n" -eq "$FM_WEDGE_DEMAND_INSPECT_COUNT" ] \
           || [ "$(age_of "$rf")" -ge "$PAUSE_RESURFACE_SECS" ]; then
+          fires=1
           fm_wake_append stale "$win" "$reason" || exit 1
           date +%s > "$rf"
-          rm -f "$since_file"
-          clear_write_tracking "$key"
+        fi
+        rm -f "$since_file"
+        clear_write_tracking "$key"
+        if [ "$fires" -eq 1 ]; then
           wake "$reason"
         else
-          rm -f "$since_file"
-          clear_write_tracking "$key"
           triage_log "absorbed wedge escalation $n (same episode, rechecked on a long cadence not every poll): $win"
         fi
       fi
@@ -1945,16 +1947,14 @@ EOF
           # authoritative source fm-crew-state.sh itself already prioritizes
           # over the log) a chance to override before trusting the log.
           if [ "$(cat "$sf" 2>/dev/null || true)" != "$h" ]; then
+            clear_wedge_episode "$key" "$ssf" "$ewf"
             if crew_is_provably_working "$(window_to_task "$w" "$STATE")"; then
               printf '%s' "$h" > "$sf"
               date +%s > "$ssf"
-              clear_write_tracking "$key"
               triage_log "absorbed stale (provably working, overriding a stale captain-relevant status): $w"
             else
               fm_wake_append stale "$w" "stale: $w" || exit 1
               printf '%s' "$h" > "$sf"
-              rm -f "$ssf"
-              clear_write_tracking "$key"
               stale_status="$STATE/$(window_to_task "$w" "$STATE").status"
               stale_record=$(status_span_first_actionable_record "$stale_status" 0)
               case $? in

@@ -1764,6 +1764,73 @@ test_stale_terminal_status_overridden_by_active_run() {
   pass "a stale terminal-looking status is overridden and absorbed while a run is actively working, then wedge-escalated"
 }
 
+# --- terminal-override absorb on a NEW hash: opens a fresh wedge episode ---
+# The terminal-override path is the second place a provably-working stale is
+# absorbed onto a wedge timer. Its new-hash branch used to restart that timer by
+# hand while leaving the previous episode's escalation counter and
+# .wedge-resurfaced-<key> throttle in place, so the first escalation of the new
+# episode was silently swallowed by the old episode's PAUSE_RESURFACE_SECS clock
+# - a genuinely hung task going quieter than before the dedup change, which the
+# structurally identical non-terminal branch never did. A capture-hash change
+# ends an episode on every path.
+test_terminal_override_new_hash_opens_a_fresh_wedge_episode() {
+  local dir state fakebin out capture_file window key pane_hash sig pid
+  dir=$(make_case terminal-override-new-episode); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"
+  window="test:fm-term-episode"
+  printf 'no-mistakes axi run: validating step two...' > "$capture_file"
+  printf 'window=%s\nkind=ship\n' "$window" > "$state/termep.meta"
+  # The leftover captain-relevant line the run step outranks, exactly as in the
+  # override fixture above.
+  printf 'done: implementation complete, ready to validate\n' > "$state/termep.status"
+  sig=$(seen_sig "$state/termep.status"); printf '%s' "$sig" > "$state/.seen-termep_status"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  pane_hash=$(hash_text "no-mistakes axi run: validating step two...")
+  printf '%s' "$pane_hash" > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+  # A previous episode ran on a DIFFERENT hash and already fired its first
+  # escalation, so its throttle marker is fresh (well inside PAUSE_RESURFACE_SECS).
+  printf 'an-older-pane-hash' > "$state/.stale-$key"
+  printf '1\n' > "$state/.wedge-escalations-$key"
+  : > "$state/.wedge-resurfaced-$key"
+  export FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
+
+  # Phase A: the pane settles on its new hash while the log still ends in that
+  # leftover done: line - absorbed onto a fresh timer, nothing surfaced.
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "watcher exited on the terminal-override absorb of a new hash (should absorb): $(cat "$out")"
+  fi
+  [ ! -s "$out" ] || fail "the terminal-override absorb printed a wake reason: $(cat "$out")"
+  [ "$(cat "$state/.stale-$key" 2>/dev/null || true)" = "$pane_hash" ] || fail "stale suppressor not advanced to the new hash"
+  [ -s "$state/.stale-since-$key" ] || fail "the terminal-override absorb did not start a fresh wedge timer"
+  reap "$pid"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the intentional phase-A watcher stop"
+
+  # Phase B: the new hash turns out to be genuinely wedged. Because the hash
+  # change ended the old episode, this is escalation 1 of a NEW episode and must
+  # report at once. With the old throttle left in place it would instead be
+  # escalation 2 inside a still-fresh resurface window, and stay silent - the
+  # demand-deep-inspection bypass is pushed out of reach so only the fresh
+  # episode can explain a wake here.
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_WEDGE_DEMAND_INSPECT_COUNT=1000 \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "the first escalation after a terminal-override hash change stayed silent on the previous episode's throttle: $(cat "$out")"
+  grep -F "possible wedge" "$out" >/dev/null || fail "the fresh episode did not flag a possible wedge: $(cat "$out")"
+  grep -F "escalation 1" "$out" >/dev/null || fail "the terminal-override hash change did not open a fresh episode at escalation 1: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the fresh-episode escalation"
+
+  unset FM_FAKE_CREW_STATE
+  pass "a terminal-override absorb on a new capture hash opens a fresh wedge episode that reports its first escalation at once"
+}
+
 # --- non-terminal stale, crew provably working: absorbed, then wedge-escalated ---
 # A provably-working crew (an actively-running pipeline) legitimately sits on a
 # static pane (e.g. waiting on CI), so a non-terminal stale is absorbed and only
@@ -4256,6 +4323,7 @@ test_unreadable_status_reports_once_per_file_state
 test_permission_recovery_surfaces_preserved_status
 test_terminal_stale_surfaced
 test_stale_terminal_status_overridden_by_active_run
+test_terminal_override_new_hash_opens_a_fresh_wedge_episode
 test_nonterminal_stale_provably_working_absorbed_then_escalated
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold
 test_wedge_escalation_stays_silent_within_pause_window_then_resurfaces
