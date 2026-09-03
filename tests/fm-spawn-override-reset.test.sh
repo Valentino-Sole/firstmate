@@ -28,7 +28,7 @@ SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-override-reset)
 export FM_BACKEND=tmux
 
-RESET_PREFIX='FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE='
+RESET_PREFIX='unset FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE;'
 
 write_ship_brief() {  # <file> <id>
   cat > "$1" <<EOF
@@ -81,13 +81,57 @@ SH
   printf '%s\n' "$fakebin"
 }
 
+# Stands in for the launched agent binary and reports, per variable, whether it
+# is ABSENT from the launched process's environment or present (with its
+# value). Running the captured launch line through this probe is what proves
+# the reset is a real unset: an empty assignment prefix would still hand the
+# variable down as present-but-empty, which bin/fm-check-unregister.sh
+# (`${FM_STATE_OVERRIDE-...}`) refuses.
+make_env_probe() {  # <dir>
+  local dir=$1 probe
+  probe="$dir/probe"
+  mkdir -p "$probe"
+  cat > "$probe/claude" <<'SH'
+#!/usr/bin/env bash
+set -u
+for v in FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE FM_HOME; do
+  if eval "[ \"\${${v}+x}\" = x ]"; then
+    eval "printf '%s=present:%s\n' \"\$v\" \"\$$v\""
+  else
+    printf '%s=absent\n' "$v"
+  fi
+done
+SH
+  chmod +x "$probe/claude"
+  printf '%s\n' "$probe"
+}
+
+# Runs a captured launch line in a shell whose environment carries the given
+# override values, and echoes the probe's report of what the launched process
+# actually received.
+run_launch_under_probe() {  # <probe-dir> <home> <launch-line>
+  local probe=$1 home=$2 line=$3
+  env FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
+    PATH="$probe:$PATH" bash -c "$line" 2>&1
+}
+
+assert_overrides_absent() {  # <probe-output> <label>
+  local out=$1 label=$2 v
+  for v in FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE; do
+    assert_contains "$out" "$v=absent" \
+      "$label: $v must be unset - not present-but-empty - in the launched process"
+  done
+}
+
 # A ship spawn: the launching (parent) environment carries live, non-empty
 # FM_*_OVERRIDE values that correctly resolve fm-spawn.sh's own home, exactly
 # as an ordinary crewmate spawn's invoking environment does. The captured
 # launch line must still clear all five, proving the reset does not depend on
 # KIND.
 test_ship_spawn_clears_overrides_set_in_parent_env() {
-  local case_dir home proj wt fakebin launchlog id out status log_line
+  local case_dir home proj wt fakebin launchlog id out status log_line probe probe_out
   case_dir="$TMP_ROOT/ship"
   home="$case_dir/home"
   proj="$case_dir/project"
@@ -125,7 +169,18 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
     "ship spawn's launch line must not carry the parent's FM_ROOT_OVERRIDE value into the pane"
   assert_not_contains "$log_line" "FM_STATE_OVERRIDE=$home/state" \
     "ship spawn's launch line must not carry the parent's FM_STATE_OVERRIDE value into the pane"
-  pass "ship spawn clears FM_*_OVERRIDE in the launch line regardless of what the parent environment set"
+
+  # Execute the captured launch line: the launched process must see the five
+  # overrides as ABSENT (an empty assignment prefix would leave them present),
+  # while FM_HOME - which a ship worker is meant to resolve exactly as its
+  # launching firstmate does - must still come through.
+  probe=$(make_env_probe "$case_dir")
+  probe_out=$(run_launch_under_probe "$probe" "$home" "$log_line") \
+    || fail "ship launch line did not run: $probe_out"
+  assert_overrides_absent "$probe_out" "ship spawn"
+  assert_contains "$probe_out" "FM_HOME=present:$home" \
+    "ship spawn must still hand the launching firstmate's FM_HOME to the worker"
+  pass "ship spawn unsets FM_*_OVERRIDE for the launched process regardless of what the parent environment set"
 }
 
 # A secondmate spawn: the same five-variable reset must still apply, AND the
@@ -133,7 +188,7 @@ test_ship_spawn_clears_overrides_set_in_parent_env() {
 # ride alongside it - proving the refactor split the two concerns without
 # dropping either.
 test_secondmate_spawn_still_clears_overrides_and_redirects_home() {
-  local base prim sm sm_id fakebin launchlog out status log_line
+  local base prim sm sm_id fakebin launchlog out status log_line probe probe_out
   base="$TMP_ROOT/secondmate"
   prim="$base/primary"
   sm="$base/sm"
@@ -172,6 +227,13 @@ test_secondmate_spawn_still_clears_overrides_and_redirects_home() {
     "secondmate spawn's launch line must still redirect FM_HOME to the secondmate's own home"
   assert_not_contains "$log_line" "FM_HOME='$prim'" \
     "secondmate spawn's launch line must not leave FM_HOME pointed at the primary's home"
+
+  probe=$(make_env_probe "$base")
+  probe_out=$(run_launch_under_probe "$probe" "$prim" "$log_line") \
+    || fail "secondmate launch line did not run: $probe_out"
+  assert_overrides_absent "$probe_out" "secondmate spawn"
+  assert_contains "$probe_out" "FM_HOME=present:$sm" \
+    "secondmate spawn must hand the secondmate's own home to the launched process"
   pass "secondmate spawn keeps both the override reset and its own FM_HOME redirect"
 }
 
