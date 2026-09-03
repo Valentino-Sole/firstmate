@@ -125,7 +125,7 @@ phase_spawn() {
   # and never ran a project-style treehouse get.
   assert_grep "FM_HOME='$SUB_ABS'" "$LOG" "secondmate launch did not set FM_HOME to the subhome"
   assert_grep "$FM_TEST_SPAWN_RESET_POSIX" "$LOG" "launch did not unset the operational overrides"
-  assert_no_grep "FM_CONFIG_OVERRIDE=$HOME_DIR/parent-config" "$LOG" "launch carried the parent's config override into the pane"
+  assert_no_grep "$HOME_DIR/parent-config" "$LOG" "launch carried the parent's config override into the pane"
   assert_grep "$SUB_ABS/data/charter.md" "$LOG" "launch did not use the persistent charter"
   assert_no_grep 'notify=' "$LOG" "secondmate codex launch included the parent turn-end notify hook"
   assert_no_grep 'turn-ended' "$LOG" "secondmate codex launch referenced a parent turn-ended signal"
