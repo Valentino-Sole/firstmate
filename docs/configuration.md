@@ -683,6 +683,14 @@ Each account, model and voice file above is read as its first line that is not b
 The two read files are parsed differently: `config/voice-read-scope` must hold the bare word and nothing but blank space around it, so a comment header there refuses instead of being skipped, while every line of `config/voice-read-deny` that is not blank and not a `#` comment is one more substring.
 `FM_VOICE_RELAY` and `FM_VOICE_PYTHON` belong to the laptop rather than to a home, so they have no config file: `bin/fm-voice-client.py` requires the relay path as a flag or that variable and carries no default path.
 
+## Supabase MCP access (.mcp.json / SUPABASE_PROJECT_REF)
+
+The tracked project-scope [`.mcp.json`](../.mcp.json) pins the `supabase` MCP server to the hosted endpoint with `read_only=true` fixed in the URL, so it can never be toggled off by an environment change.
+It also scopes the connection to one project via `project_ref=${SUPABASE_PROJECT_REF}`, expanded from the `SUPABASE_PROJECT_REF` environment variable at Claude Code startup - export it (or a home-specific value) in the shell before opening a session in this repo, since `.mcp.json` expansion reads the live process environment, not `.env`.
+An unset `SUPABASE_PROJECT_REF` leaves the placeholder unexpanded in the URL rather than falling back to an unscoped connection, so the server fails closed instead of silently granting account-wide access.
+Claude Code's MCP scope hierarchy puts this Project-scope entry ahead of any claude.ai account-level Supabase connector, so it is the definition Claude Code actually connects with in this repo - captain decision 2026-09-03 required this restriction land before the first Supabase login/authenticate click.
+That precedence match is by server name for Local/Project/User scopes but by command or URL endpoint for a claude.ai connector, so a pre-existing unscoped claude.ai Supabase connector is not automatically disabled by this file; retiring or rescoping that connector is an account-level change outside any project worktree and remains the captain's own follow-up.
+
 ## Environment variables
 
 Runtime tuning via environment variables (defaults shown):
