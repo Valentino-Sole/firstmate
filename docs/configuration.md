@@ -691,6 +691,13 @@ An unset `SUPABASE_PROJECT_REF` leaves the placeholder unexpanded in the URL rat
 Claude Code's MCP scope hierarchy puts this Project-scope entry ahead of any claude.ai account-level Supabase connector, so it is the definition Claude Code actually connects with in this repo - captain decision 2026-09-03 required this restriction land before the first Supabase login/authenticate click.
 That precedence match is by server name for Local/Project/User scopes but by command or URL endpoint for a claude.ai connector, so a pre-existing unscoped claude.ai Supabase connector is not automatically disabled by this file; retiring or rescoping that connector is an account-level change outside any project worktree and remains the captain's own follow-up.
 
+## Cloudflare MCP access (.mcp.json)
+
+The tracked project-scope [`.mcp.json`](../.mcp.json) pins a single `cloudflare` MCP server to Cloudflare's Code Mode endpoint (`https://mcp.cloudflare.com/mcp`), which covers Cloudflare's entire API - including docs, Workers Bindings, Workers Builds, and observability - through one remote server instead of one connector per product.
+That single entry replaces four previously separate account-level Cloudflare connectors (`cloudflare-docs`, `cloudflare-observability`, `cloudflare-workers-bindings`, `cloudflare-workers-builds`), each gated behind its own OAuth login - captain decision 2026-09-03 to consolidate them into one access point (Herkunft: `mcp-nutzung-klaeren-decision-cloudflare-zusammenfassen`).
+As with the Supabase entry above, Project scope outranks a claude.ai account-level connector matched by URL endpoint, so this single entry is what a session in this repo actually connects with; retiring the four separate account-level Cloudflare connectors (or any global `.claude.json` entries for them) is an account-level change outside any project worktree and remains the captain's own follow-up, tracked alongside `migration-mcp-ungenutzte-eintraege-entfernen`.
+The narrower per-product servers (docs, observability, bindings, builds) remain available upstream for a project that needs one product in isolation; see [MCP servers for Cloudflare](https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/) for the full catalog.
+
 ## Environment variables
 
 Runtime tuning via environment variables (defaults shown):
