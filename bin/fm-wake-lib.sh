@@ -108,6 +108,10 @@ fm_watcher_lock_unheld() {
   [ -z "$pid" ]
 }
 
+fm_canonical_path() {
+  readlink -f "$1" 2>/dev/null || printf '%s' "$1"
+}
+
 FM_WATCHER_MATCHED_IDENTITY=
 fm_watcher_lock_matches_pid() {
   local state=$1 watch_path=$2 pid=$3 home=${4:-$FM_HOME} lockdir lock_home lock_path lock_identity current_identity
@@ -116,6 +120,10 @@ fm_watcher_lock_matches_pid() {
   lock_home=$(cat "$lockdir/fm-home" 2>/dev/null || true)
   lock_path=$(cat "$lockdir/watcher-path" 2>/dev/null || true)
   lock_identity=$(cat "$lockdir/pid-identity" 2>/dev/null || true)
+  lock_home=$(fm_canonical_path "$lock_home")
+  home=$(fm_canonical_path "$home")
+  lock_path=$(fm_canonical_path "$lock_path")
+  watch_path=$(fm_canonical_path "$watch_path")
   [ "$lock_home" = "$home" ] || return 1
   [ "$lock_path" = "$watch_path" ] || return 1
   [ -n "$lock_identity" ] || return 1
