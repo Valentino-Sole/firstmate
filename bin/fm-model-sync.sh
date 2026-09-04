@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-model-lib.sh
 . "$SCRIPT_DIR/fm-model-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
 
 MODE=all
 STATE=${1:-}
@@ -32,6 +34,12 @@ META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for $ID" >&2; exit 1; }
 
 if [ "$MODE" != display ]; then
+  # Overlapping Pi/Claude lifecycle events can invoke this script concurrently
+  # for the same task; serialize the read-probe-write below through the same
+  # per-task meta lock fm-spawn.sh uses, so interleaved updates can never
+  # revert a newer effective model or duplicate a history entry.
+  MODEL_SYNC_LOCK=$(fm_meta_lock_path "$META") || exit 1
+  fm_lock_acquire_wait "$MODEL_SYNC_LOCK"
   requested=$(fm_model_requested "$META")
   [ -n "$(fm_model_meta_get "$META" requested_model)" ] || fm_model_meta_upsert "$META" requested_model "$requested"
   # Always re-probe, even once an exact model is already recorded: a running
@@ -55,6 +63,7 @@ if [ "$MODE" != display ]; then
       fm_model_record_effective "$STATE" "$ID" "$META" "$model" "$source" "$tag" || true
     fi
   fi
+  fm_lock_release "$MODEL_SYNC_LOCK"
 fi
 
 if [ "$MODE" = probe ]; then

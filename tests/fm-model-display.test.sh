@@ -152,6 +152,52 @@ SH
   pass "fm-model-sync.sh re-probes and updates a session that changed models after its first exact reading"
 }
 
+test_sync_serializes_concurrent_probes() {
+  local fakebin fakehome sid session_dir meta i pid pids=()
+  fakebin=$(fm_fakebin "$TMP_ROOT/concurrent")
+  fakehome="$TMP_ROOT/concurrent/home"
+  sid=race1
+  session_dir="$fakehome/.claude/projects/race-test"
+  mkdir -p "$session_dir"
+  meta="$STATE/t3.meta"
+  cat > "$meta" <<EOF
+harness=claude
+model=sonnet
+requested_model=sonnet
+effective_model=pending
+effective_model_source=spawn-config
+effort=high
+herdr_pane_id=fakepane
+backend=herdr
+EOF
+
+  cat > "$fakebin/herdr" <<SH
+#!/usr/bin/env bash
+if [ "\$1" = pane ] && [ "\$2" = get ]; then
+  printf '{"result":{"pane":{"agent_session":{"kind":"id","value":"$sid"}}}}\n'
+  exit 0
+fi
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+  printf '%s\n' '{"type":"assistant","message":{"role":"assistant","model":"claude-sonnet-5"}}' \
+    > "$session_dir/$sid.jsonl"
+
+  for i in 1 2 3 4 5; do
+    (HOME="$fakehome" PATH="$fakebin:$PATH" "$ROOT/bin/fm-model-sync.sh" "$STATE" t3 --probe-only >/dev/null 2>&1) &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do wait "$pid"; done
+
+  [ "$(fm_model_effective "$meta")" = claude-sonnet-5 ] \
+    || fail "concurrent probes should still converge on the verified model: $(fm_model_effective "$meta")"
+  [ "$(awk -F= '{print $1}' "$meta" | sort | uniq -d | wc -l)" -eq 0 ] \
+    || fail "concurrent unlocked writers must not duplicate meta keys"
+  [ "$(grep -c 'claude-sonnet-5' "$STATE/t3.model-history" 2>/dev/null || echo 0)" -le 1 ] \
+    || fail "concurrent probes must not duplicate the same history transition"
+  pass "concurrent fm-model-sync.sh probes serialize instead of corrupting the meta file"
+}
+
 test_sync_probe_live_worker() {
   local live_meta=/home/vsole/vs-agent-workspace/state/checklisten-maat-einrichten.meta
   [ -f "$live_meta" ] || { pass "live worker probe skipped (no checklisten-maat meta)"; return 0; }
@@ -170,4 +216,5 @@ test_relaunch_preserves_verified_effective
 test_relaunch_pending_stays_probeable
 test_source_label_distinguishes_grok_providers
 test_sync_reprobes_after_exact_effective
+test_sync_serializes_concurrent_probes
 test_sync_probe_live_worker
