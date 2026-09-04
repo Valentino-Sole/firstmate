@@ -119,6 +119,7 @@ state/               runtime records and signals; gitignored
   <id>.pr-poll-retirement  private identity-bound crash-recovery receipt for one exact validated merged result; removed after its poll artifacts retire
   <id>.pr-poll-merge-notified  canonical PR identity of the last merge outcome delivered for this task; bin/fm-pr-lib.sh owns the marker format and identity mechanics, while bin/fm-merge-outcome-lib.sh owns locked publication, duplicate suppression, and replacement
   branch-outcomes.jsonl .branch-outcomes-cursor .branch-outcomes-processed .<task>.branch-outcome-index .branch-outcome-index-ready  Pi supervision-branch durable outcome store, its read cursor, main's processed marker, bounded latest per-task status-coverage caches, and their recovery marker; bin/fm-branch-outcome.sh owns the formats
+  captain-outcome-delivery/ .captain-outcome-ingest-branch .captain-outcome-catch-up-baselined .captain-outcome-catch-up-done  persistent captain outcome delivery records (UNPRESENTED/PRESENTED/ACKNOWLEDGED), ingest cursors, and one-time catch-up markers; bin/fm-captain-outcome-delivery.sh owns the contract
   branch-session/ .branch-session .branch-mirror-cursor  the branch's per-main-session conversations, the pointer to the current one, and the dialog-mirror cursor; extension-owned (docs/pi-supervision-branch.md)
   .branch-eligible-rows .branch-eligible-owner .main-eligible-rows  per-actor wake-row claims and branch-owner evidence; docs/watcher-continuity.md owns the acknowledgement contract
   .lease-<task>        per-task supervision lease naming which actor (main or branch) may change that task; bin/fm-lease-lib.sh owns the contract the guarded scripts enforce
@@ -437,6 +438,7 @@ No turn ends blind while work is under way, including turns described as holding
 At the start of every wake-handling turn, drain the durable wake queue before peeking, reading beyond the reason line, steering, or starting work.
 Session start is the only exception because its one-shot digest already presented the queue while locked or deliberately left it untouched in lock-refused read-only mode.
 Routine wake handling never re-runs session-start bootstrap sweeps before dispatching the next queued item; section 7 owns the continuous work loop.
+Treat any `NEUE ERGEBNISSE SEIT DEM LETZTEN BERICHT` section from the drain as mandatory captain-visible input exactly once per outcome; do not wait for the captain to ask whether new reports exist.
 Treat any `OPEN DECISIONS` section from the drain as actionable reconciliation input even when no wake record was queued.
 Treat any `UNREAD STATUS` section as newly surfaced status that must be read this turn; those lines are not re-printed after this presentation.
 Treat any `RECORD DIVERGENCE` section as a contradiction between two records of one captain call, never as proof the captain ruled; load `captain-hold-lifecycle` and reconcile it in whichever direction the evidence supports.

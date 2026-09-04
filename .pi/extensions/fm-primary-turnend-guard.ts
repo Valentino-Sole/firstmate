@@ -443,6 +443,26 @@ async function claimSessionstartMessage(
   return sessionstartMessage(generation, result);
 }
 
+function runCaptainOutcomePresent(): string {
+  if (lockOwnership() === "other") return "";
+  const result = spawnSync(
+    `${root}/bin/fm-captain-outcome-delivery.sh`,
+    ["present"],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FM_HOME: fmHome,
+        FM_STATE_OVERRIDE: state,
+        FM_SUPERVISION_ACTOR: "main",
+      },
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  if (result.status !== 0) return "";
+  return result.stdout.trim();
+}
+
 function runGuard(): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
     const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
@@ -559,6 +579,25 @@ export default function (pi: ExtensionAPI) {
       ...(message ? { message } : {}),
       ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     };
+  });
+
+  // Captain outcome delivery (bin/fm-captain-outcome-delivery.sh): present the
+  // UNPRESENTED outcomes once per prompt as their own custom message. Kept as a
+  // separate handler from the session-start claim above so Pi collects both.
+  pi.on?.("before_agent_start", async () => {
+    const section = runCaptainOutcomePresent();
+    if (!section) return;
+    try {
+      return {
+        message: {
+          customType: "firstmate-captain-outcome-delivery",
+          content: encodeFirstmateOperationalInput("captain-outcome-delivery", section),
+          display: false,
+        },
+      };
+    } catch {
+      return undefined;
+    }
   });
 
   // Pi's compaction equivalent. Manual compaction is idle and auto-compaction

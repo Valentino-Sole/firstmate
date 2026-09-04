@@ -604,6 +604,8 @@ tests/fm-work-loop.test.sh 2300
 tests/fm-grok-stop-live-e2e.test.sh 21
 tests/fm-pi-primary-restart.test.sh 363
 tests/fm-crew-liveness.test.sh 1200
+tests/fm-captain-outcome-delivery-live-e2e.test.sh 18000
+tests/fm-captain-outcome-delivery.test.sh 12000
 tests/fm-guard-stale-banner.test.sh 11218
 tests/fm-harness-adapter-instructions-live-e2e.test.sh 20
 tests/fm-harness-adapter-references.test.sh 55

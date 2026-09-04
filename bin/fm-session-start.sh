@@ -866,6 +866,12 @@ else
       printf '%s\n' "$BRANCH_REPLAY_OUT"
     fi
   fi
+  CAPTAIN_OUTCOME_CATCHUP_MARKER="$STATE/.captain-outcome-catch-up-done"
+  if [ ! -e "$CAPTAIN_OUTCOME_CATCHUP_MARKER" ]; then
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+      "$SCRIPT_DIR/fm-captain-outcome-delivery.sh" catch-up >/dev/null 2>&1 || true
+    : > "$CAPTAIN_OUTCOME_CATCHUP_MARKER"
+  fi
   DRAIN_OUT=$("$SCRIPT_DIR/fm-wake-drain.sh" 2>&1)
   if [ -n "$DRAIN_OUT" ]; then
     printf '%s\n' "$DRAIN_OUT"
