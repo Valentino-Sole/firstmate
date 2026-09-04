@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "description": "Provider families for the captain fleet. Maps quota-axi provider ids to harnesses and model-id patterns. Not a credential store.",
+  "providers": [
+    {
+      "id": "claude",
+      "label": "Claude",
+      "quotaProvider": "claude",
+      "harnesses": ["claude", "pi"],
+      "strengths": [
+        "long-context multi-file reasoning",
+        "careful refactors",
+        "instruction following"
+      ],
+      "weaknesses": [
+        "subscription headroom can tighten mid-cycle",
+        "no native live-web preference over Grok"
+      ],
+      "piModelPatterns": ["anthropic/claude-*", "anthropic/*"],
+      "nativeModelHints": ["haiku", "sonnet", "opus", "claude-sonnet-4", "claude-opus-4"],
+      "defaultHarness": "claude"
+    },
+    {
+      "id": "codex",
+      "label": "ChatGPT / Codex",
+      "quotaProvider": "codex",
+      "harnesses": ["codex", "pi"],
+      "strengths": [
+        "steady coding throughput",
+        "repo-wide edits",
+        "good default ship profile"
+      ],
+      "weaknesses": [
+        "model windows can be tighter than account windows",
+        "live-web research is not the primary strength"
+      ],
+      "piModelPatterns": ["openai-codex/*", "openai/*"],
+      "nativeModelHints": ["gpt-5.5", "gpt-5.4", "o3", "o4-mini"],
+      "defaultHarness": "codex"
+    },
+    {
+      "id": "cursor",
+      "label": "Cursor",
+      "quotaProvider": "cursor",
+      "harnesses": ["cursor"],
+      "strengths": [
+        "IDE-native multi-file edits",
+        "composer-style implementation",
+        "good when Cursor plan headroom is healthy"
+      ],
+      "weaknesses": [
+        "quota-axi often cannot compute effective remaining for Cursor",
+        "not a Firstmate primary harness for fleet spawn in all homes"
+      ],
+      "piModelPatterns": [],
+      "nativeModelHints": ["auto", "composer", "default"],
+      "defaultHarness": "cursor",
+      "notes": "Cursor quotaSemantics are frequently unknown; treat headroom as disclosed uncertainty, not zero."
+    },
+    {
+      "id": "grok",
+      "label": "Grok (xAI)",
+      "quotaProvider": "grok",
+      "harnesses": ["grok", "pi"],
+      "strengths": [
+        "live/public web-connected research",
+        "current-events style questions",
+        "fast exploratory answers"
+      ],
+      "weaknesses": [
+        "consumer credit windows may be unavailable while auth is usable",
+        "not the default for deep multi-file refactors"
+      ],
+      "piModelPatterns": ["xai/grok-*", "xai/*"],
+      "nativeModelHints": ["grok-4", "grok-3", "latest"],
+      "defaultHarness": "grok",
+      "notes": "authStatus usable with empty windows is uncertainty, not logout."
+    },
+    {
+      "id": "kimi",
+      "label": "Kimi (Moonshot AI)",
+      "quotaProvider": "kimi",
+      "harnesses": ["kimi", "pi"],
+      "strengths": [
+        "long context window",
+        "coding tasks",
+        "Asian language support"
+      ],
+      "weaknesses": [
+        "newer provider with less track record",
+        "quota integration may be incomplete"
+      ],
+      "piModelPatterns": ["moonshot/kimi-*", "moonshot/*"],
+      "nativeModelHints": ["kimi-1.5", "kimi-2"],
+      "defaultHarness": "kimi"
+    }
+  ],
+  "harnessNotes": {
+    "pi": "Pi coding-agent; model ids are provider/model. Can host anthropic, openai-codex, xai, moonshot families when authenticated.",
+    "claude": "Claude Code / Claude CLI native harness.",
+    "codex": "OpenAI Codex CLI harness.",
+    "grok": "Grok CLI harness.",
+    "kimi": "Kimi CLI harness.",
+    "cursor": "Cursor agent/composer path when the home supports it as a spawn harness."
+  }
+}
