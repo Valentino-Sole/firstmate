@@ -84,6 +84,29 @@ test_relaunch_pending_stays_probeable() {
   pass "relaunch leaves pending effective probeable"
 }
 
+test_source_label_distinguishes_grok_providers() {
+  write_meta
+  fm_model_meta_upsert "$STATE/t1.meta" harness cursor
+  fm_model_record_effective "$STATE" t1 "$STATE/t1.meta" cursor-grok-4.6-high cursor-transcript
+  out=$(fm_model_display_compact "$STATE/t1.meta")
+  printf '%s\n' "$out" | grep -q '^Cursor · Grok · cursor-grok-4.6-high' \
+    || fail "Cursor-hosted Grok must display as Cursor · Grok: $out"
+
+  write_meta
+  fm_model_meta_upsert "$STATE/t1.meta" harness pi
+  fm_model_record_effective "$STATE" t1 "$STATE/t1.meta" xai/grok-4.6 pi-transcript
+  out=$(fm_model_display_compact "$STATE/t1.meta")
+  printf '%s\n' "$out" | grep -q '^xAI · Grok · xai/grok-4.6' \
+    || fail "direct xAI Grok must display as xAI · Grok, not conflated with Cursor: $out"
+
+  write_meta
+  fm_model_record_effective "$STATE" t1 "$STATE/t1.meta" claude-sonnet-5 claude-transcript
+  out=$(fm_model_display_compact "$STATE/t1.meta")
+  printf '%s\n' "$out" | grep -q '^Anthropic · Claude · claude-sonnet-5' \
+    || fail "direct Claude must display as Anthropic · Claude: $out"
+  pass "display distinguishes Cursor Grok, direct xAI Grok, and Anthropic Claude sources"
+}
+
 test_sync_reprobes_after_exact_effective() {
   local fakebin fakehome sid session_dir meta
   fakebin=$(fm_fakebin "$TMP_ROOT/reprobe")
@@ -145,5 +168,6 @@ test_display_compact_exact_mismatch
 test_alias_runtime_becomes_unknown
 test_relaunch_preserves_verified_effective
 test_relaunch_pending_stays_probeable
+test_source_label_distinguishes_grok_providers
 test_sync_reprobes_after_exact_effective
 test_sync_probe_live_worker

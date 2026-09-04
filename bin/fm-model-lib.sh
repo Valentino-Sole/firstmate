@@ -25,6 +25,23 @@ fm_model_harness_label() {  # <harness>
   esac
 }
 
+fm_model_source_label() {  # <harness> <effective-model-id>
+  local harness=$1 effective=$2 effective_lc
+  effective_lc=$(printf '%s' "$effective" | tr '[:upper:]' '[:lower:]')
+  case "$effective_lc" in
+    cursor-grok-*) printf 'Cursor · Grok' ;;
+    xai/grok-*|grok-*) printf 'xAI · Grok' ;;
+    claude-*)
+      if [ "$harness" = cursor ]; then
+        printf 'Cursor · Claude'
+      else
+        printf 'Anthropic · Claude'
+      fi
+      ;;
+    *) printf '%s' "$(fm_model_harness_label "$harness")" ;;
+  esac
+}
+
 fm_model_alias_token() {  # <token>
   case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
     ''|default|auto|sonnet|opus|haiku|low|medium|high|xhigh|max) return 0 ;;
@@ -144,17 +161,22 @@ fm_model_record_effective() {  # <state> <id> <meta> <model> <source> [fallback-
 }
 
 fm_model_display_compact() {  # <meta>
-  local meta=$1 harness requested effort effective display requested_lc effective_lc
+  local meta=$1 harness requested effort effective display requested_lc effective_lc source_label
   harness=$(fm_model_meta_get "$meta" harness)
   requested=$(fm_model_requested "$meta")
   effort=$(fm_model_meta_get "$meta" effort)
   effective=$(fm_model_effective "$meta")
   [ "$effort" = default ] && effort=
+  if fm_model_id_is_exact "$effective"; then
+    source_label=$(fm_model_source_label "$harness" "$effective")
+  else
+    source_label=$(fm_model_harness_label "$harness")
+  fi
   case "$effective" in
     pending|PENDING) effective='pending verification' ;;
     UNKNOWN|unknown) effective=UNKNOWN ;;
   esac
-  display="$(fm_model_harness_label "$harness") · $effective"
+  display="$source_label · $effective"
   [ -z "$effort" ] || display="$display · $effort"
   requested_lc=$(printf '%s' "$requested" | tr '[:upper:]' '[:lower:]')
   effective_lc=$(printf '%s' "$effective" | tr '[:upper:]' '[:lower:]')
