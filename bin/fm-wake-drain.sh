@@ -349,8 +349,17 @@ EOF
   printf 'RECORD DIVERGENCE: reconcile each one - record the captain'"'"'s own words with bin/fm-captain-hold.sh answer <task> --decision-file <path>, or re-open the status decision when that resolution was not the captain'"'"'s word.\n' || return 1
 }
 
+print_captain_outcome_delivery_section() {
+  case "${FM_SUPERVISION_ACTOR:-main}" in
+    main|'') ;;
+    *) return 0 ;;
+  esac
+  "$SCRIPT_DIR/fm-captain-outcome-delivery.sh" present || return 1
+}
+
 print_status_sections() {
   local snapshot=${1:-} fully_presented=${2:-} acknowledged
+  print_captain_outcome_delivery_section || return 1
   if [ -z "$snapshot" ]; then snapshot=$(status_presentation_snapshot "$STATE") || return 1; fi
   [ -n "$snapshot" ] || return 0
   acknowledged=$(status_acknowledge_presented_snapshot "$STATE" "$snapshot" "$fully_presented") || return 1

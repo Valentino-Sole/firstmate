@@ -474,6 +474,26 @@ async function startCompactContinuationTurn(pi: ExtensionAPI, content: string): 
   }
 }
 
+function runCaptainOutcomePresent(): string {
+  if (lockOwnership() === "other") return "";
+  const result = spawnSync(
+    `${root}/bin/fm-captain-outcome-delivery.sh`,
+    ["present"],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FM_HOME: fmHome,
+        FM_STATE_OVERRIDE: state,
+        FM_SUPERVISION_ACTOR: "main",
+      },
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  if (result.status !== 0) return "";
+  return result.stdout.trim();
+}
+
 function runGuard(): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
     const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
@@ -621,6 +641,22 @@ export default function (pi: ExtensionAPI) {
     if (!generation) return;
     const message = await claimSessionstartMessage(generation, ctx);
     return message ? { message } : undefined;
+  });
+
+  pi.on?.("before_agent_start", async () => {
+    const section = runCaptainOutcomePresent();
+    if (!section) return;
+    try {
+      return {
+        message: {
+          customType: "firstmate-captain-outcome-delivery",
+          content: encodeFirstmateOperationalInput("captain-outcome-delivery", section),
+          display: false,
+        },
+      };
+    } catch {
+      return undefined;
+    }
   });
 
   // After compaction the helm is still held. Inject the short continuation

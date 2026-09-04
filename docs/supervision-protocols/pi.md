@@ -28,6 +28,9 @@ Treat the merged fleet event as already handled for fleet operations: MAIN must 
 Separately, MAIN applies judgment about whether and how to surface, summarize, reference, or incorporate a merged sailboat outcome in the captain conversation; event ownership does not decide the conversational treatment.
 Read the durable outcome store with the fm_branch_outcomes tool when the captain asks what happened.
 
+Before every visible captain reply, surface any `NEUE ERGEBNISSE SEIT DEM LETZTEN BERICHT` block from `bin/fm-captain-outcome-delivery.sh present` at the top of the reply (the turn-end extension injects unpresented outcomes automatically on Pi; on other harnesses run present yourself at turn start when needed).
+Every visible captain report must end with exactly one footer line from `bin/fm-captain-report-timestamp.sh`; nothing may follow that line.
+
 The turn-end guard extension lives at `__FM_PI_TURNEND_EXT__`.
 The watcher extension lives at `__FM_PI_EXT__`.
 Both are tracked, project-local `.pi/extensions/*.ts` files that Pi auto-discovers once the project is trusted; `bin/fm-session-start.sh` reports when the running Pi session has not loaded both required extensions.

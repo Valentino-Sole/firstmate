@@ -157,6 +157,9 @@ case "$CMD" in
       "$VERDICT" "$(json_escape "$SUMMARY")" "$SILENT" >> "$STORE"
     fm_lock_release "$LOCK"
     printf '%s\n' "$SEQ"
+    FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}}" \
+      FM_STATE_OVERRIDE="$STATE" \
+      "$SCRIPT_DIR/fm-captain-outcome-delivery.sh" ingest >/dev/null 2>&1 || true
     ;;
   unread)
     [ "$#" -eq 0 ] || usage

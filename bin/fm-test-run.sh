@@ -512,6 +512,8 @@ tests/fm-turnend-guard.test.sh 34915
 tests/fm-update.test.sh 5280
 tests/fm-vendor-auth-probe.test.sh 43243
 tests/fm-wake-daemon-lifecycle-e2e.test.sh 6219
+tests/fm-captain-outcome-delivery.test.sh 12000
+tests/fm-captain-outcome-delivery-live-e2e.test.sh 18000
 tests/fm-wake-drain-open-decisions-cursor.test.sh 17357
 tests/fm-wake-drain-open-decisions.test.sh 11300
 tests/fm-wake-drain-unread-status.test.sh 25214
