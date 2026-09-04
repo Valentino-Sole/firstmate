@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "description": "Task classes for crew routing. Keywords are lowercase match hints; Firstmate still judges fit.",
+  "classes": [
+    {
+      "id": "trivial_fix",
+      "label": "Trivial fix",
+      "description": "Rote rename, formatting, typo, single-line patch, simple file gathering.",
+      "keywords": [
+        "typo",
+        "rename",
+        "format",
+        "prettier",
+        "lint fix",
+        "whitespace",
+        "comment only",
+        "trivial",
+        "one-liner",
+        "simple fix"
+      ],
+      "qualityFloor": "low",
+      "preferredProfileIds": ["cheap-fast-claude", "cheap-fast-codex", "cursor-auto"],
+      "fallbackProfileIds": ["standard-codex", "standard-pi-sonnet"]
+    },
+    {
+      "id": "standard_ship",
+      "label": "Standard ship",
+      "description": "Ordinary feature or bugfix with clear scope, a few files, normal review bar.",
+      "keywords": [
+        "feature",
+        "bugfix",
+        "implement",
+        "ship",
+        "ship it",
+        "pr",
+        "pull request",
+        "open a pr",
+        "merge request",
+        "add endpoint",
+        "wire up",
+        "standard"
+      ],
+      "qualityFloor": "medium",
+      "preferredProfileIds": ["standard-codex", "standard-pi-sonnet", "standard-claude", "cursor-composer"],
+      "fallbackProfileIds": ["strong-claude", "strong-codex"]
+    },
+    {
+      "id": "hard_multi_file",
+      "label": "Hard multi-file",
+      "description": "Ambiguous multi-file feature, risky refactor, many moving parts, high judgment load.",
+      "keywords": [
+        "refactor",
+        "multi-file",
+        "architecture",
+        "ambiguous",
+        "migration",
+        "redesign",
+        "complex",
+        "risky",
+        "cross-cutting"
+      ],
+      "qualityFloor": "high",
+      "preferredProfileIds": ["strong-claude", "strong-codex", "strong-pi-opus", "cursor-composer-high"],
+      "fallbackProfileIds": ["standard-codex", "standard-claude"]
+    },
+    {
+      "id": "research_web_live",
+      "label": "Research / web-live",
+      "description": "Needs fresh news, live public facts, current market/product changes, or web-connected research.",
+      "keywords": [
+        "web research",
+        "research online",
+        "live web",
+        "search the web",
+        "web-connected",
+        "current events",
+        "current market news",
+        "latest news",
+        "breaking news",
+        "fresh news",
+        "news today",
+        "news as of today",
+        "market news",
+        "product news"
+      ],
+      "qualityFloor": "medium",
+      "preferredProfileIds": ["grok-research", "pi-grok-research"],
+      "fallbackProfileIds": ["standard-pi-sonnet", "standard-codex"]
+    },
+    {
+      "id": "scout_audit",
+      "label": "Scout / audit",
+      "description": "Read-only survey, codebase scout, audit, inventory, or risk scan without shipping code.",
+      "keywords": [
+        "scout",
+        "audit",
+        "inventory",
+        "survey",
+        "explore",
+        "map codebase",
+        "read-only",
+        "risk scan"
+      ],
+      "qualityFloor": "medium",
+      "preferredProfileIds": ["scout-codex", "scout-claude", "scout-pi", "cursor-scout"],
+      "fallbackProfileIds": ["standard-codex", "cheap-fast-claude"]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "description": "Context pack schema for microtask delegation. Workers must not infer missing system context.",
+  "requiredFields": [
+    {
+      "id": "TASK",
+      "description": "Concrete action for this worker turn or spawn."
+    },
+    {
+      "id": "GOAL",
+      "description": "Outcome that satisfies the parent task or acceptance criterion."
+    },
+    {
+      "id": "RELEVANT_FILES",
+      "description": "Paths the worker may read or change; omit only when truly local."
+    },
+    {
+      "id": "RELEVANT_SYMBOLS",
+      "description": "Functions, types, routes, config keys the worker must respect."
+    },
+    {
+      "id": "DEPENDENCIES",
+      "description": "Upstream/downstream modules, services, or data this slice touches."
+    },
+    {
+      "id": "KNOWN_CONSTRAINTS",
+      "description": "Invariants, conventions, API contracts, non-goals from captain or project."
+    },
+    {
+      "id": "EXPECTED_OUTPUT",
+      "description": "Artifact: patch, report section, test list, decision record format."
+    },
+    {
+      "id": "OUT_OF_SCOPE",
+      "description": "Explicit exclusions to prevent scope creep."
+    }
+  ],
+  "conditionalFields": [
+    {
+      "id": "SYSTEM_CONTEXT",
+      "when": "Context dependency MEDIUM or higher, or worker lacks repo-wide conventions.",
+      "description": "Architecture summary, state machines, auth boundaries, retry/failure rules."
+    }
+  ],
+  "sufficiencyGate": {
+    "question": "Could a worker complete this without discovering hidden global state?",
+    "onNo": [
+      "add SYSTEM_CONTEXT or RELEVANT_FILES",
+      "run scout first",
+      "use FULL-CONTEXT DELEGATION",
+      "abandon microtask split"
+    ]
+  },
+  "dependencyCheckPrompts": [
+    "What could go wrong without whole-system understanding?",
+    "Global invariants affected?",
+    "API or schema contracts?",
+    "State machines or event flows?",
+    "Concurrency or security boundaries?",
+    "Retry, failure, or external dependency behavior?",
+    "Implicit project conventions?"
+  ]
+}
