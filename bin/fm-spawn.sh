@@ -2835,7 +2835,10 @@ EOF
 // that raced another extension's fresh run keeps state busy via isIdle().
 // "turn_end" fires at every inner turn boundary (one LLM response plus its
 // tool calls) and stays a wake NOTIFICATION touch for the watcher, never
-// current-state truth.
+// current-state truth. It also re-syncs requested/effective model metadata
+// (bin/fm-model-sync.sh) at start and at each turn boundary, mirroring
+// Claude's SessionStart/UserPromptSubmit/Stop wiring, so a Pi session that
+// changes models mid-flight still gets its Herdr display refreshed.
 import { execFile } from "node:child_process";
 const busyEvent = (state: string, event: string) =>
   new Promise<void>((resolve) => {
@@ -2844,13 +2847,23 @@ const busyEvent = (state: string, event: string) =>
       "--gen", "$BUSY_GEN", "--source", "pi-ext", "--event", event,
     ], () => resolve());
   });
+const modelSync = () =>
+  new Promise<void>((resolve) => {
+    execFile("$FM_ROOT/bin/fm-model-sync.sh", ["$STATE_REAL", "$ID"], () => resolve());
+  });
 export default function (pi: any) {
-  pi.on("agent_start", () => busyEvent("busy", "agent-start"));
+  pi.on("agent_start", () => {
+    busyEvent("busy", "agent-start");
+    modelSync();
+  });
   pi.on("agent_settled", (_event: any, ctx: any) => {
     if (ctx && typeof ctx.isIdle === "function" && !ctx.isIdle()) return;
     return busyEvent("idle", "agent-settled");
   });
-  pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
+  pi.on("turn_end", () => {
+    execFile("touch", ["$TURNEND"]);
+    modelSync();
+  });
 }
 EOF
       ;;
