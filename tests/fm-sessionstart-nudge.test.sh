@@ -331,6 +331,7 @@ test_pi_startup_classifies_cli_continuations() {
   mkdir -p "$fixture/.pi/extensions/lib" "$fixture/bin" "$fixture/state"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-agents-refresh.ts" \
     "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$fixture/.pi/extensions/lib/"
   cat > "$fixture/bin/fm-sessionstart-run.sh" <<'SH'
 #!/usr/bin/env bash
@@ -429,6 +430,7 @@ test_pi_sessionstart_generation_prerequisite() {
   mkdir -p "$fixture/.pi/extensions/lib" "$fixture/bin" "$fixture/state"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-agents-refresh.ts" \
     "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$fixture/.pi/extensions/lib/"
   cp "$ROOT/bin/fm-operational-input.sh" "$fixture/bin/"
   cat > "$fixture/bin/fm-turnend-guard.sh" <<'SH'
@@ -755,6 +757,7 @@ test_pi_reload_releases_sessionstart_exit_listener() {
   mkdir -p "$fixture/.pi/extensions/lib" "$fixture/bin" "$fixture/state"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-agents-refresh.ts" \
     "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$fixture/.pi/extensions/lib/"
   cp "$ROOT/bin/fm-operational-input.sh" "$fixture/bin/"
   cat > "$fixture/bin/fm-turnend-guard.sh" <<'SH'
@@ -889,6 +892,7 @@ test_pi_large_sessionstart_digest_is_delivered_loudly() {
   : > "$fixture/AGENTS.md"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-agents-refresh.ts" \
     "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$fixture/.pi/extensions/lib/"
   cp "$ROOT/bin/fm-sessionstart-run.sh" "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" "$ROOT/bin/fm-gate-refuse-lib.sh" \
@@ -1012,6 +1016,103 @@ test_run_reports_a_failed_session_start_as_digest_text() {
   expect_code 0 "$status" "run wrapper with an unwritable state directory"
   assert_contains "$out" "READ-ONLY SESSION" "a failed lock did not reach the agent as digest text"
   pass "run wrapper: a session start that cannot take the lock still opens the session and says so"
+}
+
+test_pi_before_agent_start_refreshes_drifted_project_instructions() {
+  local fixture out
+  command -v node >/dev/null 2>&1 || {
+    echo "skip: node not found for Pi live instruction refresh test"
+    return 0
+  }
+  fixture="$TMP_ROOT/pi-agents-live-refresh"
+  mkdir -p "$fixture/.pi/extensions/lib" "$fixture/bin" "$fixture/state"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-agents-refresh.ts" \
+    "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$fixture/.pi/extensions/lib/"
+  cp "$ROOT/bin/fm-operational-input.sh" "$fixture/bin/"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture/bin/fm-turnend-guard.sh"
+  # The digest runner records whether the extension announced live refresh.
+  cat > "$fixture/bin/fm-sessionstart-run.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'live=%s\n' "${FM_SESSIONSTART_AGENTS_LIVE:-unset}" > "${FM_HOME:?}/state/runner-env"
+printf 'DIGEST\n'
+SH
+  chmod +x "$fixture/bin/"*.sh
+  printf 'FIRSTMATE_LIVE_TEST=original\n' > "$fixture/AGENTS.md"
+  printf 'ANCESTOR=stale\n' > "$fixture/ancestor.md"
+
+  out=$(EXT="$fixture/.pi/extensions/fm-primary-turnend-guard.ts" \
+    FM_HOME="$fixture" FM_ROOT_OVERRIDE="$fixture" \
+    node --input-type=module 2>&1 <<'JS'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const home = process.env.FM_HOME;
+const handlers = new Map();
+const pi = { on(event, handler) { handlers.set(event, handler); }, sendMessage() {} };
+const extension = await import(`${pathToFileURL(process.env.EXT).href}?live=${Date.now()}`);
+extension.default(pi);
+process.argv.splice(1, process.argv.length, "pi");
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const ctx = {
+  sessionManager: {
+    getHeader: () => ({ timestamp: new Date().toISOString() }),
+    getSessionId: () => "live-refresh",
+  },
+};
+const block = (path, content) =>
+  `<project_instructions path="${path}">\n${content}\n</project_instructions>\n`;
+const agents = `${home}/AGENTS.md`;
+const ancestor = `${home}/ancestor.md`;
+const missing = `${home}/never-there.md`;
+const prompt = (agentsContent) =>
+  `You are Pi.\n\n<project_context>\n\nProject-specific instructions and guidelines:\n\n` +
+  block(ancestor, "ANCESTOR=stale\n") + block(agentsContent === undefined ? missing : agents, agentsContent ?? "GHOST=1\n") +
+  `</project_context>\n`;
+
+// Startup delivers the digest once; the runner saw the live-refresh announcement.
+handlers.get("session_start")({ reason: "startup" }, ctx);
+for (let i = 0; i < 400 && !existsSync(`${home}/state/runner-env`); i += 1) await delay(5);
+assert(readFileSync(`${home}/state/runner-env`, "utf8").trim() === "live=1",
+  "the digest runner was not told that this primary refreshes instructions live");
+
+// Matching copies: the digest message rides alone, no system prompt override.
+const first = await handlers.get("before_agent_start")({ prompt: "p1", systemPrompt: prompt("FIRSTMATE_LIVE_TEST=original\n") }, ctx);
+assert(first?.message?.content.includes("DIGEST"), "startup digest was not delivered on the first prompt");
+assert(first.systemPrompt === undefined, "an unchanged AGENTS.md produced a system prompt override");
+
+// No drift and no pending digest: nothing at all is returned, exactly as before.
+const quiet = await handlers.get("before_agent_start")({ prompt: "p2", systemPrompt: prompt("FIRSTMATE_LIVE_TEST=original\n") }, ctx);
+assert(quiet === undefined, "a quiet prompt returned a result without message or drift");
+
+// Drift: the embedded copy is replaced by the current file, the unchanged
+// ancestor block stays byte-identical, and the swap is recomputed every prompt.
+writeFileSync(agents, "FIRSTMATE_LIVE_TEST=updated\nSecond line.\n");
+const drifted = await handlers.get("before_agent_start")({ prompt: "p3", systemPrompt: prompt("FIRSTMATE_LIVE_TEST=original\n") }, ctx);
+assert(typeof drifted?.systemPrompt === "string", "a drifted AGENTS.md did not override the system prompt");
+assert(drifted.message === undefined, "a drift-only prompt fabricated a digest message");
+assert(drifted.systemPrompt.includes(block(agents, "FIRSTMATE_LIVE_TEST=updated\nSecond line.\n")),
+  "the override did not carry the current AGENTS.md verbatim");
+assert(!drifted.systemPrompt.includes("FIRSTMATE_LIVE_TEST=original"), "the stale copy survived the refresh");
+assert(drifted.systemPrompt.includes(block(ancestor, "ANCESTOR=stale\n")), "an unchanged ancestor block was rewritten");
+assert(drifted.systemPrompt.startsWith("You are Pi.\n\n<project_context>"), "text around the blocks was disturbed");
+const again = await handlers.get("before_agent_start")({ prompt: "p4", systemPrompt: prompt("FIRSTMATE_LIVE_TEST=original\n") }, ctx);
+assert(again?.systemPrompt === drifted.systemPrompt, "the refresh was not recomputed on the next prompt");
+
+// A block whose path no longer exists is left alone rather than emptied.
+const ghost = await handlers.get("before_agent_start")({ prompt: "p5", systemPrompt: prompt(undefined) }, ctx);
+assert(ghost === undefined, "a block for a missing file was rewritten");
+
+// A prompt without any block (older Pi, or a test host) is ignored.
+const bare = await handlers.get("before_agent_start")({ prompt: "p6" }, ctx);
+assert(bare === undefined, "a prompt without a system prompt produced an override");
+console.log("LIVE_REFRESH_OK");
+JS
+  ) || fail "Pi live instruction refresh script failed: $out"
+  assert_contains "$out" "LIVE_REFRESH_OK" "Pi live instruction refresh assertions did not complete: $out"
+  pass "Pi before_agent_start swaps a drifted project-instruction block for the current file and announces live refresh to the digest"
 }
 
 test_genuine_primary_nudges

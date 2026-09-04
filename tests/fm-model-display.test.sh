@@ -153,7 +153,7 @@ SH
 }
 
 test_sync_serializes_concurrent_probes() {
-  local fakebin fakehome sid session_dir meta i pid pids=()
+  local fakebin fakehome sid session_dir meta pid pids=()
   fakebin=$(fm_fakebin "$TMP_ROOT/concurrent")
   fakehome="$TMP_ROOT/concurrent/home"
   sid=race1
@@ -183,7 +183,7 @@ SH
   printf '%s\n' '{"type":"assistant","message":{"role":"assistant","model":"claude-sonnet-5"}}' \
     > "$session_dir/$sid.jsonl"
 
-  for i in 1 2 3 4 5; do
+  for _ in 1 2 3 4 5; do
     (HOME="$fakehome" PATH="$fakebin:$PATH" "$ROOT/bin/fm-model-sync.sh" "$STATE" t3 --probe-only >/dev/null 2>&1) &
     pids+=("$!")
   done

@@ -256,6 +256,9 @@
 #             current AGENTS.md to print before the bulky digest. The baseline
 #             remains immutable so every later drifted compaction refreshes
 #             again, while an equal baseline emits no instruction refresh.
+#             With FM_SESSIONSTART_AGENTS_LIVE=1 in the environment (set only
+#             by the Pi extension, which refreshes the system prompt itself)
+#             a drifted compaction prints a short notice instead of the file.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -704,9 +707,23 @@ agents_refresh_required() {  # <rebuilding-session-pid>
   agents_baseline_drifted "$lock_pid"
 }
 
+# FM_SESSIONSTART_AGENTS_LIVE=1 is set only by the Pi extension that launches
+# this digest (.pi/extensions/fm-primary-turnend-guard.ts): that primary swaps a
+# drifted AGENTS.md copy in its own system prompt for the current file at every
+# prompt, so a drifted compaction owes the agent one notice, not the whole file
+# again on every compaction.
 print_agents_refresh_if_required() {  # <rebuilding-session-pid>
   local lock_pid=$1
   agents_refresh_required "$lock_pid" || return 0
+  if [ "${FM_SESSIONSTART_AGENTS_LIVE:-}" = 1 ]; then
+    section "AGENTS.md - INSTRUCTION REFRESH (LIVE)"
+    cat <<'EOF'
+AGENTS.md changed after this session started. Your system prompt already carries
+the current file at every prompt, so it is not reprinted here; treat the copy in
+your system prompt, not any earlier one in this conversation, as the contract.
+EOF
+    return 0
+  fi
   section "CURRENT AGENTS.md - INSTRUCTION REFRESH"
   if [ -f "$FM_ROOT/AGENTS.md" ]; then
     cat <<'EOF'
