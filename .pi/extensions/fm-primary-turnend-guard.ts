@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { refreshProjectInstructions } from "./lib/fm-agents-refresh.ts";
 import {
   classifyFirstmateCurrentOperationalText,
   encodeFirstmateOperationalInput,
@@ -267,6 +268,10 @@ function runSessionstartHook(generation: SessionstartGeneration): Promise<Sessio
           : ["--source", generation.source, "--pi-prerequisite"],
         {
           detached: supervised,
+          // Tells fm-session-start.sh that this primary refreshes drifted
+          // project instructions in the system prompt itself, so a compaction
+          // re-emit prints a one-line notice instead of the whole AGENTS.md.
+          env: { ...process.env, FM_SESSIONSTART_AGENTS_LIVE: "1" },
           stdio: supervised
             ? ["ignore", "pipe", "ignore", "ipc"]
             : ["ignore", "pipe", "ignore"],
@@ -528,11 +533,22 @@ export default function (pi: ExtensionAPI) {
     );
   });
 
-  pi.on?.("before_agent_start", async (_event, ctx) => {
+  // Two independent contributions share this one return: the session-start
+  // digest claimed exactly once per generation, and the live project-instruction
+  // refresh (lib/fm-agents-refresh.ts) that swaps a drifted AGENTS.md copy in
+  // the system prompt for the current file at every prompt. Either may be
+  // absent; nothing is returned when both are.
+  pi.on?.("before_agent_start", async (event, ctx) => {
+    const systemPrompt = refreshProjectInstructions(
+      String((event as { systemPrompt?: unknown })?.systemPrompt ?? ""),
+    );
     const generation = sessionstartGeneration;
-    if (!generation) return;
-    const message = await claimSessionstartMessage(generation, ctx);
-    return message ? { message } : undefined;
+    const message = generation ? await claimSessionstartMessage(generation, ctx) : undefined;
+    if (!message && systemPrompt === undefined) return undefined;
+    return {
+      ...(message ? { message } : {}),
+      ...(systemPrompt !== undefined ? { systemPrompt } : {}),
+    };
   });
 
   // Pi's compaction equivalent. Manual compaction is idle and auto-compaction

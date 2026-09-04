@@ -24,7 +24,6 @@ PANE=${3:-}
 META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for $ID" >&2; exit 1; }
 
-HARNESS=$(fm_model_meta_get "$META" harness)
 [ -z "$PANE" ] && PANE=$(fm_model_meta_get "$META" herdr_pane_id)
 
 probe_claude_jsonl() {  # <session-id>

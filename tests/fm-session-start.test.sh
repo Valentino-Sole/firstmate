@@ -2643,6 +2643,42 @@ $(hash_file_for_test "$root/AGENTS.md")" ] \
   pass "true-start AGENTS baselines stay immutable while every drifted Pi compact re-emits the current contract"
 }
 
+test_live_refreshing_pi_compact_prints_a_notice_instead_of_the_file() {
+  local rec root home fakebin baseline live_out plain_out
+  rec=$(new_world agents-refresh-live)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" pi
+  printf '%s\n' 'FIRSTMATE_TEST_INSTRUCTION=original' > "$root/AGENTS.md"
+  FM_FAKE_HARNESS=pi run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --source startup >/dev/null
+  baseline=$(cat "$home/state/.session-start-agents-baseline")
+
+  live_out=$(FM_SESSIONSTART_AGENTS_LIVE=1 FM_FAKE_HARNESS=pi \
+    run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source compact)
+  assert_not_contains "$live_out" "INSTRUCTION REFRESH" \
+    "an unchanged AGENTS file produced a refresh notice under live refresh"
+
+  printf '%s\n' 'FIRSTMATE_TEST_INSTRUCTION=updated' > "$root/AGENTS.md"
+  live_out=$(FM_SESSIONSTART_AGENTS_LIVE=1 FM_FAKE_HARNESS=pi \
+    run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source compact)
+  assert_contains "$live_out" "AGENTS.md - INSTRUCTION REFRESH (LIVE)" \
+    "a drifted compact under live refresh did not print the drift notice"
+  assert_not_contains "$live_out" "FIRSTMATE_TEST_INSTRUCTION=updated" \
+    "a drifted compact under live refresh reprinted the complete AGENTS.md"
+  assert_not_contains "$live_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
+    "a drifted compact under live refresh used the full-file section"
+  [ "$(cat "$home/state/.session-start-agents-baseline")" = "$baseline" ] \
+    || fail "a live-refresh compact rebased the true-start baseline"
+
+  plain_out=$(FM_FAKE_HARNESS=pi run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source compact)
+  assert_contains "$plain_out" "FIRSTMATE_TEST_INSTRUCTION=updated" \
+    "without live refresh a drifted compact stopped reprinting the complete AGENTS.md"
+
+  pass "a Pi primary that refreshes its own system prompt gets a one-line drift notice on compaction, not the whole file"
+}
+
 test_read_only_pi_compact_refreshes_against_its_own_session_identity() {
   local rec root home fakebin holder_pid out baseline_before completion_before
   rec=$(new_world agents-refresh-read-only)
@@ -3057,6 +3093,7 @@ test_runtime_bound_leaves_a_healthy_digest_untouched
 test_runtime_bound_leaves_harness_ancestry_headroom
 test_reemit_skips_startup_sweeps_but_keeps_the_wake_drain
 test_agents_baseline_stays_at_true_start_and_reemits_on_every_drifted_pi_compact
+test_live_refreshing_pi_compact_prints_a_notice_instead_of_the_file
 test_read_only_pi_compact_refreshes_against_its_own_session_identity
 test_codex_unreachable_reset_sources_do_not_claim_instruction_refresh
 test_agents_baseline_requires_sha256_and_successful_completion
