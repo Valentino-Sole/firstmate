@@ -34,24 +34,25 @@ META="$STATE/$ID.meta"
 if [ "$MODE" != display ]; then
   requested=$(fm_model_requested "$META")
   [ -n "$(fm_model_meta_get "$META" requested_model)" ] || fm_model_meta_upsert "$META" requested_model "$requested"
-  current=$(fm_model_effective "$META")
-  if [ "$current" = pending ] || [ "$current" = UNKNOWN ] || [ -z "$current" ]; then
-    pane=$(fm_model_meta_get "$META" herdr_pane_id)
-    if probe_out=$("$SCRIPT_DIR/fm-model-probe.sh" "$STATE" "$ID" "$pane" 2>/dev/null); then
-      model=${probe_out#model=}
-      model=${model%%$'\n'*}
-      source_line=${probe_out#*$'\n'}
-      source=${source_line#source=}
-      [ -n "$model" ] || source=$FM_MODEL_SOURCE_UNKNOWN
-      if [ -n "$model" ]; then
-        tag=
-        requested_lc=$(printf '%s' "$requested" | tr '[:upper:]' '[:lower:]')
-        model_lc=$(printf '%s' "$model" | tr '[:upper:]' '[:lower:]')
-        if [ "$requested_lc" != "$model_lc" ] && fm_model_id_is_exact "$model"; then
-          tag=fallback
-        fi
-        fm_model_record_effective "$STATE" "$ID" "$META" "$model" "$source" "$tag" || true
+  # Always re-probe, even once an exact model is already recorded: a running
+  # session can change models mid-flight (manual switch, provider fallback),
+  # and fm_model_record_effective already no-ops when the probed value is
+  # unchanged, so this stays cheap while still catching later changes.
+  pane=$(fm_model_meta_get "$META" herdr_pane_id)
+  if probe_out=$("$SCRIPT_DIR/fm-model-probe.sh" "$STATE" "$ID" "$pane" 2>/dev/null); then
+    model=${probe_out#model=}
+    model=${model%%$'\n'*}
+    source_line=${probe_out#*$'\n'}
+    source=${source_line#source=}
+    [ -n "$model" ] || source=$FM_MODEL_SOURCE_UNKNOWN
+    if [ -n "$model" ]; then
+      tag=
+      requested_lc=$(printf '%s' "$requested" | tr '[:upper:]' '[:lower:]')
+      model_lc=$(printf '%s' "$model" | tr '[:upper:]' '[:lower:]')
+      if [ "$requested_lc" != "$model_lc" ] && fm_model_id_is_exact "$model"; then
+        tag=fallback
       fi
+      fm_model_record_effective "$STATE" "$ID" "$META" "$model" "$source" "$tag" || true
     fi
   fi
 fi

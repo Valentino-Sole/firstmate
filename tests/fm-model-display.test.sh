@@ -84,6 +84,51 @@ test_relaunch_pending_stays_probeable() {
   pass "relaunch leaves pending effective probeable"
 }
 
+test_sync_reprobes_after_exact_effective() {
+  local fakebin fakehome sid session_dir meta
+  fakebin=$(fm_fakebin "$TMP_ROOT/reprobe")
+  fakehome="$TMP_ROOT/reprobe/home"
+  sid=abc123
+  session_dir="$fakehome/.claude/projects/reprobe-test"
+  mkdir -p "$session_dir"
+  meta="$STATE/t2.meta"
+  cat > "$meta" <<EOF
+harness=claude
+model=sonnet
+requested_model=sonnet
+effective_model=claude-sonnet-5
+effective_model_source=claude-transcript
+effort=high
+herdr_pane_id=fakepane
+backend=herdr
+EOF
+
+  cat > "$fakebin/herdr" <<SH
+#!/usr/bin/env bash
+if [ "\$1" = pane ] && [ "\$2" = get ]; then
+  printf '{"result":{"pane":{"agent_session":{"kind":"id","value":"$sid"}}}}\n'
+  exit 0
+fi
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+
+  printf '%s\n' '{"type":"assistant","message":{"role":"assistant","model":"claude-opus-4"}}' \
+    > "$session_dir/$sid.jsonl"
+
+  [ "$(fm_model_effective "$meta")" = claude-sonnet-5 ] \
+    || fail "fixture should start already-exact before reprobe: $(fm_model_effective "$meta")"
+
+  HOME="$fakehome" PATH="$fakebin:$PATH" "$ROOT/bin/fm-model-sync.sh" "$STATE" t2 --probe-only >/dev/null \
+    || fail "sync probe-only failed"
+
+  [ "$(fm_model_effective "$meta")" = claude-opus-4 ] \
+    || fail "sync must re-probe and update an already-exact effective model: $(fm_model_effective "$meta")"
+  grep -q 'claude-opus-4' "$STATE/t2.model-history" \
+    || fail "model change after an exact effective model must still append history"
+  pass "fm-model-sync.sh re-probes and updates a session that changed models after its first exact reading"
+}
+
 test_sync_probe_live_worker() {
   local live_meta=/home/vsole/vs-agent-workspace/state/checklisten-maat-einrichten.meta
   [ -f "$live_meta" ] || { pass "live worker probe skipped (no checklisten-maat meta)"; return 0; }
@@ -100,4 +145,5 @@ test_display_compact_exact_mismatch
 test_alias_runtime_becomes_unknown
 test_relaunch_preserves_verified_effective
 test_relaunch_pending_stays_probeable
+test_sync_reprobes_after_exact_effective
 test_sync_probe_live_worker
