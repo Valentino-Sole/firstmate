@@ -11,6 +11,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
 CLOUD_KICK_FILE="$STATE/cloud-kick.md"
 CLOUD_DONE_FILE="$STATE/cloud-kick.done"
+# shellcheck disable=SC2034 # Consumed by fm-cloud-senden.sh after sourcing this library.
 CLOUD_BERICHT_FILE="$STATE/cloud-bericht.md"
 CLOUD_BRUECKE_ENV="$STATE/bruecke.env"
 
@@ -51,10 +52,10 @@ fm_cloud_done_hash() {
 }
 
 fm_cloud_kick_is_new() {
-  local kick done
+  local kick prev_hash
   kick=$(fm_cloud_kick_hash) || return 1
-  done=$(fm_cloud_done_hash) || return 0
-  [ "$kick" != "$done" ]
+  prev_hash=$(fm_cloud_done_hash) || return 0
+  [ "$kick" != "$prev_hash" ]
 }
 
 fm_cloud_mark_done() {
