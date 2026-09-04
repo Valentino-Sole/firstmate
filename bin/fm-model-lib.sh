@@ -6,8 +6,8 @@
 # Model history lives in state/<id>.model-history (one line per change).
 
 FM_MODEL_SOURCE_SPAWN=spawn-config
-FM_MODEL_SOURCE_PENDING=pending
 FM_MODEL_SOURCE_UNKNOWN=unknown
+# shellcheck disable=SC2034 # Read by sourcing callers (bin/fm-model-sync.sh).
 FM_MODEL_DISPLAY_SOURCE=fm-model-display
 
 fm_model_harness_label() {  # <harness>
@@ -138,7 +138,7 @@ fm_model_relaunch_effective() {  # <prior-meta>
 
 fm_model_record_effective() {  # <state> <id> <meta> <model> <source> [fallback-tag]
   local state=$1 id=$2 meta=$3 model=$4 source=$5 tag=${6:-}
-  local prior stamp recorded
+  local prior stamp
   [ -f "$meta" ] || return 1
   [ -n "$model" ] || return 1
   [ -n "$source" ] || return 1
@@ -156,7 +156,6 @@ fm_model_record_effective() {  # <state> <id> <meta> <model> <source> [fallback-
   elif [ "$prior" = pending ] && [ "$model" != pending ] && [ "$model" != UNKNOWN ]; then
     fm_model_history_append "$state" "$id" "$stamp" "$model" "$tag"
   fi
-  recorded=1
   return 0
 }
 
