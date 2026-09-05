@@ -115,6 +115,15 @@ When this file exists with at least one id, `bin/fm-work-loop.sh plan` walks the
 `bin/fm-work-loop.sh status` adds `source=list` while the file is active; otherwise `plan` keeps the existing tasks-axi ready ordering.
 See [`docs/examples/work-loop-list`](examples/work-loop-list) for a starting point to copy into local `config/work-loop-list`.
 
+## Worker slot cap (config/worker-slots-max)
+
+`config/worker-slots-max` is an optional local, gitignored file holding one positive whole number: the most independent workers (ship and scout crewmates) that may run on this host at the same time, counted across every local Firstmate home.
+`bin/fm-capacity-lib.sh` already derives a slot budget from the host's cores, free memory, and load and stops fresh spawns when it is spent; this file is the captain's hard ceiling on top of that formula, never a way to exceed it.
+The file is read from the PRIMARY home of the host: a secondmate home resolves its local parent through `.fm-secondmate-parent` and obeys the parent's number, so one file governs every home and a secondmate cannot grant itself more room.
+Absent means the formula alone decides.
+A file that is not one positive whole number refuses every fresh worker with an error naming the file until it is fixed, because a typo must not silently widen or drop the cap.
+Relaunches of an existing task and persistent secondmate agents do not occupy a slot and are not counted against the cap, the same as the formula.
+
 ## Runtime backend (config/backend / FM_BACKEND)
 
 For spawn-capable adapters, the runtime session-provider backend controls where task windows/endpoints are created, captured, sent to, watched, and killed.

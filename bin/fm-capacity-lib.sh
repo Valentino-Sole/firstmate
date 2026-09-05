@@ -19,8 +19,14 @@
 #   load_cap     = 0 when load1 is missing or not a number, or when load1 >= nproc;
 #                  1 when load1 >= 0.7 * nproc;
 #                  otherwise the ceiling
-#   slots        = min(cpu_slots, ram_slots, load_cap, 5)
+#   slots        = min(cpu_slots, ram_slots, load_cap, 5, worker_slots_max)
 # The ceiling 5 is a safety cap on the formula, not a rigid agent count.
+# worker_slots_max is the captain's hard cap from config/worker-slots-max in
+# the PRIMARY home of this host (a secondmate home resolves its local parent
+# through .fm-secondmate-parent and reads the parent's file, so every home on
+# the host obeys one number); absent means no extra cap, and a malformed file
+# refuses fresh workers with an actionable error rather than being ignored.
+# docs/configuration.md "Worker slot cap" owns the file contract.
 #
 # Occupancy is host-scoped, not home-scoped: the budget protects one physical
 # server, so N firstmate homes on this host share one budget instead of taking
@@ -132,6 +138,8 @@ fi
 FM_WORK_LOOP_MIN_REAL=3
 
 FM_CAPACITY_SLOT_CEILING=5
+FM_CAPACITY_CAP_FILE=worker-slots-max
+FM_CAPACITY_CAP_ERROR=
 FM_CAPACITY_CPU_PER_SLOT=3
 FM_CAPACITY_RAM_RESERVE_MB=4096
 FM_CAPACITY_RAM_PER_SLOT_MB=3072
@@ -235,6 +243,45 @@ fm_capacity_slots_from_local() { # <nproc> <mem_avail_mb-or-empty> <load1>
   slots=$(fm_capacity_min "$slots" "$FM_CAPACITY_SLOT_CEILING")
   [ "$slots" -ge 0 ] || slots=0
   printf '%s\n' "$slots"
+}
+
+# The primary home whose config governs this host: the local parent of a
+# secondmate home, otherwise the home itself. Empty when no home is known.
+fm_capacity_primary_home() { # <home-dir>
+  local home=$1
+  [ -n "$home" ] || return 0
+  home=$(fm_capacity_canonical_path "$home")
+  if fm_secondmate_parent_record_parse "$home/.fm-secondmate-parent" 2>/dev/null \
+    && [ "${FM_SECONDMATE_PARENT_ROUTE:-}" = local ] && [ -n "${FM_SECONDMATE_PARENT_HOME:-}" ]; then
+    fm_capacity_canonical_path "$FM_SECONDMATE_PARENT_HOME"
+    return 0
+  fi
+  printf '%s\n' "$home"
+}
+
+# Prints the captain's hard worker cap for this host, or nothing when the
+# primary home has no config/worker-slots-max. Sets FM_CAPACITY_CAP_ERROR and
+# prints 0 when the file exists but is not one positive integer, so a typo
+# never silently widens or drops the cap.
+fm_capacity_worker_slots_max() { # <home-dir>
+  local primary file value
+  FM_CAPACITY_CAP_ERROR=
+  primary=$(fm_capacity_primary_home "$1")
+  [ -n "$primary" ] || return 0
+  file="$primary/config/$FM_CAPACITY_CAP_FILE"
+  [ -e "$file" ] || [ -L "$file" ] || return 0
+  if [ ! -f "$file" ] || [ -L "$file" ]; then
+    FM_CAPACITY_CAP_ERROR="config/$FM_CAPACITY_CAP_FILE in $primary must be a regular file"
+    printf '0\n'
+    return 0
+  fi
+  value=$(LC_ALL=C head -n 1 "$file" 2>/dev/null | tr -d '[:space:]')
+  if ! fm_capacity_is_uint "$value" || [ "$value" -lt 1 ]; then
+    FM_CAPACITY_CAP_ERROR="config/$FM_CAPACITY_CAP_FILE in $primary must hold one positive whole number, got '${value:-empty}'"
+    printf '0\n'
+    return 0
+  fi
+  printf '%s\n' "$value"
 }
 
 fm_capacity_read_nproc() {
@@ -987,6 +1034,10 @@ fm_capacity_measure_local() { # <state-dir> [home-dir]
   # rather than treating the failed query as idle (load1=0).
   FM_CAPACITY_SLOTS=$(fm_capacity_slots_from_local \
     "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_MEM_MB" "$FM_CAPACITY_LOCAL_LOAD1")
+  FM_CAPACITY_CAP=$(fm_capacity_worker_slots_max "${2:-${FM_HOME:-}}")
+  if [ -n "$FM_CAPACITY_CAP" ]; then
+    FM_CAPACITY_SLOTS=$(fm_capacity_min "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_CAP")
+  fi
   fm_capacity_measure_host_occupancy "$1" "${2:-${FM_HOME:-}}"
   FM_CAPACITY_FREE=$((FM_CAPACITY_SLOTS - FM_CAPACITY_OCCUPIED))
   [ "$FM_CAPACITY_FREE" -ge 0 ] || FM_CAPACITY_FREE=0
@@ -1012,8 +1063,17 @@ fm_capacity_allow_new_worker() { # <state-dir> <task-id> <kind> <relaunch> [home
     return 1
   fi
   fm_capacity_measure_local "$state" "$home"
+  if [ -n "$FM_CAPACITY_CAP_ERROR" ]; then
+    printf 'error: capacity: %s; fix the file before a fresh worker can be admitted\n' "$FM_CAPACITY_CAP_ERROR" >&2
+    return 1
+  fi
   if [ "$FM_CAPACITY_FREE" -ge 1 ]; then
     return 0
+  fi
+  if [ -n "$FM_CAPACITY_CAP" ] && [ "$FM_CAPACITY_OCCUPIED" -ge "$FM_CAPACITY_CAP" ]; then
+    printf 'error: capacity: the captain'"'"'s worker cap is reached (occupied=%s cap=%s from config/%s, homes_scanned=%s); independent work waits until a live worker on this host finishes; running workers were left running\n' \
+      "$FM_CAPACITY_OCCUPIED" "$FM_CAPACITY_CAP" "$FM_CAPACITY_CAP_FILE" "$FM_CAPACITY_HOMES_SCANNED" >&2
+    return 1
   fi
   if [ "$FM_CAPACITY_SLOTS" -eq 0 ]; then
     printf 'error: capacity: supervisor host is at measured capacity (slots=0 occupied=%s homes_scanned=%s nproc=%s load1=%s mem_avail_mb=%s); refusing a new independent worker rather than overloading this host\n' \
