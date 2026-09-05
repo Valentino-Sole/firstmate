@@ -26,7 +26,6 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
-CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 SECONDMATE_REG="$DATA/secondmates.md"
 
 # shellcheck source=bin/fm-classify-lib.sh
@@ -60,8 +59,9 @@ esac
 
 fm_safe_cleanup_classify_all() {
   local session list
-  command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
-    || { die 'herdr and jq are required for classify'; }
+  if ! command -v herdr >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    die 'herdr and jq are required for classify'
+  fi
   fm_backend_source herdr || die 'herdr backend unavailable'
   session=$(fm_backend_herdr_session)
   list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || die 'workspace list failed'

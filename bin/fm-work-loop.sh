@@ -151,7 +151,7 @@ work_loop_emit_ready_ids() {
 }
 
 work_loop_ready_ids() {
-  local ready err
+  local ready
   [ -f "$BACKLOG" ] || return 0
   if ! fm_tasks_axi_backend_available "$CONFIG"; then
     die "tasks-axi backlog backend is required for plan; got $(fm_backlog_backend_value "$CONFIG")"

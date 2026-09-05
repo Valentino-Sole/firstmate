@@ -92,10 +92,14 @@ fm_captain_outcome_detect_report_path() { # <task> <line>
 }
 
 fm_captain_outcome_classify_status() { # <task> <line>
-  local task=$1 line=$2 verb key note tier=done category=task report=''
+  local task=$1 line=$2 verb key note tier='done' category=task report=''
   verb=$(status_line_verb "$line")
   note=$(status_line_note "$line")
   key=$(_fm_decision_key "$line" 2>/dev/null || printf 'default')
+  # A reserved key (pending-reply-*) opened by a note outside its owner's
+  # vocabulary is not a decision transition anywhere else in the fleet
+  # (bin/fm-classify-lib.sh); it must not become a captain outcome here either.
+  _fm_decision_key_transition_allowed "$key" "$note" || return 1
   case "$verb" in
     needs-decision)
       tier=critical
@@ -113,13 +117,13 @@ fm_captain_outcome_classify_status() { # <task> <line>
         tier=report
         category=report
       else
-        tier=done
+        tier='done'
         category=task
       fi
       ;;
     *)
       status_is_captain_relevant "$line" || return 1
-      tier=done
+      tier='done'
       category=task
       ;;
   esac
@@ -283,6 +287,7 @@ fm_captain_outcome_ingest_status_file() { # <status-file>
   chunk_file="$FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR/.chunk.$$"
   _fm_status_read_span "$f" "$offset" "$((actual_size - offset))" > "$chunk_file" 2>/dev/null \
     || { rm -f "$chunk_file"; return 1; }
+  # shellcheck disable=SC2094 # The loop only reads the chunk; the register step writes the store, never the chunk.
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in *[![:space:]]*) ;; *) continue ;; esac
     fm_captain_outcome_classify_status "$task" "$line" || continue
@@ -318,7 +323,7 @@ fm_captain_outcome_ingest_terminal() {
     case "$state" in done|failed) ;; *) continue ;; esac
     summary="Terminaler Zustand $state fuer $task (inactive reconcile)"
     key="terminal:$fingerprint"
-    fm_captain_outcome_register "$key" terminal-outcome "$task" done task "$summary" '' "$fingerprint" || return 1
+    fm_captain_outcome_register "$key" terminal-outcome "$task" 'done' task "$summary" '' "$fingerprint" || return 1
   done
 }
 

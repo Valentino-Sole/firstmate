@@ -128,7 +128,7 @@ status_log_self_test_reported_before_done() {  # <status-file>
     line=${line//$'\r'/}
     [ -z "${line//[[:space:]]/}" ] && continue
     status_has_self_test_report "$line" && return 0
-    if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = done ]; then
+    if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = 'done' ]; then
       return 1
     fi
   done < "$f"
@@ -163,7 +163,7 @@ status_log_self_test_clean_before_done() {  # <status-file>
       [ "$STATUS_TEST_FAILED" -eq 0 ] && return 0
       return 1
     fi
-    if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = done ]; then
+    if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = 'done' ]; then
       return 1
     fi
   done < "$f"

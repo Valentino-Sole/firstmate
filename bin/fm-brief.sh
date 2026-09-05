@@ -428,6 +428,7 @@ case "$MODE" in
 esac
 DOD=$(fm_dod_block "$MODE" "$ID") || exit 1
 
+# shellcheck disable=SC2016 # Backticks are literal prompt markup.
 SHIP_SELF_TEST_SECTION='# Self-test before done
 Before your terminal \`done:\` status, run this project'\''s test command yourself (for example \`./tests/...\` or the project'\''s documented test entrypoint). Firstmate does not run your tests for you.
 Include the pass/fail count in your terminal status as \`Tests N/0\` (passed/failed), for example \`done: ready in branch fm/'"$ID"' · Tests 42/0\`. A terminal \`done:\` without a self-test report is refused at local-only landing time.

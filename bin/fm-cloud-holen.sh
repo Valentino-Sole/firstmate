@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# shellcheck source=/dev/null
 source "$HOME/vs-agent-workspace/state/bruecke.env"
 DEST="$HOME/vs-agent-workspace/state/cloud-kick.md"
 export DEST

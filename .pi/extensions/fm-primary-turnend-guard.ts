@@ -583,22 +583,27 @@ export default function (pi: ExtensionAPI) {
 
   // Captain outcome delivery (bin/fm-captain-outcome-delivery.sh): present the
   // UNPRESENTED outcomes once per prompt as their own custom message. Kept as a
-  // separate handler from the session-start claim above so Pi collects both.
-  pi.on?.("before_agent_start", async () => {
-    const section = runCaptainOutcomePresent();
-    if (!section) return;
-    try {
-      return {
-        message: {
-          customType: "firstmate-captain-outcome-delivery",
-          content: encodeFirstmateOperationalInput("captain-outcome-delivery", section),
-          display: false,
-        },
-      };
-    } catch {
-      return undefined;
-    }
-  });
+  // separate handler from the session-start claim above so Pi collects both
+  // (its runner gathers every handler's `message`). Registered only where the
+  // delivery script exists, so a home or fixture without it keeps the single
+  // session-start handler and never spawns a missing script per prompt.
+  if (existsSync(`${root}/bin/fm-captain-outcome-delivery.sh`)) {
+    pi.on?.("before_agent_start", async () => {
+      const section = runCaptainOutcomePresent();
+      if (!section) return undefined;
+      try {
+        return {
+          message: {
+            customType: "firstmate-captain-outcome-delivery",
+            content: encodeFirstmateOperationalInput("captain-outcome-delivery", section),
+            display: false,
+          },
+        };
+      } catch {
+        return undefined;
+      }
+    });
+  }
 
   // Pi's compaction equivalent. Manual compaction is idle and auto-compaction
   // may retry without another before_agent_start, so the event keeps its

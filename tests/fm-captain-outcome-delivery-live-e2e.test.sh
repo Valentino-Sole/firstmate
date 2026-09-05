@@ -7,7 +7,6 @@ set -u
 
 DELIVERY="$ROOT/bin/fm-captain-outcome-delivery.sh"
 TIMESTAMP="$ROOT/bin/fm-captain-report-timestamp.sh"
-TURNEND_EXT="$ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
 
 TMP_ROOT=$(fm_test_tmproot fm-captain-outcome-delivery-live-e2e)
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2329,SC2034 # Test stubs override sourced backend functions and set their output globals; the library invokes and reads them indirectly.
 # Portable tests for automatic Pi-primary restart helpers and refusal paths.
 set -u
 

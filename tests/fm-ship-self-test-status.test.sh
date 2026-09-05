@@ -64,7 +64,8 @@ test_status_parse_self_test_counts_and_clean_log() {
 }
 
 setup_merge_fixture() {  # <home> <id>
-  local home=$1 id=$2 proj="$home/proj"
+  local home=$1 id=$2 proj
+  proj="$home/proj"
   git init -q -b main "$proj"
   git -C "$proj" commit -q --allow-empty -m init
   git -C "$proj" checkout -q -b "fm/$id"

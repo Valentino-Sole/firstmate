@@ -4,6 +4,7 @@
 set -u
 
 FM_PI_RESTART_PENDING_NAME='.pi-primary-restart-pending'
+# shellcheck disable=SC2034 # Output global, read by the sourcing caller.
 FM_PI_RESTART_NEEDS_DECISION_EXIT=2
 FM_PI_RESTART_INTERRUPT_ATTEMPTS_DEFAULT=3
 FM_PI_RESTART_INTERRUPT_WAIT_SECONDS_DEFAULT=15
@@ -198,6 +199,7 @@ fm_pi_restart_prepare_pane_for_exit() {  # <backend> <target> [interrupt-attempt
     attempt=$((attempt + 1))
   done
 
+  # shellcheck disable=SC2034 # Output global, read by the sourcing caller.
   FM_PI_RESTART_PREPARE_REASON='pane-stayed-busy'
   return 1
 }
@@ -220,12 +222,13 @@ fm_pi_restart_submit_exit_command() {  # <backend> <target> <exit-cmd> [retries]
       return 1
       ;;
     *)
+      # shellcheck disable=SC2034 # Output global, read by the sourcing caller.
       FM_PI_RESTART_SUBMIT_REASON='unconfirmed'
+      # shellcheck disable=SC2034 # Output global, read by the sourcing caller.
       FM_PI_RESTART_SUBMIT_DETAIL="$submit"
       return 1
       ;;
   esac
-  return 0
 }
 
 fm_pi_restart_extensions_loaded() {  # <state-dir> <root>

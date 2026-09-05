@@ -168,7 +168,10 @@ EOF
 You are a crewmate.
 
 # Task
+## Captain's intent
 {TASK}
+## Firstmate spec
+{FIRSTMATE_SPEC}
 
 # Definition of done
 Delivery contract: mode=no-mistakes
@@ -176,7 +179,7 @@ EOF
   out=$(run_spawn "$home" "$fakebin" delivery-placeholder-e1 "$proj" claude --mode no-mistakes --yolo off)
   status=$?
   [ "$status" -ne 0 ] || fail "an unfilled brief placeholder should exit non-zero"
-  assert_contains "$out" "brief still contains {TASK}" "placeholder refusal did not name the unfilled token"
+  assert_contains "$out" "still contains {TASK}" "placeholder refusal did not name the unfilled token"
   assert_absent "$home/state/delivery-placeholder-e1.meta" "placeholder refusal still wrote task metadata"
   pass "fm-spawn: an unfilled {TASK} brief placeholder is refused before launch"
 }

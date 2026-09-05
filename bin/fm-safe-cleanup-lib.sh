@@ -6,6 +6,7 @@
 # Sourced only; do not execute directly.
 set -u
 
+# shellcheck disable=SC2034 # Sourcing guard, read by callers that include this lib.
 FM_SAFE_CLEANUP_LIB_SOURCED=1
 
 fm_safe_cleanup_warn() {
@@ -229,7 +230,7 @@ fm_safe_cleanup_classify_workspace() {  # <home> <state> <data> <registry> <work
 
 fm_safe_cleanup_try_allowed() {  # <home> <state> <data> <registry> <id>
   local home=$1 state=$2 data=$3 reg=$4 id=$5
-  local meta kind class_line
+  local meta kind
   [ -f "$state/$id.meta" ] && [ ! -L "$state/$id.meta" ] || return 1
   if fm_safe_cleanup_is_permanent_mate "$reg" "$id"; then
     return 1
