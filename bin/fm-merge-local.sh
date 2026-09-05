@@ -31,6 +31,18 @@ PROJ=$(grep '^project=' "$META" | cut -d= -f2-)
 MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 [ "$MODE" = local-only ] || { echo "error: task $ID is mode=$MODE, not local-only; merge PR tasks with bin/fm-pr-merge.sh <id> <PR url> after approval" >&2; exit 1; }
 
+# shellcheck source=bin/fm-classify-lib.sh
+. "$SCRIPT_DIR/fm-classify-lib.sh"
+STATUS_FILE="$STATE/$ID.status"
+if ! status_log_self_test_clean_before_done "$STATUS_FILE"; then
+  if status_log_self_test_reported_before_done "$STATUS_FILE"; then
+    echo "REFUSED: task $ID status reports test failures (expected Tests N/0 before terminal done:)" >&2
+  else
+    echo "REFUSED: task $ID status lacks a self-test report (expected Tests N/0 before terminal done:)" >&2
+  fi
+  exit 1
+fi
+
 default_branch() {
   local ref branch
   ref=$(git -C "$PROJ" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
@@ -65,6 +77,13 @@ fi
 if ! git -C "$PROJ" merge-base --is-ancestor "$DEFAULT" "$BRANCH"; then
   echo "REFUSED: $BRANCH is not a fast-forward of $DEFAULT (it has diverged)." >&2
   echo "Have the crewmate rebase $BRANCH onto $DEFAULT, then retry." >&2
+  exit 1
+fi
+
+AHEAD=$(git -C "$PROJ" rev-list --count "$DEFAULT..$BRANCH" 2>/dev/null || echo 0)
+case "$AHEAD" in ''|*[!0-9]*) AHEAD=0 ;; esac
+if [ "$AHEAD" -eq 0 ]; then
+  echo "REFUSED: task $ID branch $BRANCH has no commits ahead of $DEFAULT (0 commits ahead = failed)" >&2
   exit 1
 fi
 

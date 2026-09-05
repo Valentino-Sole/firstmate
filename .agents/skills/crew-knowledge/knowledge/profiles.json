@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "description": "Concrete {harness, model, effort} profiles referenced by task-classes. Update here without touching scorer code.",
+  "profiles": [
+    {
+      "id": "cheap-fast-claude",
+      "provider": "claude",
+      "harness": "claude",
+      "model": "haiku",
+      "effort": "low",
+      "quality": "low",
+      "reasoningClass": "fast",
+      "why": "Cheapest fast Claude profile for narrow mechanical work."
+    },
+    {
+      "id": "cheap-fast-codex",
+      "provider": "codex",
+      "harness": "codex",
+      "model": "gpt-5.5",
+      "effort": "low",
+      "quality": "low",
+      "reasoningClass": "fast",
+      "why": "Low-effort Codex for trivial mechanical edits."
+    },
+    {
+      "id": "cursor-auto",
+      "provider": "cursor",
+      "harness": "cursor",
+      "model": "auto",
+      "effort": "low",
+      "quality": "low",
+      "reasoningClass": "fast",
+      "why": "Cursor auto path when Cursor headroom is the right burn target."
+    },
+    {
+      "id": "standard-codex",
+      "provider": "codex",
+      "harness": "codex",
+      "model": "gpt-5.5",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "standard",
+      "why": "Default steady ship profile on Codex."
+    },
+    {
+      "id": "standard-claude",
+      "provider": "claude",
+      "harness": "claude",
+      "model": "sonnet",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "standard",
+      "why": "Standard Claude Sonnet ship profile."
+    },
+    {
+      "id": "standard-pi-sonnet",
+      "provider": "claude",
+      "harness": "pi",
+      "model": "anthropic/claude-sonnet-4",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "standard",
+      "why": "Pi-hosted Sonnet when the primary fleet prefers the Pi harness."
+    },
+    {
+      "id": "cursor-composer",
+      "provider": "cursor",
+      "harness": "cursor",
+      "model": "composer",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "standard",
+      "why": "Cursor composer for IDE-centric standard ships."
+    },
+    {
+      "id": "strong-claude",
+      "provider": "claude",
+      "harness": "claude",
+      "model": "claude-sonnet-4",
+      "effort": "high",
+      "quality": "high",
+      "reasoningClass": "strong",
+      "why": "Strong Claude profile for ambiguous multi-file work."
+    },
+    {
+      "id": "strong-codex",
+      "provider": "codex",
+      "harness": "codex",
+      "model": "gpt-5.5",
+      "effort": "high",
+      "quality": "high",
+      "reasoningClass": "strong",
+      "why": "High-effort Codex for hard multi-file features."
+    },
+    {
+      "id": "strong-pi-opus",
+      "provider": "claude",
+      "harness": "pi",
+      "model": "anthropic/claude-opus-4",
+      "effort": "high",
+      "quality": "high",
+      "reasoningClass": "strong",
+      "why": "Pi-hosted Opus when maximum judgment load is required on Pi."
+    },
+    {
+      "id": "cursor-composer-high",
+      "provider": "cursor",
+      "harness": "cursor",
+      "model": "composer",
+      "effort": "high",
+      "quality": "high",
+      "reasoningClass": "strong",
+      "why": "High-effort Cursor composer alternative for hard work."
+    },
+    {
+      "id": "grok-research",
+      "provider": "grok",
+      "harness": "grok",
+      "model": "latest",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "research",
+      "why": "Native Grok when live/public web context is central."
+    },
+    {
+      "id": "pi-grok-research",
+      "provider": "grok",
+      "harness": "pi",
+      "model": "xai/grok-4",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "research",
+      "why": "Pi-hosted Grok/xAI when the home prefers Pi over the Grok CLI."
+    },
+    {
+      "id": "scout-codex",
+      "provider": "codex",
+      "harness": "codex",
+      "model": "gpt-5.5",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "scout",
+      "why": "Read-oriented Codex scout profile."
+    },
+    {
+      "id": "scout-claude",
+      "provider": "claude",
+      "harness": "claude",
+      "model": "sonnet",
+      "effort": "medium",
+      "quality": "medium",
+      "reasoningClass": "scout",
+      "why": "Read-oriented Claude scout profile."
+    },
+    {
+      "id": "scout-pi",
+      "provider": "claude",
+      "harness": "pi",
+      "model": "anthropic/claude-sonnet-4",
+      "effort": "low",
+      "quality": "medium",
+      "reasoningClass": "scout",
+      "why": "Low-effort Pi scout to limit burn on surveys."
+    },
+    {
+      "id": "cursor-scout",
+      "provider": "cursor",
+      "harness": "cursor",
+      "model": "auto",
+      "effort": "low",
+      "quality": "medium",
+      "reasoningClass": "scout",
+      "why": "Cursor auto for lightweight scouting when Cursor is the burn target."
+    }
+  ],
+  "dispatchTemplate": {
+    "rules": [
+      {
+        "when": "The task depends on fresh news, current events, live public facts, or recent market and product changes.",
+        "profileIds": ["grok-research", "pi-grok-research"],
+        "why": "Grok is preferred when current web-connected context is central; resolve alternatives through quota-aware choice."
+      },
+      {
+        "when": "The task is a trivial mechanical edit such as a rote rename, formatting sweep, targeted typo fix, or simple file gathering.",
+        "profileIds": ["cheap-fast-claude", "cheap-fast-codex"],
+        "why": "Use the cheapest fast profile when the task is narrow and low ambiguity."
+      },
+      {
+        "when": "The task is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.",
+        "profileIds": ["strong-claude", "strong-codex"],
+        "why": "Use a strong coding profile for big, ambiguous work; resolve the alternatives through quota-array-dispatch."
+      },
+      {
+        "when": "The task is a read-only scout, audit, inventory, or risk scan without shipping code.",
+        "profileIds": ["scout-codex", "scout-claude"],
+        "why": "Prefer medium read-oriented profiles for scouts; keep burn modest."
+      }
+    ],
+    "defaultProfileIds": ["standard-codex", "standard-pi-sonnet", "standard-claude"]
+  }
+}

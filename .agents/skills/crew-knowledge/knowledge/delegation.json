@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "description": "Context-aware delegation and microtasking model. Policy only — Firstmate remains authority for spawn, approval, and quota-array-dispatch.",
+  "ownership": {
+    "firstmateExisting": [
+      "bin/fm-spawn.sh",
+      "bin/fm-brief.sh",
+      "bin/fm-send.sh",
+      "bin/fm-crew-state.sh",
+      "quota-array-dispatch",
+      "config/crew-dispatch.json",
+      "AGENTS.md hard rules and section 7 lifecycle"
+    ],
+    "knowledgePolicy": [
+      "execution mode selection",
+      "context dependency assessment",
+      "context pack completeness",
+      "delegation-first checks",
+      "failure mode catalog"
+    ],
+    "firstmateExtensionRequired": [
+      "automated context-dependency classifier",
+      "structured evidence chain enforcement between workers",
+      "delegation gate before primary tool use on project paths"
+    ]
+  },
+  "delegationFirstRule": {
+    "summary": "For every incoming task, ask first: can a worker do this? If yes, delegate immediately — do not analyze, plan, or implement first.",
+    "allowedFirstmateWork": [
+      "orchestration and routing",
+      "context selection and task decomposition",
+      "dependency ordering",
+      "status reconciliation",
+      "result evaluation and merge decisions",
+      "escalation under configured authority",
+      "fleet and state management",
+      "brief writing and fm-spawn",
+      "short necessary captain communication"
+    ],
+    "forbiddenAsDefaultFirstmateWork": [
+      "project-specific implementation",
+      "extended project-specific analysis",
+      "standalone bug research",
+      "standalone architecture work",
+      "project tests or documentation by firstmate",
+      "manual project file edits except hard rule 1 captain-approved exception"
+    ],
+    "explicitExceptions": [
+      "hard rule 1 concrete captain-approved project operation",
+      "shared tracked material when fleet is empty",
+      "supervision-only reads under projects/"
+    ]
+  },
+  "contextDependency": {
+    "levels": [
+      {
+        "id": "VERY_LOW",
+        "label": "Very low",
+        "description": "Nearly local: syntax, symbol lookup, pattern check, isolated SQL explanation.",
+        "microtaskDefault": "often",
+        "typicalWorkerContext": "single file or symbol slice",
+        "routingHint": "Prefer cheap profiles when crew-knowledge agrees; still use fm-spawn flags, not a parallel router."
+      },
+      {
+        "id": "LOW",
+        "label": "Low",
+        "description": "Few connected artifacts: one module, one API function, bounded test surface.",
+        "microtaskDefault": "usually",
+        "typicalWorkerContext": "module + direct dependencies",
+        "routingHint": "Microtask with context pack; DIRECT DELEGATION if scope is already one bounded unit."
+      },
+      {
+        "id": "MEDIUM",
+        "label": "Medium",
+        "description": "Several components or architectural context required.",
+        "microtaskDefault": "only_with_context_pack",
+        "typicalWorkerContext": "context pack + targeted architecture notes",
+        "routingHint": "MICROTASK + CONTEXT PACK or single FULL-CONTEXT worker."
+      },
+      {
+        "id": "HIGH",
+        "label": "High",
+        "description": "System-wide concerns: data flow, auth, state, queues, API contracts, migrations, cross-service.",
+        "microtaskDefault": "avoid_blind_split",
+        "typicalWorkerContext": "full subsystem map + invariants",
+        "routingHint": "FULL-CONTEXT DELEGATION or SCOUT then SHIP."
+      },
+      {
+        "id": "VERY_HIGH",
+        "label": "Very high",
+        "description": "Central architecture, complex migrations, security models, many implicit dependencies.",
+        "microtaskDefault": "no",
+        "typicalWorkerContext": "full-context agent or scout report first",
+        "routingHint": "SCOUT → SHIP or one FULL-CONTEXT DELEGATION."
+      }
+    ]
+  },
+  "executionModes": [
+    {
+      "id": "DIRECT_DELEGATION",
+      "label": "Direct delegation",
+      "when": "Task is already one bounded unit with sufficient context in the brief.",
+      "shipScoutRelation": "Ship or Scout deliverable type is chosen separately at intake; this mode is how work is handed off."
+    },
+    {
+      "id": "MICROTASK",
+      "label": "Microtask",
+      "when": "VERY_LOW or LOW context dependency and worker can succeed with minimal context pack.",
+      "shipScoutRelation": "Usually Ship sub-units; Scout only for read-only slices."
+    },
+    {
+      "id": "MICROTASK_CONTEXT_PACK",
+      "label": "Microtask + context pack",
+      "when": "MEDIUM dependency; each slice has explicit TASK, GOAL, files, symbols, constraints, expected output.",
+      "shipScoutRelation": "Ship parallel or serial microtasks with shared pack appendix."
+    },
+    {
+      "id": "FULL_CONTEXT_DELEGATION",
+      "label": "Full-context delegation",
+      "when": "HIGH or VERY_HIGH dependency, or microtask benefit negative after verification cost.",
+      "shipScoutRelation": "Single Ship worker or Scout with broad read scope."
+    },
+    {
+      "id": "SCOUT_THEN_SHIP",
+      "label": "Scout → Ship",
+      "when": "Uncertainty could change whether or what to build; investigation deliverable before implementation.",
+      "shipScoutRelation": "Firstmate intake Ship/Scout classification (AGENTS.md §7); promotion via fm-promote.sh."
+    }
+  ],
+  "decisionModel": {
+    "inputs": [
+      "taskComplexity",
+      "contextDependency",
+      "changeRisk",
+      "parallelizability",
+      "expectedVerificationCost",
+      "microtaskBenefit"
+    ],
+    "output": "executionMode",
+    "antiPatterns": [
+      "large task equals many microtasks",
+      "smaller task always cheaper or better",
+      "compression that drops global invariants",
+      "firstmate evaluates every trivial slice personally"
+    ]
+  },
+  "compressionVsLoss": {
+    "compressionAllowed": "Reduce 100 files to 5 relevant files plus architecture rules and API contracts.",
+    "lossForbidden": "Cut to 2 files when the decision depends on global state, invariants, or cross-cutting contracts."
+  },
+  "evidenceChain": {
+    "requiredFields": [
+      "FINDINGS",
+      "EVIDENCE",
+      "FILES",
+      "SYMBOLS",
+      "CONFIDENCE",
+      "OPEN_QUESTIONS",
+      "RECOMMENDATION"
+    ],
+    "noBlindSynthesis": "Conflicting worker or scout results require more evidence or a larger-context task — never average or guess."
+  },
+  "progressiveContextExpansion": [
+    "Start with minimal context pack",
+    "If worker blocked or answers contradict, expand targeted files or invariants",
+    "Re-evaluate context dependency",
+    "Escalate to full-context worker or scout before repeated micro-failures"
+  ],
+  "microtaskNotAlwaysBetter": {
+    "preferSingleTaskWhen": [
+      "context dependency HIGH or VERY_HIGH",
+      "verification cost of many slices exceeds one integrated pass",
+      "shared mutable state or ordering constraints",
+      "integration risk at boundaries"
+    ],
+    "preferMicrotaskWhen": [
+      "VERY_LOW or LOW dependency with clear boundaries",
+      "parallelizable read-only scouts",
+      "independent files with separate test surfaces",
+      "high parallelizability with low merge conflict risk"
+    ]
+  }
+}

@@ -5,7 +5,6 @@
 // message delivery.
 import type { UserMessageComponent as PiUserMessageComponent } from "@earendil-works/pi-coding-agent";
 import * as PiCodingAgent from "@earendil-works/pi-coding-agent";
-import { calmPresentationHides } from "./fm-calm-visibility.ts";
 import { classifyFirstmateCurrentOperationalText } from "./fm-operational-input.ts";
 
 type UserMessageConstructorArgs = ConstructorParameters<typeof PiUserMessageComponent>;
@@ -63,7 +62,7 @@ export function installCalmOperationalUserLayout(): void {
   const registry = globalThis as typeof globalThis & {
     [key: symbol]: CalmOperationalUserLayoutPatch | undefined;
   };
-  const hidesOperationalInput = (): boolean => calmPresentationHides("synthetic-user");
+  const hidesOperationalInput = (): boolean => true;
   const isOperationalInput = (text: string): boolean => {
     if (!text.includes("\u2063")) return false;
     return (
