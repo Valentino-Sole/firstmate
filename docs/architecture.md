@@ -51,6 +51,8 @@ A secondmate's endpoint liveness is still never read at all; a mate is admitted 
 Its initial normal-mode status signal still surfaces through the no-verb path, while away mode self-handles that routine signal and owns the later recheck.
 Fresh stale panes use the same current-state read before trusting the status log, so an active run or a proven busy worker outranks an old captain-relevant status-log line left behind before validation.
 No-change heartbeats are also benign.
+Section 7's work loop keeps dispatch moving without waiting for captain acknowledgment: after a ship worker lands or fails, firstmate tears down the pane and runs `bin/fm-work-loop.sh plan` to refill every measured free worker slot from the backlog rather than stopping after one replacement.
+`bin/fm-capacity-lib.sh` owns slot measurement; [`AGENTS.md`](../AGENTS.md) section 7 owns the ABSCHLUSS, land, cleanup, and continue chain.
 Separately from heartbeat backoff and wedge handling, the watcher poll runs `bin/fm-inactive-reconcile.sh` on its own bounded cadence, while locked session start sends the same bounded local scan through `bin/fm-startup-network.sh`'s deferred worker so current-state reads never block the digest.
 In each home the scan considers only that home's long-inactive direct ordinary crewmates, excludes captain-held work, and accepts only `done` or `failed` from `bin/fm-crew-state.sh`.
 A secondmate retains a durable receipt for its idempotent report through the established parent route, and main-home captain presentation retains a separate receipt; neither path performs a forge or PR check.
@@ -377,6 +379,8 @@ The full ownership rule - what is project-intrinsic versus fleet-private, and ho
 `/stow` sweeps the current session for durable knowledge that only exists in conversation and routes each finding to the most specific disk home.
 Home-domain captain preferences go to `data/captain.md`, cross-domain shared captain preferences go to the primary home's `data/captain-shared.md`, fleet-local operational facts and gotchas go to home-local `data/learnings.md`, project-intrinsic knowledge goes through normal crewmate delivery into that project's committed `AGENTS.md`, and task-scoped notes or undone next steps go to the backlog.
 Memory writes use inspect-then-update rather than blind append; the internal [`stow` skill](../.agents/skills/stow/SKILL.md) owns tier markers, decay, cold archival, and offload.
+The isolated Arbeits-PC plaintext copy under `/home/vsole/uebernahme-arbeits-pc` is a separate, read-only inventory surface: captain decision 2026-08-27 (Option A) keeps it isolated, permits index lookup only, and forbids merge into `~/.claude-mem`, Drive export, or destruction until a new captain decision says otherwise.
+`bin/fm-klartext-uebernahme-index.sh` is the read-only entrypoint; `docs/klartext-uebernahme-isolation.md` owns the contract and PreToolUse guard.
 The same pass also persists open-work record state the session is holding - filing a thread that was never recorded and correcting one the session knows went stale - bounded to the open work that session is actually holding.
 It is deliberately not a reconciliation of durable records against repository or PR reality: its input is the volatile context, so it can only preserve what the session still knows, and no reconciliation that outlives a session exists today.
 Task-scoped notes use `tasks-axi show <id> --full` followed by `tasks-axi update <id> --body-file <path>`, adding `--archive-body` when the prior body should remain recoverable.
@@ -407,6 +411,7 @@ The procedure and outcome vocabulary are owned by the [`/updatefirstmate` skill]
 Fleet state lives in each task's session-provider backend (tmux by hard default, herdr or cmux when selected or auto-detected, zellij/orca when explicitly selected), no-mistakes run records, status event logs, local markdown under `data/` including `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, and persistent secondmate homes.
 For herdr, respawning after a server-restored layout closes and replaces confirmed no-agent or dead task-tab husks instead of requiring manual tab cleanup.
 At session start, confirmed-dead secondmate agent endpoints are closed and relaunched through the same secondmate spawn path, while ambiguous liveness reads are left untouched to avoid duplicate supervisors.
+On a Pi or pi-signed primary, the same bootstrap pass also relaunches dead or missing cursor-grok crewmates (`harness=cursor`, `model=cursor-grok*`) that are still in flight, while leaving terminal, ambiguous, and unreadable endpoints untouched.
 Use `/stow` before an intentional reset when the conversation may hold durable knowledge that has not yet been written to disk; after that, the next firstmate session can reconcile and carry on.
 
 ## Development notes

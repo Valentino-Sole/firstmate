@@ -133,6 +133,66 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/crew-knowledge/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/docs/README.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/docs/approval-policy.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/docs/context-aware-microtasking.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/docs/context-sufficiency.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/docs/delegation-policy.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/docs/firstmate-failure-modes.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/evaluation/delegation-cases.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/examples/conflicting-microtask-results.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/examples/full-context-delegation.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/examples/microtask-with-context-pack.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/examples/not-microtaskable.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/examples/scout-then-ship.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/examples/simple-microtask.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/crew-knowledge/knowledge/README.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/decision-hold-lifecycle/SKILL.md",
       "audience": "agent-runtime"
     },
@@ -289,6 +349,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/captain-hold-lifecycle.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/cd-guard.md",
       "audience": "maintainer-architecture"
     },
@@ -305,15 +369,7 @@
       "audience": "operator-current"
     },
     {
-      "path": "docs/captain-hold-lifecycle.md",
-      "audience": "maintainer-architecture"
-    },
-    {
       "path": "docs/documentation-audiences.md",
-      "audience": "maintainer-architecture"
-    },
-    {
-      "path": "docs/extension-bindings.md",
       "audience": "maintainer-architecture"
     },
     {
@@ -337,6 +393,14 @@
       "audience": "operator-example"
     },
     {
+      "path": "docs/examples/work-loop-list",
+      "audience": "operator-example"
+    },
+    {
+      "path": "docs/extension-bindings.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/fm-test-isolation-proof.md",
       "audience": "maintainer-verification"
     },
@@ -353,6 +417,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/klartext-uebernahme-isolation.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/orca-backend.md",
       "audience": "operator-current"
     },
@@ -361,16 +429,20 @@
       "audience": "maintainer-architecture"
     },
     {
+      "path": "docs/primary-checkout-guard.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/remote-secondmates.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/scripts.md",
       "audience": "operator-current"
     },
     {
       "path": "docs/secondmate-parent-channel.md",
       "audience": "maintainer-architecture"
-    },
-    {
-      "path": "docs/scripts.md",
-      "audience": "operator-current"
     },
     {
       "path": "docs/sessionstart-nudge.md",
@@ -437,11 +509,11 @@
       "audience": "maintainer-verification"
     },
     {
-      "path": "docs/verification/secondmate-parent-channel.md",
+      "path": "docs/verification/runtime-backends.md",
       "audience": "maintainer-verification"
     },
     {
-      "path": "docs/verification/runtime-backends.md",
+      "path": "docs/verification/secondmate-parent-channel.md",
       "audience": "maintainer-verification"
     },
     {

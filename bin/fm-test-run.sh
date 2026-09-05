@@ -216,15 +216,18 @@ family_for_basename() {
     fm-arm-pretool-check.test.sh|fm-ask-user-authority.test.sh|\
     fm-bearings-board.test.sh|\
     fm-brief.test.sh|fm-vendor-auth-probe.test.sh|\
-    fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|\
-    fm-classify-decision-key.test.sh|\
+    fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|fm-primary-checkout-pretool-check.test.sh|\
+    fm-klartext-uebernahme-pretool-check.test.sh|\
+    fm-classify-decision-key.test.sh|fm-ship-self-test-status.test.sh|\
+    fm-work-loop.test.sh|\
     fm-composer-ghost.test.sh|fm-composer-lib.test.sh|\
     fm-crew-state.test.sh|fm-captain-hold-lifecycle.test.sh|\
+    fm-cursor-grok-pi-model.test.sh|\
     fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|fm-grok-harness.test.sh|\
     fm-kimi-harness.test.sh|fm-muse-harness.test.sh|fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-lint-workflows.test.sh|\
     fm-model-display.test.sh|\
-    fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
+    fm-operational-input.test.sh|fm-pi-primary-restart.test.sh|fm-pi-primary-types.test.sh|\
     fm-harness-adapter-references.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-subagent-pretool-check.test.sh|\
@@ -260,7 +263,7 @@ family_for_basename() {
     fm-remote-reply.test.sh|fm-remote-secondmate-lifecycle-e2e.test.sh|\
     fm-remote-secondmate-trace-context.test.sh|\
     fm-secondmate-harness.test.sh|fm-secondmate-lifecycle-e2e.test.sh|\
-    fm-secondmate-liveness.test.sh|fm-secondmate-reconcile.test.sh|\
+    fm-secondmate-liveness.test.sh|fm-crew-liveness.test.sh|fm-secondmate-reconcile.test.sh|\
     fm-secondmate-restart.test.sh|\
     fm-secondmate-safety.test.sh|fm-secondmate-sync.test.sh|\
     fm-startup-memory-budget.test.sh|fm-stow-cascade.test.sh|\
@@ -395,14 +398,18 @@ tests/fm-backend-herdr.test.sh
 tests/fm-brief.test.sh
 tests/fm-captain-hold-lifecycle.test.sh
 tests/fm-cd-pretool-check.test.sh
+tests/fm-primary-checkout-pretool-check.test.sh
+tests/fm-klartext-uebernahme-pretool-check.test.sh
 tests/fm-composer-ghost.test.sh
 tests/fm-composer-lib.test.sh
 tests/fm-crew-state.test.sh
+tests/fm-cursor-grok-pi-model.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-grok-harness.test.sh
 tests/fm-herdr-lab.test.sh
 tests/fm-lint.test.sh
 tests/fm-model-display.test.sh
+tests/fm-pi-primary-restart.test.sh
 tests/fm-pi-primary-types.test.sh
 tests/fm-pr-merge.test.sh
 tests/fm-review-diff.test.sh
@@ -414,6 +421,7 @@ tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
 tests/fm-tmux-submit-busy.test.sh
 tests/fm-transition-lib.test.sh
+tests/fm-work-loop.test.sh
 tests/fm-x-mode.test.sh
 EOF
 }
@@ -425,12 +433,15 @@ list_portable_parallel_1() {
   cat <<'EOF'
 tests/fm-x-mode.test.sh
 tests/fm-cd-pretool-check.test.sh
+tests/fm-primary-checkout-pretool-check.test.sh
+tests/fm-klartext-uebernahme-pretool-check.test.sh
 tests/fm-captain-hold-lifecycle.test.sh
 tests/fm-test-run.test.sh
 tests/fm-composer-ghost.test.sh
 tests/fm-grok-harness.test.sh
 tests/fm-lint.test.sh
 tests/fm-model-display.test.sh
+tests/fm-pi-primary-restart.test.sh
 tests/fm-pi-primary-types.test.sh
 tests/fm-review-diff.test.sh
 tests/fm-brief.test.sh
@@ -454,6 +465,8 @@ tests/fm-spawn-batch.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-composer-lib.test.sh
+tests/fm-work-loop.test.sh
+tests/fm-cursor-grok-pi-model.test.sh
 EOF
 }
 
@@ -587,7 +600,13 @@ tests/fm-gate-refuse.test.sh 4977
 tests/fm-gitignore-config.test.sh 62
 tests/fm-gotmp.test.sh 1310
 tests/fm-grok-continuity-live-e2e.test.sh 20
+tests/fm-ship-self-test-status.test.sh 1200
+tests/fm-work-loop.test.sh 2300
 tests/fm-grok-stop-live-e2e.test.sh 21
+tests/fm-pi-primary-restart.test.sh 363
+tests/fm-crew-liveness.test.sh 1200
+tests/fm-captain-outcome-delivery-live-e2e.test.sh 18000
+tests/fm-captain-outcome-delivery.test.sh 12000
 tests/fm-guard-stale-banner.test.sh 11218
 tests/fm-harness-adapter-instructions-live-e2e.test.sh 20
 tests/fm-harness-adapter-references.test.sh 55
@@ -1204,6 +1223,10 @@ families_for_changed_path() {
       printf '%s\n' backend-dispatch
       printf '%s\n' real-herdr-gated
       ;;
+    bin/fm-pi-primary-restart*)
+      printf '%s\n' pure-contract-unit
+      printf '%s\n' watcher-wake-lock
+      ;;
     bin/fm-watch*|bin/fm-wake*|bin/fm-inactive-reconcile.sh|\
     bin/fm-classify-lib.sh|bin/fm-daemon*|bin/fm-turnend-guard*|bin/fm-guard.sh)
       printf '%s\n' watcher-wake-lock
@@ -1324,6 +1347,10 @@ families_for_changed_path() {
       ;;
     bin/fm-lint.sh|bin/fm-lint-workflows.sh|bin/fm-install-shellcheck.sh|\
     bin/fm-install-actionlint.sh|\
+    bin/fm-work-loop.sh|bin/fm-capacity-lib.sh)
+      printf '%s\n' pure-contract-unit
+      printf '%s\n' pr-forge
+      ;;
     bin/fm-brief.sh|bin/fm-ensure-agents-md.sh|bin/fm-crew-state.sh|\
     bin/fm-captain-hold.sh|bin/fm-decision-hold.sh|bin/fm-supervision*|bin/fm-transition-lib.sh|\
     bin/fm-tmux-lib.sh|bin/fm-marker-lib.sh|bin/fm-operational-input.sh|bin/fm-tasks-axi-lib.sh|\

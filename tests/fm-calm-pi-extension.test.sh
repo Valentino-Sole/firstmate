@@ -864,10 +864,11 @@ InteractiveMode.prototype.addMessageToChat.call(
 );
 const operationalComponent = operationalChat.children[1];
 const legacyOperationalComponent = operationalChat.children[2];
-const stockOperationalComponent = new UserMessageComponent(watcherMessage, undefined, 1);
-const expectedCalmOffOperationalRows = ["", ...stockOperationalComponent.render(100)];
-if (JSON.stringify(operationalComponent.render(100)) !== JSON.stringify(expectedCalmOffOperationalRows)) {
-  throw new Error("Calm-off operational user rendering changed from Pi stock rows");
+if (operationalComponent.render(100).length !== 0) {
+  throw new Error("operational user rendering was visible while Calm was off");
+}
+if (legacyOperationalComponent.render(100).length !== 0) {
+  throw new Error("legacy operational user rendering was visible while Calm was off");
 }
 if (operationalHistory.length !== 1 || operationalHistory[0] !== watcherMessage) {
   throw new Error("operational user presentation changed Pi input history behavior");
@@ -1289,11 +1290,11 @@ if (
 ) {
   throw new Error("turning Calm off did not restore a legacy synthetic presentation row");
 }
-if (JSON.stringify(operationalComponent.render(100)) !== JSON.stringify(expectedCalmOffOperationalRows)) {
-  throw new Error("turning Calm off did not restore byte-identical operational user rows and spacing");
+if (operationalComponent.render(100).length !== 0) {
+  throw new Error("turning Calm off restored the current operational user row");
 }
-if (!legacyOperationalComponent.render(100).join("\n").includes("legacy presentation compatibility")) {
-  throw new Error("turning Calm off did not restore the supported legacy operational row");
+if (legacyOperationalComponent.render(100).length !== 0) {
+  throw new Error("turning Calm off restored the supported legacy operational user row");
 }
 for (const { name, baseline, actual } of rows) {
   if (JSON.stringify(actual.render(100)) !== JSON.stringify(baseline.render(100))) {
@@ -1817,35 +1818,48 @@ TS
       fail "Pi follow-up $label case did not process the monitoring notification"
     fi
 
-    pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
+    handled_marker="MONITOR_HANDLED_${label}_ONE"
+    if [ "$expected_notifications" -eq 2 ]; then
+      handled_marker="MONITOR_HANDLED_${label}_ONE_TWO"
+    fi
+    i=0
+    while [ "$i" -lt 120 ]; do
+      pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
+      if printf '%s\n' "$pane" | grep -Fq "$handled_marker" \
+        && [ "$(printf '%s\n' "$pane" | grep -Fc "CAPTAIN_ANSWER_$label" || true)" -eq 1 ]; then
+        break
+      fi
+      sleep 0.05
+      i=$((i + 1))
+    done
     [ "$(printf '%s\n' "$pane" | grep -Fc "CAPTAIN_ANSWER_$label" || true)" -eq 1 ] \
       || fail "Pi follow-up $label case rendered a duplicate captain answer"
     assert_contains "$pane" "CAPTAIN_PROMPT_$label" "Pi follow-up $label case hid the genuine captain prompt"
     assert_contains "$pane" "MONITOR_HANDLED_${label}_ONE" "Pi follow-up $label case did not render the intended processing result"
-    if [ "$calm_state" = on ]; then
-      assert_not_contains "$pane" "MONITOR_${label}_ONE" "Pi follow-up $label case rendered a Calm-hidden operational user row"
+    if [ "$calm_state" = absent ]; then
+      assert_contains "$pane" "MONITOR_${label}_ONE" "Pi follow-up $label case lost the operational user row without the Firstmate presentation adapter"
+      if [ "$expected_notifications" -eq 2 ]; then
+        assert_contains "$pane" "MONITOR_${label}_TWO" "Pi follow-up $label case lost the adjacent operational user row without the Firstmate presentation adapter"
+      fi
+    else
+      assert_not_contains "$pane" "MONITOR_${label}_ONE" "Pi follow-up $label case rendered a hidden operational user row"
       if [ "$label" = exact_watcher ]; then
         assert_not_contains "$pane" "FIRSTMATE WATCHER WAKE: signal: /home/fixture/github/kunchenguid/firstmate/state/oss-triage-t4.status" \
-          "Pi exact watcher case rendered the Calm-hidden authoritative payload"
+          "Pi exact watcher case rendered the hidden authoritative payload"
         assert_not_contains "$pane" "Run bin/fm-wake-drain.sh first and handle the queued wake." \
-          "Pi exact watcher case rendered the Calm-hidden drain instruction"
+          "Pi exact watcher case rendered the hidden drain instruction"
       elif [ "$label" = legacy_away ]; then
         assert_not_contains "$pane" "LEGACY_AWAY_E2E" \
-          "Pi legacy-away case rendered the narrowly supported Calm-hidden input"
+          "Pi legacy-away case rendered the narrowly supported hidden input"
       fi
       if [ "$expected_notifications" -eq 2 ]; then
-        assert_not_contains "$pane" "MONITOR_${label}_TWO" "Pi follow-up $label case rendered the adjacent Calm-hidden operational row"
+        assert_not_contains "$pane" "MONITOR_${label}_TWO" "Pi follow-up $label case rendered the adjacent hidden operational row"
       fi
       captain_line=$(printf '%s\n' "$pane" | grep -Fn "CAPTAIN_ANSWER_$label" | tail -1 | cut -d: -f1)
       handled_line=$(printf '%s\n' "$pane" | grep -Fn "MONITOR_HANDLED_${label}_ONE" | tail -1 | cut -d: -f1)
       geometry_gap=$((handled_line - captain_line))
       [ "$geometry_gap" -eq 2 ] \
         || fail "Pi follow-up $label case consumed $geometry_gap rows between neighboring assistant text instead of the two-row visible-only geometry"
-    else
-      assert_contains "$pane" "MONITOR_${label}_ONE" "Pi follow-up $label case lost the Calm-off operational user row"
-      if [ "$expected_notifications" -eq 2 ]; then
-        assert_contains "$pane" "MONITOR_${label}_TWO" "Pi follow-up $label case lost the adjacent Calm-off operational user row"
-      fi
     fi
 
     node - "$session_file" "$label" "$expected_notifications" <<'JS' \
@@ -1967,7 +1981,7 @@ JS
   run_followup_case restart-before on restart_before 1
   local restart_session=$session_file
   run_followup_case restart-after on restart_after 1 "$restart_session"
-  pass "Pi operational follow-up E2E processes exact user-role notifications once while Calm hides current and adjacent rows, Calm off and absent render them, and restart preserves semantics"
+  pass "Pi operational follow-up E2E processes exact user-role notifications once while the Firstmate presentation adapter hides current and adjacent rows, absent adapter renders them, and restart preserves semantics"
 }
 
 test_hidden_block_geometry_e2e() {
@@ -3079,6 +3093,180 @@ JS
   pass "Pi Calm working ship moves on a slow independent cadence over faster fixed-cell blue water, paints the complete boat standard yellow with balanced resets, keeps ANSI-stripped width exact, flips the directional sail on the exact bounce at both edges and every width, clamps visible and hidden resizes, falls back deterministically when narrow, freezes and resumes column/direction across settle/start without hidden-time jumps or duplicate timers, resets only on a fresh session, and installs and removes one scheduler-owning widget across starts, settle, abort, failure, shutdown, reload, replacement, and Calm toggles while leaving Calm-off visibility untouched"
 }
 
+test_calm_stale_context_after_session_replacement() {
+  local fixture out output_file status
+  if ! command -v node >/dev/null 2>&1; then
+    echo "skip: node not found for Pi calm stale-context test"
+    return 0
+  fi
+  if [ ! -f "$PI_PACKAGE_DIR/package.json" ]; then
+    echo "skip: installed @earendil-works/pi-coding-agent package not found"
+    return 0
+  fi
+
+  fixture="$TMP_ROOT/stale-context"
+  mkdir -p "$fixture/lib" "$fixture/node_modules/@earendil-works"
+  cp "$EXT" "$fixture/fm-calm.ts"
+  cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
+  cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
+  cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
+  cp "$WORKING_SHIP" "$fixture/lib/fm-calm-working-ship.ts"
+  cp "$PI_OPERATIONAL_INPUT" "$fixture/lib/fm-operational-input.ts"
+  ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
+  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
+
+  output_file="$fixture/node-output"
+  (cd "$fixture" && EXT="$fixture/fm-calm.ts" node --input-type=module) >"$output_file" 2>&1 <<'JS'
+import { pathToFileURL } from "node:url";
+
+const STALE =
+  "This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload().";
+
+let ctxEpoch = 0;
+
+function makePi() {
+  const handlers = new Map();
+  const pi = {
+    events: { emit() {}, on() {} },
+    on(event, handler) {
+      const list = handlers.get(event) ?? [];
+      list.push(handler);
+      handlers.set(event, list);
+    },
+    registerCommand() {},
+    registerEntryRenderer() {},
+    registerTool() {},
+    getAllTools() {
+      return [];
+    },
+    getHandlers() {
+      return handlers;
+    },
+  };
+  return pi;
+}
+
+function makeContext(ui, epoch) {
+  return {
+    get ui() {
+      if (epoch !== ctxEpoch) throw new Error(STALE);
+      return ui;
+    },
+  };
+}
+
+function invalidateCapturedContexts() {
+  ctxEpoch += 1;
+}
+
+function makeUi() {
+  let editorText = "";
+  let terminalInputHandler;
+  return {
+    getEditorText() {
+      return editorText;
+    },
+    getToolsExpanded() {
+      return false;
+    },
+    onTerminalInput(handler) {
+      terminalInputHandler = handler;
+      return () => {
+        if (terminalInputHandler === handler) terminalInputHandler = undefined;
+      };
+    },
+    fireTerminalInput(data) {
+      terminalInputHandler?.(data);
+    },
+    setEditorText(text) {
+      editorText = text;
+    },
+    setHiddenThinkingLabel() {},
+    setStatus() {},
+    setToolsExpanded() {},
+    setWorkingVisible() {},
+    notify() {},
+  };
+}
+
+async function fire(handlers, event, payload, ctx) {
+  for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);
+}
+
+const extension = await import(`${pathToFileURL(process.env.EXT).href}?stale=${Date.now()}`);
+const pi = makePi();
+extension.default(pi);
+const handlers = pi.getHandlers();
+
+const firstUi = makeUi();
+const firstEpoch = ctxEpoch;
+const firstCtx = makeContext(firstUi, firstEpoch);
+await fire(handlers, "session_start", { reason: "startup" }, firstCtx);
+
+firstUi.setEditorText("/export calm.html");
+try {
+  firstUi.fireTerminalInput("\r");
+} catch (error) {
+  throw new Error(`export submit threw before invalidation: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+await fire(handlers, "session_shutdown", { reason: "reload" }, firstCtx);
+invalidateCapturedContexts();
+
+try {
+  firstCtx.ui.getEditorText();
+  throw new Error("stale ctx.ui getter did not throw after invalidation");
+} catch (error) {
+  if (!(error instanceof Error) || !error.message.includes("stale after session replacement")) {
+    throw error;
+  }
+}
+
+try {
+  firstUi.fireTerminalInput("\r");
+} catch (error) {
+  throw new Error(`stale terminal input listener still used ctx after shutdown: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+await new Promise((resolve) => setTimeout(resolve, 0));
+
+const secondUi = makeUi();
+const secondCtx = makeContext(secondUi, ctxEpoch);
+let currentCtx = secondCtx;
+await fire(handlers, "session_start", { reason: "reload" }, secondCtx);
+
+secondUi.setEditorText("/export calm-after-reload.html");
+try {
+  secondUi.fireTerminalInput("\r");
+} catch (error) {
+  throw new Error(`export submit threw on the replacement session: ${error instanceof Error ? error.message : String(error)}`);
+}
+await new Promise((resolve) => setTimeout(resolve, 0));
+
+for (const reason of ["new", "resume", "fork"]) {
+  await fire(handlers, "session_shutdown", { reason }, currentCtx);
+  invalidateCapturedContexts();
+  const nextUi = makeUi();
+  currentCtx = makeContext(nextUi, ctxEpoch);
+  await fire(handlers, "session_start", { reason }, currentCtx);
+  nextUi.setEditorText("/share");
+  try {
+    nextUi.fireTerminalInput("\r");
+  } catch (error) {
+    throw new Error(`${reason} replacement export submit threw: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+JS
+  status=$?
+  out=$(cat "$output_file")
+  [ "$status" -eq 0 ] || fail "Pi calm stale-context path failed: $out"
+  [ -z "$out" ] || fail "Pi calm stale-context test printed output: $out"
+  pass "Pi Calm export terminal-input listeners and deferred export cleanup survive reload and session replacement without touching stale ctx"
+}
+
 test_interactive_terminal_e2e() {
   local project config home session_file export_file export_dom default_snapshot expanded_snapshot hidden_snapshot active_before_snapshot active_hidden_snapshot export_snapshot export_settled_snapshot restored_snapshot working_snapshot working_response_snapshot restarted_snapshot resumed_restored_snapshot hash_before hash_after now version chrome chrome_pid chrome_wait chrome_reap_wait active_wait active_screen_wait boat_frame_one boat_frame_two boat_resized_snapshot boat_focus_snapshot boat_cleared_snapshot boat_hull_line boat_sail_line boat_column_one boat_column_two boat_line boat_color_snapshot boat_color_line boat_water_snapshot boat_water_line boat_water_first boat_water_changed boat_narrow_snapshot boat_narrow_sails boat_freeze_snapshot boat_resume_snapshot boat_freeze_column boat_freeze_sail boat_resume_column boat_resume_sail
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
@@ -3607,18 +3795,18 @@ JS
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
   wait_for_text "$restored_snapshot" "CALM_E2E_OUTPUT" \
     || fail "second /calm did not restore tool result output"
-  wait_for_text "$restored_snapshot" "/tmp/active-probe.status" \
-    || fail "second /calm did not restore a synthetic row received while Calm was active"
+  wait_for_text "$restored_snapshot" "fm_watch_arm_pi" \
+    || fail "second /calm did not restore the Firstmate watcher tool shell"
   assert_contains "$(cat "$restored_snapshot")" "fm_watch_arm_pi" "second /calm did not restore the Firstmate watcher tool shell"
   assert_contains "$(cat "$restored_snapshot")" "FIRSTMATE WATCHER WAKE: signal: /tmp/probe.status" "second /calm did not restore the synthetic Firstmate user row"
-  for restored in \
+  for hidden in \
     CURRENT_WATCHER_E2E \
     CURRENT_TURN_END_E2E \
     CURRENT_AWAY_E2E \
     CURRENT_FROM_FIRSTMATE_E2E \
     CURRENT_LAUNCH_BRIEF_E2E
   do
-    assert_contains "$(cat "$restored_snapshot")" "$restored" "second /calm did not restore current operational kind $restored"
+    assert_not_contains "$(cat "$restored_snapshot")" "$hidden" "second /calm restored current operational kind $hidden"
   done
   assert_contains "$(cat "$restored_snapshot")" "Warning: CALM_TRANSIENT_DIAGNOSTIC" "second /calm dropped a transient diagnostic"
   assert_contains "$(cat "$restored_snapshot")" " Error:" "second /calm dropped the synthetic delivery diagnostic"
@@ -3977,4 +4165,5 @@ test_calm_mid_turn_working_notes
 test_operational_followup_turn_e2e
 test_hidden_block_geometry_e2e
 test_working_ship_geometry_and_lifecycle
+test_calm_stale_context_after_session_replacement
 test_interactive_terminal_e2e

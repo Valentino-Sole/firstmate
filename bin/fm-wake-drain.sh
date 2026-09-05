@@ -22,6 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-lease-lib.sh
 . "$SCRIPT_DIR/fm-lease-lib.sh"
+# shellcheck source=bin/fm-captain-outcome-delivery-lib.sh
+. "$SCRIPT_DIR/fm-captain-outcome-delivery-lib.sh"
 
 DRAIN_TMP=
 DRAIN_VIEW_TMP=
@@ -337,6 +339,9 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
     fi
     output="$output$line
 "
+    # The backstop is this line's presentation; record it in the persistent
+    # outcome store so the outcome section below never shows it again.
+    fm_captain_outcome_note_presented_status_line "$task" "$event" || { rc=1; break; }
     STATUS_OUTCOME_BACKSTOP_ACKNOWLEDGED="$STATUS_OUTCOME_BACKSTOP_ACKNOWLEDGED$task$(printf '\t')$event_endpoint
 "
     used=$((used + bytes))
@@ -514,17 +519,31 @@ EOF
   printf 'RECORD DIVERGENCE: reconcile each one - record the captain'"'"'s own words with bin/fm-captain-hold.sh answer <task> --decision-file <path>, or re-open the status decision when that resolution was not the captain'"'"'s word.\n' || return 1
 }
 
+# Persistent exactly-once outcomes that no section above delivers (buried
+# captain-facing results; bin/fm-captain-outcome-delivery-lib.sh owns the
+# boundary). Printed after the backstop so its presentations are already on
+# record, and on the no-status-file path too, because a registered outcome
+# outlives its status file.
+print_captain_outcome_delivery_section() {
+  [ "$ACTOR" = main ] || return 0
+  "$SCRIPT_DIR/fm-captain-outcome-delivery.sh" present || return 1
+}
+
 print_status_sections() {
   local snapshot=${1:-} fully_presented=${2:-} acknowledged prepared
   if [ -z "$snapshot" ]; then snapshot=$(status_presentation_snapshot "$STATE") || return 1; fi
-  [ -n "$snapshot" ] || return 0
+  if [ -z "$snapshot" ]; then
+    print_captain_outcome_delivery_section || return 1
+    return 0
+  fi
   acknowledged=$(status_acknowledge_presented_snapshot "$STATE" "$snapshot" "$fully_presented") || return 1
   prepared=$(mktemp "$STATE/.status-presentation.prepared.XXXXXX") || return 1
   if ! {
     print_unread_status_section "$snapshot" \
       && print_status_outcome_backstop_section "$snapshot" \
       && print_open_decisions_section "$snapshot" \
-      && print_record_divergence_section
+      && print_record_divergence_section \
+      && print_captain_outcome_delivery_section
   } > "$prepared"; then
     rm -f -- "$prepared"
     return 1

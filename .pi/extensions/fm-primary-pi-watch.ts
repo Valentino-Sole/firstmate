@@ -23,7 +23,7 @@
 // replacement handoff.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
@@ -149,6 +149,20 @@ const armReadyTimeoutMs = positiveInteger(
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
+const pendingRestartMarker = `${state}/.pi-primary-restart-pending`;
+
+function clearPendingRestart(): void {
+  try {
+    unlinkSync(pendingRestartMarker);
+  } catch {
+  }
+}
+
+function consumePendingRestart(): boolean {
+  if (!existsSync(pendingRestartMarker)) return false;
+  clearPendingRestart();
+  return true;
+}
 
 let nextGenerationId = 0;
 let nextHandoffId = 0;
@@ -1083,7 +1097,19 @@ export default function (pi: ExtensionAPI) {
     activateGeneration(generation);
     markLoaded();
     if (lockOwnership() !== "owned") return;
-    activateOwnedWatch(generation);
+    const activation = activateOwnedWatch(generation);
+    // An automatic Pi-primary restart (bin/fm-pi-primary-restart.sh) leaves a
+    // marker; once the owned watch is armed again, wake the session so it
+    // resumes in-flight work without a captain prompt.
+    if (!consumePendingRestart()) return;
+    if (!activation.ok) return;
+    void sendWake(
+      generation,
+      "PRIMARY RESTART COMPLETE - the session resumed after an automatic Pi-primary restart. " +
+        "Run bin/fm-wake-drain.sh first, handle any queued wakes, then continue in-flight work.",
+    ).catch(() => {
+      // Delivery errors are surfaced on the next guard cycle if needed.
+    });
   });
   pi.on?.("session_shutdown", async (event) => {
     const replacement = event.reason === "reload" || event.reason === "new" || event.reason === "resume" || event.reason === "fork";

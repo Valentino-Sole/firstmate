@@ -36,6 +36,8 @@ test_conditional_stanzas() {
   assert_contains "$out" "- Lock: read-only" "read-only stanza missing"
   assert_contains "$out" "- Away mode: active" "afk stanza missing"
   assert_contains "$out" "- X mode: active" "x-mode stanza missing"
+  assert_contains "$out" "- Captain language: keep captain-facing supervision summaries and status responses in German" \
+    "captain-language hardening stanza missing"
   assert_contains "$out" "$config/x-mode.env" "x-mode stanza did not render the effective config path"
   assert_contains "$out" 'Mode: Codex foreground checkpoint.' "codex snippet missing"
   assert_not_contains "$out" "Source \`config/x-mode.env\`" "snippet kept the repo-relative x-mode config path"

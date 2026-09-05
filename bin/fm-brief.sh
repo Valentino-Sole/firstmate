@@ -278,6 +278,7 @@ Handle routine work yourself.
 Report only true captain-relevant outcomes or a declared external wait by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
 States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
+Write every free-text status note in German (keep URLs/IDs exact); never paste raw English logs or multiline worker dumps into the status line.
 Use \`$PAUSED_VERB: {why}\` (distinct from \`blocked:\`) only when your domain is deliberately idling on a known external wait you expect to clear on its own; use \`blocked:\` when you are stuck and need firstmate to act.
 Use this only for material phase changes, a captain decision, a real blocker, a failure, work ready for review, or work you landed.
 Work you landed includes a merge you performed yourself under standing merge authority and one the captain merged on the forge: under that authority nothing is ever \"ready for review\", so a landed merge that goes unreported reaches the captain as silence.
@@ -296,6 +297,8 @@ You are persistent by default. Do not exit just because your queue is empty.
 On startup and restart, run normal firstmate bootstrap and recovery through \`bin/fm-session-start.sh\` for your own home, but only to RECONCILE work that is already yours: in-flight crewmates, tracked backlog items, and durable watches recorded in this home.
 When you have no assigned or in-flight work after that reconciliation, go idle and wait silently for the main firstmate to route you a task.
 An empty queue is a healthy resting state, not a cue to invent work: never spawn a survey, audit, or any self-directed "find work" task on your own initiative.
+Treat an idle/alive worker endpoint as healthy: relaunch only after a real dead-or-missing failure is confirmed.
+Never start the same task id in parallel to a worker that may still be active; use steer or the owned relaunch path instead of duplicate spawn.
 If this charter cannot be carried out, append \`blocked: {why}\` or \`failed: {why}\` to the main status file and stop.
 EOF
 if [ "$SECONDMATE_CHARTER" = "{TASK}" ]; then
@@ -371,6 +374,7 @@ The report is the only thing that survives, so anything worth keeping must be in
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
+   Write every free-text status note in German (keep URLs/IDs exact); never paste raw English logs or multiline worker dumps into the status line.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
    would act on and the needs-decision/blocked/paused/done/failed states. No step-by-step
    FYI progress lines; firstmate reads your pane for that.
@@ -426,6 +430,12 @@ case "$MODE" in
 esac
 DOD=$(fm_dod_block "$MODE" "$ID") || exit 1
 
+# shellcheck disable=SC2016 # Backticks are literal prompt markup.
+SHIP_SELF_TEST_SECTION='# Self-test before done
+Before your terminal \`done:\` status, run this project'\''s test command yourself (for example \`./tests/...\` or the project'\''s documented test entrypoint). Firstmate does not run your tests for you.
+Include the pass/fail count in your terminal status as \`Tests N/0\` (passed/failed), for example \`done: ready in branch fm/'"$ID"' · Tests 42/0\`. A terminal \`done:\` without a self-test report is refused at local-only landing time.
+'
+
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
@@ -471,6 +481,8 @@ $ASK_USER_BLOCK
 7. Never stop, restart, or update the shared \`no-mistakes\` daemon - it is one instance serving
    every lane/home, so restarting it kills other lanes' in-flight pipeline runs. On ANY no-mistakes
    daemon error, append \`blocked: {the daemon error}\` and stop; only firstmate manages the daemon.
+
+$SHIP_SELF_TEST_SECTION
 
 $INBOX_SECTION
 

@@ -155,6 +155,88 @@ EOF
   pass "fm-spawn: the brief's recorded mode and the spawn's explicit mode must agree"
 }
 
+# A scaffold placeholder is not task intent. Launching it leaks template text to
+# the worker, so spawn must refuse before any endpoint is created.
+test_spawn_refuses_an_unfilled_task_placeholder() {
+  local rec home proj fakebin out status
+  rec=$(make_home placeholder)
+  IFS='|' read -r home proj fakebin <<EOF
+$rec
+EOF
+  mkdir -p "$home/data/delivery-placeholder-e1"
+  cat > "$home/data/delivery-placeholder-e1/brief.md" <<'EOF'
+You are a crewmate.
+
+# Task
+## Captain's intent
+{TASK}
+## Firstmate spec
+{FIRSTMATE_SPEC}
+
+# Definition of done
+Delivery contract: mode=no-mistakes
+EOF
+  out=$(run_spawn "$home" "$fakebin" delivery-placeholder-e1 "$proj" claude --mode no-mistakes --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "an unfilled brief placeholder should exit non-zero"
+  assert_contains "$out" "still contains {TASK}" "placeholder refusal did not name the unfilled token"
+  assert_absent "$home/state/delivery-placeholder-e1.meta" "placeholder refusal still wrote task metadata"
+  pass "fm-spawn: an unfilled {TASK} brief placeholder is refused before launch"
+}
+
+# A fresh spawn must never create a second worker on a task id that may already
+# be active. Ambiguous or unreadable endpoint states are not safe enough to allow
+# a duplicate launch.
+test_spawn_refuses_duplicate_launch_when_existing_endpoint_is_live() {
+  local rec home proj fakebin out status
+  rec=$(make_home duplicate-live)
+  IFS='|' read -r home proj fakebin <<EOF
+$rec
+EOF
+  write_brief "$home" delivery-live-f2 no-mistakes
+  fm_write_meta "$home/state/delivery-live-f2.meta" \
+    "window=firstmate:fm-delivery-live-f2" \
+    "endpoint_task_id=delivery-live-f2" \
+    "worktree=$proj" \
+    "project=$proj" \
+    "harness=claude" \
+    "kind=ship" \
+    "mode=no-mistakes" \
+    "yolo=off"
+  cat > "$fakebin/tmux" <<'SH'
+#!/bin/sh
+set -u
+last=
+for arg in "$@"; do
+  last=$arg
+done
+case "${1:-}" in
+  list-windows)
+    printf '%s\n' "${FM_TEST_WINDOW_NAME:-}"
+    exit 0
+    ;;
+  display-message)
+    case "$last" in
+      '#{pane_tty}') printf '\n' ;;
+      '#{pane_current_command}') printf '%s\n' "${FM_TEST_PANE_COMMAND:-claude}" ;;
+      '#{pane_current_path}') printf '%s\n' "${FM_TEST_PANE_PATH:-/tmp}" ;;
+      *) printf '\n' ;;
+    esac
+    exit 0
+    ;;
+esac
+exit 1
+SH
+  chmod +x "$fakebin/tmux"
+  out=$(FM_TEST_WINDOW_NAME='fm-delivery-live-f2' run_spawn "$home" "$fakebin" delivery-live-f2 "$proj" claude --mode no-mistakes --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "duplicate spawn over a live endpoint should exit non-zero"
+  assert_contains "$out" "refusing duplicate spawn while another worker may still be active" \
+    "duplicate-live refusal did not report the active-endpoint guard"
+  assert_not_contains "$out" "spawned delivery-live-f2" "duplicate-live guard still launched a worker"
+  pass "fm-spawn: a fresh spawn refuses when the same task id already has a live endpoint"
+}
+
 # The registry is the captain's standing posture, so dropping below its rigor is
 # allowed but never silent, while matching or exceeding it stays quiet. An
 # unregistered project resolves to the same no-mistakes standing default
@@ -750,6 +832,8 @@ EOF
 test_ship_spawn_requires_a_valid_delivery_contract
 test_scout_and_secondmate_refuse_delivery_flags
 test_spawn_refuses_a_brief_mode_mismatch
+test_spawn_refuses_an_unfilled_task_placeholder
+test_spawn_refuses_duplicate_launch_when_existing_endpoint_is_live
 test_spawn_notices_a_rigor_downgrade_against_the_registry
 test_scout_records_no_delivery_posture
 test_promote_requires_and_records_the_delivery_contract

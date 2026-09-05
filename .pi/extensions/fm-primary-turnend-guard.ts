@@ -443,6 +443,26 @@ async function claimSessionstartMessage(
   return sessionstartMessage(generation, result);
 }
 
+function runCaptainOutcomePresent(): string {
+  if (lockOwnership() === "other") return "";
+  const result = spawnSync(
+    `${root}/bin/fm-captain-outcome-delivery.sh`,
+    ["present"],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FM_HOME: fmHome,
+        FM_STATE_OVERRIDE: state,
+        FM_SUPERVISION_ACTOR: "main",
+      },
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  if (result.status !== 0) return "";
+  return result.stdout.trim();
+}
+
 function runGuard(): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
     const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
@@ -459,7 +479,9 @@ function runGuard(): Promise<{ code: number; stderr: string }> {
 }
 
 // PreToolUse seatbelts (bin/fm-arm-pretool-check.sh, docs/arm-pretool-check.md;
-// bin/fm-cd-pretool-check.sh, docs/cd-guard.md). Both piggyback on this same
+// bin/fm-cd-pretool-check.sh, docs/cd-guard.md;
+// bin/fm-primary-checkout-pretool-check.sh, docs/primary-checkout-guard.md;
+// bin/fm-klartext-uebernahme-pretool-check.sh, docs/klartext-uebernahme-isolation.md).
 // extension file rather than separate ones so no extra Pi -e flag is needed at
 // launch - the primary already loads this file for the turn-end guard, and
 // pi.on("tool_call", ...) can block (verified 2026-07-09 against pi 0.80.5:
@@ -485,6 +507,14 @@ function runPretoolCheck(command: string): Promise<{ code: number; stderr: strin
 
 function runCdCheck(command: string): Promise<{ code: number; stderr: string }> {
   return runChecker("fm-cd-pretool-check.sh", command);
+}
+
+function runPrimaryCheckoutCheck(command: string): Promise<{ code: number; stderr: string }> {
+  return runChecker("fm-primary-checkout-pretool-check.sh", command);
+}
+
+function runKlartextUebernahmeCheck(command: string): Promise<{ code: number; stderr: string }> {
+  return runChecker("fm-klartext-uebernahme-pretool-check.sh", command);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -551,6 +581,30 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
+  // Captain outcome delivery (bin/fm-captain-outcome-delivery.sh): present the
+  // UNPRESENTED outcomes once per prompt as their own custom message. Kept as a
+  // separate handler from the session-start claim above so Pi collects both
+  // (its runner gathers every handler's `message`). Registered only where the
+  // delivery script exists, so a home or fixture without it keeps the single
+  // session-start handler and never spawns a missing script per prompt.
+  if (existsSync(`${root}/bin/fm-captain-outcome-delivery.sh`)) {
+    pi.on?.("before_agent_start", async () => {
+      const section = runCaptainOutcomePresent();
+      if (!section) return undefined;
+      try {
+        return {
+          message: {
+            customType: "firstmate-captain-outcome-delivery",
+            content: encodeFirstmateOperationalInput("captain-outcome-delivery", section),
+            display: false,
+          },
+        };
+      } catch {
+        return undefined;
+      }
+    });
+  }
+
   // Pi's compaction equivalent. Manual compaction is idle and auto-compaction
   // may retry without another before_agent_start, so the event keeps its
   // existing delivery path while sharing generation ownership and cancellation.
@@ -584,6 +638,20 @@ export default function (pi: ExtensionAPI) {
     const cdResult = await runCdCheck(command);
     if (cdResult.code === 2) {
       return { block: true, reason: cdResult.stderr.trim() || "denied by the cd-guard PreToolUse seatbelt" };
+    }
+    const primaryCheckoutResult = await runPrimaryCheckoutCheck(command);
+    if (primaryCheckoutResult.code === 2) {
+      return {
+        block: true,
+        reason: primaryCheckoutResult.stderr.trim() || "denied by the primary-checkout PreToolUse seatbelt",
+      };
+    }
+    const klartextResult = await runKlartextUebernahmeCheck(command);
+    if (klartextResult.code === 2) {
+      return {
+        block: true,
+        reason: klartextResult.stderr.trim() || "denied by the Klartext-Uebernahme isolation PreToolUse seatbelt",
+      };
     }
     const result = await runPretoolCheck(command);
     if (result.code !== 2) return {};

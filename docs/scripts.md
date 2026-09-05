@@ -50,6 +50,10 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
+| `fm-primary-checkout-pretool-check.sh` | Stable PreToolUse transport for the primary-checkout guard (docs/primary-checkout-guard.md) |
+| `fm-klartext-uebernahme-index.sh` | Read-only index entrypoint for the isolated Arbeits-PC copy (docs/klartext-uebernahme-isolation.md) |
+| `fm-klartext-uebernahme-pretool-check.sh` | Stable PreToolUse transport for the Klartext-Uebernahme isolation guard (docs/klartext-uebernahme-isolation.md) |
+| `fm-primary-checkout-command-policy.mjs` | Semantic owner of the primary-checkout PreToolUse policy (docs/primary-checkout-guard.md) |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |
 | `fm-supervision-instructions.sh` | Render the session-start primary-harness supervision block or the one-line repair instruction |
 | `fm-home-seed.sh`        | Transactionally provision a local secondmate home and maintain `data/secondmates.md` |
@@ -70,6 +74,8 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-config-push.sh`      | Push declared inherited local material to live local or remote secondmates and send the placement-specific config reread when changed |
 | `fm-project-mode.sh`     | Resolve a project's registered delivery posture from `data/projects.md` for fleet sync and home seeding |
 | `fm-merge-local.sh`      | Fast-forward a `local-only` project's local default branch after approval            |
+| `fm-capacity-lib.sh`     | Shared worker-slot measurement and occupancy helpers used by `fm-work-loop.sh`     |
+| `fm-work-loop.sh`        | Report measured free worker slots, real-worker floor, and plan parallel refill from a fixed list or backlog ready |
 | `fm-review-diff.sh`      | Review a crewmate branch or resolved PR head against the authoritative base          |
 | `fm-marker-lib.sh`       | Compatibility entry point for the from-firstmate carrier owned by `fm-operational-input.sh` |
 | `fm-task-inbox-lib.sh`   | Single owner of durable steering-inbox records, acknowledgement, doorbells, and the delivery-attempt ladder |
@@ -85,6 +91,9 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-gate-refuse-lib.sh`  | Shared no-mistakes gate-context refusal for fleet lifecycle entrypoints               |
 | `fm-watch-arm.sh`        | Verified home-scoped watcher arm wrapper with loud cycle endings and bounded lifecycle ledger |
 | `fm-watch-checkpoint.sh` | Run one bounded foreground watcher checkpoint for Codex-style supervision            |
+| `fm-pi-primary-restart.sh` | Automatically restart a live Pi primary: checkpoint, clean exit, session resume, lock reclaim, and extension-owned watcher re-arm |
+| `fm-pi-primary-restart-lib.sh` | Shared helpers for Pi-primary restart checkpointing and launch planning |
+| `fm-crew-liveness-lib.sh` | Pi-primary session-start recovery for dead or missing cursor-grok crewmates |
 | `fm-watch.sh`            | Singleton-safe watcher: absorb benign wakes, detect stalled local-secondmate wake queues, and exit on actionable ones |
 | `fm-inactive-reconcile.sh` | Reconcile long-inactive direct crewmate terminal outcomes without forge access |
 | `fm-afk-start.sh`        | Run the common sourceable away-mode daemon entry in the foreground                      |
