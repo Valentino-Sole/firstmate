@@ -120,19 +120,23 @@ status_has_self_test_report() {  # <status-line>
   printf '%s\n' "$line" | grep -Eq '[Tt]ests[[:space:]]+[0-9]+/[0-9]+'
 }
 
-# 0 if the status log documents a self-test report on or before its terminal done:.
+# 0 if the status log documents a self-test report on or before its terminal
+# done:. The terminal done: is the LAST one in the log: a worker that reports
+# done twice (an early completion note, then the real one carrying Tests N/0)
+# has documented its self-test before it finished, and an earlier done: without
+# the report must not shadow that. A report after the last done: does not count.
 status_log_self_test_reported_before_done() {  # <status-file>
-  local f=$1 line
+  local f=$1 line seen=1 before_last_done=1
   [ -e "$f" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line=${line//$'\r'/}
     [ -z "${line//[[:space:]]/}" ] && continue
-    status_has_self_test_report "$line" && return 0
+    status_has_self_test_report "$line" && seen=0
     if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = 'done' ]; then
-      return 1
+      before_last_done=$seen
     fi
   done < "$f"
-  return 1
+  return "$before_last_done"
 }
 
 # Parse Tests N/M from one status line into STATUS_TEST_PASSED and
@@ -152,22 +156,24 @@ status_parse_self_test_counts() {  # <status-line>
   return 0
 }
 
-# 0 when the status log documents Tests N/0 on or before its terminal done:.
+# 0 when the status log documents Tests N/0 on or before its terminal done:,
+# the last done: in the log (same rule as above). The newest report before that
+# done: decides: a later clean run supersedes an earlier failing one, and a
+# later failing run supersedes an earlier clean one.
 status_log_self_test_clean_before_done() {  # <status-file>
-  local f=$1 line
+  local f=$1 line latest=1 before_last_done=1
   [ -e "$f" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line=${line//$'\r'/}
     [ -z "${line//[[:space:]]/}" ] && continue
     if status_parse_self_test_counts "$line"; then
-      [ "$STATUS_TEST_FAILED" -eq 0 ] && return 0
-      return 1
+      if [ "$STATUS_TEST_FAILED" -eq 0 ]; then latest=0; else latest=1; fi
     fi
     if status_is_terminal_verb "$line" && [ "$(status_line_verb "$line")" = 'done' ]; then
-      return 1
+      before_last_done=$latest
     fi
   done < "$f"
-  return 1
+  return "$before_last_done"
 }
 
 # 0 if the given (last) status line's leading verb is a real terminal captain verb
