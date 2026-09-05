@@ -30,6 +30,32 @@ test_status_has_self_test_report_rejects_missing_counts() {
   pass "status_has_self_test_report rejects lines without Tests N/0"
 }
 
+test_status_log_last_done_is_the_terminal_done() {
+  local dir
+  dir="$TMP_ROOT/last-done"; mkdir -p "$dir"
+  # An early done: without a report, then the real completion with Tests N/0.
+  printf 'done: first pass shipped\nworking: self-test run\ndone: ready in branch fm/x · Tests 14/0\n' > "$dir/twice.status"
+  status_log_self_test_reported_before_done "$dir/twice.status" \
+    || fail "an earlier done: without a report shadowed the terminal done: that carried Tests N/0"
+  status_log_self_test_clean_before_done "$dir/twice.status" \
+    || fail "an earlier done: without a report shadowed a clean terminal done:"
+  # A report only after the last done: does not count.
+  printf 'done: ready in branch fm/x\nworking: Tests 14/0\n' > "$dir/after.status"
+  if status_log_self_test_reported_before_done "$dir/after.status"; then
+    fail "a report after the last done: was accepted"
+  fi
+  # A failing run before an earlier done, clean before the last: the last wins.
+  printf 'working: Tests 3/2\ndone: shaky\nworking: Tests 5/0\ndone: ready in branch fm/x · Tests 5/0\n' > "$dir/superseded.status"
+  status_log_self_test_clean_before_done "$dir/superseded.status" \
+    || fail "a later clean run did not supersede an earlier failing one"
+  # A failing run after the clean one, before the last done: the failure wins.
+  printf 'working: Tests 5/0\ndone: early\nworking: Tests 5/1\ndone: ready in branch fm/x\n' > "$dir/regressed.status"
+  if status_log_self_test_clean_before_done "$dir/regressed.status"; then
+    fail "an earlier clean run hid a later failing one"
+  fi
+  pass "the last done: is the terminal done, and the newest report before it decides"
+}
+
 test_status_log_self_test_reported_before_done() {
   local dir="$TMP_ROOT/log-fold"
   mkdir -p "$dir"
@@ -140,6 +166,7 @@ test_ship_brief_scaffold_carries_self_test_contract() {
 
 test_status_has_self_test_report_accepts_common_shapes
 test_status_has_self_test_report_rejects_missing_counts
+test_status_log_last_done_is_the_terminal_done
 test_status_log_self_test_reported_before_done
 test_status_parse_self_test_counts_and_clean_log
 test_merge_local_refuses_done_without_self_test_report
