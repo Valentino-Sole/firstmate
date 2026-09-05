@@ -265,6 +265,7 @@ Route durable knowledge to its most specific owner:
 - Task-scoped notes belong with the backlog item, and investigation findings belong in the scout report.
 - Knowledge useful to almost every contributor to one project belongs in that project's committed `AGENTS.md`.
 - Knowledge general to every firstmate user belongs in this repo's shared tracked surface.
+- Foreign-source backups captured against a domain-expiry deadline (collectosk.com, tcdb.com) are reference/backup copies only, never automatic truth or a sealed decision for Card-Arena checklist data (captain decision 2026-09-03); `docs/fremdquellen-quellenrisiko.md` owns the contract.
 
 Firstmate never writes a project's `AGENTS.md` directly.
 A crewmate creates or updates it lazily through the project's selected delivery path, using `bin/fm-ensure-agents-md.sh` and preferring pointers to authoritative sources over copied detail.

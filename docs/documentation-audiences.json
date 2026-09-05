@@ -273,12 +273,28 @@
       "audience": "operator-example"
     },
     {
+      "path": "docs/examples/work-loop-list",
+      "audience": "operator-example"
+    },
+    {
+      "path": "docs/klartext-uebernahme-isolation.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/primary-checkout-guard.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/fm-test-isolation-proof.md",
       "audience": "maintainer-verification"
     },
     {
       "path": "docs/fm-test-portable-shards.md",
       "audience": "maintainer-verification"
+    },
+    {
+      "path": "docs/fremdquellen-quellenrisiko.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "docs/gitlab-merge-watch.md",
