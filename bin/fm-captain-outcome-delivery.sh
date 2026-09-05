@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # fm-captain-outcome-delivery.sh - persistent exactly-once captain outcome delivery.
 #
-# Registers relevant fleet results from existing durable sources, presents each
-# outcome to the captain at most once on main supervision turns, and keeps
+# Registers captain-facing done:/failed: status results that no other delivery
+# path owns (the lib header names the boundary against OPEN DECISIONS, the
+# drain's outcome backstop, and the supervision branch), presents each outcome
+# to the captain at most once on main supervision turns, and keeps
 # UNPRESENTED/PRESENTED/ACKNOWLEDGED state across compaction and restart.
 #
 # Usage:

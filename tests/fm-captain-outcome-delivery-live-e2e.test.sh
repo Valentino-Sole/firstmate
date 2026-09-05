@@ -18,7 +18,7 @@ test_live_worker_done_without_captain_ask() {
   report="data/$task/report.md"
   mkdir -p "$dir/$(dirname "$report")"
   printf '# Live E2E\n\nUngefaehrlicher Test-Worker.\n' > "$dir/$report"
-  printf 'done: Bericht unter %s\n' "$report" > "$state/$task.status"
+  printf 'done: Bericht unter %s\nworking: Arbeitsverzeichnis aufgeraeumt\n' "$report" > "$state/$task.status"
 
   FM_STATE_OVERRIDE="$state" "$DELIVERY" ingest >/dev/null || fail "ingest failed"
   FM_STATE_OVERRIDE="$state" "$DELIVERY" present > "$dir/first-present.out" || fail "first present failed"
@@ -40,13 +40,13 @@ test_unpresented_survives_compaction_presented_does_not() {
   state="$dir/state"
   mkdir -p "$dir/data/scout-live"
   printf '# scout\n' > "$dir/data/scout-live/report.md"
-  printf 'done: Bericht unter data/scout-live/report.md\n' > "$state/scout-live.status"
+  printf 'done: Bericht unter data/scout-live/report.md\nworking: aufgeraeumt\n' > "$state/scout-live.status"
   FM_STATE_OVERRIDE="$state" "$DELIVERY" ingest >/dev/null || fail "scout ingest failed"
   FM_STATE_OVERRIDE="$state" "$DELIVERY" present >/dev/null || fail "scout present failed"
 
   mkdir -p "$dir/data/presented-live"
   printf '# presented\n' > "$dir/data/presented-live/report.md"
-  printf 'done: Bericht unter data/presented-live/report.md\n' > "$state/presented-live.status"
+  printf 'done: Bericht unter data/presented-live/report.md\nworking: aufgeraeumt\n' > "$state/presented-live.status"
   FM_STATE_OVERRIDE="$state" "$DELIVERY" ingest >/dev/null || fail "presented ingest failed"
 
   # Simulate compaction/restart: new process, same disk state.
@@ -73,8 +73,9 @@ test_pi_before_agent_start_injects_outcomes() {
   ln -s "$ROOT/bin" "$fixture/bin"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/.pi/extensions/lib/"
+  cp "$ROOT/.pi/extensions/lib/fm-agents-refresh.ts" "$fixture/.pi/extensions/lib/"
 
-  printf 'done: Bericht unter data/pi-hook/report.md\n' > "$state/pi-hook.status"
+  printf 'done: Bericht unter data/pi-hook/report.md\nworking: aufgeraeumt\n' > "$state/pi-hook.status"
   mkdir -p "$dir/data/pi-hook"
   printf '# pi hook\n' > "$dir/data/pi-hook/report.md"
   FM_STATE_OVERRIDE="$state" "$DELIVERY" ingest >/dev/null || fail "pi-hook ingest failed"

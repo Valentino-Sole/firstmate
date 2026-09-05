@@ -1,9 +1,29 @@
 #!/usr/bin/env bash
-# Shared persistent captain outcome delivery: register relevant fleet results,
-# present each exactly once to the captain, and survive compaction/restart.
+# Shared persistent captain outcome delivery: register captain-facing status
+# results that no other presentation path delivers, present each exactly once
+# to the captain, and survive compaction/restart.
 #
-# Sourced by bin/fm-captain-outcome-delivery.sh and tests. No side effects on
-# source beyond its sourced libraries.
+# Ownership boundary. Every other captain-facing delivery path keeps its own
+# durable receipt, so this store never duplicates them:
+#   - needs-decision and blocked lines belong to the OPEN DECISIONS fold
+#     (bin/fm-classify-lib.sh), which re-presents them on every drain while
+#     they stay open; they are never registered here.
+#   - a status line covered by a newer supervision-branch outcome for the same
+#     task (the bounded index bin/fm-branch-outcome.sh maintains) was already
+#     delivered by the branch path and is never registered here.
+#   - the newest captain-facing event of a task belongs to the drain's STATUS
+#     OUTCOME BACKSTOP for as long as it stays newest, including while that
+#     bounded section defers it; a record whose line is still its file's last
+#     event is held back here, and the drain records the backstop's
+#     presentation (fm_captain_outcome_note_presented_status_line) so the same
+#     line is never presented twice once it is buried.
+#   - branch outcome rows and inactive-reconcile terminal outcomes reach main
+#     through the branch cursor and the durable wake queue respectively.
+# What remains are captain-facing done: and failed: results buried under later
+# routine lines, which no bounded latest-event scan would surface again.
+#
+# Sourced by bin/fm-captain-outcome-delivery.sh, bin/fm-wake-drain.sh, and
+# tests. No side effects on source beyond its sourced libraries.
 
 _FM_CAPTAIN_OUTCOME_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-wake-lib.sh
@@ -15,10 +35,9 @@ _FM_CAPTAIN_OUTCOME_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 FM_CAPTAIN_OUTCOME_DELIVERY_DIR=${FM_CAPTAIN_OUTCOME_DELIVERY_DIR:-$STATE/captain-outcome-delivery}
 FM_CAPTAIN_OUTCOME_LOCK=${FM_CAPTAIN_OUTCOME_LOCK:-$STATE/.captain-outcome-delivery.lock}
-FM_CAPTAIN_OUTCOME_INGEST_BRANCH_CURSOR=${FM_CAPTAIN_OUTCOME_INGEST_BRANCH_CURSOR:-$STATE/.captain-outcome-ingest-branch}
 FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR=${FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR:-$FM_CAPTAIN_OUTCOME_DELIVERY_DIR/.ingest-status-cursors}
-FM_CAPTAIN_OUTCOME_BRANCH_STORE=${FM_CAPTAIN_OUTCOME_BRANCH_STORE:-$STATE/branch-outcomes.jsonl}
-FM_CAPTAIN_OUTCOME_BRANCH_READ_CURSOR=${FM_CAPTAIN_OUTCOME_BRANCH_READ_CURSOR:-$STATE/.branch-outcomes-cursor}
+FM_CAPTAIN_OUTCOME_INDEX_VERSION=fm-branch-outcome-index-v1
+FM_CAPTAIN_OUTCOME_INDEX_MAX_BYTES=512
 
 fm_captain_outcome_actor_is_main() {
   case "${FM_SUPERVISION_ACTOR:-main}" in
@@ -64,6 +83,10 @@ fm_captain_outcome_sha16() { # <text>
   fi
 }
 
+fm_captain_outcome_status_key() { # <task> <line>
+  printf 'status:%s:%s\n' "$1" "$(fm_captain_outcome_sha16 "$2")"
+}
+
 fm_captain_outcome_clean_summary() {
   printf '%s' "$1" | tr '\t\r\n' '   ' | cut -c1-1200
 }
@@ -91,8 +114,11 @@ fm_captain_outcome_detect_report_path() { # <task> <line>
   return 1
 }
 
+# Classify one status line as a captain outcome this store owns. Returns 1 for
+# every line another presentation path already delivers (see the header).
 fm_captain_outcome_classify_status() { # <task> <line>
   local task=$1 line=$2 verb key note tier='done' category=task report=''
+  status_is_captain_relevant "$line" || return 1
   verb=$(status_line_verb "$line")
   note=$(status_line_note "$line")
   key=$(_fm_decision_key "$line" 2>/dev/null || printf 'default')
@@ -101,11 +127,11 @@ fm_captain_outcome_classify_status() { # <task> <line>
   # (bin/fm-classify-lib.sh); it must not become a captain outcome here either.
   _fm_decision_key_transition_allowed "$key" "$note" || return 1
   case "$verb" in
-    needs-decision)
-      tier=critical
-      category=decision
+    needs-decision|blocked)
+      # The durable OPEN DECISIONS fold owns open decisions and blockers.
+      return 1
       ;;
-    blocked|failed)
+    failed)
       tier=critical
       category=blocker
       ;;
@@ -122,7 +148,6 @@ fm_captain_outcome_classify_status() { # <task> <line>
       fi
       ;;
     *)
-      status_is_captain_relevant "$line" || return 1
       tier='done'
       category=task
       ;;
@@ -131,32 +156,6 @@ fm_captain_outcome_classify_status() { # <task> <line>
   FM_CAPTAIN_OUTCOME_CATEGORY=$category
   FM_CAPTAIN_OUTCOME_SUMMARY=$(fm_captain_outcome_clean_summary "$note")
   FM_CAPTAIN_OUTCOME_REPORT_PATH=${report:-}
-  return 0
-}
-
-fm_captain_outcome_classify_branch() { # <verdict> <summary> <silent>
-  local verdict=$1 summary=$2 silent=$3
-  FM_CAPTAIN_OUTCOME_REPORT_PATH=
-  FM_CAPTAIN_OUTCOME_SUMMARY=$(fm_captain_outcome_clean_summary "$summary")
-  case "$verdict" in
-    captain)
-      FM_CAPTAIN_OUTCOME_TIER=critical
-      FM_CAPTAIN_OUTCOME_CATEGORY=branch
-      ;;
-    *)
-      [ "$silent" = true ] && return 1
-      if printf '%s' "$summary" | grep -qiE 'abnahme|merge|deploy|PR #|needs-decision|blocker|sicherheit|datenverlust|verfaelsch'; then
-        FM_CAPTAIN_OUTCOME_TIER=critical
-        FM_CAPTAIN_OUTCOME_CATEGORY=branch
-      elif printf '%s' "$summary" | grep -qiE 'report\.md|plan\.md|bericht'; then
-        FM_CAPTAIN_OUTCOME_TIER=report
-        FM_CAPTAIN_OUTCOME_CATEGORY=report
-      else
-        FM_CAPTAIN_OUTCOME_TIER=routine
-        FM_CAPTAIN_OUTCOME_CATEGORY=branch
-      fi
-      ;;
-  esac
   return 0
 }
 
@@ -204,25 +203,6 @@ fm_captain_outcome_set_state() { # <key> <state>
   esac
 }
 
-fm_captain_outcome_read_branch_cursor() {
-  local value
-  value=$(head -n 1 "$FM_CAPTAIN_OUTCOME_BRANCH_READ_CURSOR" 2>/dev/null | tr -cd '0-9' || true)
-  printf '%s\n' "${value:-0}"
-}
-
-fm_captain_outcome_read_ingest_branch_cursor() {
-  local value
-  value=$(head -n 1 "$FM_CAPTAIN_OUTCOME_INGEST_BRANCH_CURSOR" 2>/dev/null | tr -cd '0-9' || true)
-  printf '%s\n' "${value:-0}"
-}
-
-fm_captain_outcome_write_ingest_branch_cursor() { # <seq>
-  local seq=$1 tmp
-  tmp=$(mktemp "$STATE/.captain-outcome-ingest-branch.XXXXXX") || return 1
-  printf '%s\n' "$seq" > "$tmp"
-  mv -f "$tmp" "$FM_CAPTAIN_OUTCOME_INGEST_BRANCH_CURSOR"
-}
-
 fm_captain_outcome_status_ingest_cursor_path() { # <task>
   printf '%s/%s\n' "$FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR" "$(fm_captain_outcome_key_safe "$1")"
 }
@@ -243,38 +223,48 @@ fm_captain_outcome_write_status_ingest_offset() { # <task> <offset>
   mv -f "$tmp" "$path"
 }
 
-fm_captain_outcome_branch_last_seq() {
-  local value
-  [ -s "$FM_CAPTAIN_OUTCOME_BRANCH_STORE" ] || { printf '0\n'; return 0; }
-  value=$(tail -n 1 "$FM_CAPTAIN_OUTCOME_BRANCH_STORE" | jq -er 'select((.seq | type) == "number") | .seq' 2>/dev/null) || return 1
-  printf '%s\n' "$value"
+_fm_captain_outcome_byte_length() { # <text>
+  local LC_ALL=C
+  printf '%s\n' "${#1}"
 }
 
-fm_captain_outcome_ingest_branch() {
-  local cursor seq line task verdict summary silent last=0
-  [ -s "$FM_CAPTAIN_OUTCOME_BRANCH_STORE" ] || return 0
-  cursor=$(fm_captain_outcome_read_ingest_branch_cursor)
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    seq=$(printf '%s' "$line" | jq -er '.seq // empty' 2>/dev/null) || continue
-    task=$(printf '%s' "$line" | jq -er '.task // empty' 2>/dev/null) || continue
-    verdict=$(printf '%s' "$line" | jq -er '.verdict // empty' 2>/dev/null) || continue
-    summary=$(printf '%s' "$line" | jq -er '.summary // empty' 2>/dev/null) || continue
-    silent=$(printf '%s' "$line" | jq -er '.silent // false' 2>/dev/null) || silent=false
-    fm_captain_outcome_classify_branch "$verdict" "$summary" "$silent" || { last=$seq; continue; }
-    fm_captain_outcome_register "branch:seq:$seq" branch-outcome "$task" \
-      "$FM_CAPTAIN_OUTCOME_TIER" "$FM_CAPTAIN_OUTCOME_CATEGORY" \
-      "$FM_CAPTAIN_OUTCOME_SUMMARY" "$FM_CAPTAIN_OUTCOME_REPORT_PATH" "$seq" || return 1
-    last=$seq
-  done < <(jq -c --argjson cursor "$cursor" 'select((.seq // 0) > $cursor)' "$FM_CAPTAIN_OUTCOME_BRANCH_STORE" 2>/dev/null || true)
-  if [ "$last" -gt "$cursor" ]; then
-    fm_captain_outcome_write_ingest_branch_cursor "$last"
-  fi
-  return 0
+# Read the task's bounded branch-outcome index into
+# FM_CAPTAIN_OUTCOME_COVER_ENDPOINT / FM_CAPTAIN_OUTCOME_COVER_IDENT. Absent,
+# unreadable, or malformed indexes leave both empty: an unproven cover never
+# suppresses a result, the same direction the drain's backstop takes.
+fm_captain_outcome_load_cover() { # <task>
+  local task=$1 path data version seq endpoint ident extra size
+  FM_CAPTAIN_OUTCOME_COVER_ENDPOINT=
+  FM_CAPTAIN_OUTCOME_COVER_IDENT=
+  case "$task" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  path="$STATE/.$task.branch-outcome-index"
+  [ -f "$path" ] && [ -r "$path" ] && [ ! -L "$path" ] || return 0
+  size=$(_fm_status_file_size "$path" 2>/dev/null) || return 0
+  size=${size//[[:space:]]/}
+  case "$size" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$size" -le "$FM_CAPTAIN_OUTCOME_INDEX_MAX_BYTES" ] || return 0
+  data=$(LC_ALL=C command cat "$path" 2>/dev/null) || return 0
+  case "$data" in *$'\n'*) return 0 ;; esac
+  IFS=$(printf '\t') read -r version seq endpoint ident extra <<EOF
+$data
+EOF
+  [ "$version" = "$FM_CAPTAIN_OUTCOME_INDEX_VERSION" ] && [ -z "$extra" ] || return 0
+  case "$seq:$endpoint" in *[!0-9:]*) return 0 ;; esac
+  [ -n "$seq" ] && [ -n "$endpoint" ] && [ -n "$ident" ] || return 0
+  FM_CAPTAIN_OUTCOME_COVER_ENDPOINT=$endpoint
+  FM_CAPTAIN_OUTCOME_COVER_IDENT=$ident
+}
+
+# 0 when a supervision-branch outcome for this task already covers the status
+# span ending at <line-endpoint> in the file identified by <ident>.
+fm_captain_outcome_line_covered() { # <line-endpoint> <ident>
+  [ -n "$FM_CAPTAIN_OUTCOME_COVER_ENDPOINT" ] || return 1
+  [ "$FM_CAPTAIN_OUTCOME_COVER_IDENT" = "$2" ] || return 1
+  [ "$FM_CAPTAIN_OUTCOME_COVER_ENDPOINT" -ge "$1" ]
 }
 
 fm_captain_outcome_ingest_status_file() { # <status-file>
-  local f=$1 task offset size actual_size chunk_file line key
+  local f=$1 task offset actual_size chunk_file line key ident pos len endpoint
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
   mkdir -p "$FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR" || return 1
   [ ! -L "$FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR" ] || return 1
@@ -284,14 +274,24 @@ fm_captain_outcome_ingest_status_file() { # <status-file>
   actual_size=${actual_size//[[:space:]]/}
   case "$actual_size" in ''|*[!0-9]*) return 1 ;; esac
   [ "$offset" -lt "$actual_size" ] || return 0
+  ident=$(_fm_open_decisions_file_ident "$f") || return 1
+  fm_captain_outcome_load_cover "$task"
   chunk_file="$FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR/.chunk.$$"
   _fm_status_read_span "$f" "$offset" "$((actual_size - offset))" > "$chunk_file" 2>/dev/null \
     || { rm -f "$chunk_file"; return 1; }
+  pos=$offset
   # shellcheck disable=SC2094 # The loop only reads the chunk; the register step writes the store, never the chunk.
   while IFS= read -r line || [ -n "$line" ]; do
+    len=$(_fm_captain_outcome_byte_length "$line")
+    endpoint=$((pos + len))
+    # A line the read stopped at a newline for is charged for that newline,
+    # the same endpoint arithmetic the branch index and the backstop use.
+    [ "$endpoint" -ge "$actual_size" ] || endpoint=$((endpoint + 1))
+    pos=$endpoint
     case "$line" in *[![:space:]]*) ;; *) continue ;; esac
+    fm_captain_outcome_line_covered "$endpoint" "$ident" && continue
     fm_captain_outcome_classify_status "$task" "$line" || continue
-    key="status:${task}:$(fm_captain_outcome_sha16 "$line")"
+    key=$(fm_captain_outcome_status_key "$task" "$line")
     fm_captain_outcome_register "$key" status "$task" \
       "$FM_CAPTAIN_OUTCOME_TIER" "$FM_CAPTAIN_OUTCOME_CATEGORY" \
       "$FM_CAPTAIN_OUTCOME_SUMMARY" "$FM_CAPTAIN_OUTCOME_REPORT_PATH" "$line" || {
@@ -311,26 +311,39 @@ fm_captain_outcome_ingest_status() {
   done
 }
 
-fm_captain_outcome_ingest_terminal() {
-  local dir=$STATE/terminal-outcomes record fingerprint task state summary key
-  [ -d "$dir" ] && [ ! -L "$dir" ] || return 0
-  for record in "$dir"/*.pending; do
-    [ -e "$record" ] || continue
-    fingerprint=$(fm_captain_outcome_record_field "$record" fingerprint)
-    task=$(fm_captain_outcome_record_field "$record" task_id)
-    state=$(fm_captain_outcome_record_field "$record" state)
-    [ -n "$fingerprint" ] && [ -n "$task" ] || continue
-    case "$state" in done|failed) ;; *) continue ;; esac
-    summary="Terminaler Zustand $state fuer $task (inactive reconcile)"
-    key="terminal:$fingerprint"
-    fm_captain_outcome_register "$key" terminal-outcome "$task" 'done' task "$summary" '' "$fingerprint" || return 1
-  done
+fm_captain_outcome_ingest_all() {
+  fm_captain_outcome_ingest_status || return 1
 }
 
-fm_captain_outcome_ingest_all() {
-  fm_captain_outcome_ingest_branch || return 1
-  fm_captain_outcome_ingest_status || return 1
-  fm_captain_outcome_ingest_terminal || return 1
+# Record that another drain section (the STATUS OUTCOME BACKSTOP) presented
+# this status line, so the outcome section never shows it a second time. The
+# record is created in the presented state when ingestion has not reached the
+# line yet, which is the common order inside one drain. Lines this store does
+# not own are ignored. Caller holds no outcome lock; this takes it.
+fm_captain_outcome_note_presented_status_line() { # <task> <line>
+  local task=$1 line=$2 key rc=0
+  fm_captain_outcome_classify_status "$task" "$line" || return 0
+  key=$(fm_captain_outcome_status_key "$task" "$line")
+  fm_lock_acquire_wait "$FM_CAPTAIN_OUTCOME_LOCK"
+  fm_captain_outcome_register "$key" status "$task" \
+    "$FM_CAPTAIN_OUTCOME_TIER" "$FM_CAPTAIN_OUTCOME_CATEGORY" \
+    "$FM_CAPTAIN_OUTCOME_SUMMARY" "$FM_CAPTAIN_OUTCOME_REPORT_PATH" "$line" || rc=1
+  if [ "$rc" -eq 0 ] \
+    && [ "$(fm_captain_outcome_record_field "$(fm_captain_outcome_record_path "$key")" state)" = unpresented ]; then
+    fm_captain_outcome_set_state "$key" presented || rc=1
+  fi
+  fm_lock_release "$FM_CAPTAIN_OUTCOME_LOCK"
+  return "$rc"
+}
+
+# 0 when <line> is still the last non-blank event of the task's status file.
+# A missing file (the task was cleaned up) is not newest: nothing else will
+# present the record, so this store does. Bounded to the file's final 64 KiB.
+fm_captain_outcome_line_is_newest_event() { # <task> <line>
+  local f="$STATE/$1.status" last
+  [ -f "$f" ] && [ ! -L "$f" ] || return 1
+  last=$(LC_ALL=C tail -c 65536 "$f" 2>/dev/null | awk 'NF { last=$0 } END { print last }') || return 1
+  [ "$last" = "$2" ]
 }
 
 fm_captain_outcome_list_unpresented() {
@@ -344,9 +357,8 @@ fm_captain_outcome_list_unpresented() {
 }
 
 fm_captain_outcome_format_line() { # <record>
-  local record=$1 task tier summary report_path line
+  local record=$1 task summary report_path line
   task=$(fm_captain_outcome_record_field "$record" task)
-  tier=$(fm_captain_outcome_record_field "$record" tier)
   summary=$(fm_captain_outcome_record_field "$record" summary)
   report_path=$(fm_captain_outcome_record_field "$record" report_path)
   line="$task: $summary"
@@ -355,17 +367,32 @@ fm_captain_outcome_format_line() { # <record>
   printf '%s\n' "$FM_LINE_CAP_LINE"
 }
 
+# Presentation is bounded like the drain's other sections: at most
+# FM_CAPTAIN_OUTCOME_SECTION_BYTES of items per call, the rest stay unpresented
+# for the next call and are counted on the last line.
+FM_CAPTAIN_OUTCOME_SECTION_BYTES=${FM_CAPTAIN_OUTCOME_SECTION_BYTES:-4000}
 fm_captain_outcome_present_section() {
-  local record key tier line
-  local critical_n=0 finished_n=0 report_n=0 routine_n=0 shown=0
+  local record key tier line task source_ref bytes used=0 deferred=0
+  local critical_n=0 finished_n=0 report_n=0 shown=0
   local critical='' finished='' report=''
   fm_captain_outcome_ingest_all || return 1
   for record in "$FM_CAPTAIN_OUTCOME_DELIVERY_DIR"/*.outcome; do
     [ -e "$record" ] || continue
     [ "$(fm_captain_outcome_record_field "$record" state)" = unpresented ] || continue
+    if [ "$(fm_captain_outcome_record_field "$record" source)" = status ]; then
+      task=$(fm_captain_outcome_record_field "$record" task)
+      source_ref=$(fm_captain_outcome_record_field "$record" source_ref)
+      fm_captain_outcome_line_is_newest_event "$task" "$source_ref" && continue
+    fi
     tier=$(fm_captain_outcome_record_field "$record" tier)
     key=$(fm_captain_outcome_record_field "$record" key)
     line=$(fm_captain_outcome_format_line "$record")
+    bytes=$(( $(_fm_captain_outcome_byte_length "$line") + 4 ))
+    if [ $((used + bytes)) -gt "$FM_CAPTAIN_OUTCOME_SECTION_BYTES" ]; then
+      deferred=$((deferred + 1))
+      continue
+    fi
+    used=$((used + bytes))
     case "$tier" in
       critical)
         critical_n=$((critical_n + 1))
@@ -377,13 +404,10 @@ fm_captain_outcome_present_section() {
         report="${report}${report_n}) ${line}
 "
         ;;
-      done)
+      *)
         finished_n=$((finished_n + 1))
         finished="${finished}${finished_n}) ${line}
 "
-        ;;
-      *)
-        routine_n=$((routine_n + 1))
         ;;
     esac
     fm_captain_outcome_set_state "$key" presented || return 1
@@ -401,13 +425,15 @@ fm_captain_outcome_present_section() {
   if [ "$report_n" -gt 0 ]; then
     printf '\nBERICHTE:\n%s' "$report"
   fi
-  if [ "$routine_n" -gt 0 ]; then
-    printf '\nROUTINE:\n%d weitere erledigt, keine Entscheidung noetig.\n' "$routine_n"
+  if [ "$deferred" -gt 0 ]; then
+    printf '\nNOCH NICHT GEZEIGT: %d weitere Ergebnisse folgen im naechsten Bericht (Umfangsgrenze).\n' "$deferred"
   fi
 }
 
+# One-time baseline: history that predates this store was delivered by the
+# paths that existed then, so it is never presented as new.
 fm_captain_outcome_baseline_ingest_cursors() {
-  local f task actual_size last=0
+  local f task actual_size
   mkdir -p "$FM_CAPTAIN_OUTCOME_INGEST_STATUS_DIR" "$FM_CAPTAIN_OUTCOME_DELIVERY_DIR" || return 1
   for f in "$STATE"/*.status; do
     [ -e "$f" ] || continue
@@ -417,30 +443,13 @@ fm_captain_outcome_baseline_ingest_cursors() {
     case "$actual_size" in ''|*[!0-9]*) return 1 ;; esac
     fm_captain_outcome_write_status_ingest_offset "$task" "$actual_size" || return 1
   done
-  last=$(fm_captain_outcome_branch_last_seq) || return 1
-  fm_captain_outcome_write_ingest_branch_cursor "$last"
 }
 
 fm_captain_outcome_catch_up() {
-  local record key source_ref branch_cursor seq
   if [ ! -e "$STATE/.captain-outcome-catch-up-baselined" ]; then
     fm_captain_outcome_baseline_ingest_cursors || return 1
     : > "$STATE/.captain-outcome-catch-up-baselined"
   fi
   fm_captain_outcome_ingest_all || return 1
-  branch_cursor=$(fm_captain_outcome_read_branch_cursor)
-  for record in "$FM_CAPTAIN_OUTCOME_DELIVERY_DIR"/*.outcome; do
-    [ -e "$record" ] || continue
-    [ "$(fm_captain_outcome_record_field "$record" state)" = unpresented ] || continue
-    key=$(fm_captain_outcome_record_field "$record" key)
-    case "$key" in
-      branch:seq:*)
-        seq=${key##branch:seq:}
-        case "$seq" in ''|*[!0-9]*) continue ;; esac
-        [ "$seq" -le "$branch_cursor" ] || continue
-        fm_captain_outcome_set_state "$key" presented || return 1
-        ;;
-    esac
-  done
   return 0
 }

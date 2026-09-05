@@ -466,6 +466,7 @@ tests/fm-supervision-instructions.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-composer-lib.test.sh
 tests/fm-work-loop.test.sh
+tests/fm-cursor-grok-pi-model.test.sh
 EOF
 }
 

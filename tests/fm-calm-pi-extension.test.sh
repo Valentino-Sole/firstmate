@@ -3099,6 +3099,10 @@ test_calm_stale_context_after_session_replacement() {
     echo "skip: node not found for Pi calm stale-context test"
     return 0
   fi
+  if [ ! -f "$PI_PACKAGE_DIR/package.json" ]; then
+    echo "skip: installed @earendil-works/pi-coding-agent package not found"
+    return 0
+  fi
 
   fixture="$TMP_ROOT/stale-context"
   mkdir -p "$fixture/lib" "$fixture/node_modules/@earendil-works"

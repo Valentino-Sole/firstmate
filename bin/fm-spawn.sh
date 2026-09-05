@@ -105,9 +105,11 @@
 #   even when they select different backends. A fresh spawn first takes the
 #   per-home task-set lock and refuses rather than waits when forced teardown owns
 #   it; relaunch is exempt because the existing task's control lock covers it.
-#   A fresh spawn also refuses when the same task id already has a live, ambiguous,
-#   unreadable, or otherwise unverified endpoint state, so no parallel worker can
-#   be started onto work that may still be active.
+#   A fresh local spawn also refuses when the same task id already has a live,
+#   ambiguous, unreadable, or otherwise unverified endpoint state, so no parallel
+#   worker can be started onto work that may still be active; a remote secondmate
+#   gets the same protection from the host-local launch in
+#   bin/fm-remote-secondmate-control.sh, which reads the endpoint where it lives.
 #   With no harness arg, a crewmate/scout spawn resolves the CREW harness only when
 #   config/crew-dispatch.json is absent. When that file exists, crewmate/scout
 #   spawns require an explicit harness so firstmate cannot silently skip dispatch
@@ -583,39 +585,6 @@ spawn_remote_secondmate() {
     [ "$rc" -ne 255 ] || return 255
     return 1
   fi
-  if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
-    rc=0
-  else
-    rc=$?
-  fi
-  if [ "$rc" -eq 255 ]; then
-    fm_lock_release "$registry_lock" || true
-    fm_lock_release "$SPAWN_TASK_LOCK" || true
-    echo "error: remote secondmate $id endpoint state could not be confirmed; refusing duplicate launch" >&2
-    return 255
-  fi
-  if [ "$rc" -ne 0 ]; then
-    fm_lock_release "$registry_lock" || true
-    fm_lock_release "$SPAWN_TASK_LOCK" || true
-    echo "error: remote secondmate $id endpoint state is unreadable; refusing duplicate launch" >&2
-    return 1
-  fi
-  state=$(printf '%s\n' "$out" | tail -1)
-  case "$state" in
-    dead|missing) ;;
-    alive|ambiguous|unreadable|unknown|unverified)
-      fm_lock_release "$registry_lock" || true
-      fm_lock_release "$SPAWN_TASK_LOCK" || true
-      echo "error: remote secondmate $id endpoint is $state; refusing duplicate launch while another worker may still be active" >&2
-      return 1
-      ;;
-    *)
-      fm_lock_release "$registry_lock" || true
-      fm_lock_release "$SPAWN_TASK_LOCK" || true
-      echo "error: remote secondmate $id returned invalid endpoint state '$state'; refusing launch" >&2
-      return 1
-      ;;
-  esac
   # Pre-launch sync, the remote twin of the local-HEAD sync below: this home
   # follows THIS primary's default-branch commit, not the Firstmate copy on that
   # host, so the commit is resolved here and handed over for the host to import
@@ -1945,11 +1914,10 @@ delivery_rigor_rank() {  # <mode> -> 3 (most rigor) .. 1 (least); 0 = not a task
 
 guard_existing_live_task() {  # <meta> <task-id>
   local meta=$1 id=$2 backend target state kind backend_count window
-  [ -e "$meta" ] || return 0
-  [ -f "$meta" ] && [ ! -L "$meta" ] || {
-    echo "error: existing metadata for $id is unsafe or unreadable; refusing duplicate spawn" >&2
-    return 1
-  }
+  # Only a regular task record can name an endpoint to protect. Anything else
+  # at that path (a directory, a symlink) is the record-boundary refusal of the
+  # publication step, which names it precisely; do not pre-empt it here.
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 0
   # Remote secondmates are validated through the remote state path in
   # spawn_remote_secondmate(); skip local backend probing here.
   if grep -q '^remote_host=' "$meta" 2>/dev/null; then

@@ -168,14 +168,17 @@ tests/fm-cd-pretool-check.test.sh
 tests/fm-composer-ghost.test.sh
 tests/fm-composer-lib.test.sh
 tests/fm-crew-state.test.sh
+tests/fm-cursor-grok-pi-model.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-grok-harness.test.sh
 tests/fm-herdr-lab.test.sh
+tests/fm-klartext-uebernahme-pretool-check.test.sh
 tests/fm-lint.test.sh
 tests/fm-model-display.test.sh
 tests/fm-pi-primary-restart.test.sh
 tests/fm-pi-primary-types.test.sh
 tests/fm-pr-merge.test.sh
+tests/fm-primary-checkout-pretool-check.test.sh
 tests/fm-review-diff.test.sh
 tests/fm-send-popup-settle.test.sh
 tests/fm-send-settle.test.sh
