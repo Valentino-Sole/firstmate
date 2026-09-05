@@ -409,6 +409,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/fremdquellen-quellenrisiko.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/gitlab-merge-watch.md",
       "audience": "maintainer-verification"
     },
