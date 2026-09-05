@@ -172,7 +172,22 @@ const PROCESSING_INSTRUCTION =
   "The outcomes below are already stored durably and already shown to the captain as anchor entries in this transcript; each fleet event is already handled, so do not re-drain, re-run, or acknowledge the wake. " +
   "Process each outcome now as firstmate: give the captain a visible response where one is due, answer or escalate a decision, act on a blocker or failure, or record that no further action is needed. " +
   "When every outcome below is processed, call fm_branch_processed with through={N} exactly once. " +
-  "Until that call the outcomes stay open and are presented again; an answer that does not make that call never counts as processing.";
+  "Until that call the outcomes stay open and are presented again; an answer that does not make that call never counts as processing. " +
+  "Antworte dem Captain durchgaengig auf Deutsch und fasse englische Worker-Texte sinngemaess auf Deutsch zusammen, statt sie als Roh-Dump weiterzureichen.";
+// A captain-facing summary is one or two plain sentences, never a pasted
+// worker dump: fenced code, shell prompts, status-line prefixes, or more than
+// three lines are refused at the tool boundary so the branch rewrites them.
+const CAPTAIN_SUMMARY_MAX_LENGTH = 600;
+function compactCaptainSummary(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim();
+}
+function summaryLooksLikeRawDump(raw: string): boolean {
+  if (raw.includes("```")) return true;
+  if (/(^|\n)\s*\$ /.test(raw)) return true;
+  if (/(^|\n)\s*(working|needs-decision|blocked|paused|done|failed|resolved):/m.test(raw)) return true;
+  const nonEmptyLines = raw.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  return nonEmptyLines.length > 3;
+}
 type MirrorItem = { tag: "captain" | "main"; text: string };
 type MirrorCursor = { file: string; index: number };
 type Verdict = "routine" | "captain";
@@ -950,7 +965,7 @@ export default function (pi: ExtensionAPI) {
         }),
         summary: Type.String({
           description:
-            "One or two sentences in captain outcome language; include the full https:// PR URL when a PR is involved",
+            "One or two concise German captain-outcome sentences (no raw dumps); include the full https:// PR URL when a PR is involved",
         }),
         wake: Type.Optional(Type.String({ description: "The wake reason line this outcome answers" })),
         silent: Type.Optional(Type.Boolean({
@@ -960,8 +975,16 @@ export default function (pi: ExtensionAPI) {
       execute: async (_toolCallId, params) => {
         const task = String((params as { task: unknown }).task || "").trim();
         const verdictRaw = String((params as { verdict: unknown }).verdict || "");
-        const summary = String((params as { summary: unknown }).summary || "").trim();
+        const summaryRaw = String((params as { summary: unknown }).summary || "");
+        const summary = compactCaptainSummary(summaryRaw);
         const wake = String((params as { wake?: unknown }).wake ?? "").trim();
+        if (summary.length > CAPTAIN_SUMMARY_MAX_LENGTH || summaryLooksLikeRawDump(summaryRaw)) {
+          return {
+            content: [{ type: "text", text: "invalid report: summary must be one or two concise German sentences, not a raw worker dump" }],
+            details: undefined,
+            isError: true,
+          };
+        }
         const silent = (params as { silent?: unknown }).silent === true;
         if (!task || !summary || (verdictRaw !== "routine" && verdictRaw !== "captain") || (silent && (task !== "fleet" || verdictRaw !== "routine"))) {
           return {

@@ -278,6 +278,7 @@ Handle routine work yourself.
 Report only true captain-relevant outcomes or a declared external wait by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
 States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
+Write every free-text status note in German (keep URLs/IDs exact); never paste raw English logs or multiline worker dumps into the status line.
 Use \`$PAUSED_VERB: {why}\` (distinct from \`blocked:\`) only when your domain is deliberately idling on a known external wait you expect to clear on its own; use \`blocked:\` when you are stuck and need firstmate to act.
 Use this only for material phase changes, a captain decision, a real blocker, a failure, work ready for review, or work you landed.
 Work you landed includes a merge you performed yourself under standing merge authority and one the captain merged on the forge: under that authority nothing is ever \"ready for review\", so a landed merge that goes unreported reaches the captain as silence.
@@ -373,6 +374,7 @@ The report is the only thing that survives, so anything worth keeping must be in
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
+   Write every free-text status note in German (keep URLs/IDs exact); never paste raw English logs or multiline worker dumps into the status line.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
    would act on and the needs-decision/blocked/paused/done/failed states. No step-by-step
    FYI progress lines; firstmate reads your pane for that.

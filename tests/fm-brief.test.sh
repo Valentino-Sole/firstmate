@@ -860,6 +860,8 @@ test_scout_and_secondmate_scaffold() {
     "secondmate charter did not anchor idle-is-healthy recovery behavior"
   assert_grep "Never start the same task id in parallel to a worker that may still be active" "$brief" \
     "secondmate charter did not forbid duplicate active task launches"
+  assert_grep 'Write every free-text status note in German' "$brief" \
+    "secondmate charter lost the German captain-facing status-note guardrail"
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 

@@ -75,6 +75,8 @@ Keep an unsolicited routine outcome as verdict routine, including a healthy resu
 Keep an unchanged fleet review silent as instructed above.
 When genuinely in doubt, choose captain: a spurious escalation costs a glance, a swallowed one costs trust.
 Write summaries in the captain's outcome language - the project, the fix, the PR, the worker, the blocker - never internal mechanics like wake kinds, status prefixes, worktrees, or state file names.
+Write every summary in German. Keep URLs, command names, and exact identifiers unchanged, but paraphrase any English status text into concise German instead of forwarding it verbatim.
+Never paste raw worker dumps (logs, stack traces, multiline command output) into `summary`; compress the captain-relevant outcome into one or two plain German sentences.
 
 # PR identity: copy or abstain
 
