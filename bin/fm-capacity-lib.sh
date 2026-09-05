@@ -259,12 +259,15 @@ fm_capacity_primary_home() { # <home-dir>
   printf '%s\n' "$home"
 }
 
-# Prints the captain's hard worker cap for this host, or nothing when the
-# primary home has no config/worker-slots-max. Sets FM_CAPACITY_CAP_ERROR and
-# prints 0 when the file exists but is not one positive integer, so a typo
-# never silently widens or drops the cap.
+# Sets FM_CAPACITY_CAP to the captain's hard worker cap for this host, or to
+# the empty string when the primary home has no config/worker-slots-max. A
+# file that exists but is not one positive integer sets FM_CAPACITY_CAP to 0
+# and FM_CAPACITY_CAP_ERROR to the reason, so a typo never silently widens or
+# drops the cap. Called in the caller's own shell, never in a substitution,
+# because the error must reach the spawn gate.
 fm_capacity_worker_slots_max() { # <home-dir>
   local primary file value
+  FM_CAPACITY_CAP=
   FM_CAPACITY_CAP_ERROR=
   primary=$(fm_capacity_primary_home "$1")
   [ -n "$primary" ] || return 0
@@ -272,16 +275,16 @@ fm_capacity_worker_slots_max() { # <home-dir>
   [ -e "$file" ] || [ -L "$file" ] || return 0
   if [ ! -f "$file" ] || [ -L "$file" ]; then
     FM_CAPACITY_CAP_ERROR="config/$FM_CAPACITY_CAP_FILE in $primary must be a regular file"
-    printf '0\n'
+    FM_CAPACITY_CAP=0
     return 0
   fi
   value=$(LC_ALL=C head -n 1 "$file" 2>/dev/null | tr -d '[:space:]')
   if ! fm_capacity_is_uint "$value" || [ "$value" -lt 1 ]; then
     FM_CAPACITY_CAP_ERROR="config/$FM_CAPACITY_CAP_FILE in $primary must hold one positive whole number, got '${value:-empty}'"
-    printf '0\n'
+    FM_CAPACITY_CAP=0
     return 0
   fi
-  printf '%s\n' "$value"
+  FM_CAPACITY_CAP=$value
 }
 
 fm_capacity_read_nproc() {
@@ -1034,7 +1037,7 @@ fm_capacity_measure_local() { # <state-dir> [home-dir]
   # rather than treating the failed query as idle (load1=0).
   FM_CAPACITY_SLOTS=$(fm_capacity_slots_from_local \
     "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_MEM_MB" "$FM_CAPACITY_LOCAL_LOAD1")
-  FM_CAPACITY_CAP=$(fm_capacity_worker_slots_max "${2:-${FM_HOME:-}}")
+  fm_capacity_worker_slots_max "${2:-${FM_HOME:-}}"
   if [ -n "$FM_CAPACITY_CAP" ]; then
     FM_CAPACITY_SLOTS=$(fm_capacity_min "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_CAP")
   fi
