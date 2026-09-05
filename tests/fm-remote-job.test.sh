@@ -120,6 +120,26 @@ export FM_REMOTE_JOB_QUEUE_TIMEOUT=5
 export FM_REMOTE_JOB_TIMEOUT=5
 # shellcheck source=bin/fm-remote-job-lib.sh
 . "$ROOT/bin/fm-remote-job-lib.sh"
+# shellcheck source=bin/fm-timeout-lib.sh
+. "$ROOT/bin/fm-timeout-lib.sh"
+
+# TERM, a bounded wait, then KILL. A worker that does not finish its shutdown
+# must fail the assertion that follows, never hold this script open until the
+# runner's per-script bound (seen in CI on 2026-09-05: the quarantine-recovery
+# section hung for ten minutes behind an unbounded wait).
+reap_bounded() {  # <pid> [ticks of 0.1s, default 100]
+  local pid=$1 limit=${2:-100} i=0
+  [ -n "$pid" ] || return 0
+  kill -TERM "$pid" 2>/dev/null || true
+  while [ "$i" -lt "$limit" ] && kill -0 "$pid" 2>/dev/null; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
 
 LOCAL_BIN_PARENT="$ACCOUNT_HOME/.local"
 LOCAL_BIN_TARGET="$TMP_ROOT/local-bin-target"
@@ -618,10 +638,11 @@ chmod 600 "$RECOVERY_STATE/worker.lock"/* "$RECOVERY_JOB/state" "$RECOVERY_JOB/.
 touch -t 200001010000 "$RECOVERY_STATE/worker.lock"
 set +e
 HOME="$RECOVERY_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$RECOVERY_STATE" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
+  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux fm_run_timed 60 "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
   > "$TMP_ROOT/recovery-refused.out" 2> "$TMP_ROOT/recovery-refused.err"
 RECOVERY_REFUSED_RC=$?
 set -e
+[ "$RECOVERY_REFUSED_RC" -ne 124 ] || fail "quarantine recovery neither refused nor returned within 60s"
 [ "$RECOVERY_REFUSED_RC" -ne 0 ] || fail "quarantine recovery ignored a recorded live process"
 assert_present "$RECOVERY_STATE/worker.lock/quarantine" "a live recorded process lost quarantine protection"
 printf '%s\n' "$QUARANTINED_PROCESS_PID" > "$RECOVERY_JOB/.claim/owner"
@@ -641,11 +662,9 @@ assert_present "$RECOVERY_STATE/worker.ready" "a reused supervisor pid did not p
 assert_absent "$RECOVERY_STATE/worker.lock/quarantine" "recovered worker retained stale quarantine"
 kill -0 "$QUARANTINED_PROCESS_PID" 2>/dev/null \
   || fail "worker recovery signalled a process whose supervisor identity did not match"
-kill -TERM "$RECOVERY_WORKER_PID"
-wait "$RECOVERY_WORKER_PID" 2>/dev/null || true
+reap_bounded "$RECOVERY_WORKER_PID"
 RECOVERY_WORKER_PID=
-kill "$QUARANTINED_PROCESS_PID" 2>/dev/null || true
-wait "$QUARANTINED_PROCESS_PID" 2>/dev/null || true
+reap_bounded "$QUARANTINED_PROCESS_PID"
 pass "quarantine recovery refuses unverifiable supervisors and ignores reused pids"
 
 # A replacement stops a Linux worker by signalling its whole isolated group, and
@@ -695,7 +714,7 @@ if kill -0 "$REPEAT_WORKER_PID" 2>/dev/null; then
   REPEAT_WORKER_PID=
   fail "the repeatedly signalled worker never finished its shutdown"
 fi
-wait "$REPEAT_WORKER_PID" 2>/dev/null || true
+reap_bounded "$REPEAT_WORKER_PID"
 REPEAT_WORKER_PID=
 assert_absent "$REPEAT_STATE/worker.lock" \
   "a repeatedly signalled shutdown left its ownership lock behind"
@@ -711,8 +730,7 @@ for _ in $(seq 1 600); do
 done
 assert_present "$REPEAT_STATE/worker.ready" \
   "the worker after a repeatedly signalled shutdown never reported ready"
-kill -TERM "$REPEAT_WORKER_PID"
-wait "$REPEAT_WORKER_PID" 2>/dev/null || true
+reap_bounded "$REPEAT_WORKER_PID"
 REPEAT_WORKER_PID=
 pass "a repeatedly signalled shutdown still releases ownership for the next worker"
 

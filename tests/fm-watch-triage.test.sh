@@ -174,7 +174,22 @@ record_pi_busy() {  # <state-dir> <id>
     --source pi-ext --event agent-start
 }
 
-reap() { kill "$1" 2>/dev/null || true; wait "$1" 2>/dev/null || true; }
+# TERM, a bounded wait, then KILL. A watcher wedged inside its own signal
+# handler (seen in CI on 2026-09-05: the lock handoff's TERM trap failed to
+# parse and the helper kept waiting for the lock) must not turn one test into
+# a job-long hang behind an unbounded wait.
+reap() {
+  local pid=$1 i=0
+  kill "$pid" 2>/dev/null || true
+  while [ "$i" -lt 50 ] && is_live_non_zombie "$pid"; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if is_live_non_zombie "$pid"; then
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
 
 # --- pure classifier predicates (fm-classify-lib.sh) ------------------------
 
