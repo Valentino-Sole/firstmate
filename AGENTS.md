@@ -452,7 +452,7 @@ Handle actionable wakes as follows:
 
 1. For `signal:`, read the listed event lines first, then reconcile current state only where action depends on it.
 2. For `stale:`, inspect the recorded endpoint and load `stuck-crewmate-recovery` for a stopped, looping, confused, or unresponsive worker; a deep-inspection reason also requires current-state and validation-log inspection.
-3. For `check:`, act on the named poll result, including merges, Relay events, process-to-event source results, and captain inbox notes; a handled inbox note is also acknowledged with `bin/fm-inbox.sh drain --ack <id>`, or it stays counted as still waiting for firstmate.
+3. For `check:`, act on the named poll result, including merges, Relay events, process-to-event source results, and captain inbox notes; a captain inbox note that is a question or otherwise calls for an answer is answered with `bin/fm-inbox.sh reply <id> <answer>` (or `reply --key <token> <answer>` when the note carries an `external_key=` header, so an external bridge's own token resolves it without needing firstmate's internal id) - this itself acknowledges the note, so a separate `drain --ack` is redundant on that path. A note that is a pure capture with no answer expected is acknowledged with `bin/fm-inbox.sh drain --ack <id>` alone; either way, a note is only handled once it is durably answered or acked, or it stays counted as still waiting for firstmate.
 4. For `heartbeat:`, review the whole fleet from the structured fleet view, reconcile suspicious tasks and PR state, update the backlog, and never report an unchanged fleet as progress.
 
 When any wake reports a merged PR for a project cloned in this home, refresh that clone through the guarded fleet-sync path.
