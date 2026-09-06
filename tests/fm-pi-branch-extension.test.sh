@@ -771,11 +771,83 @@ outcomesTool.renderResult(legacyStockResult, { expanded: true, isPartial: false 
 if (legacyCall.children[1]?.text !== collapsedLegacyText) {
   throw new Error("legacy all-line stock capability changed expanded Calm-off output");
 }
+// The tool's own shell (renderShell: "self") only actually lays out text
+// inside Pi's live component tree, so - as with the ordinary Calm-off
+// assertion above - visibility is checked by inspecting the tracked shell's
+// children for real text rather than calling .render() on a bare Box.
+const hasVisibleText = (box) =>
+  Array.isArray(box?.children) &&
+  box.children.some((child) => typeof child?.text === "string" && child.text.length > 0);
+
 pi.events.emit("firstmate:calm-presentation", { active: true, stockExportRendering: false });
 const calmOnCall = outcomesTool.renderCall({}, renderTheme, renderContext);
 const calmOnResult = outcomesTool.renderResult(stockResult, { expanded: false, isPartial: false }, renderTheme, renderContext);
-if (calmOnCall.constructor.name !== "Container" || calmOnCall.render(100).length !== 0 || calmOnResult.constructor.name !== "Container" || calmOnResult.render(100).length !== 0) {
+// The call header always tracks the SAME shell object (a Box, never a
+// throwaway Container) so a later captain-verdict result on this row can
+// still render on it; what must hold is that a routine/unparseable batch
+// carries no visible text, not any particular constructor name.
+if (hasVisibleText(calmOnCall) || calmOnResult.constructor.name !== "Container") {
   throw new Error("fm_branch_outcomes remained visible while Calm was on");
+}
+
+// Calm fix (captain directive, 2026-09-06, fm-reparatur-zustellung-calm-leak,
+// Paket B): a batch containing a captain-verdict outcome - a result,
+// blocker, self-disclosure, or approval question - stays visible under Calm
+// even though the tool's own call label may still collapse. Regression
+// fixture: the real seq 1759/1760 captain-verdict outcomes from this
+// session's supervision branch (a worker collision self-disclosure and a
+// JARVIS practice-run blocker report); both must render.
+const captainBatchResult = {
+  content: [{
+    type: "text",
+    text: [
+      JSON.stringify({
+        seq: 1759, epoch: 1, task: "cardarena", wake: "signal: working", verdict: "captain",
+        summary: "Card-Arena-Arbeiterkollision: zwei schreibende Arbeiter in derselben Arbeitskopie, 87.716 Zeilen einer nicht freigegebenen Aenderung im master-Arbeitsbaum.",
+        silent: false,
+      }),
+      JSON.stringify({
+        seq: 1760, epoch: 2, task: "jarvis", wake: "signal: working", verdict: "captain",
+        summary: "JARVIS-Praxistest: zwei belegte Bruchstellen.",
+        silent: false,
+      }),
+    ].join("\n"),
+  }],
+};
+const captainBatchRenderContext = { state: {}, isError: false, isPartial: false };
+const captainBatchCall = outcomesTool.renderCall({}, renderTheme, captainBatchRenderContext);
+const captainBatchRenderedResult = outcomesTool.renderResult(captainBatchResult, { expanded: false, isPartial: false }, renderTheme, captainBatchRenderContext);
+if (captainBatchRenderedResult.constructor.name !== "Container") {
+  throw new Error("fm_branch_outcomes result wrapper changed shape for a captain-bearing batch");
+}
+// The tool's own shell (renderShell: "self") only actually renders inside
+// Pi's live component tree, so - matching the ordinary Calm-off assertion
+// above - inspect the tracked shell's children directly rather than calling
+// .render() on a Box outside that tree.
+const captainBatchText = captainBatchCall.children?.map((child) => child?.text ?? "").join("\n") ?? "";
+if (!captainBatchText.includes("Card-Arena-Arbeiterkollision")) {
+  throw new Error(`fm_branch_outcomes hid seq 1759 (captain verdict) under Calm: ${JSON.stringify(captainBatchText)}`);
+}
+if (!captainBatchText.includes("JARVIS-Praxistest")) {
+  throw new Error(`fm_branch_outcomes hid seq 1760 (captain verdict) under Calm: ${JSON.stringify(captainBatchText)}`);
+}
+
+// A purely routine, no-change batch stays silent under Calm exactly as
+// before: only a genuine captain verdict earns the exception.
+const routineOnlyResult = {
+  content: [{
+    type: "text",
+    text: JSON.stringify({
+      seq: 1761, epoch: 3, task: "fleet", wake: "heartbeat", verdict: "routine",
+      summary: "nothing changed", silent: true,
+    }),
+  }],
+};
+const routineOnlyRenderContext = { state: {}, isError: false, isPartial: false };
+const routineOnlyCall = outcomesTool.renderCall({}, renderTheme, routineOnlyRenderContext);
+const routineOnlyRenderedResult = outcomesTool.renderResult(routineOnlyResult, { expanded: false, isPartial: false }, renderTheme, routineOnlyRenderContext);
+if (hasVisibleText(routineOnlyCall) || routineOnlyRenderedResult.constructor.name !== "Container") {
+  throw new Error("fm_branch_outcomes showed a purely routine, no-change batch under Calm");
 }
 pi.events.emit("firstmate:calm-presentation", { active: false, stockExportRendering: false });
 if (outcomesTool.renderCall({}, renderTheme, renderContext).constructor.name !== "Box" || outcomesTool.renderResult(stockResult, { expanded: false, isPartial: false }, renderTheme, renderContext).constructor.name !== "Container") {
