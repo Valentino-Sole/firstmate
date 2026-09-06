@@ -178,8 +178,16 @@ _fm_task_inbox_write_record_locked() {  # <inbox-dir> <text> [delivery-mode]
 
 # Durably enqueue one steer: temp-write, then atomic rename into the next
 # sequence slot. Prints the record path. Fails without a partial record.
+# Refuses an empty text outright (captain directive, 2026-09-06,
+# fm-send-stdin-schalter-verschluckt): an empty body carries no instruction a
+# worker could act on, so writing one durably would only manufacture a
+# confirmable-but-useless delivery.
 fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock rec status=0
+  if [ -z "$text" ]; then
+    echo "fm-task-inbox: refusing to write an empty message body for task $task" >&2
+    return 1
+  fi
   dir=$(fm_task_inbox_dir "$state" "$task")
   mkdir -p "$dir/handled" || return 1
   lock="$dir/.seq.lock"
@@ -203,6 +211,10 @@ fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
 # a repeated identical local steer is a deliberate new instruction.
 fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock want have f rec='' status=0
+  if [ -z "$text" ]; then
+    echo "fm-task-inbox: refusing to write an empty message body for task $task" >&2
+    return 1
+  fi
   dir=$(fm_task_inbox_dir "$state" "$task")
   mkdir -p "$dir/handled" || return 1
   lock="$dir/.seq.lock"
@@ -269,14 +281,30 @@ fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mod
 # directory-scan match, as delivery proof by itself. Re-reads the record from
 # disk through the same fm_task_inbox_body every reader uses, piped straight
 # into cmp so no command-substitution trailing-newline stripping can paper
-# over a mismatch.
+# over a mismatch. A full byte-for-byte comparison, never a prefix or length
+# check alone: `cmp -s` fails on the first differing byte or on either side
+# running short, so a truncated, padded, or partially-written body is caught
+# exactly like a wholesale mismatch. On failure this prints the concrete
+# deviation (byte lengths, and an empty-body call-out) to stderr rather than
+# a bare pass/fail, so the caller's refusal names what actually went wrong.
 _fm_task_inbox_verify_record() {  # <record-path> <expected-text>
-  local rec=$1 expected=$2 dir want ok=1
-  [ -f "$rec" ] || return 1
+  local rec=$1 expected=$2 dir want got ok=1
+  if [ ! -f "$rec" ]; then
+    echo "fm-task-inbox: verify failed for $rec: record does not exist" >&2
+    return 1
+  fi
   dir=${rec%/*}
   want=$(mktemp "$dir/.verify.XXXXXX") || return 1
   printf '%s' "$expected" > "$want" || { rm -f "$want"; return 1; }
-  fm_task_inbox_body "$rec" 2>/dev/null | cmp -s - "$want" || ok=0
+  got=$(fm_task_inbox_body "$rec" 2>/dev/null)
+  if ! fm_task_inbox_body "$rec" 2>/dev/null | cmp -s - "$want"; then
+    ok=0
+    if [ -z "$got" ]; then
+      echo "fm-task-inbox: verify failed for $rec: the record body is empty but ${#expected} byte(s) were expected" >&2
+    else
+      echo "fm-task-inbox: verify failed for $rec: recorded body is ${#got} byte(s), expected ${#expected} byte(s); content does not match byte-for-byte" >&2
+    fi
+  fi
   rm -f "$want"
   [ "$ok" -eq 1 ]
 }

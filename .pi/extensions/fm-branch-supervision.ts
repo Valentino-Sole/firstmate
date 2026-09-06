@@ -1779,6 +1779,31 @@ ${context.command}
       .replace(/\r/g, "");
   };
 
+  // Calm (captain directive, 2026-09-06, fm-reparatur-zustellung-calm-leak):
+  // a captain-verdict outcome is a result, blocker, self-disclosure, or
+  // approval question the captain must see, never a technical output Calm
+  // may collapse. Each stored row is one compact JSON object per line
+  // (bin/fm-branch-outcome.sh's header owns the schema); this scans for at
+  // least one row whose verdict is exactly "captain" without otherwise caring
+  // about shape, so a routine-only listing (or any non-JSON stub, such as an
+  // error message) still collapses under Calm exactly as before.
+  const outcomesTextHasCaptainVerdict = (text: string): boolean => {
+    if (!text) return false;
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (parsed && typeof parsed === "object" && (parsed as { verdict?: unknown }).verdict === "captain") {
+        return true;
+      }
+    }
+    return false;
+  };
+
   let stockOutcomesPreviewLines: number | null | undefined;
   const getStockOutcomesPreviewLines = (): number | undefined => {
     if (stockOutcomesPreviewLines !== undefined) return stockOutcomesPreviewLines ?? undefined;
@@ -1852,19 +1877,32 @@ ${context.command}
     renderShell: "self",
     renderCall: (_args, theme, context) => {
       if (calmPresentation.stockExportRendering) throw new Error("Use Pi stock export rendering");
-      if (calmHides("assistant-tool-call")) return new Container();
+      // Always return the SAME tracked shell object (never an untracked
+      // throwaway Container), even while the call label itself stays hidden:
+      // renderResult may still need to show captain-verdict content on this
+      // same row once the result arrives, and mutating a Box Pi never
+      // inserted into the transcript would render nothing.
       const shellState = context.state as OutcomesToolShellState;
-      shellState.call = new Text(theme.fg("toolTitle", theme.bold("fm_branch_outcomes")), 0, 0);
+      shellState.call = calmHides("assistant-tool-call")
+        ? undefined
+        : new Text(theme.fg("toolTitle", theme.bold("fm_branch_outcomes")), 0, 0);
       return refreshOutcomesToolShell(shellState, theme, context);
     },
     renderResult: (result, options, theme, context) => {
       if (calmPresentation.stockExportRendering) throw new Error("Use Pi stock export rendering");
-      if (calmHides("tool-result")) return new Container();
       const output = result.content
         .filter((item) => item.type === "text")
         .map((item) => normalizeOutcomesToolOutput(item.text))
         .join("\n");
       const shellState = context.state as OutcomesToolShellState;
+      // A batch containing at least one captain-verdict outcome (a result,
+      // blocker, self-disclosure, or approval question) stays visible under
+      // Calm; a purely routine or unparseable listing still collapses.
+      if (calmHides("tool-result") && !outcomesTextHasCaptainVerdict(output)) {
+        shellState.result = new Container();
+        refreshOutcomesToolShell(shellState, theme, context);
+        return new Container();
+      }
       // Keep each line's ANSI scope independent, matching Pi's stock fallback.
       // Pi 0.84.4 no longer supplies an implicit reset at multiline boundaries.
       const lines = output.split("\n");
