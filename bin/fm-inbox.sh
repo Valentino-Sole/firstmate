@@ -86,6 +86,12 @@
 # firstmate's internal note id at all. A note queued without `--key` carries no
 # `external_key=` line, exactly like every note queued before this existed.
 #
+# `list` and `drain` (which lists before its own ack prompt) print a note's
+# `external_key=` line right above its body when present, so a wake-handling
+# turn sees at a glance that a note came from an external caller who will poll
+# for its answer by that key - and can quote the token straight into
+# `reply --key <token> <answer>` without opening the raw note file to find it.
+#
 # `note` is also the queueing half of the spoken interface: when the voice agent
 # in bin/fm-voice-relay.py hands real work over to firstmate, it runs this
 # subcommand rather than carrying a second queue of its own. Keep the `note`
@@ -453,6 +459,9 @@ cmd_list() {
     [ -e "$f" ] || break
     any=1
     printf '%s\n' "$(basename "$f" .note)"
+    local key
+    key=$(sed -n 's/^external_key=//p' "$f" | head -1)
+    [ -z "$key" ] || printf '    external_key=%s\n' "$key"
     sed -n '/^--$/,$p' "$f" | tail -n +2 | sed 's/^/    /'
   done
   [ "$any" -eq 1 ] || printf '(inbox empty)\n'

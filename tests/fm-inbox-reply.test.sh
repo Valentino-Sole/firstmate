@@ -248,6 +248,31 @@ test_reply_key_refuses_when_unknown_or_ambiguous() {
   pass "fm-inbox reply --key: refuses an unknown or ambiguous external key rather than guessing"
 }
 
+test_list_and_drain_surface_the_external_key_next_to_the_note() {
+  local home id_plain out
+  home=$(setup_home list-surfaces-key)
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" note --key "z-liste-test" "Notiz mit Schluessel.") \
+    || fail "note --key failed: $out"
+  [ -n "$(printf '%s' "$out" | head -1 | awk '{print $2}')" ] || fail "no id came back from note --key"
+  id_plain=$(queue "$home" "Notiz ohne Schluessel.")
+
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" list) || fail "list failed: $out"
+  assert_contains "$out" "external_key=z-liste-test" \
+    "list must surface a note's external_key next to it, not just in the raw file"
+
+  # The keyed line must sit with its own note, never bleed onto the plain one.
+  local plain_block
+  plain_block=$(printf '%s\n' "$out" | awk -v id="$id_plain" 'BEGIN{f=0} $0==id{f=1;next} /^[0-9]/{f=0} f{print}')
+  case "$plain_block" in
+    *external_key*) fail "the keyed note's external_key leaked into the plain note's listing: $plain_block" ;;
+  esac
+
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" drain) || fail "drain failed: $out"
+  assert_contains "$out" "external_key=z-liste-test" \
+    "drain (which lists before prompting for --ack) must surface the external_key too"
+  pass "fm-inbox list/drain: surfaces a note's external_key next to it so a wake-handling turn can quote it straight into reply --key, without hunting through the raw note file"
+}
+
 resolve_external_key_for_test() {  # <home> <token> -> echoes the note id
   local home=$1 token=$2 f
   for f in "$home/state/inbox"/*.note "$home/state/inbox/handled"/*.note; do
@@ -269,6 +294,7 @@ test_reply_via_stdin
 test_note_with_key_stores_header_and_reply_resolves_by_key
 test_two_external_keys_close_together_are_never_swapped
 test_reply_key_refuses_when_unknown_or_ambiguous
+test_list_and_drain_surface_the_external_key_next_to_the_note
 # Runs last, after every fixture above has had the chance to go wrong: confirms
 # the real live inbox is still byte-for-byte what it was before this suite.
 test_real_open_notes_are_never_touched
