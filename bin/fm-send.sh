@@ -11,6 +11,12 @@
 # Key support is backend-specific: tmux/herdr support Escape, Enter, and C-c;
 # Orca currently supports Enter and C-c only, and rejects Escape.
 #
+# An unrecognized leading "--" switch is refused loudly rather than silently
+# delivered as literal message text - the whole message text, never just its
+# first argument - and the message text may never be empty; either refusal
+# happens before any record is written. Pass a literal "--" first to send
+# text that must itself start with "--".
+#
 # Two data planes:
 #
 # INBOX - the default for text to a task recorded in this home, local and
@@ -491,6 +497,27 @@ while :; do
   esac
 done
 
+# An unrecognized leading "--" switch is never treated as literal message
+# text (captain directive, 2026-09-06, fm-send-stdin-schalter-verschluckt):
+# three real deliveries on 06.09. were silently reduced to the literal text
+# "--stdin" this way, because fm-send did not know that flag and let it fall
+# through to the plain message assignment below - the record was then written
+# and verified byte-exact, so the existing delivery proof correctly confirmed
+# a record nobody actually meant to send. An unrecognized switch is now a
+# loud, pre-send refusal instead. A literal "--" explicitly ends option
+# parsing, so a message that must itself start with "--" still has a way
+# through; "--key" is the one recognized switch handled further below.
+case "${1:-}" in
+  --)
+    shift
+    ;;
+  --key) : ;;
+  --*)
+    echo "error: unknown switch '$1'; fm-send does not recognize this option and refuses to silently deliver it as message text. To send text that itself starts with '--', pass a literal '--' first to end option parsing (e.g. fm-send.sh <target> -- '$1')." >&2
+    exit 1
+    ;;
+esac
+
 if [ "$TARGET_BACKEND" != remote ]; then
   fm_backend_validate "$TARGET_BACKEND" || exit 1
 fi
@@ -721,6 +748,10 @@ if [ "${1:-}" = "--key" ]; then
   fm_send_record_interrupt "$semantic_key" || exit 1
 else
   MESSAGE=$*
+  if [ -z "$MESSAGE" ]; then
+    echo "error: refusing to send: the message text is empty. fm-send never records or types an empty steer body, because an empty record carries no instruction the worker could act on." >&2
+    exit 1
+  fi
   if [ "$TARGET_BACKEND" = remote ]; then
     FM_SEND_REMOTE_BUDGET=${FM_SEND_REMOTE_BUDGET:-30}
     case "$FM_SEND_REMOTE_BUDGET" in
