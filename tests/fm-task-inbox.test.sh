@@ -279,6 +279,50 @@ test_ring_skips_dead_agent() {
   pass "inbox: the ring skips dead or missing endpoints and still rings live or unclassifiable endpoints"
 }
 
+test_write_refuses_when_post_write_verification_fails() {
+  local state stderr_log result rc
+  state="$TMP_ROOT/verify-fail/state"; mkdir -p "$state"
+  stderr_log="$state/stderr.log"
+  result=$(FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_task_inbox_body() { printf "%s" "corrupted, not the real body"; }
+    fm_task_inbox_write "$2" t1 "the real message"
+  ' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$state" 2>"$stderr_log")
+  rc=$?
+  [ "$rc" -ne 0 ] \
+    || fail "a write whose post-write verification fails must not report success (rc=0, printed: $result)"
+  [ -z "$result" ] \
+    || fail "a failed verification must not print a record path on stdout, got: $result"
+  [ -f "$state/t1.inbox/001.msg" ] \
+    || fail "the unverifiable record should be left in place for inspection, not deleted"
+  grep -qF "could not verify" "$stderr_log" \
+    || fail "a failed verification should explain itself on stderr: $(cat "$stderr_log")"
+  pass "inbox: fm_task_inbox_write refuses rc=0 when post-write verification fails, and never deletes the evidence"
+}
+
+test_idempotent_write_refuses_when_dedup_hit_verification_fails() {
+  local state stderr_log first result rc
+  state="$TMP_ROOT/verify-fail-idem/state"; mkdir -p "$state"
+  first=$(inbox_lib "$state" fm_task_inbox_write_idempotent "$state" t1 "steer to verify") \
+    || fail "fixture write failed"
+  stderr_log="$state/stderr.log"
+  result=$(FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_task_inbox_body() { printf "%s" "corrupted, not the real body"; }
+    fm_task_inbox_write_idempotent "$2" t1 "steer to verify"
+  ' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$state" 2>"$stderr_log")
+  rc=$?
+  [ "$rc" -ne 0 ] \
+    || fail "a dedup hit whose post-write verification fails must not report success (rc=0, printed: $result)"
+  [ -z "$result" ] \
+    || fail "a failed dedup-hit verification must not print a record path, got: $result"
+  [ -f "$first" ] \
+    || fail "the dedup-matched record should be left in place for inspection, not deleted"
+  grep -qF "could not verify" "$stderr_log" \
+    || fail "a failed dedup-hit verification should explain itself on stderr: $(cat "$stderr_log")"
+  pass "inbox: fm_task_inbox_write_idempotent refuses rc=0 when a dedup-hit record fails re-verification"
+}
+
 test_idempotent_write_dedups_exact_body() {
   local state r1 r2 r3 r4 count text
   state="$TMP_ROOT/idem/state"; mkdir -p "$state"
@@ -696,6 +740,8 @@ test_write_is_durable_and_exact
 test_doorbell_is_a_shell_noop
 test_doorbell_rejects_terminal_controls
 test_ring_skips_dead_agent
+test_write_refuses_when_post_write_verification_fails
+test_idempotent_write_refuses_when_dedup_hit_verification_fails
 test_idempotent_write_dedups_exact_body
 test_idempotent_write_follows_concurrent_ack
 test_handled_mv_dedups_by_sequence
