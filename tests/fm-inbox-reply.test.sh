@@ -183,6 +183,82 @@ test_reply_via_stdin() {
   pass "fm-inbox reply: accepts its body from stdin exactly like note does (simulated answer - mechanism only)"
 }
 
+test_note_with_key_stores_header_and_reply_resolves_by_key() {
+  local home id out body
+  home=$(setup_home external-key)
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" note --key "z-kette-test" "Guten Morgen, Jarvis.") \
+    || fail "note --key failed: $out"
+  id=$(printf '%s' "$out" | head -1 | awk '{print $2}')
+  [ -n "$id" ] || fail "no id came back from note --key"
+  assert_contains "$(cat "$home/state/inbox/$id.note")" "external_key=z-kette-test" \
+    "the note must carry the external key as its own header line, not a footer in the text"
+  case "$(cat "$home/state/inbox/$id.note")" in
+    *"Guten Morgen, Jarvis."*z-kette-test*) fail "the external key leaked into the note body text" ;;
+  esac
+
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" reply --key "z-kette-test" "Kapitaen, guten Morgen.") \
+    || fail "reply --key failed to resolve an unambiguous external key: $out"
+  assert_contains "$out" "replied $id" "reply --key should report the resolved firstmate id"
+  body=$(reply_body "$home/state/inbox/replies/$id.reply")
+  [ "$body" = "Kapitaen, guten Morgen." ] || fail "reply --key body did not round-trip: $body"
+  [ -f "$home/state/inbox/handled/$id.note" ] || fail "reply --key must acknowledge the note like any other reply"
+  pass "fm-inbox note/reply --key: an external conversation key round-trips as a real header field, never a text footer (simulated answer - mechanism only)"
+}
+
+test_two_external_keys_close_together_are_never_swapped() {
+  local home id_a id_b out_a out_b body_a body_b
+  home=$(setup_home external-key-pair)
+  FM_HOME="$home" bash "$INBOX_BIN" note --key "z-zwei-a" "Wie spaet ist es, Jarvis?" >/dev/null \
+    || fail "queuing note A with --key failed"
+  FM_HOME="$home" bash "$INBOX_BIN" note --key "z-zwei-b" "Wo bist du gerade, Jarvis?" >/dev/null \
+    || fail "queuing note B with --key failed"
+
+  # Answered in reversed order (B before A), matching JARVIS's own chain test
+  # shape: correlation must ride the key, never the order of replying.
+  out_b=$(FM_HOME="$home" bash "$INBOX_BIN" reply --key "z-zwei-b" "Kapitaen, hier ist es Vormittag.") \
+    || fail "reply --key for B failed: $out_b"
+  out_a=$(FM_HOME="$home" bash "$INBOX_BIN" reply --key "z-zwei-a" "Kapitaen, kurz nach zehn.") \
+    || fail "reply --key for A failed: $out_a"
+
+  id_a=$(resolve_external_key_for_test "$home" "z-zwei-a")
+  id_b=$(resolve_external_key_for_test "$home" "z-zwei-b")
+  body_a=$(reply_body "$home/state/inbox/replies/$id_a.reply")
+  body_b=$(reply_body "$home/state/inbox/replies/$id_b.reply")
+  [ "$body_a" = "Kapitaen, kurz nach zehn." ] || fail "note A's reply carries the wrong text (possible swap by key): $body_a"
+  [ "$body_b" = "Kapitaen, hier ist es Vormittag." ] || fail "note B's reply carries the wrong text (possible swap by key): $body_b"
+  pass "fm-inbox reply --key: two external keys queued close together and answered out of order are never swapped (simulated answers - mechanism only)"
+}
+
+test_reply_key_refuses_when_unknown_or_ambiguous() {
+  local home rc out
+  home=$(setup_home external-key-bad)
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" reply --key "no-such-key" "an answer nobody asked for" 2>&1)
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "reply --key must refuse a token with no corresponding note"
+  assert_contains "$out" "no single active note carries external_key" "the refusal should name why"
+
+  # Ambiguity: two notes accidentally sharing the same external key must
+  # never let reply --key silently pick one.
+  FM_HOME="$home" bash "$INBOX_BIN" note --key "dup" "erste Notiz" >/dev/null || fail "fixture note 1 failed"
+  FM_HOME="$home" bash "$INBOX_BIN" note --key "dup" "zweite Notiz" >/dev/null || fail "fixture note 2 failed"
+  out=$(FM_HOME="$home" bash "$INBOX_BIN" reply --key "dup" "welche davon?" 2>&1)
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "reply --key must refuse an ambiguous key claimed by more than one active note"
+  assert_contains "$out" "no single active note carries external_key" "the ambiguity refusal should name why"
+  pass "fm-inbox reply --key: refuses an unknown or ambiguous external key rather than guessing"
+}
+
+resolve_external_key_for_test() {  # <home> <token> -> echoes the note id
+  local home=$1 token=$2 f
+  for f in "$home/state/inbox"/*.note "$home/state/inbox/handled"/*.note; do
+    [ -e "$f" ] || continue
+    grep -qxF "external_key=$token" "$f" || continue
+    basename "$f" .note
+    return 0
+  done
+  return 1
+}
+
 test_reply_writes_keyed_record_and_acks_the_note
 test_two_close_notes_are_never_swapped_or_double_processed
 test_unknown_id_is_refused_without_writing_anything
@@ -190,6 +266,9 @@ test_already_acked_note_is_refused_safely
 test_malformed_id_is_refused_before_touching_the_filesystem
 test_empty_reply_is_refused
 test_reply_via_stdin
+test_note_with_key_stores_header_and_reply_resolves_by_key
+test_two_external_keys_close_together_are_never_swapped
+test_reply_key_refuses_when_unknown_or_ambiguous
 # Runs last, after every fixture above has had the chance to go wrong: confirms
 # the real live inbox is still byte-for-byte what it was before this suite.
 test_real_open_notes_are_never_touched

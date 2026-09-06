@@ -21,21 +21,27 @@
 #           actually processed it (not merely read the wake). Writes ONE durable
 #           reply record keyed by the note's own id - the note id IS the
 #           conversation key an external caller (a voice agent, a bridge like
-#           JARVIS) correlates its question against - then acknowledges the note
-#           the same way `drain --ack` does, because a replied-to note has been
-#           handled. Refuses loudly, writing nothing, for any id that is not
-#           currently a live unhandled note: unknown, already replied, or
-#           already acked some other way. Never touches or infers a reply for a
-#           note nobody named.
+#           JARVIS) correlates its question against, unless that caller supplied
+#           its OWN external key at `note` time (see `--key` below), in which
+#           case `reply --key <token>` addresses the note by that key instead of
+#           ever needing to learn firstmate's internal id at all - then
+#           acknowledges the note the same way `drain --ack` does, because a
+#           replied-to note has been handled. Refuses loudly, writing nothing,
+#           for any id or key that does not currently resolve to exactly one
+#           live unhandled note: unknown, ambiguous, already replied, or already
+#           acked some other way. Never touches or infers a reply for a note
+#           nobody named.
 #
 # Usage:
 #   fm-inbox.sh note <text>...          | fm-inbox.sh note -   (body from stdin)
+#   fm-inbox.sh note --key <token> <text>...   (an external caller's own conversation key)
 #   fm-inbox.sh say  [<file.wav>]       (default: audio on stdin)
 #   fm-inbox.sh status
 #   fm-inbox.sh ask  <question>...
 #   fm-inbox.sh list
 #   fm-inbox.sh drain [--ack <id>...]
-#   fm-inbox.sh reply <id> <text>...    | fm-inbox.sh reply <id> -   (body from stdin)
+#   fm-inbox.sh reply <id> <text>...           | fm-inbox.sh reply <id> -   (body from stdin)
+#   fm-inbox.sh reply --key <token> <text>...  | fm-inbox.sh reply --key <token> -
 #
 # Configuration. A region, a model id and an AWS profile name somebody's account
 # and somebody's choices, so this file carries no default for any of them. Each is
@@ -69,6 +75,16 @@
 # this script only writes it durably and keyed correctly. It never deletes or
 # rewrites a reply once written, matching the append-only spirit of the note
 # store itself - a caller that must correct a reply sends a new note instead.
+#
+# `note --key <token>` stores the caller's own external conversation key as an
+# `external_key=<token>` header line in the note, alongside `id=`/`at=`/`source=`
+# - a real header field, never a footer folded into the free text a captain or
+# a spoken answer reads. `reply --key <token>` resolves that same token back to
+# the one live note carrying it (refusing on none or on more than one, never
+# guessing), so an external caller's whole round trip - deposit, correlate,
+# read the answer - can use only its own key and never needs to learn or carry
+# firstmate's internal note id at all. A note queued without `--key` carries no
+# `external_key=` line, exactly like every note queued before this existed.
 #
 # `note` is also the queueing half of the spoken interface: when the voice agent
 # in bin/fm-voice-relay.py hands real work over to firstmate, it runs this
@@ -216,15 +232,25 @@ queue_note() {
 }
 
 cmd_note() {
-  local body
+  local key='' body
+  if [ "${1:-}" = "--key" ]; then
+    [ "$#" -ge 2 ] || die "usage: fm-inbox.sh note --key <token> <text>...   (or: note --key <token> - to read stdin)"
+    key=$2
+    key_valid "$key" || die "refusing: '$key' is not a valid conversation key"
+    shift 2
+  fi
   if [ "$#" -eq 0 ]; then
-    die "usage: fm-inbox.sh note <text>...   (or: note - to read stdin)"
+    die "usage: fm-inbox.sh note <text>...   (or: note - to read stdin)  [--key <token> before the text]"
   elif [ "$1" = "-" ]; then
     body=$(cat)
   else
     body="$*"
   fi
-  queue_note text "$body"
+  if [ -n "$key" ]; then
+    queue_note text "$body" "external_key=$key"
+  else
+    queue_note text "$body"
+  fi
 }
 
 # ---------------------------------------------------------------- say
@@ -377,6 +403,36 @@ id_valid() {  # <id>
   esac
 }
 
+# An external caller's own conversation key (a bridge like JARVIS, a voice
+# front end) - never a firstmate note id itself, and never accepted loosely
+# enough to break out of the `external_key=` header line it is stored in.
+key_valid() {  # <token>
+  case "$1" in
+    ''|*[!A-Za-z0-9._-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Resolve an external conversation key - set via `note --key`, stored as the
+# note's own `external_key=` header line - to the firstmate note id currently
+# carrying it, among ACTIVE (unhandled) notes only. Prints nothing and fails
+# when no active note claims that key, or when more than one does: a caller
+# addressing a note purely by its own external key must never be handed an
+# ambiguous match, and a stale or reused key is exactly the shape of mistake
+# this refuses rather than guesses through.
+resolve_external_key() {  # <token>
+  local token=$1 f found='' matches=0
+  [ -d "$INBOX" ] || return 1
+  for f in "$INBOX"/*.note; do
+    [ -e "$f" ] || continue
+    grep -qxF "external_key=$token" "$f" 2>/dev/null || continue
+    matches=$((matches + 1))
+    found=$(basename "$f" .note)
+  done
+  [ "$matches" -eq 1 ] || return 1
+  printf '%s' "$found"
+}
+
 # Acknowledge one note the same way regardless of caller: move it into
 # handled/, or report it was already gone. Shared by `drain --ack` and `reply`
 # so the two never drift into two different ideas of "handled".
@@ -429,10 +485,17 @@ cmd_drain() {
 # same note can never be answered twice.
 cmd_reply() {
   local id body tmp
-  [ "$#" -ge 1 ] || die "usage: fm-inbox.sh reply <id> <text>...   (or: reply <id> - to read stdin)"
-  id=$1
-  shift
-  id_valid "$id" || die "refusing: '$id' is not a valid note id"
+  [ "$#" -ge 1 ] || die "usage: fm-inbox.sh reply <id> <text>...   (or: reply --key <token> <text>...)"
+  if [ "$1" = "--key" ]; then
+    [ "$#" -ge 2 ] || die "usage: fm-inbox.sh reply --key <token> <text>...   (or: reply --key <token> - to read stdin)"
+    key_valid "$2" || die "refusing: '$2' is not a valid conversation key"
+    id=$(resolve_external_key "$2") || die "refusing: no single active note carries external_key '$2' (none, or more than one)"
+    shift 2
+  else
+    id=$1
+    shift
+    id_valid "$id" || die "refusing: '$id' is not a valid note id"
+  fi
   if [ "$#" -eq 0 ]; then
     die "usage: fm-inbox.sh reply <id> <text>...   (or: reply <id> - to read stdin)"
   elif [ "$1" = "-" ]; then
