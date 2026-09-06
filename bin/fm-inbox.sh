@@ -30,7 +30,17 @@
 #           for any id or key that does not currently resolve to exactly one
 #           live unhandled note: unknown, ambiguous, already replied, or already
 #           acked some other way. Never touches or infers a reply for a note
-#           nobody named.
+#           nobody named. When the answered note carries an external key,
+#           `reply` also ATTEMPTS delivery straight to JARVIS over HTTP (see
+#           `deliver` below) - the local record is written and the note is
+#           acknowledged either way, but the command exits nonzero, naming the
+#           failure, when that delivery attempt fails.
+#   deliver Retries a JARVIS delivery for a note that already has a reply
+#           record, without writing a second reply or re-acknowledging the
+#           note - the recovery path when `reply`'s own delivery attempt
+#           failed, or a duplicate-guard was never reached in the first place.
+#           Idempotent: a note already marked delivered is reported and left
+#           alone, never re-sent.
 #
 # Usage:
 #   fm-inbox.sh note <text>...          | fm-inbox.sh note -   (body from stdin)
@@ -42,6 +52,7 @@
 #   fm-inbox.sh drain [--ack <id>...]
 #   fm-inbox.sh reply <id> <text>...           | fm-inbox.sh reply <id> -   (body from stdin)
 #   fm-inbox.sh reply --key <token> <text>...  | fm-inbox.sh reply --key <token> -
+#   fm-inbox.sh deliver <id>            | fm-inbox.sh deliver --key <token>
 #
 # Configuration. A region, a model id and an AWS profile name somebody's account
 # and somebody's choices, so this file carries no default for any of them. Each is
@@ -50,23 +61,37 @@
 # write rather than reaching for a value that belongs to another home. That
 # configuration is also the opt-in: `say` and `ask` are off until it exists.
 #
-#   config/inbox-region     FM_INBOX_REGION     AWS region.            required
-#   config/inbox-stt-model  FM_INBOX_STT_MODEL  speech-to-text model.  required by say
-#   config/inbox-ask-model  FM_INBOX_ASK_MODEL  side-question model.   required by ask
-#   config/inbox-profile    FM_INBOX_PROFILE    AWS profile.           optional
+#   config/inbox-region      FM_INBOX_REGION       AWS region.            required
+#   config/inbox-stt-model   FM_INBOX_STT_MODEL     speech-to-text model.  required by say
+#   config/inbox-ask-model   FM_INBOX_ASK_MODEL     side-question model.   required by ask
+#   config/inbox-profile     FM_INBOX_PROFILE       AWS profile.           optional
+#   config/inbox-jarvis-url  FM_INBOX_JARVIS_URL    JARVIS answer endpoint. optional, has a default
 #
 # An absent profile means the call uses whatever credentials are already in the
 # environment, which is also what FM_INBOX_PROFILE= (empty) forces.
 #
-# `note`, `status`, `list`, `drain` and `reply` need NO configuration at all,
-# because they make no model call. The voice handover depends on `note`, so it
-# keeps working in a home that has configured nothing.
+# The JARVIS URL defaults to http://127.0.0.1:7416/api/briefkasten/antwort -
+# JARVIS's own bridge, its documented default port (JARVIS_BRUECKE_PORT), same
+# server. That endpoint deliberately accepts only real loopback connections,
+# never a forwarded or credentialed one (JARVIS's own gemeinsam/zugang.py
+# ist_lokal check), so no secret is configured here to reach it - only the
+# address, in case a home's JARVIS bridge runs on a different port. This is a
+# server-internal detail, not a captain-held secret.
+#
+# `note`, `status`, `list`, `drain` and `reply` (for a note with no external
+# key) need NO configuration at all, because they make no model call. The
+# voice handover depends on `note`, so it keeps working in a home that has
+# configured nothing.
 #
 # Environment:
 #   FM_HOME              operational home whose state/ and data/ are used.
 #
 # PRIVACY: `say` sends your audio and `ask` sends your question to Bedrock.
-# `note`, `status`, `list`, `drain` and `reply` make no network call at all.
+# `note`, `status`, `list`, `drain`, and `reply` for a note with no external
+# key make no network call at all. `reply`/`deliver` for a note WITH an
+# external key make exactly one loopback HTTP call to JARVIS's own bridge on
+# this same server (never anywhere else) to hand back the already-composed
+# answer text.
 #
 # `reply` writes into state/inbox/replies/<id>.reply, a sibling of the note
 # store: schema=fm-inbox-reply.v1, at=<UTC timestamp>, then the exact reply text
@@ -75,6 +100,10 @@
 # this script only writes it durably and keyed correctly. It never deletes or
 # rewrites a reply once written, matching the append-only spirit of the note
 # store itself - a caller that must correct a reply sends a new note instead.
+# Whether a keyed note's reply was actually DELIVERED to JARVIS is tracked
+# separately, in state/inbox/replies/delivered/<id> (written only after a
+# confirmed 200 "ok":true from JARVIS's own endpoint) - never by rewriting the
+# write-once .reply record itself.
 #
 # `note --key <token>` stores the caller's own external conversation key as an
 # `external_key=<token>` header line in the note, alongside `id=`/`at=`/`source=`
@@ -86,11 +115,23 @@
 # firstmate's internal note id at all. A note queued without `--key` carries no
 # `external_key=` line, exactly like every note queued before this existed.
 #
+# COMPATIBILITY: a note JARVIS deposits through its own unmodified path (no
+# `--key`, `bin/fm-inbox.sh note <text>` verbatim) still carries its
+# conversation key the way it always has - as a "\n\n[Antwortschlüssel:
+# <token>]" footer inside the free text itself, matching JARVIS's own
+# `bruecke/auftrag.py:schluessel_aus_notiz`. `reply --key`/`deliver --key` and
+# `list`/`drain`'s key display recognize BOTH forms - the real `external_key=`
+# header and this legacy footer - so neither format needs to change and
+# neither is preferred over the other; a note carrying either resolves the
+# same way. A note with no key in either form (every note queued before any of
+# this existed, including the three real open captain notes) is unaffected.
+#
 # `list` and `drain` (which lists before its own ack prompt) print a note's
-# `external_key=` line right above its body when present, so a wake-handling
-# turn sees at a glance that a note came from an external caller who will poll
-# for its answer by that key - and can quote the token straight into
-# `reply --key <token> <answer>` without opening the raw note file to find it.
+# external key - header or legacy footer, whichever it carries - right above
+# its body when present, so a wake-handling turn sees at a glance that a note
+# came from an external caller who will poll for its answer by that key - and
+# can quote the token straight into `reply --key <token> <answer>` without
+# opening the raw note file to find it.
 #
 # `note` is also the queueing half of the spoken interface: when the voice agent
 # in bin/fm-voice-relay.py hands real work over to firstmate, it runs this
@@ -155,6 +196,14 @@ STT_MODEL="${FM_INBOX_STT_MODEL:-}"
 ASK_MODEL="${FM_INBOX_ASK_MODEL:-}"
 # Unset falls through to config; explicitly empty means "use ambient credentials".
 PROFILE="${FM_INBOX_PROFILE-$(read_setting inbox-profile)}"
+
+# JARVIS's own bridge, its documented default port - a server-internal
+# detail, never a secret (see the header comment's JARVIS URL paragraph).
+JARVIS_URL_DEFAULT="http://127.0.0.1:7416/api/briefkasten/antwort"
+jarvis_url() {
+  local v="${FM_INBOX_JARVIS_URL:-$(read_setting inbox-jarvis-url)}"
+  printf '%s' "${v:-$JARVIS_URL_DEFAULT}"
+}
 
 # Resolved only by the subcommands that make a model call, so note, status, list
 # and drain keep working in a home that has configured nothing.
@@ -419,8 +468,57 @@ key_valid() {  # <token>
   esac
 }
 
-# Resolve an external conversation key - set via `note --key`, stored as the
-# note's own `external_key=` header line - to the firstmate note id currently
+# COMPATIBILITY with JARVIS's own unmodified note-deposit path (no `--key`):
+# the same "\n\n[Antwortschlüssel: <token>]" footer JARVIS's own
+# bruecke/auftrag.py:_notiz_mit_schluessel appends to the free text, and
+# schluessel_aus_notiz reads back - reproduced exactly here, byte for byte
+# (blank line, literal bracket text, no trailing content after the closing
+# bracket but whatever trailing newline the note store itself adds), so
+# neither side has to change format. A note with no such footer, and no
+# `external_key=` header, matches neither and is unaffected - including the
+# three real open captain notes, which predate both formats.
+note_footer_key_matches() {  # <note-file> <token>
+  local f=$1 token=$2 body suffix
+  body=$(sed -n '/^--$/,$p' "$f" | tail -n +2)
+  suffix=$'\n\n[Antwortschlüssel: '"$token"']'
+  case "$body" in
+    *"$suffix") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Same footer, read back without already knowing the token - for `list`/
+# `drain` to display whatever key a footer-format note happens to carry.
+# Mirrors JARVIS's own schluessel_aus_notiz(): no match is not an error, an
+# untokened note (every note before either format existed) just prints "".
+_FOOTER_KEY_RE=$'\n\n\\[Antwortschlüssel: ([^]]+)\\]$'
+footer_key_of() {  # <note-file> -> echoes the footer-format key, if any
+  local f=$1 body
+  body=$(sed -n '/^--$/,$p' "$f" | tail -n +2)
+  if [[ $body =~ $_FOOTER_KEY_RE ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
+
+# One note's external key regardless of which of the two forms it carries -
+# the real `external_key=` header (set via `note --key`) takes priority,
+# falling back to the legacy footer JARVIS's own unmodified path still uses.
+# Prints "" for a note with neither, never an error.
+note_key_of() {  # <note-file> -> echoes the note's external key, if any
+  local f=$1 key
+  key=$(sed -n 's/^external_key=//p' "$f" | head -1)
+  [ -n "$key" ] || key=$(footer_key_of "$f")
+  printf '%s' "$key"
+}
+
+_note_carries_key() {  # <note-file> <token>
+  local f=$1 token=$2
+  grep -qxF "external_key=$token" "$f" 2>/dev/null && return 0
+  note_footer_key_matches "$f" "$token"
+}
+
+# Resolve an external conversation key - the note's own `external_key=`
+# header, or its legacy footer form - to the firstmate note id currently
 # carrying it, among ACTIVE (unhandled) notes only. Prints nothing and fails
 # when no active note claims that key, or when more than one does: a caller
 # addressing a note purely by its own external key must never be handed an
@@ -431,7 +529,22 @@ resolve_external_key() {  # <token>
   [ -d "$INBOX" ] || return 1
   for f in "$INBOX"/*.note; do
     [ -e "$f" ] || continue
-    grep -qxF "external_key=$token" "$f" 2>/dev/null || continue
+    _note_carries_key "$f" "$token" || continue
+    matches=$((matches + 1))
+    found=$(basename "$f" .note)
+  done
+  [ "$matches" -eq 1 ] || return 1
+  printf '%s' "$found"
+}
+
+# Same resolution, but also over already-handled (replied/acked) notes - only
+# for `deliver --key`, which retries a delivery for a note firstmate has
+# already answered and which has therefore already left the active inbox.
+resolve_external_key_delivered() {  # <token>
+  local token=$1 f found='' matches=0
+  for f in "$INBOX"/*.note "$INBOX/handled"/*.note; do
+    [ -e "$f" ] || continue
+    _note_carries_key "$f" "$token" || continue
     matches=$((matches + 1))
     found=$(basename "$f" .note)
   done
@@ -460,7 +573,7 @@ cmd_list() {
     any=1
     printf '%s\n' "$(basename "$f" .note)"
     local key
-    key=$(sed -n 's/^external_key=//p' "$f" | head -1)
+    key=$(note_key_of "$f")
     [ -z "$key" ] || printf '    external_key=%s\n' "$key"
     sed -n '/^--$/,$p' "$f" | tail -n +2 | sed 's/^/    /'
   done
@@ -493,7 +606,7 @@ cmd_drain() {
 # notes arriving close together can never have their answers swapped and the
 # same note can never be answered twice.
 cmd_reply() {
-  local id body tmp
+  local id body tmp key delivered_rc=0
   [ "$#" -ge 1 ] || die "usage: fm-inbox.sh reply <id> <text>...   (or: reply --key <token> <text>...)"
   if [ "$1" = "--key" ]; then
     [ "$#" -ge 2 ] || die "usage: fm-inbox.sh reply --key <token> <text>...   (or: reply --key <token> - to read stdin)"
@@ -517,6 +630,11 @@ cmd_reply() {
   mkdir -p "$REPLIES"
   [ ! -e "$REPLIES/$id.reply" ] || die "refusing: a reply for '$id' already exists at $REPLIES/$id.reply - a note is answered at most once"
 
+  # Read the note's key (either form) while it is still at its active path,
+  # before ack_note moves it - simpler and race-free versus reading it back
+  # out of handled/ afterward.
+  key=$(note_key_of "$INBOX/$id.note")
+
   tmp=$(mktemp "$REPLIES/.staging-XXXXXX")
   {
     printf 'schema=fm-inbox-reply.v1\n'
@@ -536,18 +654,121 @@ cmd_reply() {
     # narrow race the caller does not need to react to.
     printf 'replied %s (note was already acked)\n' "$id"
   fi
+
+  # The local record and the acknowledgement both stand either way; only the
+  # exit code (and deliver_to_jarvis's own stderr line) distinguishes a fully
+  # closed loop from one that still needs `fm-inbox.sh deliver` to retry.
+  if [ -n "$key" ]; then
+    deliver_to_jarvis "$id" "$key" "$body" || delivered_rc=$?
+  fi
+  return "$delivered_rc"
+}
+
+reply_body_of() {  # <reply-file>
+  sed -n '/^--$/,$p' "$1" | tail -n +2
+}
+
+# Sends one already-composed answer to JARVIS's own bridge over HTTP - the
+# missing half PR #20 named explicitly out of scope: a durable
+# state/inbox/replies/<id>.reply file was never the same as JARVIS actually
+# receiving it. Idempotent via state/inbox/replies/delivered/<id>, written
+# only after a confirmed 200 "ok":true - a note already marked delivered is
+# reported and left alone, never re-sent, so a retry after a network blip can
+# never produce a second answer at JARVIS. A failed attempt is NEVER reported
+# as delivered: this prints the failure to stderr, names the retry command,
+# and returns nonzero, so nothing here can mistake "answered locally" for
+# "JARVIS has it".
+deliver_to_jarvis() {  # <id> <key> <body>
+  local id=$1 key=$2 body=$3 url marker payload tmp_resp http_status curl_ok
+
+  url=$(jarvis_url)
+  mkdir -p "$REPLIES/delivered"
+  marker="$REPLIES/delivered/$id"
+  if [ -e "$marker" ]; then
+    printf 'delivery %s: already delivered to jarvis, not re-sending\n' "$id"
+    return 0
+  fi
+
+  if ! command -v curl >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+    printf 'fm-inbox: delivery to jarvis FAILED for %s: curl and python3 are both required and at least one is missing - the answer is written at %s but was NOT transmitted; retry with: fm-inbox.sh deliver %s\n' \
+      "$id" "$REPLIES/$id.reply" "$id" >&2
+    return 1
+  fi
+
+  if ! payload=$(printf '%s' "$body" | JARVIS_KEY="$key" python3 -c '
+import json, os, sys
+print(json.dumps({"text": sys.stdin.read(), "zug": os.environ["JARVIS_KEY"]}))
+'); then
+    printf 'fm-inbox: delivery to jarvis FAILED for %s: could not build the request body - the answer is written at %s but was NOT transmitted; retry with: fm-inbox.sh deliver %s\n' \
+      "$id" "$REPLIES/$id.reply" "$id" >&2
+    return 1
+  fi
+
+  tmp_resp=$(mktemp "$REPLIES/.staging-XXXXXX")
+  curl_ok=0
+  if http_status=$(printf '%s' "$payload" | curl -sS --max-time 10 -o "$tmp_resp" -w '%{http_code}' \
+      -H 'Content-Type: application/json' --data-binary @- "$url" 2>/dev/null); then
+    curl_ok=1
+  fi
+
+  if [ "$curl_ok" -eq 1 ] && [ "$http_status" = "200" ] \
+      && grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$tmp_resp" 2>/dev/null; then
+    rm -f "$tmp_resp"
+    : > "$marker"
+    printf 'delivered %s to jarvis\n' "$id"
+    return 0
+  fi
+
+  printf 'fm-inbox: delivery to jarvis FAILED for %s (http=%s, url=%s) - the answer is written at %s but was NOT confirmed delivered; retry with: fm-inbox.sh deliver %s\n' \
+    "$id" "${http_status:-none}" "$url" "$REPLIES/$id.reply" "$id" >&2
+  rm -f "$tmp_resp"
+  return 1
+}
+
+# Retries a JARVIS delivery for a note that already has a reply record, using
+# only the two durable records already on disk (the note, for its key; the
+# .reply, for the already-composed text) - never composes a new answer, never
+# re-acknowledges. The idempotency guard lives in deliver_to_jarvis itself, so
+# retrying an already-confirmed delivery is reported and left alone.
+cmd_deliver() {
+  local id key body notefile
+  [ "$#" -ge 1 ] || die "usage: fm-inbox.sh deliver <id>   (or: deliver --key <token>)"
+  if [ "$1" = "--key" ]; then
+    [ "$#" -ge 2 ] || die "usage: fm-inbox.sh deliver --key <token>"
+    key_valid "$2" || die "refusing: '$2' is not a valid conversation key"
+    id=$(resolve_external_key_delivered "$2") \
+      || die "refusing: no single note (active or already handled) carries external_key '$2' (none, or more than one)"
+  else
+    id=$1
+    id_valid "$id" || die "refusing: '$id' is not a valid note id"
+  fi
+  [ -f "$REPLIES/$id.reply" ] || die "refusing: no reply record exists yet for '$id' - answer it first with fm-inbox.sh reply"
+
+  if [ -f "$INBOX/$id.note" ]; then
+    notefile="$INBOX/$id.note"
+  elif [ -f "$INBOX/handled/$id.note" ]; then
+    notefile="$INBOX/handled/$id.note"
+  else
+    die "refusing: no note record (active or handled) found for '$id'"
+  fi
+  key=$(note_key_of "$notefile")
+  [ -n "$key" ] || die "refusing: note '$id' carries no external key - nothing to deliver to jarvis for a plain captain note"
+
+  body=$(reply_body_of "$REPLIES/$id.reply")
+  deliver_to_jarvis "$id" "$key" "$body"
 }
 
 # ---------------------------------------------------------------- dispatch
 
 case "${1:-}" in
-  note)   shift; cmd_note "$@" ;;
-  say)    shift; cmd_say "$@" ;;
-  status) shift; cmd_status ;;
-  ask)    shift; cmd_ask "$@" ;;
-  list)   shift; cmd_list ;;
-  drain)  shift; cmd_drain "$@" ;;
-  reply)  shift; cmd_reply "$@" ;;
+  note)     shift; cmd_note "$@" ;;
+  say)      shift; cmd_say "$@" ;;
+  status)   shift; cmd_status ;;
+  ask)      shift; cmd_ask "$@" ;;
+  list)     shift; cmd_list ;;
+  drain)    shift; cmd_drain "$@" ;;
+  reply)    shift; cmd_reply "$@" ;;
+  deliver)  shift; cmd_deliver "$@" ;;
   ''|-h|--help|help)
     # The whole header block, found rather than counted: everything after the
     # shebang up to the first line that is not a comment. A fixed line range
