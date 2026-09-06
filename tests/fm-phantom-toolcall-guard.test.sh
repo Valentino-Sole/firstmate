@@ -157,8 +157,8 @@ const pi = {
   on(event, handler) { handlers.set(event, handler); },
   async sendUserMessage(message, options) {
     prompts += 1;
-    // Simulate the corrective follow-up's OWN turn also ending phantom-shaped
-    // (the worst case: the guard's nudge itself gets no real tool call back).
+    // Simulate the corrective follow-up OWN turn also ending phantom-shaped
+    // (the worst case: the guard nudge itself gets no real tool call back).
     const entries = [
       { type: "message", message: { role: "assistant", stopReason: "stop", content: [
         { type: "text", text: "read" },
@@ -173,7 +173,7 @@ const entries = [
   { type: "message", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "read" }] } },
 ];
 await handlers.get("turn_end")?.({ type: "turn_end" }, { sessionManager: { getEntries: () => entries } });
-if (prompts !== 1) throw new Error(`the guard's own follow-up must not re-trigger itself, got ${prompts} prompts`);
+if (prompts !== 1) throw new Error(`the guard own follow-up must not re-trigger itself, got ${prompts} prompts`);
 console.log("PASS");
 EOF
 )
