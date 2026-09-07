@@ -90,6 +90,34 @@ test_spawn_tmux_and_fakebin() {
   pass "spawn fakebin answers pane path, logs -l payloads, and installs extra tools"
 }
 
+# FM_FAKE_PANE_PATHS lets one home spawn several tasks without them sharing a
+# copy, which fm-spawn.sh refuses (tests/fm-spawn-pool-collision.test.sh).
+test_spawn_tmux_pane_sequence_advances_per_acquisition() {
+  local fakebin seq out
+  fakebin=$(make_spawn_fakebin "$TMP_ROOT/spawn-seq")
+  seq="$TMP_ROOT/spawn-seq/pane-seq"
+  export FM_FAKE_PANE_PATHS='/tmp/wt-a
+/tmp/wt-b'
+  export FM_FAKE_PANE_SEQ_FILE="$seq"
+
+  out=$("$fakebin/tmux" display-message -p '#{pane_current_path}')
+  [ "$out" = /tmp/wt-a ] || fail "first copy should be reported before any acquisition, got '$out'"
+  "$fakebin/tmux" send-keys -t @w 'treehouse get' Enter
+  out=$("$fakebin/tmux" display-message -p '#{pane_current_path}')
+  [ "$out" = /tmp/wt-a ] || fail "first acquisition should report the first copy, got '$out'"
+  "$fakebin/tmux" send-keys -t @w 'treehouse get' Enter
+  out=$("$fakebin/tmux" display-message -p '#{pane_current_path}')
+  [ "$out" = /tmp/wt-b ] || fail "second acquisition should report the second copy, got '$out'"
+  "$fakebin/tmux" send-keys -t @w 'treehouse get' Enter
+  out=$("$fakebin/tmux" display-message -p '#{pane_current_path}')
+  [ "$out" = /tmp/wt-b ] || fail "an exhausted sequence should stay on the last copy, got '$out'"
+
+  unset FM_FAKE_PANE_PATHS FM_FAKE_PANE_SEQ_FILE
+  out=$(FM_FAKE_PANE_PATH=/tmp/wt "$fakebin/tmux" display-message -p '#{pane_current_path}')
+  [ "$out" = /tmp/wt ] || fail "an unset sequence must leave FM_FAKE_PANE_PATH in charge, got '$out'"
+  pass "the pane sequence advances one copy per acquisition and stays inert when unset"
+}
+
 test_send_stubs_and_ssh() {
   local fakebin log ssh_log out
   fakebin=$(make_stubs "$TMP_ROOT/send")
@@ -128,5 +156,6 @@ test_no_mistakes_version_constant
 test_no_mistakes_init_doctor_markers
 test_fake_gh_and_gh_axi
 test_spawn_tmux_and_fakebin
+test_spawn_tmux_pane_sequence_advances_per_acquisition
 test_send_stubs_and_ssh
 test_spawn_home_layout

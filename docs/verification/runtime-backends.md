@@ -230,6 +230,42 @@ Valid cleanup removed only the exact task-bound target and left the control wind
 The metadata-only validation covers tmux, Herdr, Zellij, Orca, and cmux before backend dispatch.
 Claude, Codex, OpenCode, Pi, pi-signed, Grok, Kimi, Cursor, and Muse share that backend cleanup boundary; their harness-specific hook files, tokens, transcript bindings, and session-log sidecars are cleaned only after it, so no harness needs a separate endpoint parser.
 
+## Treehouse worktree pool
+
+Verified 2026-09-07 with treehouse v2.2.0 on Linux, in a throwaway repo whose pool was driven through an in-project root.
+The pool is the worktree provider for every session-provider backend, so these two facts bound what `bin/fm-spawn.sh`'s pool-slot double-assignment guard can rely on.
+
+A slot is offered again while a process of ours already sits in it, so a second `get` from inside an acquired slot necessarily advances to a different one.
+
+```sh
+printf 'pwd -P\nsleep 1\ntreehouse get\nsleep 2\npwd -P\nexit\nexit\nexit\n' | treehouse get
+```
+
+Observed output:
+
+```text
+Entered worktree at <pool>/1/repo. Type 'exit' to return.
+<pool>/1/repo
+Entered worktree at <pool>/2/repo. Type 'exit' to return.
+<pool>/2/repo
+```
+
+A pool with no free slot refuses instead of handing one out, leaving the shell where it stands.
+
+```sh
+treehouse get --lease --lease-holder f4   # max_trees = 3, all three already leased
+```
+
+Observed output:
+
+```text
+all 3 worktrees are in use or dirty (max_trees = 3). Run 'treehouse status' to see details, or increase max_trees in treehouse.toml
+```
+
+Occupancy is decided from the processes the pool can see inside each slot, never from firstmate's `state/<id>.meta` records, which is why those two can disagree and why the guard exists.
+The guard does not depend on the evasion above succeeding: when no free slot arrives it refuses loudly rather than sharing an occupied copy, so a future pool release that stops advancing degrades to a refusal, not to a collision.
+`tests/fm-spawn-pool-collision.test.sh` pins the guard's behavior without treehouse.
+
 ## Claude workspace trust
 
 Verified 2026-09-03 on Claude Code 2.1.259.

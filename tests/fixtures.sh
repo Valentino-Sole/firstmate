@@ -100,13 +100,44 @@ fm_test_fake_gh_axi() {
 # The pane path defaults to empty when FM_FAKE_PANE_PATH is unset. Window
 # cleanup and option operations are no-ops. Launch logging is env-gated, so
 # suites that do not set FM_FAKE_LAUNCH_LOG keep a silent send-keys.
+#
+# A suite that spawns more than one task into the SAME home needs each task in
+# its own copy, because fm-spawn.sh refuses a pooled copy another task's record
+# still claims (tests/fm-spawn-pool-collision.test.sh). Set FM_FAKE_PANE_PATHS to
+# the newline-separated copies and FM_FAKE_PANE_SEQ_FILE to a scratch file: the
+# pane then reports the next copy each time it sees a `treehouse get` sent, the
+# way a real pool hands out a fresh slot per acquisition, and stays on the last
+# entry once they run out. Unset, both are inert and FM_FAKE_PANE_PATH rules.
 fm_test_fake_tmux_spawn() {
   local fakebin=$1
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
+fake_pane_path() {
+  local seqfile n
+  if [ -z "${FM_FAKE_PANE_PATHS:-}" ]; then
+    printf '%s\n' "${FM_FAKE_PANE_PATH:-}"
+    return 0
+  fi
+  seqfile="${FM_FAKE_PANE_SEQ_FILE:?FM_FAKE_PANE_SEQ_FILE unset with FM_FAKE_PANE_PATHS}"
+  n=1
+  [ -f "$seqfile" ] && n=$(cat "$seqfile")
+  case "$n" in ''|*[!0-9]*|0) n=1 ;; esac
+  printf '%s\n' "$FM_FAKE_PANE_PATHS" | sed -n "${n}p" | grep . ||
+    printf '%s\n' "$FM_FAKE_PANE_PATHS" | tail -n 1
+}
+fake_pane_advance() {
+  local seqfile n
+  [ -n "${FM_FAKE_PANE_PATHS:-}" ] || return 0
+  seqfile="${FM_FAKE_PANE_SEQ_FILE:?FM_FAKE_PANE_SEQ_FILE unset with FM_FAKE_PANE_PATHS}"
+  n=0
+  [ -f "$seqfile" ] && n=$(cat "$seqfile")
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  printf '%s\n' "$((n + 1))" > "$seqfile"
+}
 case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
+  *"#{pane_current_path}"*) fake_pane_path; exit 0 ;;
+  *"treehouse get"*) fake_pane_advance ;;
 esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
