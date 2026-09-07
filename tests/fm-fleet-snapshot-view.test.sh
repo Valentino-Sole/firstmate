@@ -1045,8 +1045,72 @@ EOF
   pass "home-summary excludes kind=secondmate from unowned_current and terminal_in_flight"
 }
 
+# R2 owner contract: tasks[] exposes the model fields fm-spawn.sh/fm-model-lib.sh
+# write into a task's metadata (requested_model, effective_model,
+# effective_model_source), never surfacing the "pending" spawn placeholder or a
+# missing effective_model as anything but an absent/null value.
+test_effective_model_field() {
+  local home fakebin out
+  home=$(make_home model-field)
+  mkdir -p "$home/projects/known-worktree" "$home/projects/pending-worktree" "$home/projects/absent-worktree"
+  fm_write_meta "$home/state/known-model.meta" \
+    "window=firstmate:fm-known-model" \
+    "worktree=$home/projects/known-worktree" \
+    "project=alpha" \
+    "harness=claude" \
+    "kind=ship" \
+    "mode=no-mistakes" \
+    "yolo=off" \
+    "model=sonnet" \
+    "requested_model=sonnet" \
+    "effective_model=claude-sonnet-5" \
+    "effective_model_source=claude-transcript"
+  fm_write_meta "$home/state/pending-model.meta" \
+    "window=firstmate:fm-pending-model" \
+    "worktree=$home/projects/pending-worktree" \
+    "project=alpha" \
+    "harness=claude" \
+    "kind=ship" \
+    "mode=no-mistakes" \
+    "yolo=off" \
+    "model=sonnet" \
+    "requested_model=sonnet" \
+    "effective_model=pending" \
+    "effective_model_source=spawn-config"
+  fm_write_meta "$home/state/absent-model.meta" \
+    "window=firstmate:fm-absent-model" \
+    "worktree=$home/projects/absent-worktree" \
+    "project=alpha" \
+    "harness=claude" \
+    "kind=ship" \
+    "mode=no-mistakes" \
+    "yolo=off"
+  fakebin=$(make_fakebin "$home")
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json)
+  printf '%s' "$out" | jq -e '
+    .tasks[] | select(.id == "known-model")
+    | .requested_model == "sonnet"
+      and .effective_model == "claude-sonnet-5"
+      and .effective_model_source == "claude-transcript"
+  ' >/dev/null || fail "known effective_model must pass through verbatim with its source: $out"
+  printf '%s' "$out" | jq -e '
+    .tasks[] | select(.id == "pending-model")
+    | .requested_model == "sonnet"
+      and .effective_model == null
+      and .effective_model_source == null
+  ' >/dev/null || fail "spawn placeholder effective_model=pending must surface as null, never the word pending: $out"
+  printf '%s' "$out" | jq -e '
+    .tasks[] | select(.id == "absent-model")
+    | .requested_model == null
+      and .effective_model == null
+      and .effective_model_source == null
+  ' >/dev/null || fail "task metadata with no model fields at all must surface as null, not a fabricated default: $out"
+  pass "tasks[] exposes requested_model separately from a real or absent effective_model/effective_model_source"
+}
+
 test_empty_fleet_json
 test_fixture_snapshot_json
+test_effective_model_field
 test_home_summary_excludes_secondmate_from_child_inventory
 test_undated_captain_hold_phrasing_and_aging
 test_hold_buckets_are_total_and_text_blind

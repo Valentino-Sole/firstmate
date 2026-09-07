@@ -65,6 +65,11 @@
 #     endpoint.agent_alive is populated for local secondmates only, where it is
 #     useful return-channel supervision data; remote secondmates use "unknown"
 #     without a probe, and other tasks use "not_checked".
+#     requested_model is what fm-spawn.sh recorded as asked for; it is never a
+#     measured value. effective_model/effective_model_source are the value and
+#     provenance bin/fm-model-lib.sh last upserted into the task's metadata;
+#     both are null while no real measurement exists yet, including the
+#     "pending" placeholder fm-spawn.sh writes before the first probe.
 #   scout_reports[]: present data/<id>/report.md pointers.
 #   main_inventory: {valid,reason,orphan_in_flight[],unstructured_current_count} -
 #     main-home current-inventory checks shared with secondmate_home_summary_json
@@ -693,6 +698,7 @@ task_json_lines() {
   local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
   local open_decisions_tsv open_decisions_json
+  local requested_model effective_model effective_model_source
 
   while [ "$index" -lt "$SNAPSHOT_TASK_META_COUNT" ]; do
     meta=${SNAPSHOT_TASK_METAS[index]}
@@ -709,6 +715,9 @@ task_json_lines() {
     home=$(meta_value "$meta" home)
     projects=$(meta_value "$meta" projects)
     spawn_gen=$(meta_value "$meta" spawn_gen)
+    requested_model=$(meta_value "$meta" requested_model)
+    effective_model=$(meta_value "$meta" effective_model)
+    effective_model_source=$(meta_value "$meta" effective_model_source)
     remote_host=$(meta_value "$meta" remote_host)
     remote_root=$(meta_value "$meta" remote_root)
     if [ -n "$remote_host" ]; then
@@ -810,6 +819,9 @@ task_json_lines() {
       --arg home "$home" \
       --arg projects "$projects" \
       --arg spawn_gen "$spawn_gen" \
+      --arg requested_model "$requested_model" \
+      --arg effective_model "$effective_model" \
+      --arg effective_model_source "$effective_model_source" \
       --arg backend "$backend" \
       --arg target "$target" \
       --arg remote_host "$remote_host" \
@@ -830,7 +842,10 @@ task_json_lines() {
       --argjson pending_decision "$(bool_json "$pending_decision")" \
       --argjson blocked_event "$(bool_json "$blocked_event")" \
       --argjson report_present "$(bool_json "$report_present")" \
-      '{
+      '
+      def effective_model_is_placeholder:
+        . == "" or (ascii_downcase == "pending");
+      {
         id:$id,
         kind:$kind,
         harness:($harness // ""),
@@ -838,6 +853,10 @@ task_json_lines() {
         yolo:($yolo // ""),
         project:($project // ""),
         spawn_gen:($spawn_gen | if . == "" then null else . end),
+        requested_model:($requested_model | if . == "" then null else . end),
+        effective_model:(if ($effective_model | effective_model_is_placeholder) then null else $effective_model end),
+        effective_model_source:(if ($effective_model | effective_model_is_placeholder) then null
+                                 else ($effective_model_source | if . == "" then null else . end) end),
         backend:$backend,
         remote:(if $remote_host == "" then null else {host:$remote_host,root:$remote_root} end),
         paths:{
