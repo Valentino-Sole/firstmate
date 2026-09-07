@@ -28,6 +28,21 @@
 # refuses fresh workers with an actionable error rather than being ignored.
 # docs/configuration.md "Worker slot cap" owns the file contract.
 #
+# `slots` above is the display/total figure and stays exactly this combined
+# min. FREE capacity for a fresh worker is NOT simply slots - occupied,
+# because ram_slots and load_cap are read live from the host right now: an
+# already-occupied worker's memory and CPU footprint is already reflected in a
+# lower mem_avail_mb/load1 before this formula ever runs, so subtracting
+# occupied from them again would deduct that same footprint twice. Only
+# cpu_slots, the ceiling, and worker_slots_max are occupancy-independent (a
+# core count and two constants never change because a worker is running), so
+# occupied is subtracted from THEM only:
+#   static  = min(cpu_slots, 5, worker_slots_max)
+#   live    = min(ram_slots, load_cap, 5)
+#   free    = min(max(0, static - occupied), live)
+# fm_capacity_slots_from_local exposes the split as FM_CAPACITY_SLOTS_STATIC
+# and FM_CAPACITY_SLOTS_LIVE; fm_capacity_measure_local owns applying it.
+#
 # Occupancy is host-scoped, not home-scoped: the budget protects one physical
 # server, so N firstmate homes on this host share one budget instead of taking
 # N independent ones. The scanned set is this home, the local primary home it
@@ -218,8 +233,21 @@ fm_capacity_mean() { # <value>...
 # Integer slot count from one local measurement triple. Unknown RAM (empty or
 # non-numeric mem_avail_mb) skips the RAM axis rather than inventing a size.
 # Unknown load (empty or non-numeric load1) yields 0 slots rather than idle.
+#
+# Also sets FM_CAPACITY_SLOTS_STATIC and FM_CAPACITY_SLOTS_LIVE as a side
+# effect, splitting the same axes this function already combines into the
+# printed total: cpu_slots and the ceiling are occupancy-INDEPENDENT (a core
+# count and a constant never change because a worker is running), while
+# ram_slots and load_cap are occupancy-REFLECTING - both are read live from the
+# host right now, so a currently-occupied worker's memory and CPU usage is
+# already baked into a lower mem_avail_mb/load1 before this function ever
+# sees them. fm_capacity_measure_local uses this split so occupied is
+# subtracted from the static side only; subtracting it from the live side too
+# would deduct the same running worker's footprint twice.
 fm_capacity_slots_from_local() { # <nproc> <mem_avail_mb-or-empty> <load1>
   local nproc=$1 mem=$2 load1=$3 cpu_slots ram_slots load_cap load_h nproc_h slots
+  FM_CAPACITY_SLOTS_STATIC=0
+  FM_CAPACITY_SLOTS_LIVE=0
   fm_capacity_is_uint "$nproc" || { printf '0\n'; return 0; }
   [ "$nproc" -gt 0 ] || { printf '0\n'; return 0; }
   cpu_slots=$(fm_capacity_max 1 $((nproc / FM_CAPACITY_CPU_PER_SLOT)))
@@ -238,9 +266,10 @@ fm_capacity_slots_from_local() { # <nproc> <mem_avail_mb-or-empty> <load1>
   else
     load_cap=$FM_CAPACITY_SLOT_CEILING
   fi
-  slots=$(fm_capacity_min "$cpu_slots" "$ram_slots")
-  slots=$(fm_capacity_min "$slots" "$load_cap")
-  slots=$(fm_capacity_min "$slots" "$FM_CAPACITY_SLOT_CEILING")
+  FM_CAPACITY_SLOTS_STATIC=$(fm_capacity_min "$cpu_slots" "$FM_CAPACITY_SLOT_CEILING")
+  FM_CAPACITY_SLOTS_LIVE=$(fm_capacity_min "$ram_slots" "$load_cap")
+  FM_CAPACITY_SLOTS_LIVE=$(fm_capacity_min "$FM_CAPACITY_SLOTS_LIVE" "$FM_CAPACITY_SLOT_CEILING")
+  slots=$(fm_capacity_min "$FM_CAPACITY_SLOTS_STATIC" "$FM_CAPACITY_SLOTS_LIVE")
   [ "$slots" -ge 0 ] || slots=0
   printf '%s\n' "$slots"
 }
@@ -1051,15 +1080,34 @@ fm_capacity_measure_local() { # <state-dir> [home-dir]
   fm_capacity_is_uint "$FM_CAPACITY_LOCAL_NPROC" || FM_CAPACITY_LOCAL_NPROC=1
   # A missing or non-numeric load is left as-is. slots_from_local then yields 0
   # rather than treating the failed query as idle (load1=0).
-  FM_CAPACITY_SLOTS=$(fm_capacity_slots_from_local \
-    "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_MEM_MB" "$FM_CAPACITY_LOCAL_LOAD1")
+  # Called directly, never substituted: fm_capacity_slots_from_local's
+  # FM_CAPACITY_SLOTS_STATIC/_LIVE side effects only reach this shell when the
+  # function itself runs here rather than in a $(...) subshell. Its own printed
+  # combined value is redundant once those two globals are set (recomputed
+  # below) and is discarded.
+  fm_capacity_slots_from_local \
+    "$FM_CAPACITY_LOCAL_NPROC" "$FM_CAPACITY_LOCAL_MEM_MB" "$FM_CAPACITY_LOCAL_LOAD1" >/dev/null
+  FM_CAPACITY_SLOTS=$(fm_capacity_min "$FM_CAPACITY_SLOTS_STATIC" "$FM_CAPACITY_SLOTS_LIVE")
   fm_capacity_worker_slots_max "${2:-${FM_HOME:-}}"
   if [ -n "$FM_CAPACITY_CAP" ]; then
     FM_CAPACITY_SLOTS=$(fm_capacity_min "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_CAP")
+    FM_CAPACITY_SLOTS_STATIC=$(fm_capacity_min "$FM_CAPACITY_SLOTS_STATIC" "$FM_CAPACITY_CAP")
   fi
   fm_capacity_measure_host_occupancy "$1" "${2:-${FM_HOME:-}}"
-  FM_CAPACITY_FREE=$((FM_CAPACITY_SLOTS - FM_CAPACITY_OCCUPIED))
-  [ "$FM_CAPACITY_FREE" -ge 0 ] || FM_CAPACITY_FREE=0
+  # FM_CAPACITY_FREE is deliberately not a flat SLOTS - OCCUPIED: ram_slots and
+  # load_cap (folded into FM_CAPACITY_SLOTS_LIVE above) are read live from the
+  # host right now, so an already-occupied worker's memory and CPU footprint is
+  # already reflected in a lower mem_avail_mb/load1 before FM_CAPACITY_SLOTS
+  # was ever computed. Subtracting OCCUPIED from the combined SLOTS ceiling
+  # would deduct that same running worker's footprint a second time on the
+  # live axes (a real free slot reading as blocked, e.g. mem_avail_mb=7359
+  # with one occupied worker: SLOTS=1, and a flat 1-1 read as 0 free, though
+  # the RAM reading alone already has room for one more). Only
+  # FM_CAPACITY_SLOTS_STATIC (cpu_slots, the formula ceiling, and the captain's
+  # cap - none of them derived from current usage) genuinely needs OCCUPIED
+  # subtracted; the live axis already accounts for it and is used as-is.
+  FM_CAPACITY_FREE=$(fm_capacity_max 0 $((FM_CAPACITY_SLOTS_STATIC - FM_CAPACITY_OCCUPIED)))
+  FM_CAPACITY_FREE=$(fm_capacity_min "$FM_CAPACITY_FREE" "$FM_CAPACITY_SLOTS_LIVE")
 }
 
 # Allow a fresh independent worker. Relaunch and secondmate skip the slot
