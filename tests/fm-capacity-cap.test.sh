@@ -102,7 +102,102 @@ test_cap_reached_names_the_cap() {
   pass "a reached cap refuses with the occupied count and the cap named"
 }
 
+test_unverified_backend_frees_a_slot_when_its_window_is_confirmed_gone() {
+  local home meta out
+  home=$(make_home unverified-gone)
+  meta="$home/state/ghost-one.meta"
+  fm_write_meta "$meta" \
+    "window=firstmate:ghost-one" "endpoint_task_id=ghost-one" "worktree=$home/wt" \
+    "project=$home/proj" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
+    "backend=orca" "terminal=ghost-terminal-1"
+  out=$(
+    export FM_HOME=$home
+    # shellcheck source=bin/fm-capacity-lib.sh
+    . "$ROOT/bin/fm-capacity-lib.sh"
+    fm_backend_agent_state() { printf 'unverified'; }
+    fm_backend_target_exists() { return 1; }
+    fm_capacity_task_active() { echo "task_active_called_unexpectedly" >&2; return 0; }
+    if fm_capacity_worker_live "$meta"; then echo LIVE; else echo FREED; fi
+  )
+  case "$out" in
+    FREED) ;;
+    *) fail "an unverified backend with a confirmed-gone window still held the slot (or consulted the status guess): $out" ;;
+  esac
+  pass "fm_capacity_worker_live frees a slot when its backend is unverified and the recorded window is confirmed gone"
+}
+
+test_unverified_backend_with_a_live_window_falls_back_to_the_status_guess() {
+  local home meta out
+  home=$(make_home unverified-live)
+  meta="$home/state/live-one.meta"
+  fm_write_meta "$meta" \
+    "window=firstmate:live-one" "endpoint_task_id=live-one" "worktree=$home/wt" \
+    "project=$home/proj" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
+    "backend=orca" "terminal=live-terminal-1"
+  out=$(
+    export FM_HOME=$home
+    # shellcheck source=bin/fm-capacity-lib.sh
+    . "$ROOT/bin/fm-capacity-lib.sh"
+    fm_backend_agent_state() { printf 'unverified'; }
+    fm_backend_target_exists() { return 0; }
+    fm_capacity_task_active() { return 0; }
+    if fm_capacity_worker_live "$meta"; then echo LIVE; else echo FREED; fi
+  )
+  [ "$out" = LIVE ] || fail "an unverified backend whose window still exists must still fall back to the status guess: $out"
+  pass "fm_capacity_worker_live still falls back to the status guess when an unverified backend's window still exists"
+}
+
+test_ram_derived_slot_is_not_deducted_twice_for_the_same_occupied_worker() {
+  local home out
+  home=$(make_home ram-double-deduct)
+  fm_write_meta "$home/state/busy-one.meta" \
+    "window=firstmate:fm-busy-one" "endpoint_task_id=busy-one" "worktree=$home/wt" \
+    "project=$home/proj" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off"
+  out=$(
+    export FM_HOME=$home FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=7359 FM_CAPACITY_LOAD1=0.5
+    # shellcheck source=bin/fm-capacity-lib.sh
+    . "$ROOT/bin/fm-capacity-lib.sh"
+    fm_capacity_worker_live() { return 0; }
+    fm_capacity_measure_local "$home/state" "$home"
+    printf 'slots=%s free=%s occupied=%s static=%s live=%s\n' \
+      "$FM_CAPACITY_SLOTS" "$FM_CAPACITY_FREE" "$FM_CAPACITY_OCCUPIED" \
+      "$FM_CAPACITY_SLOTS_STATIC" "$FM_CAPACITY_SLOTS_LIVE"
+  )
+  case "$out" in
+    slots=1\ free=1\ occupied=1\ static=5\ live=1) ;;
+    *) fail "7359 MiB available RAM with one occupied worker must still leave one free RAM-derived slot (the RAM reading already reflects that worker's own footprint): $out" ;;
+  esac
+  pass "a live RAM-derived slot is not deducted a second time for the same occupied worker"
+}
+
+test_cpu_and_cap_axes_still_lose_a_slot_per_occupied_worker() {
+  local home out
+  home=$(make_home static-axis-deduct)
+  printf '1\n' > "$home/config/worker-slots-max"
+  fm_write_meta "$home/state/busy-one.meta" \
+    "window=firstmate:fm-busy-one" "endpoint_task_id=busy-one" "worktree=$home/wt" \
+    "project=$home/proj" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off"
+  out=$(
+    export FM_HOME=$home FM_CAPACITY_NPROC=16 FM_CAPACITY_MEM_AVAIL_MB=32768 FM_CAPACITY_LOAD1=0.5
+    # shellcheck source=bin/fm-capacity-lib.sh
+    . "$ROOT/bin/fm-capacity-lib.sh"
+    fm_capacity_worker_live() { return 0; }
+    fm_capacity_measure_local "$home/state" "$home"
+    printf 'free=%s static=%s live=%s\n' \
+      "$FM_CAPACITY_FREE" "$FM_CAPACITY_SLOTS_STATIC" "$FM_CAPACITY_SLOTS_LIVE"
+  )
+  case "$out" in
+    free=0\ static=1\ live=5) ;;
+    *) fail "a captain cap of 1 with one occupied worker and abundant RAM/CPU must still refuse a second worker: $out" ;;
+  esac
+  pass "the captain's cap and cpu_slots still correctly lose a slot per occupied worker (unaffected by the RAM/load fix)"
+}
+
 test_cap_lowers_the_formula_budget
 test_secondmate_home_obeys_the_parent_cap
 test_malformed_cap_refuses_fresh_workers
 test_cap_reached_names_the_cap
+test_unverified_backend_frees_a_slot_when_its_window_is_confirmed_gone
+test_unverified_backend_with_a_live_window_falls_back_to_the_status_guess
+test_ram_derived_slot_is_not_deducted_twice_for_the_same_occupied_worker
+test_cpu_and_cap_axes_still_lose_a_slot_per_occupied_worker

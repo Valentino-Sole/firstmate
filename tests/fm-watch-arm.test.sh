@@ -288,6 +288,14 @@ test_rearm_resurfaces_durable_queue_and_remote_open_decision() {
   append_wake "$state" check startup-network 'check: startup-network'
 
   start_rearm_arm "$home" "$state" "$fakebin" "$armout"
+  # A single fixed sleep before one is_live_non_zombie check is a one-shot race
+  # window: under host load, recognizing the already-durable queued wakes can
+  # legitimately take longer than a fixed instant without the outcome itself
+  # being wrong. Every sibling assertion in this file instead polls for exit
+  # with a generous bounded budget (wait_for_exit); match that idiom here so a
+  # slow-but-correct exit is not mistaken for "stayed live". wait_for_exit
+  # returns 124 only when the process never exited within the budget - any
+  # other status means it did exit and is checked below on its own terms.
   wait_for_exit "$ARM_PID" 80
   status=$?
   [ "$status" -ne 124 ] \
