@@ -102,7 +102,54 @@ test_cap_reached_names_the_cap() {
   pass "a reached cap refuses with the occupied count and the cap named"
 }
 
+test_unverified_backend_frees_a_slot_when_its_window_is_confirmed_gone() {
+  local home meta out
+  home=$(make_home unverified-gone)
+  meta="$home/state/ghost-one.meta"
+  fm_write_meta "$meta" \
+    "window=firstmate:ghost-one" "endpoint_task_id=ghost-one" "worktree=$home/wt" \
+    "project=$home/proj" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
+    "backend=orca" "terminal=ghost-terminal-1"
+  out=$(
+    export FM_HOME=$home
+    # shellcheck source=bin/fm-capacity-lib.sh
+    . "$ROOT/bin/fm-capacity-lib.sh"
+    fm_backend_agent_state() { printf 'unverified'; }
+    fm_backend_target_exists() { return 1; }
+    fm_capacity_task_active() { echo "task_active_called_unexpectedly" >&2; return 0; }
+    if fm_capacity_worker_live "$meta"; then echo LIVE; else echo FREED; fi
+  )
+  case "$out" in
+    FREED) ;;
+    *) fail "an unverified backend with a confirmed-gone window still held the slot (or consulted the status guess): $out" ;;
+  esac
+  pass "fm_capacity_worker_live frees a slot when its backend is unverified and the recorded window is confirmed gone"
+}
+
+test_unverified_backend_with_a_live_window_falls_back_to_the_status_guess() {
+  local home meta out
+  home=$(make_home unverified-live)
+  meta="$home/state/live-one.meta"
+  fm_write_meta "$meta" \
+    "window=firstmate:live-one" "endpoint_task_id=live-one" "worktree=$home/wt" \
+    "project=$home/proj" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
+    "backend=orca" "terminal=live-terminal-1"
+  out=$(
+    export FM_HOME=$home
+    # shellcheck source=bin/fm-capacity-lib.sh
+    . "$ROOT/bin/fm-capacity-lib.sh"
+    fm_backend_agent_state() { printf 'unverified'; }
+    fm_backend_target_exists() { return 0; }
+    fm_capacity_task_active() { return 0; }
+    if fm_capacity_worker_live "$meta"; then echo LIVE; else echo FREED; fi
+  )
+  [ "$out" = LIVE ] || fail "an unverified backend whose window still exists must still fall back to the status guess: $out"
+  pass "fm_capacity_worker_live still falls back to the status guess when an unverified backend's window still exists"
+}
+
 test_cap_lowers_the_formula_budget
 test_secondmate_home_obeys_the_parent_cap
 test_malformed_cap_refuses_fresh_workers
 test_cap_reached_names_the_cap
+test_unverified_backend_frees_a_slot_when_its_window_is_confirmed_gone
+test_unverified_backend_with_a_live_window_falls_back_to_the_status_guess

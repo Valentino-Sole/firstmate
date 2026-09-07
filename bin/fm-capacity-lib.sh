@@ -405,6 +405,17 @@ fm_capacity_task_active() { # <state-dir> <task-id>
 # a task that is actively working or has declared nothing yet keeps its slot -
 # the fail-closed half, because that is the case where a wrong guess would
 # oversubscribe the host.
+#
+# `unverified` gets one extra, cheap check first: fm_backend_target_exists asks
+# only whether the recorded window/pane/terminal still exists at all, never
+# what runs inside it. When it confidently does not, there is no window left
+# to hold a slot, so the record is freed here rather than falling through to
+# the status-based guess below - the guess would otherwise pin the slot
+# forever on exactly the backends (zellij, orca, cmux) whose agent-state
+# classifier can never answer `missing` for a torn-down window. `ambiguous`
+# and `unreadable` are deliberately left alone: both already mean the window
+# DOES exist (or its existence could not be told apart from a transient read
+# failure), so this check would never fire for them anyway.
 fm_capacity_worker_live() { # <meta-file>
   local meta=$1 backend target endpoint_state
   [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
@@ -416,6 +427,11 @@ fm_capacity_worker_live() { # <meta-file>
   case "$endpoint_state" in
     alive) return 0 ;;
     dead | missing) return 1 ;;
+    unverified)
+      if declare -F fm_backend_target_exists >/dev/null 2>&1; then
+        fm_backend_target_exists "$backend" "$target" || return 1
+      fi
+      ;;
   esac
   fm_capacity_task_active "$(dirname "$meta")" "$(basename "$meta" .meta)"
 }
