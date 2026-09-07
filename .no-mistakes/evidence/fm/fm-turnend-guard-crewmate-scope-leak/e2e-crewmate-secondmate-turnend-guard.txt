@@ -1,0 +1,124 @@
+==============================================================
+== firstmate source: before-fix
+== commit: ffd2c89
+==============================================================
+
+--- bin/fm-spawn.sh crew-guard-before-fix (crewmate, project = this firstmate home) -------
+    notice: crew-guard-before-fix ships mode=local-only while the standing posture for firstmate-primary is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+    spawned crew-guard-before-fix harness=fm-e2e-crew-harness kind=ship mode=local-only yolo=off window=firstmate:fm-crew-guard-before-fix worktree=/tmp/fm-e2e-before-fix-sXB1SJ/crew-worktree
+
+--- state/crew-guard-before-fix.meta recorded by the spawn --------------------------------
+    window=firstmate:fm-crew-guard-before-fix
+    endpoint_task_id=crew-guard-before-fix
+    worktree=/tmp/fm-e2e-before-fix-sXB1SJ/crew-worktree
+    project=/tmp/fm-e2e-before-fix-sXB1SJ/firstmate-primary
+    harness=fm-e2e-crew-harness
+    kind=ship
+    mode=local-only
+    yolo=off
+    tasktmp=/tmp/fm-crew-guard-before-fix
+    model=default
+    effort=default
+    spawn_gen=s1788814249.3080105.658
+
+--- launch command tmux received ----------------------------------------
+    fm-e2e-crew-harness --start
+
+--- parent primary is now unsupervised (its own turn WOULD block) -------
+    primary guard exit status: 2
+    | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    | ●  TURN WOULD END BLIND - SUPERVISION IS OFF
+    | ●  1 task(s) in flight, but no live watcher holds this home lock (last beat: never).
+
+--- crewmate turn in /tmp/fm-e2e-before-fix-sXB1SJ/crew-worktree
+--- (launched with the parent primary's FM_ROOT_OVERRIDE/FM_HOME inherited)
+    [crewmate] launched by fm-spawn.sh
+    [crewmate] cwd            : /tmp/fm-e2e-before-fix-sXB1SJ/crew-worktree
+    [crewmate] FM_ROOT_OVERRIDE=/tmp/fm-e2e-before-fix-sXB1SJ/firstmate-primary
+    [crewmate] FM_HOME         =/tmp/fm-e2e-before-fix-sXB1SJ/firstmate-primary
+    [crewmate] turn ends -> Stop hook runs bin/fm-turnend-guard.sh
+    [crewmate] guard exit status: 2
+    [crewmate] guard output:
+        | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        | ●  TURN WOULD END BLIND - SUPERVISION IS OFF
+        | ●  1 task(s) in flight, but no live watcher holds this home lock (last beat: never).
+        | ●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+        | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    [crewmate] RESULT: TURN WEDGED - crewmate cannot end its turn
+
+== before-fix: crewmate turn-end guard exit status 2
+
+--- bin/fm-home-seed.sh sm-before-fix (real secondmate home) -----------------
+    scaffolded: /tmp/fm-e2e-before-fix-sXB1SJ/firstmate-primary/data/sm-before-fix/brief.md (secondmate charter)
+    home=/tmp/fm-e2e-before-fix-sXB1SJ/secondmate-home
+    marker: .fm-secondmate-home present
+    secondmate state dir: (empty = nothing in flight)
+
+--- secondmate turn end, parent primary's FM_ROOT_OVERRIDE/FM_HOME inherited
+    guard exit status: 2
+    | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    | ●  TURN WOULD END BLIND - SUPERVISION IS OFF
+    | ●  1 task(s) in flight, but no live watcher holds this home lock (last beat: never).
+    | ●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+    RESULT: TURN WEDGED by the PARENT's in-flight work
+
+== before-fix: secondmate turn-end guard exit status 2
+
+==============================================================
+== firstmate source: after-fix
+== commit: 7379879
+==============================================================
+
+--- bin/fm-spawn.sh crew-guard-after-fix (crewmate, project = this firstmate home) -------
+    notice: crew-guard-after-fix ships mode=local-only while the standing posture for firstmate-primary is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+    spawned crew-guard-after-fix harness=fm-e2e-crew-harness kind=ship mode=local-only yolo=off window=firstmate:fm-crew-guard-after-fix worktree=/tmp/fm-e2e-after-fix-jlCj4P/crew-worktree
+
+--- state/crew-guard-after-fix.meta recorded by the spawn --------------------------------
+    window=firstmate:fm-crew-guard-after-fix
+    endpoint_task_id=crew-guard-after-fix
+    worktree=/tmp/fm-e2e-after-fix-jlCj4P/crew-worktree
+    project=/tmp/fm-e2e-after-fix-jlCj4P/firstmate-primary
+    harness=fm-e2e-crew-harness
+    kind=ship
+    mode=local-only
+    yolo=off
+    tasktmp=/tmp/fm-crew-guard-after-fix
+    model=default
+    effort=default
+    spawn_gen=s1788814254.3085821.12419
+
+--- launch command tmux received ----------------------------------------
+    fm-e2e-crew-harness --start
+
+--- parent primary is now unsupervised (its own turn WOULD block) -------
+    primary guard exit status: 2
+    | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    | ●  TURN WOULD END BLIND - SUPERVISION IS OFF
+    | ●  1 task(s) in flight, but no live watcher holds this home lock (last beat: never).
+
+--- crewmate turn in /tmp/fm-e2e-after-fix-jlCj4P/crew-worktree
+--- (launched with the parent primary's FM_ROOT_OVERRIDE/FM_HOME inherited)
+    [crewmate] launched by fm-spawn.sh
+    [crewmate] cwd            : /tmp/fm-e2e-after-fix-jlCj4P/crew-worktree
+    [crewmate] FM_ROOT_OVERRIDE=/tmp/fm-e2e-after-fix-jlCj4P/firstmate-primary
+    [crewmate] FM_HOME         =/tmp/fm-e2e-after-fix-jlCj4P/firstmate-primary
+    [crewmate] turn ends -> Stop hook runs bin/fm-turnend-guard.sh
+    [crewmate] guard exit status: 0
+    [crewmate] guard output: <none>
+    [crewmate] RESULT: turn ended normally (guard was a NO-OP)
+
+== after-fix: crewmate turn-end guard exit status 0
+
+--- bin/fm-home-seed.sh sm-after-fix (real secondmate home) -----------------
+    scaffolded: /tmp/fm-e2e-after-fix-jlCj4P/firstmate-primary/data/sm-after-fix/brief.md (secondmate charter)
+    home=/tmp/fm-e2e-after-fix-jlCj4P/secondmate-home
+    marker: .fm-secondmate-home present
+    secondmate state dir: (empty = nothing in flight)
+
+--- secondmate turn end, parent primary's FM_ROOT_OVERRIDE/FM_HOME inherited
+    guard exit status: 0
+    guard output: <none>
+    RESULT: turn ended normally (guard was a NO-OP on its own idle home)
+
+== after-fix: secondmate turn-end guard exit status 0
+
