@@ -153,7 +153,10 @@ Cursor rejects a `followup_message` submit while it is compacting, so tracked `p
 `bin/fm-cursor-compaction-lib.sh` owns those records.
 The mark carries `updated_at` and expires once it is older than `FM_CURSOR_COMPACTION_WAIT_MAX` (180s, overridable through `FM_CURSOR_COMPACTION_MAX_AGE`), so a Cursor that exits, crashes, or never fires `afterAgentResponse` cannot silence supervision indefinitely; nothing sweeps the file, every reader ages it out.
 A held follow-up is claimed at the start of the next stop, before that park builds anything of its own, and it is consumed only after its object was printed, so a lost owner lock, a supersession, or away mode re-parks the event instead of dropping it.
-It never substitutes itself for a freshly built follow-up: the once-only ceiling notice and a fresh watcher wake reach the session as themselves, and a still-held event is delivered by the next stop that would otherwise be silent.
+It never substitutes itself for a freshly built follow-up, whether or not compaction is still active when that follow-up is committed: the once-only ceiling notice and a fresh watcher wake reach the session as themselves, and a still-held event is delivered by the next stop that would otherwise be silent.
+Writing the hold is a state mutation like the output itself, so it happens inside the same guarded section as every other one, after the owner lock, park ownership, session ownership and away-mode checks; a superseded park, a foreign session or away mode leaves nothing behind for a later stop to deliver.
+The hold slot is created through a link, so two overlapping parks cannot replace each other's event and the loser knows it is submitting its own object rather than the other park's.
+A repair nag charges `FM_CURSOR_TURNEND_BLOCK_BUDGET` in that same section when it is accepted for holding or printing, so a nag carried across a compaction window numbers itself correctly and the bound still stops at three.
 Digest re-emission after Cursor compaction stays deferred.
 
 If a passive adapter cannot invoke its SDK, or the Grok legacy fallback cannot find `grok` or a session id, the next pull-based `fm-guard.sh` call reports the problem.

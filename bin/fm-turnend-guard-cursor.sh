@@ -29,7 +29,15 @@
 #   3. the bounded repair instruction when supervision could not be established.
 # Priority 1 is claimed BEFORE this park builds anything, never by substituting
 # a stale held object for a freshly built one at submit time: the once-only
-# ceiling notice and a fresh wake must reach the session as themselves.
+# ceiling notice and a fresh wake must reach the session as themselves, whether
+# or not compaction is active when they are committed.
+#
+# ONE GUARDED SECTION. Every shared-state mutation and the single stdout object
+# go through guarded_commit, after the same owner lock, park ownership, session
+# ownership and away-mode checks. That includes writing the compaction hold and
+# spending repair-nag budget, so a superseded park, a foreign session or away
+# mode can neither leave a follow-up behind nor consume the budget, and a nag
+# that is held counts exactly like a nag that is printed.
 #
 # COMPACTION HOLD. Cursor rejects submitting a followup_message while it is
 # compacting ("Cannot submit a prompt while compaction is in progress").
@@ -150,36 +158,79 @@ compaction_should_stand_down() {
   return 1
 }
 
+# The single guarded section: the owner lock plus the ownership, session and
+# away-mode checks that every state change and the one stdout object share.
+# <budget> is empty, reset-budget, or nag:<prior>:<count> for the compare-and-set
+# repair-budget commit. <print> is the response object to submit, or empty to
+# only commit budget. <held> marks a printed object as the held record this park
+# owns, which is dropped only after the print succeeded.
+# Returns 1 without acting, and without holding the lock, when this park may not
+# act or its budget commit failed.
+guarded_commit() {  # <budget> [print] [held]
+  local budget=$1 response=${2-} from_held=${3-} prior count
+  lock_acquire_bounded "$OWNER_LOCK" || return 1
+  if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
+    fm_lock_release "$OWNER_LOCK"
+    return 1
+  fi
+  case "$budget" in
+    reset-budget)
+      if ! budget_reset; then
+        fm_lock_release "$OWNER_LOCK"
+        return 1
+      fi
+      ;;
+    nag:*:*)
+      prior=${budget#nag:}
+      count=${prior#*:}
+      prior=${prior%%:*}
+      budget_read
+      if [ "$BUDGET_COUNT" -ne "$prior" ] || ! budget_write "$count"; then
+        fm_lock_release "$OWNER_LOCK"
+        return 1
+      fi
+      ;;
+  esac
+  if [ -n "$response" ]; then
+    printf '%s\n' "$response" || true
+    [ "$from_held" = held ] && fm_cursor_compaction_drop_held "$STATE"
+  fi
+  fm_lock_release "$OWNER_LOCK"
+  return 0
+}
+
 # Commit one already-built follow-up JSON object to stdout, or hold it when
 # compaction is active. Never prints followup_message while the active mark
-# is present. A second hold in the same window keeps the first event.
+# is present. A second hold in the same window keeps the first event, and this
+# park then submits its own object once the window closes instead of standing in
+# for the earlier one, which stays held for emit_held_if_ready.
 # The held record is consumed only after its object was printed: a lost lock,
-# a supersession, or away mode between the decision and the print leaves the
-# event held for the next stop rather than dropping it.
-commit_followup() {  # <response-json> [reset-budget] [held]
-  local response=$1 reset_budget=${2-} from_held=${3-} held
+# a supersession, away mode, or a failed budget commit between the decision and
+# the print leaves the event held for the next stop rather than dropping it.
+# A repair nag charges its budget when it is accepted for holding, because a
+# held nag is delivered later and is still one of the bounded three.
+commit_followup() {  # <response-json> [budget]
+  local response=$1 budget=${2-} accept= from_held= status
   if fm_cursor_compaction_is_active "$STATE"; then
-    fm_cursor_compaction_hold_once "$STATE" "$response" || exit 0
+    case "$budget" in
+      nag:*) accept=$budget; budget= ;;
+    esac
+    guarded_commit "$accept" || exit 0
+    fm_cursor_compaction_hold_once "$STATE" "$response"
+    status=$?
+    [ "$status" -eq 1 ] && exit 0
+    [ "$status" -eq 0 ] && from_held=held
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
     if fm_cursor_compaction_is_active "$STATE" || compaction_should_stand_down; then
       exit 0
     fi
-    held=$(fm_cursor_compaction_peek_held "$STATE") || exit 0
-    response=$held
-    from_held=held
-  fi
-  lock_acquire_bounded "$OWNER_LOCK" || exit 0
-  if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
-    fm_lock_release "$OWNER_LOCK"
+    if [ "$from_held" = held ]; then
+      response=$(fm_cursor_compaction_peek_held "$STATE") || exit 0
+    fi
+    guarded_commit "$budget" "$response" "$from_held" || exit 0
     exit 0
   fi
-  if [ "$reset_budget" = reset-budget ] && ! budget_reset; then
-    fm_lock_release "$OWNER_LOCK"
-    exit 0
-  fi
-  printf '%s\n' "$response" || true
-  [ "$from_held" = held ] && fm_cursor_compaction_drop_held "$STATE"
-  fm_lock_release "$OWNER_LOCK"
+  guarded_commit "$budget" "$response" || exit 0
   exit 0
 }
 
@@ -194,16 +245,17 @@ emit_held_if_ready() {
   fi
   fm_cursor_compaction_is_active "$STATE" && return 0
   compaction_should_stand_down && return 0
-  commit_followup "$held" '' held
+  guarded_commit '' "$held" held || return 0
+  exit 0
 }
 
 # Emit exactly one follow-up object and stop. jq owns the JSON escaping so an
 # embedded quote, newline, or the U+2063 prefix cannot corrupt the response.
-emit_followup() {  # <kind> <body> [reset-budget]
-  local kind=$1 body=$2 reset_budget=${3-} encoded response
+emit_followup() {  # <kind> <body> [budget]
+  local kind=$1 body=$2 budget=${3-} encoded response
   fm_operational_input_encode "$kind" "$body" encoded || exit 0
   response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
-  commit_followup "$response" "$reset_budget"
+  commit_followup "$response" "$budget"
 }
 
 budget_read() {
@@ -232,16 +284,7 @@ budget_reset() {
 }
 
 budget_reset_if_ours() {
-  lock_acquire_bounded "$OWNER_LOCK" || exit 0
-  if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
-    fm_lock_release "$OWNER_LOCK"
-    exit 0
-  fi
-  budget_reset || {
-    fm_lock_release "$OWNER_LOCK"
-    exit 0
-  }
-  fm_lock_release "$OWNER_LOCK"
+  guarded_commit reset-budget || exit 0
 }
 
 emit_repair_followup() {  # <reason> <arm-tail> <attempt>
@@ -258,23 +301,7 @@ $arm_tail
 $reason"
   fm_operational_input_encode turn-end-guard "$body" encoded || exit 0
   response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
-  if fm_cursor_compaction_is_active "$STATE"; then
-    commit_followup "$response"
-  fi
-
-  lock_acquire_bounded "$OWNER_LOCK" || exit 0
-  if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
-    fm_lock_release "$OWNER_LOCK"
-    exit 0
-  fi
-  budget_read
-  if [ "$BUDGET_COUNT" -ne "$prior" ] || ! budget_write "$count"; then
-    fm_lock_release "$OWNER_LOCK"
-    exit 0
-  fi
-  printf '%s\n' "$response" || true
-  fm_lock_release "$OWNER_LOCK"
-  exit 0
+  commit_followup "$response" "nag:$prior:$count"
 }
 
 # --- park ownership ----------------------------------------------------------

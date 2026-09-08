@@ -17,6 +17,11 @@ FM_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FM_HOME="${FM_HOME:-$FM_ROOT}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
+# This step runs after every assistant response and removing that record is the
+# only mutation, so leave the primary's hot path before the scope check's git
+# calls and the library sources when there is nothing to clear.
+[ -f "$STATE/.cursor-compaction" ] || exit 0
+
 # shellcheck source=bin/fm-primary-scope-lib.sh
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
 # shellcheck source=bin/fm-cursor-compaction-lib.sh

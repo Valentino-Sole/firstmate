@@ -17,7 +17,8 @@
 # Mutation contract:
 #   mark_active   creates or refreshes .cursor-compaction (atomic replace)
 #   mark_done     removes .cursor-compaction only
-#   hold_once     writes .cursor-compaction-held only when it does not exist
+#   hold_once     creates .cursor-compaction-held atomically; 0 when this call
+#                 holds the event, 2 when another event is already held, 1 on error
 #   peek_held     prints the held object without consuming it; fails when absent
 #   drop_held     removes the held object, only after it was actually submitted
 #   is_active     true when .cursor-compaction exists AND is younger than max_age
@@ -86,18 +87,26 @@ fm_cursor_compaction_mark_done() {  # <state>
 
 # Write $2 (a follow-up JSON object) once. A second call leaves the first
 # event in place so one compaction window cannot queue two submits.
+# The link is the create-if-absent primitive: two overlapping parks cannot
+# replace each other's record, and the loser learns it did not hold this event.
+# Returns 0 when this call holds $2, 2 when another event is already held.
 fm_cursor_compaction_hold_once() {  # <state> <json>
   local state=$1 json=$2 path tmp
   [ -n "$state" ] && [ -d "$state" ] && [ -n "$json" ] || return 1
   path=$(fm_cursor_compaction_held_path "$state")
-  [ -f "$path" ] && return 0
+  [ -e "$path" ] && return 2
   tmp="$path.tmp.$$"
-  if ! printf '%s\n' "$json" > "$tmp" 2>/dev/null \
-    || ! mv -f "$tmp" "$path" 2>/dev/null; then
+  if ! printf '%s\n' "$json" > "$tmp" 2>/dev/null; then
     rm -f "$tmp" 2>/dev/null || true
     return 1
   fi
-  return 0
+  if ln "$tmp" "$path" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null || true
+  [ -e "$path" ] && return 2
+  return 1
 }
 
 fm_cursor_compaction_peek_held() {  # <state> -> json on stdout
