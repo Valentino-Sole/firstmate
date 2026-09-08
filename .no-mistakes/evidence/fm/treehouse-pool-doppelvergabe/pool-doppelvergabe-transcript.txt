@@ -1,0 +1,75 @@
+================================================================
+  BEFORE the fix (fm-spawn.sh at 3256c22, parent of the change)
+================================================================
+pool copies:        1 2 3 7 8 9   (only copy 3 is recorded to a task)
+copy 3 recorded to: firstmate-fork-main-upstream-sync  (live, parked, needs-decision)
+second spawn:       fm-spawn-override-reset  -- treehouse hands it copy 3
+
+--- what the operator sees from fm-spawn.sh -------------------
+  warning: /tmp/pool-replay.fxWAXh/home/data/fm-spawn-override-reset/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+  warning: /tmp/pool-replay.fxWAXh/home/data/fm-spawn-override-reset/launch-brief.md lacks the ship self-test contract (scaffolded before self-test briefs recorded one); the worker may report done: without Tests N/0
+  spawned fm-spawn-override-reset harness=codex kind=ship mode=no-mistakes yolo=off window=firstmate:fm-fm-spawn-override-reset worktree=/tmp/pool-replay.fxWAXh/vs-agent-workspace-8bf1b0/3
+  Harness: Codex
+  Requested Model: default
+  Effective Model: pending verification
+  Model Source: spawn-config
+  [exit status: 0]
+
+--- firstmate's task records afterwards -----------------------
+  firstmate-fork-main-upstream-sync.meta     -> <pool>/3
+  fm-spawn-override-reset.meta               -> <pool>/3
+
+--- the parked task's checkout (pool copy 3) ------------------
+  branch now: fm/firstmate-fork-main-upstream-sync
+  HEAD  now:  14e560e initial
+  its committed work: LOST from the checkout (was bfee174 'parked upstream sync work')
+
+================================================================
+  AFTER the fix (fm-spawn.sh at 19df10d)
+================================================================
+pool copies:        1 2 3 7 8 9   (only copy 3 is recorded to a task)
+copy 3 recorded to: firstmate-fork-main-upstream-sync  (live, parked, needs-decision)
+second spawn:       fm-spawn-override-reset  -- treehouse hands it copy 3
+
+--- what the operator sees from fm-spawn.sh -------------------
+  warning: /tmp/pool-replay.V7gJBn/home/data/fm-spawn-override-reset/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+  warning: /tmp/pool-replay.V7gJBn/home/data/fm-spawn-override-reset/launch-brief.md lacks the ship self-test contract (scaffolded before self-test briefs recorded one); the worker may report done: without Tests N/0
+  note: the worktree pool offered /tmp/pool-replay.V7gJBn/vs-agent-workspace-8bf1b0/3, which firstmate's records still assign to task firstmate-fork-main-upstream-sync; asking it for another copy
+  spawned fm-spawn-override-reset harness=codex kind=ship mode=no-mistakes yolo=off window=firstmate:fm-fm-spawn-override-reset worktree=/tmp/pool-replay.V7gJBn/vs-agent-workspace-8bf1b0/7
+  Harness: Codex
+  Requested Model: default
+  Effective Model: pending verification
+  Model Source: spawn-config
+  [exit status: 0]
+
+--- firstmate's task records afterwards -----------------------
+  firstmate-fork-main-upstream-sync.meta     -> <pool>/3
+  fm-spawn-override-reset.meta               -> <pool>/7
+
+--- the parked task's checkout (pool copy 3) ------------------
+  branch now: fm/firstmate-fork-main-upstream-sync
+  HEAD  now:  b45a925 parked upstream sync work
+  its committed work: INTACT
+
+================================================================
+  AFTER the fix, pool exhausted (no free copy anywhere)
+================================================================
+pool copies:        1 2 3 7 8 9   (only copy 3 is recorded to a task)
+copy 3 recorded to: firstmate-fork-main-upstream-sync  (live, parked, needs-decision)
+second spawn:       fm-spawn-override-reset  -- copy 3 is the only copy the pool ever offers
+
+--- what the operator sees from fm-spawn.sh -------------------
+  warning: /tmp/pool-replay.3nv9EZ/home/data/fm-spawn-override-reset/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+  warning: /tmp/pool-replay.3nv9EZ/home/data/fm-spawn-override-reset/launch-brief.md lacks the ship self-test contract (scaffolded before self-test briefs recorded one); the worker may report done: without Tests N/0
+  note: the worktree pool offered /tmp/pool-replay.3nv9EZ/vs-agent-workspace-8bf1b0/3, which firstmate's records still assign to task firstmate-fork-main-upstream-sync; asking it for another copy
+  error: the worktree pool offered no copy that is free; firstmate's own records still assign every copy it handed out to another task (/tmp/pool-replay.3nv9EZ/vs-agent-workspace-8bf1b0/3 belongs to task firstmate-fork-main-upstream-sync); refusing to launch a second worker into an occupied copy. Inspect window firstmate:fm-fm-spawn-override-reset
+  [exit status: 1]
+
+--- firstmate's task records afterwards -----------------------
+  firstmate-fork-main-upstream-sync.meta     -> <pool>/3
+
+--- the parked task's checkout (pool copy 3) ------------------
+  branch now: fm/firstmate-fork-main-upstream-sync
+  HEAD  now:  0b2b657 parked upstream sync work
+  its committed work: INTACT
+
