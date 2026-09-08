@@ -98,11 +98,17 @@ make_primary_dir() {
 
 # One held follow-up object in the same wire form the park writes, built by the
 # real operational-input encoder rather than a hand-copied prefix.
-hold_watcher_followup() {  # <dir> <body> [budget]
-  local encoded
+# A session of "unbounded" writes the record without its session and updated_at
+# headers, i.e. an event with no owner and no lifetime at all.
+hold_watcher_followup() {  # <dir> <body> [budget] [session] [age-seconds]
+  local encoded session=${4:-sess-cursor}
   encoded=$(printf '%s' "$2" | "$ROOT/bin/fm-operational-input.sh" encode watcher) \
     || fail "could not encode the held follow-up fixture"
   {
+    if [ "$session" != unbounded ]; then
+      printf 'session=%s\n' "$session"
+      printf 'updated_at=%s\n' "$(( $(date +%s) - ${5:-0} ))"
+    fi
     printf 'budget=%s\n' "${3-}"
     jq -n --arg m "$encoded" '{followup_message:$m}'
   } > "$1/state/.cursor-compaction-held" \
@@ -878,6 +884,83 @@ test_held_wake_still_resets_the_nag_budget() {
   pass "cursor park: a wake delivered from the hold still resets the nag budget"
 }
 
+# The held slot is private to the session that parked it and expires with the
+# same budget as the mark, so a follow-up built for one session can never be
+# replayed into the next one and none can sit in the slot forever.
+test_held_followup_is_bound_to_its_session_and_freshness() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-scope")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'unbounded wake' '' unbounded
+  out=$(run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'unbounded wake'*) fail "a held follow-up with no owner and no lifetime was delivered: $out" ;;
+  esac
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "this session's own wake must still be delivered, got: $out"
+  rm -f "$dir/state/arm-ran"
+  hold_watcher_followup "$dir" 'foreign session wake' '' sess-other
+  out=$(run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'foreign session wake'*) fail "another session's held follow-up was delivered: $out" ;;
+  esac
+  rm -f "$dir/state/arm-ran"
+  hold_watcher_followup "$dir" 'expired wake' '' sess-cursor 100000
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'expired wake'*) fail "an expired held follow-up was delivered: $out" ;;
+  esac
+  pass "cursor park: an unowned, foreign or expired held follow-up is never delivered"
+}
+
+# An undeliverable record must not wedge the single slot either: the next hold
+# replaces it, and that fresh event is the one the session receives.
+test_undeliverable_held_record_does_not_block_the_slot() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-slot-free")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'unbounded wake' '' unbounded
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "the open window must not submit, got: $out"
+  rm -f "$dir/state/.cursor-compaction" "$dir/state/arm-ran"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "the fresh event that took the slot must be delivered, got: $out"
+  case "$(followup_of "$out")" in
+    *'unbounded wake'*) fail "the undeliverable record was delivered after all: $out" ;;
+  esac
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  pass "cursor park: an undeliverable held record is replaced, not left blocking"
+}
+
+# The ceiling notice is the session's one warning that automatic delivery stops,
+# so an occupied slot must not be what makes it disappear.
+test_ceiling_notice_takes_the_slot_when_the_window_outlives_the_wait() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-ceiling-takes-slot")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'earlier window wake'
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 5 5)
+  [ -z "$out" ] || fail "an open window must not submit the notice, got: $out"
+  rm -f "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 6 5)
+  case "$(followup_of "$out")" in
+    *'CEILING REACHED'*) ;;
+    *) fail "the ceiling notice must survive an occupied slot, got: $out" ;;
+  esac
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 7 5)
+  [ -z "$out" ] || fail "the ceiling notice must not be delivered twice, got: $out"
+  pass "cursor park: the ceiling notice claims the held slot instead of vanishing"
+}
+
 # Holding is a state mutation like any other: a park that may no longer act must
 # not leave an object behind for a later stop to deliver.
 test_park_holds_nothing_once_away_mode_activates() {
@@ -1107,6 +1190,9 @@ test_refused_nag_does_not_spend_its_budget
 test_held_wake_still_resets_the_nag_budget
 test_ceiling_notice_is_not_shadowed_by_a_held_followup
 test_ceiling_notice_survives_an_active_compaction_window
+test_ceiling_notice_takes_the_slot_when_the_window_outlives_the_wait
+test_held_followup_is_bound_to_its_session_and_freshness
+test_undeliverable_held_record_does_not_block_the_slot
 test_repair_nag_charges_its_budget_when_held
 test_sessionstart_emits_additional_context
 test_sessionstart_silent_in_child_worktree

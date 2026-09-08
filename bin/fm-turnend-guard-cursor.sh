@@ -219,13 +219,17 @@ guarded_commit() {  # <budget> [print] [held]
 # already occupies the single slot.
 # A repair nag is charged here, and only here, when the slot accepted it: a nag
 # the slot refused is still unspent and is charged by its own print instead.
-# A print-time action travels with the record for whichever stop submits it.
-guarded_hold() {  # <response-json> <budget>
-  local response=$1 budget=$2 carry= status
+# A print-time action travels with the record for whichever stop submits it, and
+# so does the session that parked it, because only that session may submit it.
+# take-slot is the second chance a once-only object gets when the window did not
+# close: it takes the slot from a replaceable event rather than being dropped.
+guarded_hold() {  # <response-json> <budget> [take-slot]
+  local response=$1 budget=$2 mode=${3-} carry= status
   HELD_ACCEPTED=
   case "$budget" in reset-budget) carry=$budget ;; esac
   guard_enter || return 1
-  fm_cursor_compaction_hold_once "$STATE" "$response" "$carry"
+  [ "$mode" = take-slot ] && fm_cursor_compaction_drop_held "$STATE"
+  fm_cursor_compaction_hold_once "$STATE" "$response" "$SESSION_ID" "$carry"
   status=$?
   if [ "$status" -eq 2 ]; then
     fm_lock_release "$OWNER_LOCK"
@@ -261,17 +265,22 @@ guarded_hold() {  # <response-json> <budget>
 # held slot took it or this park printed it, because a held nag is delivered
 # later and is still one of the bounded three. An object the slot refused and
 # this park never printed stays unspent.
-commit_followup() {  # <response-json> [budget]
-  local response=$1 budget=${2-}
+# A once-only object is never merely dropped: when the window outlasts the wait
+# and the slot is occupied by a replaceable event, it takes that slot instead, so
+# the ceiling notice still reaches the session exactly once.
+commit_followup() {  # <response-json> [budget] [once-only]
+  local response=$1 budget=${2-} once=${3-}
   if fm_cursor_compaction_is_active "$STATE"; then
     guarded_hold "$response" "$budget" || exit 0
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
     if fm_cursor_compaction_is_active "$STATE" || compaction_should_stand_down; then
+      if [ -z "$HELD_ACCEPTED" ] && [ "$once" = once-only ]; then
+        guarded_hold "$response" "$budget" take-slot || exit 0
+      fi
       exit 0
     fi
     if [ "$HELD_ACCEPTED" = held ]; then
-      response=$(fm_cursor_compaction_peek_held "$STATE") || exit 0
-      budget=$(fm_cursor_compaction_peek_held_budget "$STATE")
+      case "$budget" in nag:*) budget= ;; esac
     fi
     guarded_commit "$budget" "$response" "$HELD_ACCEPTED" || exit 0
     exit 0
@@ -285,24 +294,24 @@ commit_followup() {  # <response-json> [budget]
 # release, so an ordinary stop falls through to its own follow-up sources.
 emit_held_if_ready() {
   local held budget
-  held=$(fm_cursor_compaction_peek_held "$STATE") || return 0
+  held=$(fm_cursor_compaction_peek_held "$STATE" "$SESSION_ID") || return 0
   if fm_cursor_compaction_is_active "$STATE"; then
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
   fi
   fm_cursor_compaction_is_active "$STATE" && return 0
   compaction_should_stand_down && return 0
-  budget=$(fm_cursor_compaction_peek_held_budget "$STATE")
+  budget=$(fm_cursor_compaction_peek_held_budget "$STATE" "$SESSION_ID")
   guarded_commit "$budget" "$held" held || return 0
   exit 0
 }
 
 # Emit exactly one follow-up object and stop. jq owns the JSON escaping so an
 # embedded quote, newline, or the U+2063 prefix cannot corrupt the response.
-emit_followup() {  # <kind> <body> [budget]
-  local kind=$1 body=$2 budget=${3-} encoded response
+emit_followup() {  # <kind> <body> [budget] [once-only]
+  local kind=$1 body=$2 budget=${3-} once=${4-} encoded response
   fm_operational_input_encode "$kind" "$body" encoded || exit 0
   response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
-  commit_followup "$response" "$budget"
+  commit_followup "$response" "$budget" "$once"
 }
 
 budget_read() {
@@ -407,7 +416,7 @@ claim_park || exit 0
 # session is told once, loudly, instead of supervision going quiet unannounced.
 if [ "$LOOP_COUNT" -ge "$LOOP_CEILING" ]; then
   if [ "$LOOP_COUNT" -eq "$LOOP_CEILING" ] && fm_supervision_needed "$STATE" "$GRACE"; then
-    emit_followup turn-end-guard "FIRSTMATE SUPERVISION FOLLOW-UP CEILING REACHED - this session has taken $LOOP_COUNT consecutive hook-driven turns without a captain message, so automatic wake delivery stops here to bound the loop. Queued wakes stay durable: run bin/fm-wake-drain.sh, handle them, and run its exact WAKE_ACK_REQUIRED command. Supervision resumes automatically at the next turn end after the captain's next message."
+    emit_followup turn-end-guard "FIRSTMATE SUPERVISION FOLLOW-UP CEILING REACHED - this session has taken $LOOP_COUNT consecutive hook-driven turns without a captain message, so automatic wake delivery stops here to bound the loop. Queued wakes stay durable: run bin/fm-wake-drain.sh, handle them, and run its exact WAKE_ACK_REQUIRED command. Supervision resumes automatically at the next turn end after the captain's next message." '' once-only
   fi
   emit_held_if_ready
   exit 0
