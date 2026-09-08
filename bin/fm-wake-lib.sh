@@ -1781,14 +1781,14 @@ fm_wake_grant_rows_valid() {  # <rows-file>
 # not a match, so uncertainty reads as "no live owner".
 fm_wake_branch_owner_matches() {  # <owner-file> [<pid>] [<generation>]
   local file=$1 expected_pid=${2:-} expected_generation=${3:-}
-  local version pid identity generation current extra
+  local version pid identity generation current _extra
   [ -f "$file" ] && [ ! -L "$file" ] || return 1
   exec 8< "$file" || return 1
   IFS= read -r version <&8 || { exec 8<&-; return 1; }
   IFS= read -r pid <&8 || { exec 8<&-; return 1; }
   IFS= read -r identity <&8 || { exec 8<&-; return 1; }
   IFS= read -r generation <&8 || { exec 8<&-; return 1; }
-  if IFS= read -r extra <&8; then exec 8<&-; return 1; fi
+  if IFS= read -r _extra <&8; then exec 8<&-; return 1; fi
   exec 8<&-
   [ "$version" = fm-branch-eligible-owner-v1 ] || return 1
   case "$pid" in ''|*[!0-9]*|1) return 1 ;; esac
