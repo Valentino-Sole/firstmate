@@ -33,11 +33,13 @@
 # or not compaction is active when they are committed.
 #
 # ONE GUARDED SECTION. Every shared-state mutation and the single stdout object
-# go through guarded_commit, after the same owner lock, park ownership, session
+# happen under the same HELD owner lock, after the same park ownership, session
 # ownership and away-mode checks. That includes writing the compaction hold and
-# spending repair-nag budget, so a superseded park, a foreign session or away
-# mode can neither leave a follow-up behind nor consume the budget, and a nag
-# that is held counts exactly like a nag that is printed.
+# spending repair-nag budget: the lock is never released between a check and the
+# mutation it guards, and away mode (bin/fm-afk-start.sh) plus a newer stop's
+# claim serialize on that same lock. A superseded park, a foreign session or away
+# mode can therefore neither leave a follow-up behind nor consume the budget, and
+# a nag that is held counts exactly like a nag that is printed.
 #
 # COMPACTION HOLD. Cursor rejects submitting a followup_message while it is
 # compacting ("Cannot submit a prompt while compaction is in progress").
@@ -158,43 +160,91 @@ compaction_should_stand_down() {
   return 1
 }
 
-# The single guarded section: the owner lock plus the ownership, session and
-# away-mode checks that every state change and the one stdout object share.
-# <budget> is empty, reset-budget, or nag:<prior>:<count> for the compare-and-set
-# repair-budget commit. <print> is the response object to submit, or empty to
-# only commit budget. <held> marks a printed object as the held record this park
-# owns, which is dropped only after the print succeeded.
-# Returns 1 without acting, and without holding the lock, when this park may not
-# act or its budget commit failed.
-guarded_commit() {  # <budget> [print] [held]
-  local budget=$1 response=${2-} from_held=${3-} prior count
+# Enter the single guarded section: take the owner lock and re-verify that this
+# park may still act. The caller releases the lock on every path out.
+# Away mode and a newer stop's claim both serialize on this same lock, so
+# nothing they write can interleave between this check and the caller's mutation.
+guard_enter() {
   lock_acquire_bounded "$OWNER_LOCK" || return 1
   if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
     fm_lock_release "$OWNER_LOCK"
     return 1
   fi
+  return 0
+}
+
+# Apply one budget action inside the guarded section: empty, reset-budget, or
+# nag:<prior>:<count> for the compare-and-set repair-budget commit.
+budget_commit() {  # <budget>
+  local budget=$1 prior count
   case "$budget" in
     reset-budget)
-      if ! budget_reset; then
-        fm_lock_release "$OWNER_LOCK"
-        return 1
-      fi
+      budget_reset || return 1
       ;;
     nag:*:*)
       prior=${budget#nag:}
       count=${prior#*:}
       prior=${prior%%:*}
       budget_read
-      if [ "$BUDGET_COUNT" -ne "$prior" ] || ! budget_write "$count"; then
+      [ "$BUDGET_COUNT" -eq "$prior" ] || return 1
+      budget_write "$count" || return 1
+      ;;
+  esac
+  return 0
+}
+
+# Commit budget and at most one stdout object in the guarded section. <held>
+# marks a printed object as the held record this park owns, which is dropped
+# only after the print succeeded.
+# Returns 1 without acting, and without holding the lock, when this park may not
+# act or its budget commit failed.
+guarded_commit() {  # <budget> [print] [held]
+  local budget=$1 response=${2-} from_held=${3-}
+  guard_enter || return 1
+  if ! budget_commit "$budget"; then
+    fm_lock_release "$OWNER_LOCK"
+    return 1
+  fi
+  if [ -n "$response" ]; then
+    printf '%s\n' "$response" || true
+    [ "$from_held" = held ] && fm_cursor_compaction_drop_held "$STATE"
+  fi
+  fm_lock_release "$OWNER_LOCK"
+  return 0
+}
+
+# Park one follow-up for a later stop, inside the same guarded section and the
+# same lock hold as the ownership checks. Sets HELD_ACCEPTED to held when this
+# park now owns the held record, and leaves it empty when an earlier event
+# already occupies the single slot.
+# A repair nag is charged here, and only here, when the slot accepted it: a nag
+# the slot refused is still unspent and is charged by its own print instead.
+# A print-time action travels with the record for whichever stop submits it.
+guarded_hold() {  # <response-json> <budget>
+  local response=$1 budget=$2 carry= status
+  HELD_ACCEPTED=
+  case "$budget" in reset-budget) carry=$budget ;; esac
+  guard_enter || return 1
+  fm_cursor_compaction_hold_once "$STATE" "$response" "$carry"
+  status=$?
+  if [ "$status" -eq 2 ]; then
+    fm_lock_release "$OWNER_LOCK"
+    return 0
+  fi
+  if [ "$status" -ne 0 ]; then
+    fm_lock_release "$OWNER_LOCK"
+    return 1
+  fi
+  case "$budget" in
+    nag:*:*)
+      if ! budget_commit "$budget"; then
+        fm_cursor_compaction_drop_held "$STATE"
         fm_lock_release "$OWNER_LOCK"
         return 1
       fi
       ;;
   esac
-  if [ -n "$response" ]; then
-    printf '%s\n' "$response" || true
-    [ "$from_held" = held ] && fm_cursor_compaction_drop_held "$STATE"
-  fi
+  HELD_ACCEPTED=held
   fm_lock_release "$OWNER_LOCK"
   return 0
 }
@@ -207,27 +257,23 @@ guarded_commit() {  # <budget> [print] [held]
 # The held record is consumed only after its object was printed: a lost lock,
 # a supersession, away mode, or a failed budget commit between the decision and
 # the print leaves the event held for the next stop rather than dropping it.
-# A repair nag charges its budget when it is accepted for holding, because a
-# held nag is delivered later and is still one of the bounded three.
+# A repair nag charges its budget the moment the object is accepted, whether the
+# held slot took it or this park printed it, because a held nag is delivered
+# later and is still one of the bounded three. An object the slot refused and
+# this park never printed stays unspent.
 commit_followup() {  # <response-json> [budget]
-  local response=$1 budget=${2-} accept= from_held= status
+  local response=$1 budget=${2-}
   if fm_cursor_compaction_is_active "$STATE"; then
-    case "$budget" in
-      nag:*) accept=$budget; budget= ;;
-    esac
-    guarded_commit "$accept" || exit 0
-    fm_cursor_compaction_hold_once "$STATE" "$response"
-    status=$?
-    [ "$status" -eq 1 ] && exit 0
-    [ "$status" -eq 0 ] && from_held=held
+    guarded_hold "$response" "$budget" || exit 0
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
     if fm_cursor_compaction_is_active "$STATE" || compaction_should_stand_down; then
       exit 0
     fi
-    if [ "$from_held" = held ]; then
+    if [ "$HELD_ACCEPTED" = held ]; then
       response=$(fm_cursor_compaction_peek_held "$STATE") || exit 0
+      budget=$(fm_cursor_compaction_peek_held_budget "$STATE")
     fi
-    guarded_commit "$budget" "$response" "$from_held" || exit 0
+    guarded_commit "$budget" "$response" "$HELD_ACCEPTED" || exit 0
     exit 0
   fi
   guarded_commit "$budget" "$response" || exit 0
@@ -238,14 +284,15 @@ commit_followup() {  # <response-json> [budget]
 # this park builds anything of its own. Returns when there is nothing to
 # release, so an ordinary stop falls through to its own follow-up sources.
 emit_held_if_ready() {
-  local held
+  local held budget
   held=$(fm_cursor_compaction_peek_held "$STATE") || return 0
   if fm_cursor_compaction_is_active "$STATE"; then
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
   fi
   fm_cursor_compaction_is_active "$STATE" && return 0
   compaction_should_stand_down && return 0
-  guarded_commit '' "$held" held || return 0
+  budget=$(fm_cursor_compaction_peek_held_budget "$STATE")
+  guarded_commit "$budget" "$held" held || return 0
   exit 0
 }
 
@@ -353,6 +400,7 @@ OWNER_ID=$(cat "$STATE/.lock" 2>/dev/null || true)
 case "$OWNER_ID" in ''|*[!0-9]*) exit 0 ;; esac
 
 PARK_SEQ=
+HELD_ACCEPTED=
 claim_park || exit 0
 
 # Cursor's own loop_limit is the outer ceiling; this inner one bites first so the

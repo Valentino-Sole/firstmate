@@ -98,11 +98,14 @@ make_primary_dir() {
 
 # One held follow-up object in the same wire form the park writes, built by the
 # real operational-input encoder rather than a hand-copied prefix.
-hold_watcher_followup() {  # <dir> <body>
+hold_watcher_followup() {  # <dir> <body> [budget]
   local encoded
   encoded=$(printf '%s' "$2" | "$ROOT/bin/fm-operational-input.sh" encode watcher) \
     || fail "could not encode the held follow-up fixture"
-  jq -n --arg m "$encoded" '{followup_message:$m}' > "$1/state/.cursor-compaction-held" \
+  {
+    printf 'budget=%s\n' "${3-}"
+    jq -n --arg m "$encoded" '{followup_message:$m}'
+  } > "$1/state/.cursor-compaction-held" \
     || fail "could not write the held follow-up fixture"
 }
 
@@ -787,6 +790,94 @@ test_park_holds_followup_during_compaction_then_delivers_once() {
   pass "cursor park: hold once during compaction, deliver once after, never twice"
 }
 
+# The owner lock is what serializes this park against away mode
+# (bin/fm-afk-start.sh takes the same lock) and against a newer stop's claim, so
+# the hold must be written while the lock is still held. state/.cursor-park-owner.lock
+# is the on-disk record of that hold.
+test_hold_is_written_without_releasing_the_owner_lock() {
+  local dir park_pid waited unlocked samples
+  dir=$(make_primary_dir "$TMP_ROOT/park-hold-lock-scope")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  # Widen the moment between the ownership check and the hold so the lock can be
+  # observed, without changing what the adapter does in it.
+  cat >> "$dir/bin/fm-cursor-compaction-lib.sh" <<'SH'
+eval "fm_cursor_compaction_hold_once_real() $(declare -f fm_cursor_compaction_hold_once | sed 1d)"
+fm_cursor_compaction_hold_once() {
+  : > "$FM_HOME/state/hold-entered"
+  sleep 3
+  fm_cursor_compaction_hold_once_real "$@"
+}
+SH
+  ( FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" > "$dir/state/hold-lock-out" ) &
+  park_pid=$!
+  waited=0
+  while [ ! -e "$dir/state/hold-entered" ]; do
+    sleep 0.05
+    waited=$((waited + 1))
+    [ "$waited" -lt 400 ] || fail "the park never reached its hold"
+  done
+  unlocked=0
+  samples=0
+  while [ ! -e "$dir/state/.cursor-compaction-held" ] && [ "$samples" -lt 25 ]; do
+    if [ ! -e "$dir/state/.cursor-park-owner.lock" ] && [ ! -L "$dir/state/.cursor-park-owner.lock" ]; then
+      unlocked=1
+    fi
+    sleep 0.1
+    samples=$((samples + 1))
+  done
+  wait "$park_pid" 2>/dev/null || true
+  [ "$unlocked" -eq 0 ] \
+    || fail "the owner lock was free between the ownership check and the hold"
+  [ -e "$dir/state/.cursor-compaction-held" ] || fail "the park never held its follow-up"
+  pass "cursor park: the hold is written without releasing the owner lock"
+}
+
+# A nag the held slot refused and this park never printed was never delivered,
+# so it must not spend one of the three the budget allows.
+test_refused_nag_does_not_spend_its_budget() {
+  local dir out held
+  dir=$(make_primary_dir "$TMP_ROOT/park-nag-refused")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  hold_watcher_followup "$dir" 'earlier window wake'
+  held=$(cat "$dir/state/.cursor-compaction-held")
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "a park inside an open window must not submit, got: $out"
+  [ ! -e "$dir/state/.turnend-cursor-blocks" ] \
+    || fail "a nag that was neither held nor printed spent budget: $(cat "$dir/state/.turnend-cursor-blocks")"
+  [ "$(cat "$dir/state/.cursor-compaction-held")" = "$held" ] \
+    || fail "the earlier window's event must stay untouched"
+  pass "cursor park: a nag the held slot refused stays unspent"
+}
+
+# A watcher wake is productive work that clears the repair-nag budget, and it
+# stays productive when the window makes a later stop deliver it.
+test_held_wake_still_resets_the_nag_budget() {
+  local dir out budget_count
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-wake-reset")
+  : > "$dir/state/task1.meta"
+  printf 'session=sess-cursor\ncount=2\n' > "$dir/state/.turnend-cursor-blocks"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "the open window must not submit the wake, got: $out"
+  [ -f "$dir/state/.cursor-compaction-held" ] || fail "the wake must be held"
+  budget_count=$(sed -n '2s/^count=//p' "$dir/state/.turnend-cursor-blocks" 2>/dev/null || true)
+  [ "$budget_count" = 2 ] \
+    || fail "a wake that was only held must not reset the budget yet: $budget_count"
+  rm -f "$dir/state/.cursor-compaction" "$dir/state/arm-ran"
+  write_arm_fixture "$dir" failed
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "the held wake must be delivered by the next stop, got: $out"
+  [ ! -e "$dir/state/.turnend-cursor-blocks" ] \
+    || fail "the delivered wake did not reset the nag budget: $(cat "$dir/state/.turnend-cursor-blocks")"
+  pass "cursor park: a wake delivered from the hold still resets the nag budget"
+}
+
 # Holding is a state mutation like any other: a park that may no longer act must
 # not leave an object behind for a later stop to deliver.
 test_park_holds_nothing_once_away_mode_activates() {
@@ -1011,6 +1102,9 @@ test_stale_compaction_mark_does_not_hold
 test_held_followup_survives_a_failed_commit
 test_park_holds_followup_during_compaction_then_delivers_once
 test_park_holds_nothing_once_away_mode_activates
+test_hold_is_written_without_releasing_the_owner_lock
+test_refused_nag_does_not_spend_its_budget
+test_held_wake_still_resets_the_nag_budget
 test_ceiling_notice_is_not_shadowed_by_a_held_followup
 test_ceiling_notice_survives_an_active_compaction_window
 test_repair_nag_charges_its_budget_when_held
