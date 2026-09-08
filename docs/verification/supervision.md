@@ -287,9 +287,13 @@ Away-mode delivery needed no daemon change once the composer reader was correct 
 
 Cursor compaction instruction refresh is DEFERRED and not shipped, so a Cursor primary does not re-emit its digest after a compaction.
 Two static facts decided that: `PreCompactRequestResponse` carries only `user_message`, and `preCompact` is absent from the `additional_context` step set (`index.js` @ 4814884), so the step cannot inject a digest and any delivery has to be routed through a later boundary.
-A staged-then-delivered design is rejected because carrying a digest across two concurrently running `stop` hooks can deliver it twice or strand it indefinitely, while closing those races enlarges a critical section inside a hook Cursor awaits at the turn boundary.
+A staged-then-delivered DIGEST is still rejected, because carrying a digest across two concurrently running `stop` hooks can deliver it twice or strand it indefinitely, while closing those races enlarges a critical section inside a hook Cursor awaits at the turn boundary.
+That rejection is scoped to the digest and does not extend to the follow-up hold, which closes both races inside the existing commit section instead of adding one.
+Double delivery cannot happen because `hold_once` writes the single held record only when it is absent and the record is consumed only after its object was printed under the owner lock, in the same critical section the park already holds for every follow-up.
+Stranding cannot outlive one window either: a held record is claimed by the next stop before that park builds anything of its own, and the compaction mark carries `updated_at` and expires after the wait budget, so a Cursor that exits, crashes, or never fires `afterAgentResponse` cannot leave the park waiting on a mark nobody will clear.
 Native `preCompact` firing was not observed because a real compaction could not be forced in the isolated session, so the digest surface has no empirical basis yet.
-`preCompact` is registered only to mark compaction active so the park will not submit `followup_message` during that window; `tests/fm-cursor-primary.test.sh` proves hold-once and deliver-once for that follow-up path.
+`afterAgentResponse` has no live observation either, which is why the mark expires by age rather than trusting that step to clear it.
+`preCompact` is registered only to mark compaction active so the park will not submit `followup_message` during that window; `tests/fm-cursor-primary.test.sh` proves hold-once, deliver-once, expiry of an abandoned mark, and that a commit which never printed re-parks its event.
 
 The Grok adaptive matrix ran on 2026-07-28 with separate scratch repositories and homes, dedicated tmux sockets, one target plus one control window, ambient tmux variables removed, and a socket-bound wrapper first in `PATH`.
 

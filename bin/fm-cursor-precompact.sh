@@ -9,11 +9,15 @@
 #
 # Every path exits 0. A mark failure is fail-open: the park then behaves as
 # it did before this hold existed.
+#
+# The root is resolved from this script's OWN tree, never from an inherited
+# FM_ROOT_OVERRIDE, so a child session in a task worktree stays out of primary
+# scope instead of marking or clearing the primary home's compaction record.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
+FM_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+FM_HOME="${FM_HOME:-$FM_ROOT}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
 # shellcheck source=bin/fm-primary-scope-lib.sh

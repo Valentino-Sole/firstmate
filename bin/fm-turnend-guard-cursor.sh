@@ -27,12 +27,16 @@
 #   1. a follow-up held from an earlier compaction window, once compaction is done;
 #   2. an actionable watcher wake from the park;
 #   3. the bounded repair instruction when supervision could not be established.
+# Priority 1 is claimed BEFORE this park builds anything, never by substituting
+# a stale held object for a freshly built one at submit time: the once-only
+# ceiling notice and a fresh wake must reach the session as themselves.
 #
 # COMPACTION HOLD. Cursor rejects submitting a followup_message while it is
 # compacting ("Cannot submit a prompt while compaction is in progress").
 # preCompact marks that window; this park holds exactly one follow-up JSON
 # object and submits it once after the mark clears. bin/fm-cursor-compaction-lib.sh
-# owns the two records. Digest re-emit after compaction stays deferred.
+# owns the two records, ages an abandoned mark out of the way, and consumes the
+# held object only after the submit was printed. Digest re-emit stays deferred.
 #
 # LOOP BOUNDING IS DOUBLE, because either bound alone is insufficient:
 #   - `loop_limit` in .cursor/hooks.json is Cursor's own ceiling. Once
@@ -149,19 +153,20 @@ compaction_should_stand_down() {
 # Commit one already-built follow-up JSON object to stdout, or hold it when
 # compaction is active. Never prints followup_message while the active mark
 # is present. A second hold in the same window keeps the first event.
-commit_followup() {  # <response-json> [reset-budget]
-  local response=$1 reset_budget=${2-} held
+# The held record is consumed only after its object was printed: a lost lock,
+# a supersession, or away mode between the decision and the print leaves the
+# event held for the next stop rather than dropping it.
+commit_followup() {  # <response-json> [reset-budget] [held]
+  local response=$1 reset_budget=${2-} from_held=${3-} held
   if fm_cursor_compaction_is_active "$STATE"; then
     fm_cursor_compaction_hold_once "$STATE" "$response" || exit 0
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
     if fm_cursor_compaction_is_active "$STATE" || compaction_should_stand_down; then
       exit 0
     fi
-    held=$(fm_cursor_compaction_take_held "$STATE") || exit 0
+    held=$(fm_cursor_compaction_peek_held "$STATE") || exit 0
     response=$held
-  elif [ -f "$(fm_cursor_compaction_held_path "$STATE")" ]; then
-    held=$(fm_cursor_compaction_take_held "$STATE") || exit 0
-    response=$held
+    from_held=held
   fi
   lock_acquire_bounded "$OWNER_LOCK" || exit 0
   if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
@@ -173,22 +178,23 @@ commit_followup() {  # <response-json> [reset-budget]
     exit 0
   fi
   printf '%s\n' "$response" || true
+  [ "$from_held" = held ] && fm_cursor_compaction_drop_held "$STATE"
   fm_lock_release "$OWNER_LOCK"
   exit 0
 }
 
-# When this park has nothing new to emit, still release a held follow-up
-# exactly once after compaction succeeds.
+# Release a follow-up held by an earlier compaction window exactly once, before
+# this park builds anything of its own. Returns when there is nothing to
+# release, so an ordinary stop falls through to its own follow-up sources.
 emit_held_if_ready() {
   local held
-  [ -f "$(fm_cursor_compaction_held_path "$STATE")" ] || return 0
+  held=$(fm_cursor_compaction_peek_held "$STATE") || return 0
   if fm_cursor_compaction_is_active "$STATE"; then
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
   fi
   fm_cursor_compaction_is_active "$STATE" && return 0
   compaction_should_stand_down && return 0
-  held=$(fm_cursor_compaction_take_held "$STATE") || return 0
-  commit_followup "$held"
+  commit_followup "$held" '' held
 }
 
 # Emit exactly one follow-up object and stop. jq owns the JSON escaping so an
@@ -252,8 +258,7 @@ $arm_tail
 $reason"
   fm_operational_input_encode turn-end-guard "$body" encoded || exit 0
   response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
-  if fm_cursor_compaction_is_active "$STATE" \
-    || [ -f "$(fm_cursor_compaction_held_path "$STATE")" ]; then
+  if fm_cursor_compaction_is_active "$STATE"; then
     commit_followup "$response"
   fi
 
@@ -326,13 +331,17 @@ claim_park || exit 0
 # Cursor's own loop_limit is the outer ceiling; this inner one bites first so the
 # session is told once, loudly, instead of supervision going quiet unannounced.
 if [ "$LOOP_COUNT" -ge "$LOOP_CEILING" ]; then
-  [ "$LOOP_COUNT" -eq "$LOOP_CEILING" ] || exit 0
-  fm_supervision_needed "$STATE" "$GRACE" || exit 0
-  emit_followup turn-end-guard "FIRSTMATE SUPERVISION FOLLOW-UP CEILING REACHED - this session has taken $LOOP_COUNT consecutive hook-driven turns without a captain message, so automatic wake delivery stops here to bound the loop. Queued wakes stay durable: run bin/fm-wake-drain.sh, handle them, and run its exact WAKE_ACK_REQUIRED command. Supervision resumes automatically at the next turn end after the captain's next message."
+  if [ "$LOOP_COUNT" -eq "$LOOP_CEILING" ] && fm_supervision_needed "$STATE" "$GRACE"; then
+    emit_followup turn-end-guard "FIRSTMATE SUPERVISION FOLLOW-UP CEILING REACHED - this session has taken $LOOP_COUNT consecutive hook-driven turns without a captain message, so automatic wake delivery stops here to bound the loop. Queued wakes stay durable: run bin/fm-wake-drain.sh, handle them, and run its exact WAKE_ACK_REQUIRED command. Supervision resumes automatically at the next turn end after the captain's next message."
+  fi
+  emit_held_if_ready
+  exit 0
 fi
 
 # Away mode owns the watcher and its own triage; never park and never wake.
 [ -e "$STATE/.afk" ] && exit 0
+
+emit_held_if_ready
 
 if ! fm_supervision_needed "$STATE" "$GRACE"; then
   budget_reset_if_ours
