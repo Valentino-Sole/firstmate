@@ -54,6 +54,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-klartext-uebernahme-index.sh` | Read-only index entrypoint for the isolated Arbeits-PC copy (docs/klartext-uebernahme-isolation.md) |
 | `fm-klartext-uebernahme-pretool-check.sh` | Stable PreToolUse transport for the Klartext-Uebernahme isolation guard (docs/klartext-uebernahme-isolation.md) |
 | `fm-primary-checkout-command-policy.mjs` | Semantic owner of the primary-checkout PreToolUse policy (docs/primary-checkout-guard.md) |
+| `fm-klartext-uebernahme-command-policy.mjs` | Semantic owner of the Klartext-Uebernahme PreToolUse policy (docs/klartext-uebernahme-isolation.md) |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |
 | `fm-supervision-instructions.sh` | Render the session-start primary-harness supervision block or the one-line repair instruction |
 | `fm-home-seed.sh`        | Transactionally provision a local secondmate home and maintain `data/secondmates.md` |
@@ -61,10 +62,15 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-remote-readiness-lib.sh` | Shared remote second-mate readiness gate: check and, when needed, repair then re-check through `fm-remote-doctor.sh` |
 | [`fm-project-origin-lib.sh`](../bin/fm-project-origin-lib.sh) | Accepted origin-form owner shared by both remote provisioning boundaries |
 | `fm-spawn.sh`            | Spawn crewmates, scouts, `id=repo` batches, and secondmates on the resolved harness and runtime backend |
+| `fm-claude-trust.sh`     | Pre-register Claude Code workspace trust for the task worktree a spawn is about to launch a claude crewmate into |
 | `fm-resgate.sh`          | CLI for the weekly clock-window resource cap, manual override marker, and home-PC GPU exclusivity |
 | `fm-resgate-lib.sh`      | Schedule-window, percentage-cap, override-marker, and GPU-exclusivity primitives fm-resgate.sh wraps |
 | `fm-backend.sh`          | Runtime-backend selection, meta helpers, selector resolution, and operation dispatch |
 | `fm-backend-hometag-lib.sh` | Shared per-installation home-tag derivation for zellij tab and cmux workspace titles |
+| `fm-gemini-lib.sh`       | Single owner of Gemini CLI process identity for the session-provider adapters        |
+| `fm-model-lib.sh`        | Requested vs effective model metadata and model-history primitives for crew tasks    |
+| `fm-model-probe.sh`      | Probe a task's effective model from runtime and session metadata only                |
+| `fm-model-sync.sh`       | Sync a task's requested/effective model metadata and push the compact backend display |
 | `fm-composer-lib.sh`     | Single fleet-wide owner of composer shapes, capability-aware screen classification, and verdicts |
 | `backends/tmux.sh`       | Verified tmux session-provider adapter                                               |
 | `backends/herdr.sh`      | Herdr session-provider adapter with its own required CI lane                         |
@@ -93,6 +99,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-watch-checkpoint.sh` | Run one bounded foreground watcher checkpoint for Codex-style supervision            |
 | `fm-pi-primary-restart.sh` | Automatically restart a live Pi primary: checkpoint, clean exit, session resume, lock reclaim, and extension-owned watcher re-arm |
 | `fm-pi-primary-restart-lib.sh` | Shared helpers for Pi-primary restart checkpointing and launch planning |
+| `fm-pi-summary-reap.sh`  | Reap Pi's own hung internal summarization children with a bounded hard timeout, never an ordinary worker |
 | `fm-crew-liveness-lib.sh` | Pi-primary session-start recovery for dead or missing cursor-grok crewmates |
 | `fm-watch.sh`            | Singleton-safe watcher: absorb benign wakes, detect stalled local-secondmate wake queues, and exit on actionable ones |
 | `fm-inactive-reconcile.sh` | Reconcile long-inactive direct crewmate terminal outcomes without forge access |
@@ -119,6 +126,9 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-wake-grant.sh`       | Serialize Pi supervision-branch wake-row claim activation, publication, release, and deactivation |
 | `fm-wake-lib.sh`         | Shared durable wake queue, recovery generations, portable locks, and watcher identity/health helpers |
 | `fm-classify-lib.sh`     | Shared wake classification, durable keyed-decision folds and scans, unread status selection, and bounded latest-event snapshots |
+| `fm-captain-outcome-delivery.sh` | Register and present persistent exactly-once captain outcomes no other delivery path owns |
+| `fm-captain-outcome-delivery-lib.sh` | Shared store, ownership boundary, and presentation lifecycle behind that delivery |
+| `fm-captain-report-timestamp.sh` | Print the canonical closing timestamp line every visible captain report must end with |
 | `fm-send.sh`             | Steer a task via a durable inbox record plus doorbell, or send a supported key or typed harness invocation through the recorded backend |
 | `fm-branch-prompt.sh`    | Emit the Pi supervision branch's byte-stable system prompt ([pi-supervision-branch.md](pi-supervision-branch.md)) |
 | `fm-branch-outcome.sh`   | Own the supervision branch's append-only outcome store, cursors, bounded status-coverage indexes, and session-start replay |
@@ -142,6 +152,8 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-parent-channel-lib.sh` | Resolve a secondmate home's parent channel and append a captain-facing outcome line to it at most once |
 | `fm-promote.sh`          | Promote a scout task in place to a protected ship task with an explicit delivery mode, and write the ship instructions carrying that mode's definition of done |
 | `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees, require completed scout deliverables, retire secondmate homes |
+| `fm-safe-cleanup.sh`     | Classify Herdr workspaces and tear down only eligible finished normal workers, never with `--force` |
+| `fm-safe-cleanup-lib.sh` | Shared workspace classification and teardown-eligibility helpers behind that sweep   |
 | `fm-harness.sh`          | Detect the running harness and resolve crew or secondmate harness, model, and effort |
 | `fm-lock.sh`             | Per-home firstmate session lock                                                      |
 | `fm-x-lib.sh`            | Shared Relay config, relay, and reply-threading helpers                              |
@@ -155,6 +167,8 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-public-followup-emit.sh` | Report one typed terminal work result into the home that owes the public reply, or stage it when that home is on another machine |
 | `fm-public-followup-collect.sh` | Read and retire the typed terminal results a remote work home staged for the home that owes the public reply |
 | `fm-inbox.sh`            | The captain's out-of-band capture surface: queue a note, dictate one, read status, ask a side question |
+| `fm-cloud-senden.sh`     | Post a captain report to the ntfy bridge's report topic and retain it in `state/cloud-bericht.md` |
+| `fm-cloud-holen.sh`      | Poll the ntfy bridge's kick topic in a loop and keep the latest kick in `state/cloud-kick.md` |
 | `fm-voice-relay.py`      | Hold the spoken conversation on this host, answer from the records, and hand real work to `fm-inbox.sh` ([voice-relay.md](voice-relay.md)) |
 | `fm-voice-client.py`     | The laptop end of the spoken interface: capture, playback, and turn timing over SSH; audio devices unverified |
 | `fm_voice_frame.py`      | The wire format both machines share, copied to the laptop beside the client          |
