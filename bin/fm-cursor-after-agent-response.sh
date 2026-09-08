@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Cursor afterAgentResponse adapter: clear the compaction-active mark after a
+# successful assistant boundary so a held stop-hook follow-up can be submitted
+# exactly once.
+#
+# Registered in tracked .cursor/hooks.json. Cursor documents no output fields
+# for this step, so this script prints nothing.
+# Clearing the mark is the only mutation; it does not emit a follow-up.
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+
+# shellcheck source=bin/fm-primary-scope-lib.sh
+. "$SCRIPT_DIR/fm-primary-scope-lib.sh"
+# shellcheck source=bin/fm-cursor-compaction-lib.sh
+. "$SCRIPT_DIR/fm-cursor-compaction-lib.sh"
+
+fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
+fm_cursor_compaction_mark_done "$STATE"
+exit 0

@@ -24,8 +24,15 @@
 # agent_settled adapters use.
 #
 # Follow-up sources, in priority order, at most one per invocation:
-#   1. an actionable watcher wake from the park;
-#   2. the bounded repair instruction when supervision could not be established.
+#   1. a follow-up held from an earlier compaction window, once compaction is done;
+#   2. an actionable watcher wake from the park;
+#   3. the bounded repair instruction when supervision could not be established.
+#
+# COMPACTION HOLD. Cursor rejects submitting a followup_message while it is
+# compacting ("Cannot submit a prompt while compaction is in progress").
+# preCompact marks that window; this park holds exactly one follow-up JSON
+# object and submits it once after the mark clears. bin/fm-cursor-compaction-lib.sh
+# owns the two records. Digest re-emit after compaction stays deferred.
 #
 # LOOP BOUNDING IS DOUBLE, because either bound alone is insufficient:
 #   - `loop_limit` in .cursor/hooks.json is Cursor's own ceiling. Once
@@ -76,11 +83,13 @@ BLOCK_BUDGET=${FM_CURSOR_TURNEND_BLOCK_BUDGET:-3}
 ARM_ATTEMPTS=${FM_CURSOR_PARK_ATTEMPTS:-2}
 POLL=${FM_CURSOR_PARK_POLL:-2}
 LOCK_ATTEMPTS=${FM_CURSOR_LOCK_ATTEMPTS:-50}
+COMPACTION_WAIT=${FM_CURSOR_COMPACTION_WAIT_MAX:-180}
 case "$LOOP_CEILING" in ''|*[!0-9]*|0) LOOP_CEILING=180 ;; esac
 case "$BLOCK_BUDGET" in ''|*[!0-9]*|0) BLOCK_BUDGET=3 ;; esac
 case "$ARM_ATTEMPTS" in 1|2|3) : ;; *) ARM_ATTEMPTS=2 ;; esac
 case "$POLL" in ''|*[!0-9]*|0) POLL=2 ;; esac
 case "$LOCK_ATTEMPTS" in ''|*[!0-9]*|0) LOCK_ATTEMPTS=50 ;; esac
+case "$COMPACTION_WAIT" in ''|*[!0-9]*|0) COMPACTION_WAIT=180 ;; esac
 
 # shellcheck source=bin/fm-supervision-lib.sh
 . "$SCRIPT_DIR/fm-supervision-lib.sh"
@@ -90,6 +99,8 @@ case "$LOCK_ATTEMPTS" in ''|*[!0-9]*|0) LOCK_ATTEMPTS=50 ;; esac
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 # shellcheck source=bin/fm-operational-input.sh
 . "$SCRIPT_DIR/fm-operational-input.sh"
+# shellcheck source=bin/fm-cursor-compaction-lib.sh
+. "$SCRIPT_DIR/fm-cursor-compaction-lib.sh"
 
 PAYLOAD=$(cat 2>/dev/null || true)
 [ -n "$PAYLOAD" ] || exit 0
@@ -128,12 +139,30 @@ lock_acquire_bounded() {  # <lock>
   return 1
 }
 
-# Emit exactly one follow-up object and stop. jq owns the JSON escaping so an
-# embedded quote, newline, or the U+2063 prefix cannot corrupt the response.
-emit_followup() {  # <kind> <body> [reset-budget]
-  local kind=$1 body=$2 reset_budget=${3-} encoded response
-  fm_operational_input_encode "$kind" "$body" encoded || exit 0
-  response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
+compaction_should_stand_down() {
+  ! park_still_ours && return 0
+  ! current_session_still_ours && return 0
+  [ -e "$STATE/.afk" ] && return 0
+  return 1
+}
+
+# Commit one already-built follow-up JSON object to stdout, or hold it when
+# compaction is active. Never prints followup_message while the active mark
+# is present. A second hold in the same window keeps the first event.
+commit_followup() {  # <response-json> [reset-budget]
+  local response=$1 reset_budget=${2-} held
+  if fm_cursor_compaction_is_active "$STATE"; then
+    fm_cursor_compaction_hold_once "$STATE" "$response" || exit 0
+    fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
+    if fm_cursor_compaction_is_active "$STATE" || compaction_should_stand_down; then
+      exit 0
+    fi
+    held=$(fm_cursor_compaction_take_held "$STATE") || exit 0
+    response=$held
+  elif [ -f "$(fm_cursor_compaction_held_path "$STATE")" ]; then
+    held=$(fm_cursor_compaction_take_held "$STATE") || exit 0
+    response=$held
+  fi
   lock_acquire_bounded "$OWNER_LOCK" || exit 0
   if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
     fm_lock_release "$OWNER_LOCK"
@@ -146,6 +175,29 @@ emit_followup() {  # <kind> <body> [reset-budget]
   printf '%s\n' "$response" || true
   fm_lock_release "$OWNER_LOCK"
   exit 0
+}
+
+# When this park has nothing new to emit, still release a held follow-up
+# exactly once after compaction succeeds.
+emit_held_if_ready() {
+  local held
+  [ -f "$(fm_cursor_compaction_held_path "$STATE")" ] || return 0
+  if fm_cursor_compaction_is_active "$STATE"; then
+    fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
+  fi
+  fm_cursor_compaction_is_active "$STATE" && return 0
+  compaction_should_stand_down && return 0
+  held=$(fm_cursor_compaction_take_held "$STATE") || return 0
+  commit_followup "$held"
+}
+
+# Emit exactly one follow-up object and stop. jq owns the JSON escaping so an
+# embedded quote, newline, or the U+2063 prefix cannot corrupt the response.
+emit_followup() {  # <kind> <body> [reset-budget]
+  local kind=$1 body=$2 reset_budget=${3-} encoded response
+  fm_operational_input_encode "$kind" "$body" encoded || exit 0
+  response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
+  commit_followup "$response" "$reset_budget"
 }
 
 budget_read() {
@@ -200,6 +252,10 @@ $arm_tail
 $reason"
   fm_operational_input_encode turn-end-guard "$body" encoded || exit 0
   response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
+  if fm_cursor_compaction_is_active "$STATE" \
+    || [ -f "$(fm_cursor_compaction_held_path "$STATE")" ]; then
+    commit_followup "$response"
+  fi
 
   lock_acquire_bounded "$OWNER_LOCK" || exit 0
   if ! park_still_ours || ! current_session_still_ours || [ -e "$STATE/.afk" ]; then
@@ -368,6 +424,7 @@ fi
 # A verified live cycle with a fresh beacon is positive recovery even though this
 # park closed without a wake of its own: the next turn end parks again.
 if [ "$HEALTHY" -eq 1 ]; then
+  emit_held_if_ready
   budget_reset_if_ours
   exit 0
 fi

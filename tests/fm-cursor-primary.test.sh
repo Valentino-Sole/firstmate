@@ -73,7 +73,9 @@ install_scripts() {
            fm-sessionstart-run.sh fm-sessionstart-nudge.sh fm-arm-pretool-check.sh \
            fm-cd-pretool-check.sh fm-claude-stop-autoarm.sh fm-hook-host-lib.sh \
            fm-primary-scope-lib.sh fm-supervision-lib.sh fm-wake-lib.sh \
-           fm-session-lock-lib.sh fm-cursor-lib.sh fm-operational-input.sh \
+           fm-session-lock-lib.sh fm-cursor-lib.sh fm-cursor-compaction-lib.sh \
+           fm-cursor-precompact.sh fm-cursor-after-agent-response.sh \
+           fm-operational-input.sh \
            fm-supervision-instructions.sh fm-harness.sh fm-lock.sh \
            fm-gate-refuse-lib.sh; do
     cp "$ROOT/bin/$f" "$dir/bin/$f"
@@ -159,6 +161,7 @@ run_park() {  # <dir> [loop_count] [loop_ceiling]
       FM_CURSOR_TURNEND_LOOP_CEILING="$ceiling" "$FAKE_CURSOR" -c "$PARK_CHILD" 2>/dev/null
   else
     printf '%s' "$payload" | env -u PI_CODING_AGENT FM_HOME="$dir" FM_CURSOR_PARK_POLL=1 \
+      FM_CURSOR_COMPACTION_WAIT_MAX="${FM_CURSOR_COMPACTION_WAIT_MAX:-180}" \
       "$FAKE_CURSOR" -c "$PARK_CHILD" 2>/dev/null
   fi
 }
@@ -639,6 +642,53 @@ test_park_ignores_malformed_payload() {
   pass "cursor park: malformed payloads fail open without arming"
 }
 
+test_precompact_marks_active_without_context() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/precompact-mark")
+  out=$(printf '{"hook_event_name":"preCompact","session_id":"sess-cursor","trigger":"auto","cursor_version":"x"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-precompact.sh" 2>/dev/null)
+  [ -z "$out" ] || fail "preCompact must stay silent and never inject context, got: $out"
+  [ -f "$dir/state/.cursor-compaction" ] || fail "preCompact must mark compaction active"
+  pass "cursor preCompact: marks active and prints nothing"
+}
+
+test_after_agent_response_clears_active() {
+  local dir
+  dir=$(make_primary_dir "$TMP_ROOT/after-agent-clear")
+  printf 'session=sess-cursor\nupdated_at=1\n' > "$dir/state/.cursor-compaction"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  [ ! -f "$dir/state/.cursor-compaction" ] || fail "afterAgentResponse must clear the active mark"
+  pass "cursor afterAgentResponse: clears the compaction-active mark"
+}
+
+test_park_holds_followup_during_compaction_then_delivers_once() {
+  local dir out held held2
+  dir=$(make_primary_dir "$TMP_ROOT/park-compaction-hold")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  printf 'session=sess-cursor\nupdated_at=1\n' > "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "compaction-active must not submit a follow-up, got: $out"
+  [ -f "$dir/state/.cursor-compaction-held" ] || fail "the follow-up must be held exactly once"
+  held=$(cat "$dir/state/.cursor-compaction-held")
+  [ -n "$held" ] || fail "the held record must contain the follow-up object"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "a second stop while still compacting must not submit, got: $out"
+  held2=$(cat "$dir/state/.cursor-compaction-held")
+  [ "$held" = "$held2" ] || fail "a second stop must not replace or duplicate the held event"
+  rm -f "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "after successful compaction the held follow-up must be delivered once, got: $out"
+  [ ! -f "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  rm -f "$dir/state/task1.meta" "$dir/state/arm-ran"
+  write_arm_fixture "$dir" failed
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "a later stop with no new event must not submit again, got: $out"
+  pass "cursor park: hold once during compaction, deliver once after, never twice"
+}
+
 # --- SESSION -----------------------------------------------------------------
 
 install_digest_fixture() {  # <dir>
@@ -684,10 +734,10 @@ test_tracked_registration_covers_the_primary_events() {
   local reg
   reg="$ROOT/.cursor/hooks.json"
   [ -f "$reg" ] || fail "firstmate must ship a tracked project-scope .cursor/hooks.json"
-  jq -e '.hooks.stop and .hooks.sessionStart and .hooks.preToolUse' "$reg" >/dev/null 2>&1 \
-    || fail "the registration must cover stop, sessionStart, and preToolUse"
-  jq -e '.hooks | has("preCompact") | not' "$reg" >/dev/null 2>&1 \
-    || fail "preCompact staging is deliberately deferred to a follow-up and must stay unregistered"
+  jq -e '.hooks.stop and .hooks.sessionStart and .hooks.preToolUse and .hooks.preCompact and .hooks.afterAgentResponse' "$reg" >/dev/null 2>&1 \
+    || fail "the registration must cover stop, sessionStart, preToolUse, preCompact, and afterAgentResponse"
+  jq -e '.hooks.preCompact[0].command | test("fm-cursor-precompact")' "$reg" >/dev/null 2>&1 \
+    || fail "preCompact must only mark the compaction hold, not inject context"
   jq -e '[.hooks.stop[] | select(.loop_limit != null and .loop_limit > 0)] | length == 1' "$reg" >/dev/null 2>&1 \
     || fail "the stop registration needs an explicit positive loop_limit: without it Cursor's default is unlimited"
   jq -e '[.hooks.sessionStart[]] | all(.timeout > 120)' "$reg" >/dev/null 2>&1 \
@@ -737,6 +787,9 @@ test_park_stands_down_after_session_takeover
 test_park_inert_in_child_worktree
 test_park_inert_in_child_worktree_with_inherited_primary_env
 test_park_ignores_malformed_payload
+test_precompact_marks_active_without_context
+test_after_agent_response_clears_active
+test_park_holds_followup_during_compaction_then_delivers_once
 test_sessionstart_emits_additional_context
 test_sessionstart_silent_in_child_worktree
 test_tracked_registration_covers_the_primary_events

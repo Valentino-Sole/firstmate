@@ -8,6 +8,20 @@
         "timeout": 180
       }
     ],
+    "preCompact": [
+      {
+        "type": "command",
+        "command": "\"$CURSOR_PROJECT_DIR\"/bin/fm-cursor-precompact.sh",
+        "timeout": 10
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "type": "command",
+        "command": "\"$CURSOR_PROJECT_DIR\"/bin/fm-cursor-after-agent-response.sh",
+        "timeout": 10
+      }
+    ],
     "stop": [
       {
         "type": "command",
