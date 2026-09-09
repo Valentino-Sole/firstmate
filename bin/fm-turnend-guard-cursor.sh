@@ -221,14 +221,14 @@ guarded_commit() {  # <budget> [print] [held]
 # the slot refused is still unspent and is charged by its own print instead.
 # A print-time action travels with the record for whichever stop submits it, and
 # so does the session that parked it, because only that session may submit it.
-# take-slot is the second chance a once-only object gets when the window did not
-# close: it takes the slot from a replaceable event rather than being dropped.
-guarded_hold() {  # <response-json> <budget> [take-slot]
-  local response=$1 budget=$2 mode=${3-} carry= status
+# A still-deliverable event is never evicted from the slot: only a record this
+# session may no longer submit is replaced, which fm_cursor_compaction_hold_once
+# does on its own.
+guarded_hold() {  # <response-json> <budget>
+  local response=$1 budget=$2 carry= status
   HELD_ACCEPTED=
   case "$budget" in reset-budget) carry=$budget ;; esac
   guard_enter || return 1
-  [ "$mode" = take-slot ] && fm_cursor_compaction_drop_held "$STATE"
   fm_cursor_compaction_hold_once "$STATE" "$response" "$SESSION_ID" "$carry"
   status=$?
   if [ "$status" -eq 2 ]; then
@@ -265,9 +265,10 @@ guarded_hold() {  # <response-json> <budget> [take-slot]
 # held slot took it or this park printed it, because a held nag is delivered
 # later and is still one of the bounded three. An object the slot refused and
 # this park never printed stays unspent.
-# A once-only object is never merely dropped: when the window outlasts the wait
-# and the slot is occupied by a replaceable event, it takes that slot instead, so
-# the ceiling notice still reaches the session exactly once.
+# A once-only object gets one more chance at the slot when the window outlasts
+# the wait, so the ceiling notice is parked rather than dropped whenever the slot
+# is free by then. It never evicts an event that is still deliverable: that one
+# is itself owed a submit, and the single slot cannot owe two.
 commit_followup() {  # <response-json> [budget] [once-only]
   local response=$1 budget=${2-} once=${3-}
   if fm_cursor_compaction_is_active "$STATE"; then
@@ -275,7 +276,7 @@ commit_followup() {  # <response-json> [budget] [once-only]
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
     if fm_cursor_compaction_is_active "$STATE" || compaction_should_stand_down; then
       if [ -z "$HELD_ACCEPTED" ] && [ "$once" = once-only ]; then
-        guarded_hold "$response" "$budget" take-slot || exit 0
+        guarded_hold "$response" "$budget" || exit 0
       fi
       exit 0
     fi
@@ -292,15 +293,17 @@ commit_followup() {  # <response-json> [budget] [once-only]
 # Release a follow-up held by an earlier compaction window exactly once, before
 # this park builds anything of its own. Returns when there is nothing to
 # release, so an ordinary stop falls through to its own follow-up sources.
+# The object and its budget action are read together, before any wait, so a
+# record that ages out while this park waits still carries what it owes.
 emit_held_if_ready() {
   local held budget
   held=$(fm_cursor_compaction_peek_held "$STATE" "$SESSION_ID") || return 0
+  budget=$(fm_cursor_compaction_peek_held_budget "$STATE" "$SESSION_ID")
   if fm_cursor_compaction_is_active "$STATE"; then
     fm_cursor_compaction_wait_while_active "$STATE" "$POLL" compaction_should_stand_down "$COMPACTION_WAIT" || true
   fi
   fm_cursor_compaction_is_active "$STATE" && return 0
   compaction_should_stand_down && return 0
-  budget=$(fm_cursor_compaction_peek_held_budget "$STATE" "$SESSION_ID")
   guarded_commit "$budget" "$held" held || return 0
   exit 0
 }

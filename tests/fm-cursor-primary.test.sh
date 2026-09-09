@@ -681,14 +681,88 @@ test_precompact_marks_active_without_context() {
   pass "cursor preCompact: marks active and prints nothing"
 }
 
-test_after_agent_response_clears_active() {
-  local dir
+test_after_agent_response_ends_the_window() {
+  local dir out
   dir=$(make_primary_dir "$TMP_ROOT/after-agent-clear")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
   mark_compaction_active "$dir"
   printf '{"text":"done"}' \
     | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
-  [ ! -f "$dir/state/.cursor-compaction" ] || fail "afterAgentResponse must clear the active mark"
-  pass "cursor afterAgentResponse: clears the compaction-active mark"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "after the window closed the park must submit instead of holding, got: $out"
+  [ ! -e "$dir/state/.cursor-compaction-held" ] \
+    || fail "a closed window must not make the park hold its follow-up"
+  pass "cursor afterAgentResponse: ends the window so the park submits again"
+}
+
+# The window can outlast the park's whole wait. That park submits nothing, so no
+# further turn starts until the captain types, and the stop that finally can
+# deliver the event arrives long after the record's own age budget.
+test_held_followup_survives_a_window_that_outlives_the_wait() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-window-outlives-wait")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  hold_watcher_followup "$dir" 'wake parked before a long window' '' sess-cursor 100000
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "the still-open window must not submit, got: $out"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake parked before a long window'*) ;;
+    *) fail "the first stop after the window closed must deliver the held event, got: $out" ;;
+  esac
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  pass "cursor park: a window that outlives the wait does not expire the held event"
+}
+
+# The single slot cannot owe two submits: an event that is still deliverable is
+# itself owed one, so nothing evicts it.
+test_once_only_object_never_evicts_a_deliverable_event() {
+  local dir out held
+  dir=$(make_primary_dir "$TMP_ROOT/park-no-eviction")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'earlier window wake'
+  held=$(cat "$dir/state/.cursor-compaction-held")
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 5 5)
+  [ -z "$out" ] || fail "an open window must not submit, got: $out"
+  [ "$(cat "$dir/state/.cursor-compaction-held")" = "$held" ] \
+    || fail "a still-deliverable held event was evicted from the slot"
+  rm -f "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 6 5)
+  case "$(followup_of "$out")" in
+    *'earlier window wake'*) ;;
+    *) fail "the event that kept the slot must still be delivered, got: $out" ;;
+  esac
+  pass "cursor park: a once-only object never evicts a deliverable held event"
+}
+
+# A held wake pays its budget reset even when its own age budget runs out while
+# this park waits for the window to close.
+test_held_wake_resets_the_budget_even_when_it_ages_out_while_waiting() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-ages-in-wait")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=2\n' > "$dir/state/.turnend-cursor-blocks"
+  hold_watcher_followup "$dir" 'wake that ages while waiting' reset-budget sess-cursor 5
+  mark_compaction_active "$dir"
+  ( sleep 5; rm -f "$dir/state/.cursor-compaction" ) >/dev/null 2>&1 &
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=8 FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake that ages while waiting'*) ;;
+    *) fail "the held wake must still be delivered, got: $out" ;;
+  esac
+  [ ! -e "$dir/state/.turnend-cursor-blocks" ] \
+    || fail "the delivered wake lost its budget reset: $(cat "$dir/state/.turnend-cursor-blocks")"
+  pass "cursor park: a held wake keeps its budget reset across the wait"
 }
 
 # A crewmate worktree inherits FM_ROOT_OVERRIDE from the primary that launched
@@ -939,13 +1013,12 @@ test_undeliverable_held_record_does_not_block_the_slot() {
 }
 
 # The ceiling notice is the session's one warning that automatic delivery stops,
-# so an occupied slot must not be what makes it disappear.
-test_ceiling_notice_takes_the_slot_when_the_window_outlives_the_wait() {
+# so a free slot must park it rather than let the open window drop it.
+test_ceiling_notice_is_parked_when_the_window_outlives_the_wait() {
   local dir out
-  dir=$(make_primary_dir "$TMP_ROOT/park-ceiling-takes-slot")
+  dir=$(make_primary_dir "$TMP_ROOT/park-ceiling-parked")
   : > "$dir/state/task1.meta"
   write_arm_fixture "$dir" actionable
-  hold_watcher_followup "$dir" 'earlier window wake'
   mark_compaction_active "$dir"
   out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 5 5)
   [ -z "$out" ] || fail "an open window must not submit the notice, got: $out"
@@ -953,12 +1026,12 @@ test_ceiling_notice_takes_the_slot_when_the_window_outlives_the_wait() {
   out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 6 5)
   case "$(followup_of "$out")" in
     *'CEILING REACHED'*) ;;
-    *) fail "the ceiling notice must survive an occupied slot, got: $out" ;;
+    *) fail "the parked ceiling notice must be delivered, got: $out" ;;
   esac
   [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
   out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 7 5)
   [ -z "$out" ] || fail "the ceiling notice must not be delivered twice, got: $out"
-  pass "cursor park: the ceiling notice claims the held slot instead of vanishing"
+  pass "cursor park: an open window parks the ceiling notice instead of dropping it"
 }
 
 # Holding is a state mutation like any other: a park that may no longer act must
@@ -1179,7 +1252,10 @@ test_park_inert_in_child_worktree
 test_park_inert_in_child_worktree_with_inherited_primary_env
 test_park_ignores_malformed_payload
 test_precompact_marks_active_without_context
-test_after_agent_response_clears_active
+test_after_agent_response_ends_the_window
+test_held_followup_survives_a_window_that_outlives_the_wait
+test_once_only_object_never_evicts_a_deliverable_event
+test_held_wake_resets_the_budget_even_when_it_ages_out_while_waiting
 test_compaction_hooks_inert_in_child_worktree
 test_stale_compaction_mark_does_not_hold
 test_held_followup_survives_a_failed_commit
@@ -1190,7 +1266,7 @@ test_refused_nag_does_not_spend_its_budget
 test_held_wake_still_resets_the_nag_budget
 test_ceiling_notice_is_not_shadowed_by_a_held_followup
 test_ceiling_notice_survives_an_active_compaction_window
-test_ceiling_notice_takes_the_slot_when_the_window_outlives_the_wait
+test_ceiling_notice_is_parked_when_the_window_outlives_the_wait
 test_held_followup_is_bound_to_its_session_and_freshness
 test_undeliverable_held_record_does_not_block_the_slot
 test_repair_nag_charges_its_budget_when_held

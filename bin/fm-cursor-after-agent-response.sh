@@ -17,9 +17,10 @@ FM_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FM_HOME="${FM_HOME:-$FM_ROOT}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
-# This step runs after every assistant response and removing that record is the
+# This step runs after every assistant response and closing that record is the
 # only mutation, so leave the primary's hot path before the scope check's git
-# calls and the library sources when there is nothing to clear.
+# calls when there is no open window to close. The two sourced libraries cost no
+# subprocess; the scope check does.
 [ -f "$STATE/.cursor-compaction" ] || exit 0
 
 # shellcheck source=bin/fm-primary-scope-lib.sh
@@ -27,6 +28,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 # shellcheck source=bin/fm-cursor-compaction-lib.sh
 . "$SCRIPT_DIR/fm-cursor-compaction-lib.sh"
 
+fm_cursor_compaction_is_active "$STATE" || exit 0
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
 fm_cursor_compaction_mark_done "$STATE"
 exit 0

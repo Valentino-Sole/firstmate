@@ -11,13 +11,17 @@
 # re-submitting.
 #
 # Records under $STATE (never touch from the primary session):
-#   .cursor-compaction       a FRESH mark means compaction is active for this home
+#   .cursor-compaction       a FRESH mark means compaction is active for this
+#                            home; once the window closes the same record keeps
+#                            an ended_at stamp instead of vanishing
 #   .cursor-compaction-held  exactly one held follow-up, or absent: session,
 #                            updated_at and budget header lines, then the JSON
 #
 # Mutation contract:
 #   mark_active   creates or refreshes .cursor-compaction (atomic replace)
-#   mark_done     removes .cursor-compaction only
+#   mark_done     stamps .cursor-compaction closed, so nothing reads it as
+#                 active any more and the moment the window closed stays known
+#   ended_recently  true while that closing stamp is younger than the budget
 #   hold_once     creates .cursor-compaction-held atomically; 0 when this call
 #                 holds the event, 2 when a deliverable event is already held,
 #                 1 on error. A record that is no longer deliverable is replaced.
@@ -45,6 +49,13 @@
 # and one that nothing delivered inside the wait budget expires instead of
 # sitting in the slot forever. An expired or foreign record blocks nothing,
 # because the next hold replaces it; again no sweeper and no daemon.
+# That age is measured against the window as well as the clock. A window that
+# outlasts the park's wait leaves the event parked with no stop to deliver it -
+# nothing was submitted, so no further turn starts - and it must not expire for
+# that reason alone. The closing stamp is what proves the wait was legitimate:
+# while compaction ended less than a budget ago, a held event of the same
+# session is still deliverable, which is exactly the stop that follows the
+# window closing.
 #
 # Digest re-emission after Cursor compaction remains deferred
 # (docs/sessionstart-nudge.md). These records never inject context.
@@ -92,11 +103,35 @@ fm_cursor_compaction_mark_active() {  # <state> [session-id]
 }
 
 fm_cursor_compaction_mark_done() {  # <state>
-  local path
-  [ -n "$1" ] || return 0
-  path=$(fm_cursor_compaction_active_path "$1")
+  local state=$1 path tmp session
+  [ -n "$state" ] || return 0
+  path=$(fm_cursor_compaction_active_path "$state")
+  [ -f "$path" ] || return 0
+  session=$(sed -n 's/^session=//p' "$path" 2>/dev/null | head -1)
+  case "$session" in ''|*[!A-Za-z0-9._-]*) session=unknown ;; esac
+  tmp="$path.tmp.$$"
+  if printf 'session=%s\nended_at=%s\n' "$session" "$(date +%s)" > "$tmp" 2>/dev/null \
+    && mv -f "$tmp" "$path" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null || true
   rm -f "$path" 2>/dev/null || true
   return 0
+}
+
+# True while the last compaction window closed less than the budget ago. A
+# closed mark carries no updated_at, so it is never active again.
+fm_cursor_compaction_ended_recently() {  # <state>
+  local state=$1 path ended now max
+  [ -n "$state" ] || return 1
+  path=$(fm_cursor_compaction_active_path "$state")
+  [ -f "$path" ] || return 1
+  ended=$(sed -n 's/^ended_at=//p' "$path" 2>/dev/null | head -1)
+  case "$ended" in ''|*[!0-9]*) return 1 ;; esac
+  now=$(date +%s 2>/dev/null || true)
+  case "$now" in ''|*[!0-9]*) return 1 ;; esac
+  max=$(fm_cursor_compaction_max_age)
+  [ "$((now - ended))" -lt "$max" ]
 }
 
 # One header field of the held record, read before the JSON object begins.
@@ -112,7 +147,9 @@ fm_cursor_compaction_held_field() {  # <path> <key> -> value on stdout
 }
 
 # A held event may be submitted only by the session that parked it, and only
-# while it is younger than the wait budget the mark uses.
+# while it is younger than the wait budget the mark uses - or while the window
+# it waited out closed that recently, because then this is the first stop that
+# could carry it at all.
 fm_cursor_compaction_held_is_deliverable() {  # <state> <session>
   local state=$1 session=$2 path owner updated now max
   [ -n "$state" ] && [ -n "$session" ] || return 1
@@ -125,7 +162,8 @@ fm_cursor_compaction_held_is_deliverable() {  # <state> <session>
   now=$(date +%s 2>/dev/null || true)
   case "$now" in ''|*[!0-9]*) return 1 ;; esac
   max=$(fm_cursor_compaction_max_age)
-  [ "$((now - updated))" -lt "$max" ]
+  [ "$((now - updated))" -lt "$max" ] && return 0
+  fm_cursor_compaction_ended_recently "$state"
 }
 
 # Write $2 (a follow-up JSON object) once for session $3, carrying the budget

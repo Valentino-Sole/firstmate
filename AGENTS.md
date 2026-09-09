@@ -147,7 +147,7 @@ state/               runtime records and signals; gitignored
   .resgate-cap-work .resgate-cap-home  durable manual resource-cap override markers forcing the 50% weekly-schedule cap immediately on the work or home PC regardless of the clock window; set and cleared by firstmate on the section 8 "Kappung" trigger (docs/configuration.md "Fleet resource governance")
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
   .claude-autoarm.lock .claude-autoarm-epoch .claude-autoarm-failure-notified .claude-autoarm-failure-alarmed .turnend-claude-blocks .turnend-claude-blocks.lock   Claude Stop auto-arm single-flight, epoch, failure-episode, attended-alarm, guard-budget, and budget-lock records; never touch
-  .cursor-park-owner .cursor-park-owner.lock .turnend-cursor-blocks .cursor-compaction .cursor-compaction-held   Cursor stop-hook owner record, publication and commit lock, bounded repair-nag budget, and compaction-active plus one held follow-up; never touch
+  .cursor-park-owner .cursor-park-owner.lock .turnend-cursor-blocks .cursor-compaction .cursor-compaction-held   Cursor stop-hook owner record, publication and commit lock, bounded repair-nag budget, and compaction window state plus one held follow-up; never touch
   .hash-* .count-* .stale-* .stale-since-* .churn-since-* .paused-* .wedge-escalations-* .wedge-resurfaced-* .writing-* .seen-* .hb-surfaced-* .last-* .heartbeat-streak   watcher internals; never touch
   .watch-triage.log  watcher's absorbed-wake debug log (size-capped); never relied on, safe to delete
   .last-watcher-beat watcher liveness beacon, touched every poll (including while absorbing benign wakes); guard scripts read it
