@@ -268,7 +268,9 @@ guarded_hold() {  # <response-json> <budget>
 # A once-only object gets one more chance at the slot when the window outlasts
 # the wait, so the ceiling notice is parked rather than dropped whenever the slot
 # is free by then. It never evicts an event that is still deliverable: that one
-# is itself owed a submit, and the single slot cannot owe two.
+# is itself owed a submit, and the single slot cannot owe two. When the slot is
+# occupied and the window outlasts the wait, the notice is therefore absorbed
+# rather than printed; docs/turnend-guard.md records that accepted gap.
 commit_followup() {  # <response-json> [budget] [once-only]
   local response=$1 budget=${2-} once=${3-}
   if fm_cursor_compaction_is_active "$STATE"; then

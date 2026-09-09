@@ -15,12 +15,15 @@
 #                            home; once the window closes the same record keeps
 #                            an ended_at stamp instead of vanishing
 #   .cursor-compaction-held  exactly one held follow-up, or absent: session,
-#                            updated_at and budget header lines, then the JSON
+#                            updated_at, window and budget header lines, then
+#                            the JSON
 #
 # Mutation contract:
-#   mark_active   creates or refreshes .cursor-compaction (atomic replace)
-#   mark_done     stamps .cursor-compaction closed, so nothing reads it as
-#                 active any more and the moment the window closed stays known
+#   mark_active   opens a window in .cursor-compaction (atomic replace)
+#   mark_done     stamps that window closed, so nothing reads it as active any
+#                 more and both its identity and closing moment stay known
+#   is_open       true while the mark names a window nothing has closed yet
+#   window_id     the identity of the window the mark names, open or closed
 #   ended_recently  true while that closing stamp is younger than the budget
 #   hold_once     creates .cursor-compaction-held atomically; 0 when this call
 #                 holds the event, 2 when a deliverable event is already held,
@@ -53,9 +56,12 @@
 # outlasts the park's wait leaves the event parked with no stop to deliver it -
 # nothing was submitted, so no further turn starts - and it must not expire for
 # that reason alone. The closing stamp is what proves the wait was legitimate:
-# while compaction ended less than a budget ago, a held event of the same
-# session is still deliverable, which is exactly the stop that follows the
-# window closing.
+# while compaction ended less than a budget ago, a held event parked INSIDE that
+# same window is still deliverable, which is exactly the stop that follows the
+# window closing. The grace is tied to the window by identity, so it covers the
+# one wait that was actually legitimate and nothing older: an unrelated window
+# opening and closing hours later cannot revive an event that expired long
+# before it. Stranding still cannot outlive one window.
 #
 # Digest re-emission after Cursor compaction remains deferred
 # (docs/sessionstart-nudge.md). These records never inject context.
@@ -76,12 +82,36 @@ fm_cursor_compaction_max_age() {
   printf '%s\n' "$max"
 }
 
-fm_cursor_compaction_is_active() {  # <state>
-  local path updated now max
+# True while the mark names a window nothing has closed yet, however old it is.
+# A closed mark keeps its identity but no updated_at, so it never reads as open.
+fm_cursor_compaction_is_open() {  # <state>
+  local path updated
+  [ -n "$1" ] || return 1
   path=$(fm_cursor_compaction_active_path "$1")
   [ -f "$path" ] || return 1
   updated=$(sed -n 's/^updated_at=//p' "$path" 2>/dev/null | head -1)
   case "$updated" in ''|*[!0-9]*) return 1 ;; esac
+  return 0
+}
+
+# The identity of the window this mark names, open or closed. A held event
+# records it so the closing grace can only ever cover its own window.
+fm_cursor_compaction_window_id() {  # <state>
+  local path window
+  [ -n "$1" ] || return 1
+  path=$(fm_cursor_compaction_active_path "$1")
+  [ -f "$path" ] || return 1
+  window=$(sed -n 's/^window=//p' "$path" 2>/dev/null | head -1)
+  case "$window" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$window"
+  return 0
+}
+
+fm_cursor_compaction_is_active() {  # <state>
+  local path updated now max
+  fm_cursor_compaction_is_open "$1" || return 1
+  path=$(fm_cursor_compaction_active_path "$1")
+  updated=$(sed -n 's/^updated_at=//p' "$path" 2>/dev/null | head -1)
   now=$(date +%s 2>/dev/null || true)
   case "$now" in ''|*[!0-9]*) return 1 ;; esac
   max=$(fm_cursor_compaction_max_age)
@@ -89,12 +119,13 @@ fm_cursor_compaction_is_active() {  # <state>
 }
 
 fm_cursor_compaction_mark_active() {  # <state> [session-id]
-  local state=$1 session=${2:-unknown} path tmp
+  local state=$1 session=${2:-unknown} path tmp now
   [ -n "$state" ] && [ -d "$state" ] || return 1
   case "$session" in ''|*[!A-Za-z0-9._-]*) session=unknown ;; esac
   path=$(fm_cursor_compaction_active_path "$state")
   tmp="$path.tmp.$$"
-  if ! printf 'session=%s\nupdated_at=%s\n' "$session" "$(date +%s)" > "$tmp" 2>/dev/null \
+  now=$(date +%s)
+  if ! printf 'session=%s\nwindow=%s\nupdated_at=%s\n' "$session" "$now" "$now" > "$tmp" 2>/dev/null \
     || ! mv -f "$tmp" "$path" 2>/dev/null; then
     rm -f "$tmp" 2>/dev/null || true
     return 1
@@ -103,14 +134,15 @@ fm_cursor_compaction_mark_active() {  # <state> [session-id]
 }
 
 fm_cursor_compaction_mark_done() {  # <state>
-  local state=$1 path tmp session
+  local state=$1 path tmp session window
   [ -n "$state" ] || return 0
+  fm_cursor_compaction_is_open "$state" || return 0
   path=$(fm_cursor_compaction_active_path "$state")
-  [ -f "$path" ] || return 0
   session=$(sed -n 's/^session=//p' "$path" 2>/dev/null | head -1)
   case "$session" in ''|*[!A-Za-z0-9._-]*) session=unknown ;; esac
+  window=$(fm_cursor_compaction_window_id "$state") || window=0
   tmp="$path.tmp.$$"
-  if printf 'session=%s\nended_at=%s\n' "$session" "$(date +%s)" > "$tmp" 2>/dev/null \
+  if printf 'session=%s\nwindow=%s\nended_at=%s\n' "$session" "$window" "$(date +%s)" > "$tmp" 2>/dev/null \
     && mv -f "$tmp" "$path" 2>/dev/null; then
     return 0
   fi
@@ -147,11 +179,12 @@ fm_cursor_compaction_held_field() {  # <path> <key> -> value on stdout
 }
 
 # A held event may be submitted only by the session that parked it, and only
-# while it is younger than the wait budget the mark uses - or while the window
-# it waited out closed that recently, because then this is the first stop that
-# could carry it at all.
+# while it is younger than the wait budget the mark uses - or while the very
+# window it was parked inside closed that recently, because then this is the
+# first stop that could carry it at all. An unrelated later window never
+# revives it.
 fm_cursor_compaction_held_is_deliverable() {  # <state> <session>
-  local state=$1 session=$2 path owner updated now max
+  local state=$1 session=$2 path owner updated now max window
   [ -n "$state" ] && [ -n "$session" ] || return 1
   path=$(fm_cursor_compaction_held_path "$state")
   [ -f "$path" ] || return 1
@@ -163,18 +196,22 @@ fm_cursor_compaction_held_is_deliverable() {  # <state> <session>
   case "$now" in ''|*[!0-9]*) return 1 ;; esac
   max=$(fm_cursor_compaction_max_age)
   [ "$((now - updated))" -lt "$max" ] && return 0
-  fm_cursor_compaction_ended_recently "$state"
+  fm_cursor_compaction_ended_recently "$state" || return 1
+  window=$(fm_cursor_compaction_held_field "$path" window) || return 1
+  case "$window" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$window" = "$(fm_cursor_compaction_window_id "$state")" ]
 }
 
 # Write $2 (a follow-up JSON object) once for session $3, carrying the budget
-# action $4 that its eventual submit must apply. A second call leaves a
+# action $4 that its eventual submit must apply and the identity of the window
+# it is parked inside. A second call leaves a
 # deliverable event in place so one compaction window cannot queue two submits;
 # an expired or foreign record is replaced rather than left blocking the slot.
 # The link is the create-if-absent primitive: two overlapping parks cannot
 # replace each other's record, and the loser learns it did not hold this event.
 # Returns 0 when this call holds $2, 2 when another event is already held.
 fm_cursor_compaction_hold_once() {  # <state> <json> <session> [budget]
-  local state=$1 json=$2 session=$3 budget=${4-} path tmp
+  local state=$1 json=$2 session=$3 budget=${4-} path tmp window
   [ -n "$state" ] && [ -d "$state" ] && [ -n "$json" ] && [ -n "$session" ] || return 1
   case "$session" in *[!A-Za-z0-9._-]*) return 1 ;; esac
   case "$budget" in reset-budget) ;; *) budget= ;; esac
@@ -184,9 +221,10 @@ fm_cursor_compaction_hold_once() {  # <state> <json> <session> [budget]
     rm -f "$path" 2>/dev/null || true
     [ -e "$path" ] && return 2
   fi
+  window=$(fm_cursor_compaction_window_id "$state") || window=
   tmp="$path.tmp.$$"
-  if ! printf 'session=%s\nupdated_at=%s\nbudget=%s\n%s\n' \
-    "$session" "$(date +%s)" "$budget" "$json" > "$tmp" 2>/dev/null; then
+  if ! printf 'session=%s\nupdated_at=%s\nwindow=%s\nbudget=%s\n%s\n' \
+    "$session" "$(date +%s)" "$window" "$budget" "$json" > "$tmp" 2>/dev/null; then
     rm -f "$tmp" 2>/dev/null || true
     return 1
   fi

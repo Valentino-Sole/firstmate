@@ -100,7 +100,7 @@ make_primary_dir() {
 # real operational-input encoder rather than a hand-copied prefix.
 # A session of "unbounded" writes the record without its session and updated_at
 # headers, i.e. an event with no owner and no lifetime at all.
-hold_watcher_followup() {  # <dir> <body> [budget] [session] [age-seconds]
+hold_watcher_followup() {  # <dir> <body> [budget] [session] [age-seconds] [window]
   local encoded session=${4:-sess-cursor}
   encoded=$(printf '%s' "$2" | "$ROOT/bin/fm-operational-input.sh" encode watcher) \
     || fail "could not encode the held follow-up fixture"
@@ -108,6 +108,7 @@ hold_watcher_followup() {  # <dir> <body> [budget] [session] [age-seconds]
     if [ "$session" != unbounded ]; then
       printf 'session=%s\n' "$session"
       printf 'updated_at=%s\n' "$(( $(date +%s) - ${5:-0} ))"
+      printf 'window=%s\n' "${6-}"
     fi
     printf 'budget=%s\n' "${3-}"
     jq -n --arg m "$encoded" '{followup_message:$m}'
@@ -117,8 +118,10 @@ hold_watcher_followup() {  # <dir> <body> [budget] [session] [age-seconds]
 
 # The compaction mark is only active while it is fresh, so a fixture that wants
 # an active window must stamp it with the current time the way preCompact does.
-mark_compaction_active() {  # <dir>
-  printf 'session=sess-cursor\nupdated_at=%s\n' "$(date +%s)" > "$1/state/.cursor-compaction"
+mark_compaction_active() {  # <dir> [window-id]
+  local window=${2:-$(date +%s)}
+  printf 'session=sess-cursor\nwindow=%s\nupdated_at=%s\n' "$window" "$(date +%s)" \
+    > "$1/state/.cursor-compaction"
 }
 
 # An arm fixture standing in for bin/fm-watch-arm.sh. Real process, real output.
@@ -706,8 +709,8 @@ test_held_followup_survives_a_window_that_outlives_the_wait() {
   : > "$dir/state/task1.meta"
   write_arm_fixture "$dir" failed
   printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
-  hold_watcher_followup "$dir" 'wake parked before a long window' '' sess-cursor 100000
-  mark_compaction_active "$dir"
+  hold_watcher_followup "$dir" 'wake parked before a long window' '' sess-cursor 100000 100000000
+  mark_compaction_active "$dir" 100000000
   out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
   [ -z "$out" ] || fail "the still-open window must not submit, got: $out"
   printf '{"text":"done"}' \
@@ -719,6 +722,48 @@ test_held_followup_survives_a_window_that_outlives_the_wait() {
   esac
   [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
   pass "cursor park: a window that outlives the wait does not expire the held event"
+}
+
+# The closing grace belongs to one window. An unrelated window opening and
+# closing later must not revive an event that expired long before it.
+test_a_later_window_does_not_revive_an_expired_held_event() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-window-scoped-grace")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  hold_watcher_followup "$dir" 'wake from an older window' '' sess-cursor 100000 100000000
+  mark_compaction_active "$dir"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake from an older window'*) fail "an unrelated window revived an expired held event: $out" ;;
+  esac
+  [ -z "$out" ] || fail "nothing else was owed a submit, got: $out"
+  pass "cursor park: a later window does not revive an expired held event"
+}
+
+# The window the event waited out can outlast the freshness budget; the stamp
+# that closes it must still be written, or the grace it earns never exists.
+test_a_long_window_is_still_stamped_closed() {
+  local dir out window
+  dir=$(make_primary_dir "$TMP_ROOT/park-long-window-stamped")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  window=$(( $(date +%s) - 100000 ))
+  hold_watcher_followup "$dir" 'wake from the long window' '' sess-cursor 100000 "$window"
+  printf 'session=sess-cursor\nwindow=%s\nupdated_at=%s\n' "$window" "$window" \
+    > "$dir/state/.cursor-compaction"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake from the long window'*) ;;
+    *) fail "a window that outlasted the budget must still be stamped closed, got: $out" ;;
+  esac
+  pass "cursor park: even a long window is stamped closed for its held event"
 }
 
 # The single slot cannot owe two submits: an event that is still deliverable is
@@ -1254,6 +1299,8 @@ test_park_ignores_malformed_payload
 test_precompact_marks_active_without_context
 test_after_agent_response_ends_the_window
 test_held_followup_survives_a_window_that_outlives_the_wait
+test_a_later_window_does_not_revive_an_expired_held_event
+test_a_long_window_is_still_stamped_closed
 test_once_only_object_never_evicts_a_deliverable_event
 test_held_wake_resets_the_budget_even_when_it_ages_out_while_waiting
 test_compaction_hooks_inert_in_child_worktree
