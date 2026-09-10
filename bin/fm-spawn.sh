@@ -2848,7 +2848,10 @@ EOF
 // whenever the latched session starts or finishes a turn, mirroring Claude's
 // and Pi's wiring: OpenCode's session row only exists once the agent has come
 // up, so the spawn-time probe always runs too early, and a mid-flight model
-// switch would otherwise never reach the Herdr display.
+// switch would otherwise never reach the Herdr display. Like Pi's, that sync is
+// fire-and-forget: it waits on the per-task meta lock with no time limit and
+// can add a sqlite read plus two herdr calls, so awaiting it would put the
+// busy record and the watcher's wake notification behind an unbounded wait.
 import { execFile } from "node:child_process";
 const busyEvent = (state, event) =>
   new Promise((resolve) => {
@@ -2857,10 +2860,9 @@ const busyEvent = (state, event) =>
       "--gen", "$BUSY_GEN", "--source", "opencode-plugin", "--event", event,
     ], () => resolve());
   });
-const modelSync = () =>
-  new Promise((resolve) => {
-    execFile("$FM_ROOT/bin/fm-model-sync.sh", ["$STATE_REAL", "$ID"], () => resolve());
-  });
+const modelSync = () => {
+  execFile("$FM_ROOT/bin/fm-model-sync.sh", ["$STATE_REAL", "$ID"], () => {});
+};
 export const FmBusyState = async () => {
   let activeSession = null;
   return {
@@ -2872,26 +2874,27 @@ export const FmBusyState = async () => {
           if (activeSession === null) activeSession = sessionID;
           if (sessionID === activeSession) {
             await busyEvent("busy", "session-" + statusType);
-            await modelSync();
+            modelSync();
           }
           return;
         }
         if (statusType === "idle" && sessionID === activeSession) {
           activeSession = null;
           await busyEvent("idle", "session-status-idle");
-          await modelSync();
+          modelSync();
         }
         return;
       }
       if (event.type === "session.idle") {
-        if (event.properties.sessionID === activeSession) {
+        const latched = event.properties.sessionID === activeSession;
+        if (latched) {
           activeSession = null;
           await busyEvent("idle", "session-idle");
-          await modelSync();
         }
         await new Promise((resolve) => {
           execFile("touch", ["$TURNEND"], () => resolve());
         });
+        if (latched) modelSync();
       }
     },
   };
