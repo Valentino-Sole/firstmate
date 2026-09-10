@@ -16,6 +16,13 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-supervision-lib.sh"
 
+# Every hook case below invokes a guard by absolute path inside a fixture
+# checkout, and the guard resolves its own home from the environment. An ambient
+# FM_HOME/FM_ROOT_OVERRIDE/FM_STATE_OVERRIDE from the session running this suite
+# would silently point those invocations at a foreign state dir, so clear them
+# once here; every case that needs them sets them itself.
+unset FM_HOME FM_ROOT_OVERRIDE FM_STATE_OVERRIDE
+
 TMP_ROOT=$(fm_test_tmproot fm-turnend-guard)
 fm_git_identity fmtest fmtest@example.invalid
 
@@ -597,6 +604,94 @@ test_hook_silent_in_crewmate_worktree() {
   expect_code 0 "$status" "hook must never block inside a crewmate task worktree"
   [ -z "$out" ] || fail "hook produced output inside a crewmate task worktree: $out"
   pass "fm-turnend-guard: inert in a crewmate/scout task worktree (linked git worktree) even when unhealthy"
+}
+
+# Spawned crew/scout sessions can inherit the parent primary's FM_ROOT_OVERRIDE
+# and FM_HOME. The hook must still scope to the running worktree; otherwise it
+# inspects the parent checkout, treats the child as a guarded primary, and
+# blocks every turn with TURN WOULD END BLIND.
+test_hook_silent_in_child_worktree_with_inherited_primary_env() {
+  local primary base dir home child out status
+  primary=$(make_primary_dir "$TMP_ROOT/hook-env-leak-primary")
+  : > "$primary/state/task1.meta"
+
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$primary" FM_HOME="$primary" \
+    bash "$primary/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  expect_code 2 "$status" "a primary must still be guarded when FM_ROOT_OVERRIDE names itself"
+  assert_contains "$out" "TURN WOULD END BLIND" "primary control must still alarm"
+
+  base="$TMP_ROOT/hook-env-leak-crew-base"
+  dir="$TMP_ROOT/hook-env-leak-crew-wt"
+  make_crewmate_worktree_dir "$base" "$dir" >/dev/null
+  : > "$dir/state/task1.meta"
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$primary" FM_HOME="$primary" \
+    bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  expect_code 0 "$status" "inherited primary FM_ROOT_OVERRIDE/FM_HOME must not make a crewmate worktree look like a primary"
+  [ -z "$out" ] || fail "crewmate worktree with inherited primary env produced output: $out"
+
+  home=$(make_secondmate_dir "$TMP_ROOT/hook-env-leak-sm-home")
+  : > "$home/state/task1.meta"
+  child="$TMP_ROOT/hook-env-leak-sm-child"
+  make_secondmate_child_worktree_dir "$home" "$child" >/dev/null
+  : > "$child/state/task1.meta"
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$primary" FM_HOME="$primary" \
+    bash "$child/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  expect_code 0 "$status" "inherited primary FM_ROOT_OVERRIDE/FM_HOME must not make a secondmate child worktree look like a primary"
+  [ -z "$out" ] || fail "secondmate child worktree with inherited primary env produced output: $out"
+
+  pass "fm-turnend-guard: inert in child worktrees even when FM_ROOT_OVERRIDE and FM_HOME name a parent primary"
+}
+
+# A secondmate HOME is force-included by its marker, so the child-worktree
+# git-dir test can never save it. With a leaked parent-primary FM_ROOT_OVERRIDE
+# and FM_HOME it must still resolve its OWN state, not the parent's: otherwise a
+# healthy secondmate is wedged by the parent's in-flight work, and its
+# block/failure bookkeeping lands in a state dir it does not own.
+test_hook_scopes_secondmate_home_to_its_own_state_under_inherited_env() {
+  local primary home out status
+  primary=$(make_primary_dir "$TMP_ROOT/hook-env-leak-sm-primary")
+  : > "$primary/state/task1.meta"
+
+  home=$(make_secondmate_dir "$TMP_ROOT/hook-env-leak-sm-own-home")
+
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$primary" FM_HOME="$primary" \
+    bash "$home/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  expect_code 0 "$status" "a secondmate home with no in-flight work of its own must allow, not inherit the parent's"
+  [ -z "$out" ] || fail "secondmate home with inherited primary env produced output: $out"
+
+  : > "$home/state/task1.meta"
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$primary" FM_HOME="$primary" \
+    bash "$home/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  expect_code 2 "$status" "a secondmate home with its OWN unsupervised work must still be guarded"
+  assert_contains "$out" "TURN WOULD END BLIND" "secondmate control must alarm on its own in-flight work"
+
+  pass "fm-turnend-guard: a secondmate home guards its own state, not a parent primary named by inherited env"
+}
+
+# An FM_ROOT_OVERRIDE that does not resolve proves nothing about whose session
+# this is, so it must not be read as a leaked parent environment. Discarding the
+# rest of the environment on that evidence rebinds the hook to its own
+# checkout's state while the watcher and spawn keep using the real FM_HOME, and
+# the guard then sees no in-flight work and waves a blind turn through.
+test_hook_keeps_split_home_when_root_override_is_unresolvable() {
+  local dir home out status
+  dir=$(make_primary_dir "$TMP_ROOT/hook-broken-override-root")
+  home="$TMP_ROOT/hook-broken-override-home"
+  mkdir -p "$home/state"
+  : > "$home/state/task1.meta"
+
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$TMP_ROOT/hook-broken-override-gone" FM_HOME="$home" \
+    bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  expect_code 2 "$status" "an unresolvable FM_ROOT_OVERRIDE must not discard a valid FM_HOME and its in-flight work"
+  assert_contains "$out" "TURN WOULD END BLIND" "the split home's unsupervised work must still alarm"
+
+  pass "fm-turnend-guard: an unresolvable FM_ROOT_OVERRIDE leaves the effective home intact instead of rebinding to the checkout"
 }
 
 test_hook_silent_without_jq() {
@@ -1933,6 +2028,9 @@ test_hook_blocks_in_treehouse_leased_secondmate_home
 test_hook_exempts_linked_worktree_with_stray_marker
 test_hook_exempts_linked_worktree_with_non_ascii_marker
 test_hook_silent_in_crewmate_worktree
+test_hook_silent_in_child_worktree_with_inherited_primary_env
+test_hook_scopes_secondmate_home_to_its_own_state_under_inherited_env
+test_hook_keeps_split_home_when_root_override_is_unresolvable
 test_hook_silent_without_jq
 test_hook_silent_without_stdin
 test_hook_runs_fast
