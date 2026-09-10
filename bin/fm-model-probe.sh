@@ -5,8 +5,12 @@
 #
 # OpenCode evidence is a read-only query of OPENCODE_DB, or else
 # ${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db, table session.
-# It matches meta worktree= to session.directory exactly, takes only the
-# uniquely newest row, and composes providerID/id. It never writes that
+# It matches meta worktree= to session.directory exactly, keeps only rows the
+# CURRENT run could have created (parent_id IS NULL, so a subagent's child
+# session can never stand in for the worker, and time_created at or after the
+# run's spawn_epoch, so a previous run's leftover session in the same reused
+# worktree can never be reported as this run's model), takes only the uniquely
+# newest surviving row, and composes providerID/id. It never writes that
 # database and never treats requested_model as runtime evidence.
 # Missing, unreadable, invalid, or ambiguous rows yield no candidate.
 set -u
@@ -125,11 +129,15 @@ probe_herdr_agent_session() {
 }
 
 probe_opencode_session() {
-  local harness worktree db model
+  local harness worktree spawn_epoch db model
   harness=$(fm_model_meta_get "$META" harness)
   [ "$harness" = opencode ] || return 1
   worktree=$(fm_model_meta_get "$META" worktree)
   [ -n "$worktree" ] || return 1
+  spawn_epoch=$(fm_model_meta_get "$META" spawn_epoch)
+  case "$spawn_epoch" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
   if [ -n "${OPENCODE_DB:-}" ]; then
     db=$OPENCODE_DB
   else
@@ -137,7 +145,7 @@ probe_opencode_session() {
   fi
   [ -f "$db" ] || return 1
   [ -r "$db" ] || return 1
-  model=$(python3 - "$db" "$worktree" <<'PY'
+  model=$(python3 - "$db" "$worktree" "$spawn_epoch" <<'PY'
 import json
 import os
 import sqlite3
@@ -145,6 +153,10 @@ import sys
 
 db = sys.argv[1]
 directory = sys.argv[2]
+try:
+    run_start_ms = int(sys.argv[3]) * 1000
+except ValueError:
+    sys.exit(1)
 if not os.path.isfile(db) or not os.access(db, os.R_OK):
     sys.exit(1)
 try:
@@ -153,9 +165,10 @@ except sqlite3.Error:
     sys.exit(1)
 try:
     rows = con.execute(
-        "SELECT model, time_updated FROM session WHERE directory = ? "
+        "SELECT model, time_updated FROM session "
+        "WHERE directory = ? AND parent_id IS NULL AND time_created >= ? "
         "ORDER BY time_updated DESC",
-        (directory,),
+        (directory, run_start_ms),
     ).fetchall()
 except sqlite3.Error:
     sys.exit(1)

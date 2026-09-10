@@ -219,6 +219,88 @@ test_opencode_plugin_semantic_lifecycle() {
   pass "opencode plugin classifies from session.status, scoped to the latched worker session"
 }
 
+meta_value() {  # <meta> <key>
+  awk -F= -v k="$2" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$1"
+}
+
+# seed_opencode_session <db> <directory> <model-json> <time-ms>: build a
+# stand-in for OpenCode's own session table holding one session that the
+# current run created in <directory>.
+seed_opencode_session() {
+  python3 - "$1" "$2" "$3" "$4" <<'EOF'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    """CREATE TABLE IF NOT EXISTS session (
+      id TEXT PRIMARY KEY,
+      parent_id TEXT,
+      directory TEXT NOT NULL,
+      model TEXT,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL
+    )"""
+)
+stamp = int(sys.argv[4])
+con.execute(
+    "INSERT INTO session (id, parent_id, directory, model, time_created, time_updated) "
+    "VALUES ('ses_main', NULL, ?, ?, ?, ?)",
+    (sys.argv[2], sys.argv[3], stamp, stamp),
+)
+con.commit()
+con.close()
+EOF
+}
+
+test_opencode_plugin_syncs_effective_model() {
+  local rec id=busy-oc-model out state plugin meta db epoch
+  rec=$(make_spawn_case oc-model opencode "$id")
+  read_case_record "$rec"
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
+  expect_code 0 $? "opencode spawn should succeed: $out"
+  state="$HOME_DIR/state"
+  meta="$state/$id.meta"
+  plugin="$WT_DIR/.opencode/plugins/fm-busy-state.js"
+  assert_present "$plugin" "opencode spawn did not write the busy-state plugin"
+
+  epoch=$(meta_value "$meta" spawn_epoch)
+  case "$epoch" in
+    ''|*[!0-9]*) fail "opencode spawn did not record a numeric spawn_epoch: '$epoch'" ;;
+  esac
+  db="$CASE_DIR/opencode.db"
+  # OpenCode only writes its session row once the agent is up, which is after
+  # the spawn-time probe has already run: the spawn must therefore still be
+  # pending here, and only a plugin event may verify the model.
+  [ "$(meta_value "$meta" effective_model)" = pending ] \
+    || fail "spawn-time probe should leave OpenCode pending, got '$(meta_value "$meta" effective_model)'"
+  seed_opencode_session "$db" "$(meta_value "$meta" worktree)" \
+    '{"id":"nemotron-3.5-lightning-free","providerID":"opencode"}' "$((epoch * 1000 + 1500))"
+
+  out=$(OPENCODE_DB="$db" drive_oc_plugin "$plugin" "$(oc_status ses_main busy)") \
+    || fail "opencode busy drive failed: $out"
+  [ "$(meta_value "$meta" effective_model)" = opencode/nemotron-3.5-lightning-free ] \
+    || fail "a latched session's busy event must verify the runtime model, got '$(meta_value "$meta" effective_model)'"
+  [ "$(meta_value "$meta" effective_model_source)" = opencode-session ] \
+    || fail "verified OpenCode model must record source opencode-session, got '$(meta_value "$meta" effective_model_source)'"
+
+  # A mid-flight model switch must reach the metadata at the next turn boundary.
+  python3 - "$db" <<'EOF'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    "UPDATE session SET model = ? WHERE id = 'ses_main'",
+    ('{"id":"ling-3.0-flash-fin-free","providerID":"opencode"}',),
+)
+con.commit()
+con.close()
+EOF
+  out=$(OPENCODE_DB="$db" drive_oc_plugin "$plugin" \
+    "$(oc_status ses_main busy)" "$(oc_idle ses_main)") \
+    || fail "opencode idle drive failed: $out"
+  [ "$(meta_value "$meta" effective_model)" = opencode/ling-3.0-flash-fin-free ] \
+    || fail "a later turn boundary must re-sync a mid-flight model switch, got '$(meta_value "$meta" effective_model)'"
+  pass "opencode plugin verifies the runtime model on the latched session's turn boundaries"
+}
+
 run_claude_hook() {  # <settings.json> <hook-event>
   local cmd
   cmd=$(jq -r ".hooks[\"$2\"][0].hooks[0].command" "$1")
@@ -419,6 +501,7 @@ test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
 test_kimi_and_grok_install_no_unverified_wiring
 test_opencode_plugin_semantic_lifecycle
+test_opencode_plugin_syncs_effective_model
 test_claude_hooks_semantic_lifecycle
 test_claude_hooks_stale_incarnation_harmless
 test_gemini_hooks_semantic_lifecycle

@@ -2844,6 +2844,11 @@ EOF
 // sessions' status until the latched session settles, so a child's idle can
 // never clear the worker's busy state. The session.idle touch stays the
 // watcher's wake NOTIFICATION, never current-state truth.
+// It also re-syncs requested/effective model metadata (bin/fm-model-sync.sh)
+// whenever the latched session starts or finishes a turn, mirroring Claude's
+// and Pi's wiring: OpenCode's session row only exists once the agent has come
+// up, so the spawn-time probe always runs too early, and a mid-flight model
+// switch would otherwise never reach the Herdr display.
 import { execFile } from "node:child_process";
 const busyEvent = (state, event) =>
   new Promise((resolve) => {
@@ -2851,6 +2856,10 @@ const busyEvent = (state, event) =>
       "apply", "$STATE_REAL", "$ID", state,
       "--gen", "$BUSY_GEN", "--source", "opencode-plugin", "--event", event,
     ], () => resolve());
+  });
+const modelSync = () =>
+  new Promise((resolve) => {
+    execFile("$FM_ROOT/bin/fm-model-sync.sh", ["$STATE_REAL", "$ID"], () => resolve());
   });
 export const FmBusyState = async () => {
   let activeSession = null;
@@ -2861,12 +2870,16 @@ export const FmBusyState = async () => {
         const statusType = event.properties.status && event.properties.status.type;
         if (statusType === "busy" || statusType === "retry") {
           if (activeSession === null) activeSession = sessionID;
-          if (sessionID === activeSession) await busyEvent("busy", "session-" + statusType);
+          if (sessionID === activeSession) {
+            await busyEvent("busy", "session-" + statusType);
+            await modelSync();
+          }
           return;
         }
         if (statusType === "idle" && sessionID === activeSession) {
           activeSession = null;
           await busyEvent("idle", "session-status-idle");
+          await modelSync();
         }
         return;
       }
@@ -2874,6 +2887,7 @@ export const FmBusyState = async () => {
         if (event.properties.sessionID === activeSession) {
           activeSession = null;
           await busyEvent("idle", "session-idle");
+          await modelSync();
         }
         await new Promise((resolve) => {
           execFile("touch", ["$TURNEND"], () => resolve());
@@ -3106,6 +3120,11 @@ fi
 META_WINDOW=$T
 [ "$BACKEND" = orca ] && META_WINDOW=$W
 SPAWN_GEN="s$(date +%s).${BASHPID:-$$}.$RANDOM"
+# Wall-clock start of THIS run, minted before the launch command is delivered
+# and re-minted on every relaunch, so a runtime probe can tell a session this
+# run created from a previous run's leftovers in the same reused worktree
+# (bin/fm-model-probe.sh reads it for the OpenCode session query).
+SPAWN_EPOCH=$(date +%s)
 SPAWN_EFFECTIVE_MODEL=pending
 SPAWN_EFFECTIVE_SOURCE=$FM_MODEL_SOURCE_SPAWN
 if [ "$RELAUNCH" -eq 1 ] && [ -n "${RELAUNCH_META:-}" ] && [ -f "$RELAUNCH_META" ]; then
@@ -3127,7 +3146,7 @@ SPAWN_META_PATH=$SPAWN_META_TMP
 preserve_relaunch_meta() {
   awk -F= '
     BEGIN {
-      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort requested_model effective_model effective_model_source busy_gen spawn_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
+      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort requested_model effective_model effective_model_source busy_gen spawn_gen spawn_epoch traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
       for (i in keys) owned[keys[i]] = 1
     }
     !($1 in owned)
@@ -3150,6 +3169,7 @@ preserve_relaunch_meta() {
   echo "effort=${EFFORT:-default}"
   [ -z "${BUSY_GEN:-}" ] || echo "busy_gen=$BUSY_GEN"
   echo "spawn_gen=$SPAWN_GEN"
+  echo "spawn_epoch=$SPAWN_EPOCH"
   # Default-off writes no traceparent= line.
   # backend= is written only for a non-default (non-tmux) backend, so the
   # default path's meta stays byte-identical (absent backend= means tmux;
