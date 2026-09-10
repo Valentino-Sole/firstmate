@@ -225,7 +225,7 @@ guarded_commit() {  # <budget> [print] [held]
 # session may no longer submit is replaced, which fm_cursor_compaction_hold_once
 # does on its own.
 guarded_hold() {  # <response-json> <budget>
-  local response=$1 budget=$2 carry= status
+  local response=$1 budget=$2 carry='' status
   HELD_ACCEPTED=
   case "$budget" in reset-budget) carry=$budget ;; esac
   guard_enter || return 1
