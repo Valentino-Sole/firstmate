@@ -791,16 +791,24 @@ test_once_only_object_never_evicts_a_deliverable_event() {
 
 # A held wake pays its budget reset even when its own age budget runs out while
 # this park waits for the window to close.
+# The three numbers below are one budget, and the park's own start time sits
+# between them: the record must still be fresh when the park reads it and stale
+# by the time the window closes. Pre-age 10 against a 20s budget leaves the park
+# a full 10s to start - the record expiring BEFORE it is read is an ordinary,
+# separately tested expiry, and a loaded parallel runner must not turn this test
+# into that one. The window closes at 12s, after the record's own budget ran out
+# but before the mark would age out on its own, so the close under test is the
+# explicit one.
 test_held_wake_resets_the_budget_even_when_it_ages_out_while_waiting() {
   local dir out
   dir=$(make_primary_dir "$TMP_ROOT/park-held-ages-in-wait")
   : > "$dir/state/task1.meta"
   write_arm_fixture "$dir" failed
   printf 'session=sess-cursor\ncount=2\n' > "$dir/state/.turnend-cursor-blocks"
-  hold_watcher_followup "$dir" 'wake that ages while waiting' reset-budget sess-cursor 5
+  hold_watcher_followup "$dir" 'wake that ages while waiting' reset-budget sess-cursor 10
   mark_compaction_active "$dir"
-  ( sleep 5; rm -f "$dir/state/.cursor-compaction" ) >/dev/null 2>&1 &
-  out=$(FM_CURSOR_COMPACTION_MAX_AGE=8 FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir")
+  ( sleep 12; rm -f "$dir/state/.cursor-compaction" ) >/dev/null 2>&1 &
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=20 FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir")
   case "$(followup_of "$out")" in
     *'wake that ages while waiting'*) ;;
     *) fail "the held wake must still be delivered, got: $out" ;;
