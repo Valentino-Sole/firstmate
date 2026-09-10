@@ -73,7 +73,9 @@ install_scripts() {
            fm-sessionstart-run.sh fm-sessionstart-nudge.sh fm-arm-pretool-check.sh \
            fm-cd-pretool-check.sh fm-claude-stop-autoarm.sh fm-hook-host-lib.sh \
            fm-primary-scope-lib.sh fm-supervision-lib.sh fm-wake-lib.sh \
-           fm-session-lock-lib.sh fm-cursor-lib.sh fm-operational-input.sh \
+           fm-session-lock-lib.sh fm-cursor-lib.sh fm-cursor-compaction-lib.sh \
+           fm-cursor-precompact.sh fm-cursor-after-agent-response.sh \
+           fm-operational-input.sh \
            fm-supervision-instructions.sh fm-harness.sh fm-lock.sh \
            fm-gate-refuse-lib.sh; do
     cp "$ROOT/bin/$f" "$dir/bin/$f"
@@ -92,6 +94,34 @@ make_primary_dir() {
   : > "$dir/AGENTS.md"
   install_scripts "$dir"
   printf '%s\n' "$dir"
+}
+
+# One held follow-up object in the same wire form the park writes, built by the
+# real operational-input encoder rather than a hand-copied prefix.
+# A session of "unbounded" writes the record without its session and updated_at
+# headers, i.e. an event with no owner and no lifetime at all.
+hold_watcher_followup() {  # <dir> <body> [budget] [session] [age-seconds] [window]
+  local encoded session=${4:-sess-cursor}
+  encoded=$(printf '%s' "$2" | "$ROOT/bin/fm-operational-input.sh" encode watcher) \
+    || fail "could not encode the held follow-up fixture"
+  {
+    if [ "$session" != unbounded ]; then
+      printf 'session=%s\n' "$session"
+      printf 'updated_at=%s\n' "$(( $(date +%s) - ${5:-0} ))"
+      printf 'window=%s\n' "${6-}"
+    fi
+    printf 'budget=%s\n' "${3-}"
+    jq -n --arg m "$encoded" '{followup_message:$m}'
+  } > "$1/state/.cursor-compaction-held" \
+    || fail "could not write the held follow-up fixture"
+}
+
+# The compaction mark is only active while it is fresh, so a fixture that wants
+# an active window must stamp it with the current time the way preCompact does.
+mark_compaction_active() {  # <dir> [window-id]
+  local window=${2:-$(date +%s)}
+  printf 'session=sess-cursor\nwindow=%s\nupdated_at=%s\n' "$window" "$(date +%s)" \
+    > "$1/state/.cursor-compaction"
 }
 
 # An arm fixture standing in for bin/fm-watch-arm.sh. Real process, real output.
@@ -156,9 +186,14 @@ run_park() {  # <dir> [loop_count] [loop_ceiling]
   payload=$(park_payload "$loop")
   if [ -n "$ceiling" ]; then
     printf '%s' "$payload" | env -u PI_CODING_AGENT FM_HOME="$dir" FM_CURSOR_PARK_POLL=1 \
-      FM_CURSOR_TURNEND_LOOP_CEILING="$ceiling" "$FAKE_CURSOR" -c "$PARK_CHILD" 2>/dev/null
+      FM_CURSOR_TURNEND_LOOP_CEILING="$ceiling" \
+      FM_CURSOR_COMPACTION_WAIT_MAX="${FM_CURSOR_COMPACTION_WAIT_MAX:-180}" \
+      FM_CURSOR_COMPACTION_MAX_AGE="${FM_CURSOR_COMPACTION_MAX_AGE:-180}" \
+      "$FAKE_CURSOR" -c "$PARK_CHILD" 2>/dev/null
   else
     printf '%s' "$payload" | env -u PI_CODING_AGENT FM_HOME="$dir" FM_CURSOR_PARK_POLL=1 \
+      FM_CURSOR_COMPACTION_WAIT_MAX="${FM_CURSOR_COMPACTION_WAIT_MAX:-180}" \
+      FM_CURSOR_COMPACTION_MAX_AGE="${FM_CURSOR_COMPACTION_MAX_AGE:-180}" \
       "$FAKE_CURSOR" -c "$PARK_CHILD" 2>/dev/null
   fi
 }
@@ -639,6 +674,538 @@ test_park_ignores_malformed_payload() {
   pass "cursor park: malformed payloads fail open without arming"
 }
 
+test_precompact_marks_active_without_context() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/precompact-mark")
+  out=$(printf '{"hook_event_name":"preCompact","session_id":"sess-cursor","trigger":"auto","cursor_version":"x"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-precompact.sh" 2>/dev/null)
+  [ -z "$out" ] || fail "preCompact must stay silent and never inject context, got: $out"
+  [ -f "$dir/state/.cursor-compaction" ] || fail "preCompact must mark compaction active"
+  pass "cursor preCompact: marks active and prints nothing"
+}
+
+test_after_agent_response_ends_the_window() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/after-agent-clear")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "after the window closed the park must submit instead of holding, got: $out"
+  [ ! -e "$dir/state/.cursor-compaction-held" ] \
+    || fail "a closed window must not make the park hold its follow-up"
+  pass "cursor afterAgentResponse: ends the window so the park submits again"
+}
+
+# The window can outlast the park's whole wait. That park submits nothing, so no
+# further turn starts until the captain types, and the stop that finally can
+# deliver the event arrives long after the record's own age budget.
+test_held_followup_survives_a_window_that_outlives_the_wait() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-window-outlives-wait")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  hold_watcher_followup "$dir" 'wake parked before a long window' '' sess-cursor 100000 100000000
+  mark_compaction_active "$dir" 100000000
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "the still-open window must not submit, got: $out"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake parked before a long window'*) ;;
+    *) fail "the first stop after the window closed must deliver the held event, got: $out" ;;
+  esac
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  pass "cursor park: a window that outlives the wait does not expire the held event"
+}
+
+# The closing grace belongs to one window. An unrelated window opening and
+# closing later must not revive an event that expired long before it.
+test_a_later_window_does_not_revive_an_expired_held_event() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-window-scoped-grace")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  hold_watcher_followup "$dir" 'wake from an older window' '' sess-cursor 100000 100000000
+  mark_compaction_active "$dir"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake from an older window'*) fail "an unrelated window revived an expired held event: $out" ;;
+  esac
+  [ -z "$out" ] || fail "nothing else was owed a submit, got: $out"
+  pass "cursor park: a later window does not revive an expired held event"
+}
+
+# The window the event waited out can outlast the freshness budget; the stamp
+# that closes it must still be written, or the grace it earns never exists.
+test_a_long_window_is_still_stamped_closed() {
+  local dir out window
+  dir=$(make_primary_dir "$TMP_ROOT/park-long-window-stamped")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  window=$(( $(date +%s) - 100000 ))
+  hold_watcher_followup "$dir" 'wake from the long window' '' sess-cursor 100000 "$window"
+  printf 'session=sess-cursor\nwindow=%s\nupdated_at=%s\n' "$window" "$window" \
+    > "$dir/state/.cursor-compaction"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_HOME="$dir" bash "$dir/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake from the long window'*) ;;
+    *) fail "a window that outlasted the budget must still be stamped closed, got: $out" ;;
+  esac
+  pass "cursor park: even a long window is stamped closed for its held event"
+}
+
+# The single slot cannot owe two submits: an event that is still deliverable is
+# itself owed one, so nothing evicts it.
+test_once_only_object_never_evicts_a_deliverable_event() {
+  local dir out held
+  dir=$(make_primary_dir "$TMP_ROOT/park-no-eviction")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'earlier window wake'
+  held=$(cat "$dir/state/.cursor-compaction-held")
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 5 5)
+  [ -z "$out" ] || fail "an open window must not submit, got: $out"
+  [ "$(cat "$dir/state/.cursor-compaction-held")" = "$held" ] \
+    || fail "a still-deliverable held event was evicted from the slot"
+  rm -f "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 6 5)
+  case "$(followup_of "$out")" in
+    *'earlier window wake'*) ;;
+    *) fail "the event that kept the slot must still be delivered, got: $out" ;;
+  esac
+  pass "cursor park: a once-only object never evicts a deliverable held event"
+}
+
+# A held wake pays its budget reset even when its own age budget runs out while
+# this park waits for the window to close.
+# The three numbers below are one budget, and the park's own start time sits
+# between them: the record must still be fresh when the park reads it and stale
+# by the time the window closes. Pre-age 10 against a 20s budget leaves the park
+# a full 10s to start - the record expiring BEFORE it is read is an ordinary,
+# separately tested expiry, and a loaded parallel runner must not turn this test
+# into that one. The window closes at 12s, after the record's own budget ran out
+# but before the mark would age out on its own, so the close under test is the
+# explicit one.
+test_held_wake_resets_the_budget_even_when_it_ages_out_while_waiting() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-ages-in-wait")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=2\n' > "$dir/state/.turnend-cursor-blocks"
+  hold_watcher_followup "$dir" 'wake that ages while waiting' reset-budget sess-cursor 10
+  mark_compaction_active "$dir"
+  ( sleep 12; rm -f "$dir/state/.cursor-compaction" ) >/dev/null 2>&1 &
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=20 FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'wake that ages while waiting'*) ;;
+    *) fail "the held wake must still be delivered, got: $out" ;;
+  esac
+  [ ! -e "$dir/state/.turnend-cursor-blocks" ] \
+    || fail "the delivered wake lost its budget reset: $(cat "$dir/state/.turnend-cursor-blocks")"
+  pass "cursor park: a held wake keeps its budget reset across the wait"
+}
+
+# A crewmate worktree inherits FM_ROOT_OVERRIDE from the primary that launched
+# it; neither compaction hook may write the primary's records from there.
+test_compaction_hooks_inert_in_child_worktree() {
+  local base child
+  base=$(make_primary_dir "$TMP_ROOT/compaction-base")
+  child="$TMP_ROOT/compaction-child"
+  fm_git_worktree "$base" "$child" fm/cursor-compaction-child
+  mkdir -p "$child/state"
+  : > "$child/AGENTS.md"
+  install_scripts "$child"
+  printf '{"hook_event_name":"preCompact","session_id":"sess-crew","trigger":"auto"}' \
+    | env -u PI_CODING_AGENT FM_ROOT_OVERRIDE="$base" FM_HOME="$base" \
+      bash "$child/bin/fm-cursor-precompact.sh" 2>/dev/null
+  [ ! -f "$base/state/.cursor-compaction" ] \
+    || fail "a child worktree marked the primary home as compacting"
+  [ ! -f "$child/state/.cursor-compaction" ] \
+    || fail "a child worktree must not mark itself either"
+  mark_compaction_active "$base"
+  printf '{"text":"done"}' \
+    | env -u PI_CODING_AGENT FM_ROOT_OVERRIDE="$base" FM_HOME="$base" \
+      bash "$child/bin/fm-cursor-after-agent-response.sh" 2>/dev/null
+  [ -f "$base/state/.cursor-compaction" ] \
+    || fail "a child worktree cleared the primary home's compaction mark"
+  rm -f "$base/state/.cursor-compaction"
+  pass "cursor compaction hooks: inert inside a child crewmate worktree"
+}
+
+# An abandoned mark - Cursor exited, crashed, or never fired afterAgentResponse
+# - must not silence supervision forever.
+test_stale_compaction_mark_does_not_hold() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/compaction-stale")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  printf 'session=sess-cursor\nupdated_at=1\n' > "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "a mark older than the wait budget must not hold the follow-up, got: $out"
+  [ ! -f "$dir/state/.cursor-compaction-held" ] \
+    || fail "an expired mark must not park the event in the held record"
+  pass "cursor park: an expired compaction mark counts as no compaction"
+}
+
+# The held record is the durable copy of the one event: a commit that never
+# printed must leave it held rather than consume it.
+test_held_followup_survives_a_failed_commit() {
+  local dir out held
+  dir=$(make_primary_dir "$TMP_ROOT/compaction-failed-commit")
+  : > "$dir/state/task1.meta"
+  # The arm marks compaction active and lets a detached child clear it a few
+  # seconds later, so the park provably holds first and then reaches its commit
+  # with the window closed.
+  cat > "$dir/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$$" >> "$FM_HOME/state/arm-ran"
+printf 'session=sess-cursor\nupdated_at=%s\n' "$(date +%s)" > "$FM_HOME/state/.cursor-compaction"
+( sleep 6; rm -f "$FM_HOME/state/.cursor-compaction" ) >/dev/null 2>&1 &
+printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+printf 'stale: fixture-win needs a look\n'
+exit 0
+SH
+  chmod +x "$dir/bin/fm-watch-arm.sh"
+  # A directory cannot be removed by the budget reset, so the commit section
+  # gives up after the held record was already claimed for delivery.
+  mkdir "$dir/state/.turnend-cursor-blocks"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir")
+  [ -z "$out" ] || fail "a follow-up whose budget reset failed must not be submitted, got: $out"
+  held=$(cat "$dir/state/.cursor-compaction-held" 2>/dev/null || true)
+  [ -n "$held" ] || fail "a commit that never printed must leave the event held"
+  pass "cursor park: a failed commit re-parks the held follow-up instead of stranding it"
+}
+
+test_park_holds_followup_during_compaction_then_delivers_once() {
+  local dir out held held2
+  dir=$(make_primary_dir "$TMP_ROOT/park-compaction-hold")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "compaction-active must not submit a follow-up, got: $out"
+  [ -f "$dir/state/.cursor-compaction-held" ] || fail "the follow-up must be held exactly once"
+  held=$(cat "$dir/state/.cursor-compaction-held")
+  [ -n "$held" ] || fail "the held record must contain the follow-up object"
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "a second stop while still compacting must not submit, got: $out"
+  held2=$(cat "$dir/state/.cursor-compaction-held")
+  [ "$held" = "$held2" ] || fail "a second stop must not replace or duplicate the held event"
+  rm -f "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "after successful compaction the held follow-up must be delivered once, got: $out"
+  [ ! -f "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  # Supervision stays needed and the repair budget is spent, so this stop runs
+  # the whole park and is silent only if nothing is left to deliver twice.
+  rm -f "$dir/state/arm-ran"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -n "$(cat "$dir/state/arm-ran" 2>/dev/null || true)" ] \
+    || fail "the deliver-once check must exercise a park that still needs supervision"
+  [ -z "$out" ] || fail "a later stop with no new event must not submit again, got: $out"
+  pass "cursor park: hold once during compaction, deliver once after, never twice"
+}
+
+# The owner lock is what serializes this park against away mode
+# (bin/fm-afk-start.sh takes the same lock) and against a newer stop's claim, so
+# the hold must be written while the lock is still held. state/.cursor-park-owner.lock
+# is the on-disk record of that hold.
+test_hold_is_written_without_releasing_the_owner_lock() {
+  local dir park_pid waited unlocked samples
+  dir=$(make_primary_dir "$TMP_ROOT/park-hold-lock-scope")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  # Widen the moment between the ownership check and the hold so the lock can be
+  # observed, without changing what the adapter does in it.
+  cat >> "$dir/bin/fm-cursor-compaction-lib.sh" <<'SH'
+eval "fm_cursor_compaction_hold_once_real() $(declare -f fm_cursor_compaction_hold_once | sed 1d)"
+fm_cursor_compaction_hold_once() {
+  : > "$FM_HOME/state/hold-entered"
+  sleep 3
+  fm_cursor_compaction_hold_once_real "$@"
+}
+SH
+  ( FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" > "$dir/state/hold-lock-out" ) &
+  park_pid=$!
+  waited=0
+  while [ ! -e "$dir/state/hold-entered" ]; do
+    sleep 0.05
+    waited=$((waited + 1))
+    [ "$waited" -lt 400 ] || fail "the park never reached its hold"
+  done
+  unlocked=0
+  samples=0
+  while [ ! -e "$dir/state/.cursor-compaction-held" ] && [ "$samples" -lt 25 ]; do
+    if [ ! -e "$dir/state/.cursor-park-owner.lock" ] && [ ! -L "$dir/state/.cursor-park-owner.lock" ]; then
+      unlocked=1
+    fi
+    sleep 0.1
+    samples=$((samples + 1))
+  done
+  wait "$park_pid" 2>/dev/null || true
+  [ "$unlocked" -eq 0 ] \
+    || fail "the owner lock was free between the ownership check and the hold"
+  [ -e "$dir/state/.cursor-compaction-held" ] || fail "the park never held its follow-up"
+  pass "cursor park: the hold is written without releasing the owner lock"
+}
+
+# A nag the held slot refused and this park never printed was never delivered,
+# so it must not spend one of the three the budget allows.
+test_refused_nag_does_not_spend_its_budget() {
+  local dir out held
+  dir=$(make_primary_dir "$TMP_ROOT/park-nag-refused")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  hold_watcher_followup "$dir" 'earlier window wake'
+  held=$(cat "$dir/state/.cursor-compaction-held")
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "a park inside an open window must not submit, got: $out"
+  [ ! -e "$dir/state/.turnend-cursor-blocks" ] \
+    || fail "a nag that was neither held nor printed spent budget: $(cat "$dir/state/.turnend-cursor-blocks")"
+  [ "$(cat "$dir/state/.cursor-compaction-held")" = "$held" ] \
+    || fail "the earlier window's event must stay untouched"
+  pass "cursor park: a nag the held slot refused stays unspent"
+}
+
+# A watcher wake is productive work that clears the repair-nag budget, and it
+# stays productive when the window makes a later stop deliver it.
+test_held_wake_still_resets_the_nag_budget() {
+  local dir out budget_count
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-wake-reset")
+  : > "$dir/state/task1.meta"
+  printf 'session=sess-cursor\ncount=2\n' > "$dir/state/.turnend-cursor-blocks"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "the open window must not submit the wake, got: $out"
+  [ -f "$dir/state/.cursor-compaction-held" ] || fail "the wake must be held"
+  budget_count=$(sed -n '2s/^count=//p' "$dir/state/.turnend-cursor-blocks" 2>/dev/null || true)
+  [ "$budget_count" = 2 ] \
+    || fail "a wake that was only held must not reset the budget yet: $budget_count"
+  rm -f "$dir/state/.cursor-compaction" "$dir/state/arm-ran"
+  write_arm_fixture "$dir" failed
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "the held wake must be delivered by the next stop, got: $out"
+  [ ! -e "$dir/state/.turnend-cursor-blocks" ] \
+    || fail "the delivered wake did not reset the nag budget: $(cat "$dir/state/.turnend-cursor-blocks")"
+  pass "cursor park: a wake delivered from the hold still resets the nag budget"
+}
+
+# The held slot is private to the session that parked it and expires with the
+# same budget as the mark, so a follow-up built for one session can never be
+# replayed into the next one and none can sit in the slot forever.
+test_held_followup_is_bound_to_its_session_and_freshness() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-scope")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'unbounded wake' '' unbounded
+  out=$(run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'unbounded wake'*) fail "a held follow-up with no owner and no lifetime was delivered: $out" ;;
+  esac
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "this session's own wake must still be delivered, got: $out"
+  rm -f "$dir/state/arm-ran"
+  hold_watcher_followup "$dir" 'foreign session wake' '' sess-other
+  out=$(run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'foreign session wake'*) fail "another session's held follow-up was delivered: $out" ;;
+  esac
+  rm -f "$dir/state/arm-ran"
+  hold_watcher_followup "$dir" 'expired wake' '' sess-cursor 100000
+  out=$(FM_CURSOR_COMPACTION_MAX_AGE=60 run_park "$dir")
+  case "$(followup_of "$out")" in
+    *'expired wake'*) fail "an expired held follow-up was delivered: $out" ;;
+  esac
+  pass "cursor park: an unowned, foreign or expired held follow-up is never delivered"
+}
+
+# An undeliverable record must not wedge the single slot either: the next hold
+# replaces it, and that fresh event is the one the session receives.
+test_undeliverable_held_record_does_not_block_the_slot() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-held-slot-free")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'unbounded wake' '' unbounded
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ -z "$out" ] || fail "the open window must not submit, got: $out"
+  rm -f "$dir/state/.cursor-compaction" "$dir/state/arm-ran"
+  write_arm_fixture "$dir" failed
+  printf 'session=sess-cursor\ncount=3\n' > "$dir/state/.turnend-cursor-blocks"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "the fresh event that took the slot must be delivered, got: $out"
+  case "$(followup_of "$out")" in
+    *'unbounded wake'*) fail "the undeliverable record was delivered after all: $out" ;;
+  esac
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  pass "cursor park: an undeliverable held record is replaced, not left blocking"
+}
+
+# The ceiling notice is the session's one warning that automatic delivery stops,
+# so a free slot must park it rather than let the open window drop it.
+test_ceiling_notice_is_parked_when_the_window_outlives_the_wait() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-ceiling-parked")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 5 5)
+  [ -z "$out" ] || fail "an open window must not submit the notice, got: $out"
+  rm -f "$dir/state/.cursor-compaction"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 6 5)
+  case "$(followup_of "$out")" in
+    *'CEILING REACHED'*) ;;
+    *) fail "the parked ceiling notice must be delivered, got: $out" ;;
+  esac
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" 7 5)
+  [ -z "$out" ] || fail "the ceiling notice must not be delivered twice, got: $out"
+  pass "cursor park: an open window parks the ceiling notice instead of dropping it"
+}
+
+# Holding is a state mutation like any other: a park that may no longer act must
+# not leave an object behind for a later stop to deliver.
+test_park_holds_nothing_once_away_mode_activates() {
+  local dir park_pid out waited budget_count
+  dir=$(make_primary_dir "$TMP_ROOT/park-afk-hold")
+  : > "$dir/state/task1.meta"
+  printf 'session=sess-cursor\ncount=1\n' > "$dir/state/.turnend-cursor-blocks"
+  write_arm_fixture "$dir" actionable
+  mark_compaction_active "$dir"
+  cat >> "$dir/bin/fm-operational-input.sh" <<'SH'
+fm_operational_input_encode() {
+  local kind=${1-} body=${2-} result_var=${3-}
+  [ -n "$result_var" ] && fm_operational_kind_is_current "$kind" && [ -n "$body" ] || return 2
+  : > "$FM_HOME/state/hold-commit-entered"
+  while [ ! -e "$FM_HOME/state/hold-commit-release" ]; do sleep 0.05; done
+  printf -v "$result_var" '%s%s: %s' "$FM_OPERATIONAL_HEADER_PREFIX" "$kind" "$body"
+}
+SH
+  ( FM_CURSOR_COMPACTION_WAIT_MAX=1 run_park "$dir" > "$dir/state/hold-out" ) &
+  park_pid=$!
+  waited=0
+  while [ ! -e "$dir/state/hold-commit-entered" ]; do
+    sleep 0.05
+    waited=$((waited + 1))
+    [ "$waited" -lt 200 ] || fail "the park never reached follow-up preparation"
+  done
+  : > "$dir/state/.afk"
+  : > "$dir/state/hold-commit-release"
+  wait "$park_pid" 2>/dev/null || true
+  out=$(cat "$dir/state/hold-out" 2>/dev/null || true)
+  [ -z "$out" ] || fail "the park emitted after away mode activated: $out"
+  [ ! -e "$dir/state/.cursor-compaction-held" ] \
+    || fail "a park that may no longer act still held a follow-up for later delivery"
+  budget_count=$(sed -n '2s/^count=//p' "$dir/state/.turnend-cursor-blocks" 2>/dev/null || true)
+  [ "$budget_count" = 1 ] || fail "the park reset nag state after away mode activated: $budget_count"
+  pass "cursor park: away mode before the commit leaves no held follow-up"
+}
+
+# The window closing mid-commit must deliver THIS park's object, not the one an
+# earlier window already parked in the single held slot.
+test_ceiling_notice_survives_an_active_compaction_window() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-ceiling-compacting")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'stale held wake'
+  # Marking the window from inside follow-up preparation makes it provably open
+  # when this park commits, and a detached child closes it a few seconds later.
+  cat >> "$dir/bin/fm-operational-input.sh" <<'SH'
+fm_operational_input_encode() {
+  local kind=${1-} body=${2-} result_var=${3-}
+  [ -n "$result_var" ] && fm_operational_kind_is_current "$kind" && [ -n "$body" ] || return 2
+  printf 'session=sess-cursor\nupdated_at=%s\n' "$(date +%s)" > "$FM_HOME/state/.cursor-compaction"
+  ( sleep 5; rm -f "$FM_HOME/state/.cursor-compaction" ) >/dev/null 2>&1 &
+  printf -v "$result_var" '%s%s: %s' "$FM_OPERATIONAL_HEADER_PREFIX" "$kind" "$body"
+}
+SH
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir" 5 5)
+  case "$(followup_of "$out")" in
+    *'CEILING REACHED'*) ;;
+    *) fail "the ceiling notice must survive a compaction window, got: $out" ;;
+  esac
+  [ -f "$dir/state/.cursor-compaction-held" ] \
+    || fail "the earlier window's event must stay held for its own delivery"
+  pass "cursor park: a closing compaction window submits this park's own object"
+}
+
+# A nag that is held during compaction is still one of the three the budget
+# allows, so it must be charged when it is accepted, not only when it prints.
+test_repair_nag_charges_its_budget_when_held() {
+  local dir out budget_count
+  dir=$(make_primary_dir "$TMP_ROOT/park-nag-held-budget")
+  : > "$dir/state/task1.meta"
+  cat > "$dir/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$$" >> "$FM_HOME/state/arm-ran"
+printf 'session=sess-cursor\nupdated_at=%s\n' "$(date +%s)" > "$FM_HOME/state/.cursor-compaction"
+( sleep 6; rm -f "$FM_HOME/state/.cursor-compaction" ) >/dev/null 2>&1 &
+printf 'watcher: FAILED - no live watcher with a fresh beacon\n'
+exit 1
+SH
+  chmod +x "$dir/bin/fm-watch-arm.sh"
+  out=$(FM_CURSOR_COMPACTION_WAIT_MAX=60 run_park "$dir")
+  [ "$(kind_of_followup "$out")" = turn-end-guard ] \
+    || fail "the held repair nag must still be delivered once the window closes, got: $out"
+  case "$(followup_of "$out")" in
+    *'nag 1 of 3'*) ;;
+    *) fail "the nag must number itself from the budget it charges, got: $out" ;;
+  esac
+  budget_count=$(sed -n '2s/^count=//p' "$dir/state/.turnend-cursor-blocks" 2>/dev/null || true)
+  [ "$budget_count" = 1 ] \
+    || fail "a nag held through compaction must charge the bounded budget: $budget_count"
+  [ ! -e "$dir/state/.cursor-compaction-held" ] || fail "delivery must consume the held record"
+  pass "cursor park: a repair nag held through compaction charges its budget once"
+}
+
+# A held event must not shadow a freshly built one: the ceiling notice is the
+# session's single warning that automatic delivery stops.
+test_ceiling_notice_is_not_shadowed_by_a_held_followup() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-ceiling-held")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" actionable
+  hold_watcher_followup "$dir" 'stale held wake'
+  out=$(run_park "$dir" 5 5)
+  case "$(followup_of "$out")" in
+    *'CEILING REACHED'*) ;;
+    *) fail "the ceiling notice must reach the session, got: $out" ;;
+  esac
+  [ -f "$dir/state/.cursor-compaction-held" ] \
+    || fail "the held event must stay durable until it is submitted itself"
+  out=$(run_park "$dir" 6 5)
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "the still-held event must be delivered by the next silent stop, got: $out"
+  [ ! -f "$dir/state/.cursor-compaction-held" ] \
+    || fail "the delivered event must be consumed"
+  pass "cursor park: the ceiling notice is never replaced by a held follow-up"
+}
+
 # --- SESSION -----------------------------------------------------------------
 
 install_digest_fixture() {  # <dir>
@@ -684,10 +1251,10 @@ test_tracked_registration_covers_the_primary_events() {
   local reg
   reg="$ROOT/.cursor/hooks.json"
   [ -f "$reg" ] || fail "firstmate must ship a tracked project-scope .cursor/hooks.json"
-  jq -e '.hooks.stop and .hooks.sessionStart and .hooks.preToolUse' "$reg" >/dev/null 2>&1 \
-    || fail "the registration must cover stop, sessionStart, and preToolUse"
-  jq -e '.hooks | has("preCompact") | not' "$reg" >/dev/null 2>&1 \
-    || fail "preCompact staging is deliberately deferred to a follow-up and must stay unregistered"
+  jq -e '.hooks.stop and .hooks.sessionStart and .hooks.preToolUse and .hooks.preCompact and .hooks.afterAgentResponse' "$reg" >/dev/null 2>&1 \
+    || fail "the registration must cover stop, sessionStart, preToolUse, preCompact, and afterAgentResponse"
+  jq -e '.hooks.preCompact[0].command | test("fm-cursor-precompact")' "$reg" >/dev/null 2>&1 \
+    || fail "preCompact must only mark the compaction hold, not inject context"
   jq -e '[.hooks.stop[] | select(.loop_limit != null and .loop_limit > 0)] | length == 1' "$reg" >/dev/null 2>&1 \
     || fail "the stop registration needs an explicit positive loop_limit: without it Cursor's default is unlimited"
   jq -e '[.hooks.sessionStart[]] | all(.timeout > 120)' "$reg" >/dev/null 2>&1 \
@@ -737,6 +1304,27 @@ test_park_stands_down_after_session_takeover
 test_park_inert_in_child_worktree
 test_park_inert_in_child_worktree_with_inherited_primary_env
 test_park_ignores_malformed_payload
+test_precompact_marks_active_without_context
+test_after_agent_response_ends_the_window
+test_held_followup_survives_a_window_that_outlives_the_wait
+test_a_later_window_does_not_revive_an_expired_held_event
+test_a_long_window_is_still_stamped_closed
+test_once_only_object_never_evicts_a_deliverable_event
+test_held_wake_resets_the_budget_even_when_it_ages_out_while_waiting
+test_compaction_hooks_inert_in_child_worktree
+test_stale_compaction_mark_does_not_hold
+test_held_followup_survives_a_failed_commit
+test_park_holds_followup_during_compaction_then_delivers_once
+test_park_holds_nothing_once_away_mode_activates
+test_hold_is_written_without_releasing_the_owner_lock
+test_refused_nag_does_not_spend_its_budget
+test_held_wake_still_resets_the_nag_budget
+test_ceiling_notice_is_not_shadowed_by_a_held_followup
+test_ceiling_notice_survives_an_active_compaction_window
+test_ceiling_notice_is_parked_when_the_window_outlives_the_wait
+test_held_followup_is_bound_to_its_session_and_freshness
+test_undeliverable_held_record_does_not_block_the_slot
+test_repair_nag_charges_its_budget_when_held
 test_sessionstart_emits_additional_context
 test_sessionstart_silent_in_child_worktree
 test_tracked_registration_covers_the_primary_events

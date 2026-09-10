@@ -281,15 +281,22 @@ ok - cursor primary: an away-mode escalation is delivered, confirmed, and proces
 The live run proved that session start acquires the fleet lock through Cursor's structural process identity in `bin/fm-cursor-lib.sh`; `tests/fm-session-lock-ancestry.test.sh` pins the same ancestry path portably.
 It also proved that Cursor's `autoarm` supervision model lets the mid-turn pull guard accept a fresh beacon after the between-turn watcher closes; `tests/fm-guard-stale-banner.test.sh` pins that model-aware verdict.
 The baton is claimed only by the next `stop`, so an actionable close before that claim can still produce one real follow-up from the sole existing park; durable wake handling is idempotent, and any older park still running after the claim stands down.
-Cursor's `beforeSubmitPrompt` step could close that exact window because it fires once on a real captain message and not on hook-driven follow-ups, but registering it is deliberately deferred alongside `preCompact`.
+Cursor's `beforeSubmitPrompt` step could close that exact window because it fires once on a real captain message and not on hook-driven follow-ups, but registering it remains deferred.
 
 Away-mode delivery needed no daemon change once the composer reader was correct for Cursor; [`runtime-backends.md`](runtime-backends.md#composer) owns that evidence.
 
 Cursor compaction instruction refresh is DEFERRED and not shipped, so a Cursor primary does not re-emit its digest after a compaction.
 Two static facts decided that: `PreCompactRequestResponse` carries only `user_message`, and `preCompact` is absent from the `additional_context` step set (`index.js` @ 4814884), so the step cannot inject a digest and any delivery has to be routed through a later boundary.
-A staged-then-delivered design is rejected because carrying a digest across two concurrently running `stop` hooks can deliver it twice or strand it indefinitely, while closing those races enlarges a critical section inside a hook Cursor awaits at the turn boundary.
-Native `preCompact` firing was not observed because a real compaction could not be forced in the isolated session, so the surface has no empirical basis yet.
-It is therefore recorded as uncovered in the same sense as the Codex interactive TUI, and `tests/fm-cursor-primary.test.sh` asserts `preCompact` stays unregistered so it cannot return unnoticed without its own design and evidence.
+A staged-then-delivered DIGEST is still rejected, because carrying a digest across two concurrently running `stop` hooks can deliver it twice or strand it indefinitely, while closing those races enlarges a critical section inside a hook Cursor awaits at the turn boundary.
+That rejection is scoped to the digest and does not extend to the follow-up hold, which closes both races inside the existing commit section instead of adding one.
+Double delivery cannot happen because `hold_once` writes the single held record only when it is absent and the record is consumed only after its object was printed under the owner lock, in the same critical section the park already holds for every follow-up.
+Stranding cannot outlive one window either: a held record is claimed by the next stop before that park builds anything of its own, and the compaction mark carries `updated_at` and expires after the wait budget, so a Cursor that exits, crashes, or never fires `afterAgentResponse` cannot leave the park waiting on a mark nobody will clear.
+A held record outlives that budget only for the stop that follows the closing of the very window it was parked inside, keyed by that window's identity, so an unrelated later window cannot revive an event that already expired.
+The single slot cannot owe two submits, and that is an accepted gap rather than a guarantee: when the slot already holds a deliverable event and the window outlasts the park's wait, the once-only ceiling notice is absorbed instead of printed, and `loop_count` passes its ceiling exactly once so it is not rebuilt later.
+That needs a `preCompact` refreshing the mark during the wait or `FM_CURSOR_COMPACTION_MAX_AGE` configured above `FM_CURSOR_COMPACTION_WAIT_MAX`; with the defaults equal the mark expires as the wait ends and the notice prints. [`turnend-guard.md`](../turnend-guard.md) owns that contract.
+Native `preCompact` firing was not observed because a real compaction could not be forced in the isolated session, so the digest surface has no empirical basis yet.
+`afterAgentResponse` has no live observation either, which is why the mark expires by age rather than trusting that step to clear it.
+`preCompact` is registered only to mark compaction active so the park will not submit `followup_message` during that window; `tests/fm-cursor-primary.test.sh` proves hold-once, deliver-once, expiry of an abandoned mark, and that a commit which never printed re-parks its event.
 
 The Grok adaptive matrix ran on 2026-07-28 with separate scratch repositories and homes, dedicated tmux sockets, one target plus one control window, ambient tmux variables removed, and a socket-bound wrapper first in `PATH`.
 

@@ -68,8 +68,9 @@ Example: `../../../bin/fm-spawn.sh <task-id> <project> --scout --harness cursor 
 
 Primary supervision is the stop-hook park in `../../../docs/supervision-protocols/cursor.md` through tracked `.cursor/hooks.json`; primary and secondmate launches require `--trust` or hooks do not load.
 Cursor exposes 20 project events plus a Claude-Code compatibility map that loads `.claude/settings.json`.
-Tracked hooks register `stop`, `sessionStart`, and two `preToolUse` seatbelts through `$CURSOR_PROJECT_DIR`; Claude entries stand down on Cursor payloads under `../../../docs/turnend-guard.md`.
+Tracked hooks register `stop`, `sessionStart`, `preCompact`, `afterAgentResponse`, and four `preToolUse` seatbelts through `$CURSOR_PROJECT_DIR`; Claude entries stand down on Cursor payloads under `../../../docs/turnend-guard.md`.
 
 `stop` cannot block because exit 2 is a silent no-op, so `../../../bin/fm-turnend-guard-cursor.sh` parks on supervision and returns one bounded `followup_message`.
 It does not fire in headless `cursor-agent -p`.
-`preCompact` is unregistered because it cannot inject context, so digest re-emission after Cursor compaction remains deferred.
+`preCompact` cannot inject context, so digest re-emission after Cursor compaction remains deferred.
+It is registered only to mark compaction active so the stop park holds one follow-up, and `afterAgentResponse` stamps that window closed so the held object is submitted once.
