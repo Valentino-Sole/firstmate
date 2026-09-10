@@ -207,6 +207,153 @@ test_sync_probe_live_worker() {
   pass "live sonnet worker verifies effective model claude-sonnet-5"
 }
 
+write_opencode_meta() {
+  local id=$1 worktree=$2
+  cat > "$STATE/$id.meta" <<EOF
+harness=opencode
+model=sonnet
+requested_model=sonnet
+effective_model=pending
+effective_model_source=spawn-config
+effort=high
+worktree=$worktree
+herdr_pane_id=fakepane
+backend=herdr
+EOF
+}
+
+write_opencode_db() {
+  python3 - "$1" <<'PY'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    """CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      directory TEXT NOT NULL,
+      model TEXT,
+      time_updated INTEGER NOT NULL
+    )"""
+)
+con.commit()
+con.close()
+PY
+}
+
+insert_opencode_session() {  # <db> <id> <directory> <model-json> <time_updated>
+  python3 - "$1" "$2" "$3" "$4" "$5" <<'PY'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    "INSERT INTO session (id, directory, model, time_updated) VALUES (?, ?, ?, ?)",
+    (sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5])),
+)
+con.commit()
+con.close()
+PY
+}
+
+run_opencode_probe() {  # <task-id> <db>
+  local id=$1 db=$2 fakebin fakehome
+  fakebin=$(fm_fakebin "$TMP_ROOT/oc-$id")
+  fakehome="$TMP_ROOT/oc-$id/home"
+  mkdir -p "$fakehome"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+  chmod +x "$fakebin/herdr"
+  HOME="$fakehome" PATH="$fakebin:$PATH" OPENCODE_DB="$db" \
+    "$ROOT/bin/fm-model-sync.sh" "$STATE" "$id" --probe-only
+}
+
+test_opencode_probe_unique_hit() {
+  local id=oc-hit wt db
+  wt="$TMP_ROOT/wt-hit"
+  db="$TMP_ROOT/oc-hit.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_old "$wt/other" \
+    '{"id":"old-model","providerID":"opencode"}' 100
+  insert_opencode_session "$db" ses_hit "$wt" \
+    '{"id":"nemotron-3.5-lightning-free","providerID":"opencode","variant":"default"}' 200
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || fail "opencode unique hit probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/nemotron-3.5-lightning-free ] \
+    || fail "unique OpenCode session should record providerID/id, not requested_model: $(fm_model_effective "$STATE/$id.meta")"
+  [ "$(fm_model_effective_source "$STATE/$id.meta")" = opencode-session ] \
+    || fail "unique OpenCode session source should be opencode-session: $(fm_model_effective_source "$STATE/$id.meta")"
+  pass "OpenCode probe records providerID/id from a unique matching session"
+}
+
+test_opencode_probe_multiple_sessions() {
+  local newer_id=oc-multi-newer tie_id=oc-multi-tie wt db
+  wt="$TMP_ROOT/wt-multi"
+  db="$TMP_ROOT/oc-multi.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_old "$wt" \
+    '{"id":"older-model","providerID":"opencode"}' 100
+  insert_opencode_session "$db" ses_new "$wt" \
+    '{"id":"newer-model","providerID":"opencode"}' 300
+  write_opencode_meta "$newer_id" "$wt"
+  run_opencode_probe "$newer_id" "$db" >/dev/null || fail "opencode uniquely-newest probe failed"
+  [ "$(fm_model_effective "$STATE/$newer_id.meta")" = opencode/newer-model ] \
+    || fail "uniquely newest OpenCode session should win: $(fm_model_effective "$STATE/$newer_id.meta")"
+
+  db="$TMP_ROOT/oc-multi-tie.db"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_a "$wt" \
+    '{"id":"alpha-model","providerID":"opencode"}' 200
+  insert_opencode_session "$db" ses_b "$wt" \
+    '{"id":"beta-model","providerID":"opencode"}' 200
+  write_opencode_meta "$tie_id" "$wt"
+  run_opencode_probe "$tie_id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$tie_id.meta")" = pending ] \
+    || fail "tied OpenCode sessions must stay pending, not requested_model: $(fm_model_effective "$STATE/$tie_id.meta")"
+  pass "OpenCode probe keeps a unique newest session and stays pending on a timestamp tie"
+}
+
+test_opencode_probe_missing_db() {
+  local id=oc-missing wt db
+  wt="$TMP_ROOT/wt-missing"
+  db="$TMP_ROOT/no-such-opencode.db"
+  mkdir -p "$wt"
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "missing OpenCode db must leave effective pending: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe stays pending when the session database is missing"
+}
+
+test_opencode_probe_invalid_json() {
+  local id=oc-json wt db
+  wt="$TMP_ROOT/wt-json"
+  db="$TMP_ROOT/oc-json.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_bad "$wt" '{"id":"broken"' 200
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "invalid OpenCode model JSON must stay pending: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe stays pending on invalid session model JSON"
+}
+
+test_opencode_probe_foreign_directory() {
+  local id=oc-foreign wt db
+  wt="$TMP_ROOT/wt-foreign"
+  db="$TMP_ROOT/oc-foreign.db"
+  mkdir -p "$wt" "$TMP_ROOT/wt-other"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_other "$TMP_ROOT/wt-other" \
+    '{"id":"other-model","providerID":"opencode"}' 400
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "foreign-directory OpenCode session must stay pending: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe stays pending when the only session is in another directory"
+}
+
 test_exact_model_detection
 test_record_effective_and_history
 test_display_compact_alias_mismatch
@@ -218,3 +365,8 @@ test_source_label_distinguishes_grok_providers
 test_sync_reprobes_after_exact_effective
 test_sync_serializes_concurrent_probes
 test_sync_probe_live_worker
+test_opencode_probe_unique_hit
+test_opencode_probe_multiple_sessions
+test_opencode_probe_missing_db
+test_opencode_probe_invalid_json
+test_opencode_probe_foreign_directory

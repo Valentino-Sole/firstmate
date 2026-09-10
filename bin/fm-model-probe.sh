@@ -2,6 +2,13 @@
 # Probe the effective model for a task from runtime/session metadata only.
 # Prints: model=<id-or-empty> source=<probe-source>
 # Exits 0 when a candidate was read (even if not exact); 1 when nothing found.
+#
+# OpenCode evidence is a read-only query of OPENCODE_DB, or else
+# ${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db, table session.
+# It matches meta worktree= to session.directory exactly, takes only the
+# uniquely newest row, and composes providerID/id. It never writes that
+# database and never treats requested_model as runtime evidence.
+# Missing, unreadable, invalid, or ambiguous rows yield no candidate.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -117,7 +124,73 @@ probe_herdr_agent_session() {
   esac
 }
 
+probe_opencode_session() {
+  local harness worktree db model
+  harness=$(fm_model_meta_get "$META" harness)
+  [ "$harness" = opencode ] || return 1
+  worktree=$(fm_model_meta_get "$META" worktree)
+  [ -n "$worktree" ] || return 1
+  if [ -n "${OPENCODE_DB:-}" ]; then
+    db=$OPENCODE_DB
+  else
+    db="${XDG_DATA_HOME:-${HOME:-/home/vsole}/.local/share}/opencode/opencode.db"
+  fi
+  [ -f "$db" ] || return 1
+  [ -r "$db" ] || return 1
+  model=$(python3 - "$db" "$worktree" <<'PY'
+import json
+import os
+import sqlite3
+import sys
+
+db = sys.argv[1]
+directory = sys.argv[2]
+if not os.path.isfile(db) or not os.access(db, os.R_OK):
+    sys.exit(1)
+try:
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+except sqlite3.Error:
+    sys.exit(1)
+try:
+    rows = con.execute(
+        "SELECT model, time_updated FROM session WHERE directory = ? "
+        "ORDER BY time_updated DESC",
+        (directory,),
+    ).fetchall()
+except sqlite3.Error:
+    sys.exit(1)
+finally:
+    con.close()
+if not rows:
+    sys.exit(1)
+if len(rows) >= 2 and rows[0][1] == rows[1][1]:
+    sys.exit(1)
+raw = rows[0][0]
+try:
+    obj = json.loads(raw)
+except (TypeError, json.JSONDecodeError):
+    sys.exit(1)
+if not isinstance(obj, dict):
+    sys.exit(1)
+provider = obj.get("providerID")
+mid = obj.get("id")
+if not isinstance(provider, str) or not provider.strip():
+    sys.exit(1)
+if not isinstance(mid, str) or not mid.strip():
+    sys.exit(1)
+print(f"{provider.strip()}/{mid.strip()}")
+PY
+) || return 1
+  [ -n "$model" ] || return 1
+  printf 'model=%s\nsource=opencode-session\n' "$model"
+  return 0
+}
+
 if probe_herdr_agent_session; then
+  exit 0
+fi
+
+if probe_opencode_session; then
   exit 0
 fi
 
