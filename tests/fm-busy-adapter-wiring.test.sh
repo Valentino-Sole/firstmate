@@ -153,7 +153,11 @@ test_pi_extension_stale_incarnation_rejected() {
 drive_oc_plugin() {
   local plugin=$1
   shift
-  PLUGIN_PATH="$plugin" node --input-type=module - "$@" 2>&1 <<'EOF'
+  # The plugin now shells out to the real fm-model-sync.sh, whose OpenCode probe
+  # falls back to $HOME's own opencode.db. Pin a sandbox path so a caller that
+  # does not seed a database cannot reach the developer's real one.
+  PLUGIN_PATH="$plugin" OPENCODE_DB="${OPENCODE_DB:-$TMP_ROOT/absent-opencode.db}" \
+    node --input-type=module - "$@" 2>&1 <<'EOF'
 import { pathToFileURL } from "node:url";
 const mod = await import(pathToFileURL(process.env.PLUGIN_PATH).href);
 const hooks = await mod.FmBusyState({});
@@ -217,6 +221,167 @@ test_opencode_plugin_semantic_lifecycle() {
   out=$(classify opencode "$id" "$state")
   [ "$out" = "busy opencode-plugin" ] || fail "another session's idle must not clear the latched busy, got '$out'"
   pass "opencode plugin classifies from session.status, scoped to the latched worker session"
+}
+
+meta_value() {  # <meta> <key>
+  awk -F= -v k="$2" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$1"
+}
+
+# The plugin fires its model sync without awaiting it, so a landed value is
+# observed by polling rather than by the drive call returning.
+await_meta_value() {  # <meta> <key> <expected>
+  local waited=0
+  while [ "$(meta_value "$1" "$2")" != "$3" ] && [ "$waited" -lt 150 ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  [ "$(meta_value "$1" "$2")" = "$3" ]
+}
+
+# seed_opencode_session <db> <directory> <time-ms>: build a stand-in for
+# OpenCode's own store holding one session the current run created in
+# <directory>, launched with a model that has not answered anything yet.
+seed_opencode_session() {
+  python3 - "$1" "$2" "$3" <<'EOF'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    """CREATE TABLE IF NOT EXISTS session (
+      id TEXT PRIMARY KEY,
+      parent_id TEXT,
+      directory TEXT NOT NULL,
+      model TEXT,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL
+    )"""
+)
+con.execute(
+    """CREATE TABLE IF NOT EXISTS message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )"""
+)
+stamp = int(sys.argv[3])
+con.execute(
+    "INSERT INTO session (id, parent_id, directory, model, time_created, time_updated) "
+    "VALUES ('ses_main', NULL, ?, ?, ?, ?)",
+    (sys.argv[2], '{"id":"launch-flag-model","providerID":"opencode"}', stamp, stamp),
+)
+con.commit()
+con.close()
+EOF
+}
+
+# seed_opencode_answer <db> <providerID> <modelID> <time-ms>: record one
+# assistant turn, the only evidence that a model actually answered.
+seed_opencode_answer() {
+  python3 - "$1" "$2" "$3" "$4" <<'EOF'
+import json, sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+stamp = int(sys.argv[4])
+con.execute(
+    "INSERT INTO message (id, session_id, time_created, time_updated, data) "
+    "VALUES (?, 'ses_main', ?, ?, ?)",
+    (f"msg_{stamp}", stamp, stamp,
+     json.dumps({"role": "assistant", "providerID": sys.argv[2], "modelID": sys.argv[3]})),
+)
+con.commit()
+con.close()
+EOF
+}
+
+test_opencode_plugin_syncs_effective_model() {
+  local rec id=busy-oc-model out state plugin meta db epoch
+  rec=$(make_spawn_case oc-model opencode "$id")
+  read_case_record "$rec"
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
+  expect_code 0 $? "opencode spawn should succeed: $out"
+  state="$HOME_DIR/state"
+  meta="$state/$id.meta"
+  plugin="$WT_DIR/.opencode/plugins/fm-busy-state.js"
+  assert_present "$plugin" "opencode spawn did not write the busy-state plugin"
+
+  epoch=$(meta_value "$meta" spawn_epoch)
+  case "$epoch" in
+    ''|*[!0-9]*) fail "opencode spawn did not record a numeric spawn_epoch: '$epoch'" ;;
+  esac
+  db="$CASE_DIR/opencode.db"
+  # OpenCode only writes its session row once the agent is up, which is after
+  # the spawn-time probe has already run: the spawn must therefore still be
+  # pending here, and only a plugin event may verify the model.
+  [ "$(meta_value "$meta" effective_model)" = pending ] \
+    || fail "spawn-time probe should leave OpenCode pending, got '$(meta_value "$meta" effective_model)'"
+  seed_opencode_session "$db" "$(meta_value "$meta" worktree)" "$((epoch * 1000 + 1500))"
+
+  seed_opencode_answer "$db" opencode nemotron-3.5-lightning-free "$((epoch * 1000 + 2000))"
+  out=$(OPENCODE_DB="$db" drive_oc_plugin "$plugin" "$(oc_status ses_main busy)") \
+    || fail "opencode busy drive failed: $out"
+  await_meta_value "$meta" effective_model opencode/nemotron-3.5-lightning-free \
+    || fail "a latched session's busy event must verify the runtime model, got '$(meta_value "$meta" effective_model)'"
+  [ "$(meta_value "$meta" effective_model_source)" = opencode-session ] \
+    || fail "verified OpenCode model must record source opencode-session, got '$(meta_value "$meta" effective_model_source)'"
+
+  # A mid-flight model switch must reach the metadata at the next turn boundary.
+  seed_opencode_answer "$db" opencode ling-3.0-flash-fin-free "$((epoch * 1000 + 3000))"
+  rm -f "$state/$id.turn-ended"
+  out=$(OPENCODE_DB="$db" drive_oc_plugin "$plugin" \
+    "$(oc_status ses_main busy)" "$(oc_idle ses_main)") \
+    || fail "opencode idle drive failed: $out"
+  [ -f "$state/$id.turn-ended" ] || fail "session.idle must still touch the notification marker"
+  await_meta_value "$meta" effective_model opencode/ling-3.0-flash-fin-free \
+    || fail "a later turn boundary must re-sync a mid-flight model switch, got '$(meta_value "$meta" effective_model)'"
+  pass "opencode plugin verifies the runtime model on the latched session's turn boundaries"
+}
+
+test_opencode_plugin_turnend_touch_is_not_blocked_by_model_sync() {
+  local rec id=busy-oc-touch out state plugin meta db epoch lock holder waited
+  rec=$(make_spawn_case oc-touch opencode "$id")
+  read_case_record "$rec"
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
+  expect_code 0 $? "opencode spawn should succeed: $out"
+  state="$HOME_DIR/state"
+  meta="$state/$id.meta"
+  plugin="$WT_DIR/.opencode/plugins/fm-busy-state.js"
+  epoch=$(meta_value "$meta" spawn_epoch)
+  db="$CASE_DIR/opencode.db"
+  seed_opencode_session "$db" "$(meta_value "$meta" worktree)" "$((epoch * 1000 + 1500))"
+  seed_opencode_answer "$db" opencode nemotron-3.5-lightning-free "$((epoch * 1000 + 2000))"
+
+  # fm-model-sync.sh waits on the per-task meta lock with no time limit, so a
+  # live holder stalls every model sync. The watcher's wake notification must
+  # not be stuck behind it.
+  lock=$(FM_LOCK_PATH_ONLY=1 bash -c '. "$1/bin/fm-backend.sh"; . "$1/bin/fm-wake-lib.sh"; fm_meta_lock_path "$2"' _ "$ROOT" "$meta")
+  [ -n "$lock" ] || fail "could not resolve the per-task meta lock path"
+  bash -c '. "$1/bin/fm-backend.sh"; . "$1/bin/fm-wake-lib.sh"; fm_lock_acquire_wait "$2"; touch "$3"; sleep 30' \
+    _ "$ROOT" "$lock" "$CASE_DIR/lock-held" &
+  holder=$!
+  waited=0
+  while [ ! -f "$CASE_DIR/lock-held" ] && [ "$waited" -lt 100 ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  [ -f "$CASE_DIR/lock-held" ] || { kill "$holder" 2>/dev/null; fail "the meta lock holder never started"; }
+
+  rm -f "$state/$id.turn-ended"
+  OPENCODE_DB="$db" drive_oc_plugin "$plugin" \
+    "$(oc_status ses_main busy)" "$(oc_idle ses_main)" >/dev/null 2>&1 &
+  waited=0
+  while [ ! -f "$state/$id.turn-ended" ] && [ "$waited" -lt 50 ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  if [ ! -f "$state/$id.turn-ended" ]; then
+    kill "$holder" 2>/dev/null
+    wait "$holder" 2>/dev/null
+    fail "the turn-end notification was serialized behind the model sync's meta lock wait"
+  fi
+  kill "$holder" 2>/dev/null
+  wait "$holder" 2>/dev/null
+  wait 2>/dev/null
+  pass "opencode session.idle notifies the watcher without waiting on the model sync"
 }
 
 run_claude_hook() {  # <settings.json> <hook-event>
@@ -419,6 +584,8 @@ test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
 test_kimi_and_grok_install_no_unverified_wiring
 test_opencode_plugin_semantic_lifecycle
+test_opencode_plugin_syncs_effective_model
+test_opencode_plugin_turnend_touch_is_not_blocked_by_model_sync
 test_claude_hooks_semantic_lifecycle
 test_claude_hooks_stale_incarnation_harmless
 test_gemini_hooks_semantic_lifecycle

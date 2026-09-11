@@ -34,10 +34,12 @@ META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for $ID" >&2; exit 1; }
 
 if [ "$MODE" != display ]; then
-  # Overlapping Pi/Claude lifecycle events can invoke this script concurrently
-  # for the same task; serialize the read-probe-write below through the same
-  # per-task meta lock fm-spawn.sh uses, so interleaved updates can never
-  # revert a newer effective model or duplicate a history entry.
+  # Overlapping harness lifecycle events can invoke this script concurrently
+  # for the same task; Claude's hooks, Pi's extension, and OpenCode's plugin
+  # each fire it at their own turn boundaries. Serialize the read-probe-write
+  # below through the same per-task meta lock fm-spawn.sh uses, so interleaved
+  # updates can never revert a newer effective model or duplicate a history
+  # entry.
   MODEL_SYNC_LOCK=$(fm_meta_lock_path "$META") || exit 1
   fm_lock_acquire_wait "$MODEL_SYNC_LOCK"
   requested=$(fm_model_requested "$META")
