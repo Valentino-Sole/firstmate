@@ -6,9 +6,13 @@
 # See docs/klartext-uebernahme-isolation.md.
 #
 # The inventory is deliberately split across two homes (see LIESMICH.md):
-# --search and --paths check the isolated root's own suche.sh first, then the
-# migration home's protokolle copy, and use whichever is actually executable.
-# A server without the migration home simply has only the first candidate.
+# UEBERNAHME_ROOT selects the isolated index root; PROTOKOLLE_SUCHE selects the
+# migration home's protokolle/suche.sh fallback (defaults are assigned below).
+# Unset or empty overrides use those defaults.
+# --search and --paths select the first executable helper: $UEBERNAHME_ROOT/suche.sh,
+# then $PROTOKOLLE_SUCHE, since either half of the inventory may be absent.
+# If neither is executable, --paths reports search_helper=missing with both
+# checked paths; --search reports both paths on stderr and exits with status 1.
 set -u
 
 UEBERNAHME_ROOT=${UEBERNAHME_ROOT:-/home/vsole/uebernahme-arbeits-pc}
@@ -16,10 +20,6 @@ INDEX_DIR="$UEBERNAHME_ROOT/_index"
 LIESMICH="$UEBERNAHME_ROOT/LIESMICH.md"
 SCOUT_REPORT_REL=data/fm-gedaechtnis-bestandsaufnahme/report.md
 
-# The bundled search helper lives in whichever half of the deliberately
-# two-way-split inventory happens to carry it (see LIESMICH.md): the isolated
-# root itself on a server that has one, or the migration home's protokolle
-# folder on a server that has that instead. A server may have neither.
 PROTOKOLLE_SUCHE=${PROTOKOLLE_SUCHE:-/home/vsole/data/workspaces/secondmate-migration/data/uebernahme-arbeits-pc-gross/protokolle/suche.sh}
 
 usage() {
@@ -39,9 +39,6 @@ Full contract: docs/klartext-uebernahme-isolation.md
 EOF
 }
 
-# Prints the first executable search helper across both halves of the split
-# inventory, isolated root first. Returns 1 with nothing printed when neither
-# location has it (expected on a server without the migration home).
 find_search_helper() {
   if [ -x "$UEBERNAHME_ROOT/suche.sh" ]; then
     printf '%s\n' "$UEBERNAHME_ROOT/suche.sh"
