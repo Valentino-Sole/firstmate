@@ -43,7 +43,7 @@ Use the curated index and search helpers instead:
 | Session index | `/home/vsole/uebernahme-arbeits-pc/_index/sitzungen.jsonl` |
 | Prompt index | `/home/vsole/uebernahme-arbeits-pc/_index/prompts.tsv` |
 | Plaintext warning | `/home/vsole/uebernahme-arbeits-pc/LIESMICH.md` |
-| Search helper | `/home/vsole/uebernahme-arbeits-pc/suche.sh` |
+| Search helper | `bin/fm-klartext-uebernahme-index.sh --paths` prints the actually found copy; see the script header for the checked locations |
 
 Firstmate helper:
 
