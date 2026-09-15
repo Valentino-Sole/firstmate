@@ -1,0 +1,36 @@
+CLI-Nachweis am realen, unveränderten Bestand; ohne Pfad-Overrides.
+
+$ Basis f6d6fabe: bash -s -- --search vercel (Skript aus git show)
+missing search helper: /home/vsole/uebernahme-arbeits-pc/suche.sh
+[Exit 1]
+
+$ bin/fm-klartext-uebernahme-index.sh --paths
+isolated_root=/home/vsole/uebernahme-arbeits-pc
+index_overview=/home/vsole/uebernahme-arbeits-pc/_index/UEBERSICHT.md
+index_sessions=/home/vsole/uebernahme-arbeits-pc/_index/sitzungen.jsonl
+index_prompts=/home/vsole/uebernahme-arbeits-pc/_index/prompts.tsv
+liesmich=/home/vsole/uebernahme-arbeits-pc/LIESMICH.md
+search_helper=/home/vsole/data/workspaces/secondmate-migration/data/uebernahme-arbeits-pc-gross/protokolle/suche.sh
+scout_report=data/fm-gedaechtnis-bestandsaufnahme/report.md
+[Exit 0]
+
+$ bin/fm-klartext-uebernahme-index.sh --search vercel
+2026-07-23T10:42  C--Users-vsole-wpg6n5r-Downloads-juswing-projekt-komplett  Sitzung 9b661ff1-7c30-422f-a4eb-e4e02f3f9095
+  Übergabe — Card Arena (Sealed-Kategorien & Import-Vorbereitung) Projekt & Umgebung. Gearbeitet wird in `C:\Users\vsole_wpg6n5r\card-arena-web` (Next.js 15 App Router + Supabase, deutsch-first). Git: github.com/Valentino-Sole/card-arena, Aut...
+
+2026-06-11T21:55  C--Users-vsole-wpg6n5r-Downloads-juswing-projekt-komplett  Sitzung e47c9639-5a49-431e-897b-4f600c11f47d
+  https://card-arena-one.vercel.app/
+
+2026-06-11T22:02  C--Users-vsole-wpg6n5r-Downloads-juswing-projekt-komplett  Sitzung e47c9639-5a49-431e-897b-4f600c11f47d
+  mist wie hab ich mich in vercel angemeldet vorhon
+
+2026-06-11T22:08  C--Users-vsole-wpg6n5r-Downloads-juswing-projekt-komplett  Sitzung e47c9639-5a49-431e-897b-4f600c11f47d
+  bin drinnen was soll ich machen bei vercel
+
+2026-06-12T00:12  C--Users-vsole-wpg6n5r-Downloads-juswing-projekt-komplett  Sitzung e47c9639-5a49-431e-897b-4f600c11f47d
+  This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation. Summary: 1. Primary Request and Intent: The user is the non-technical owner of "Card Are...
+
+[Exit 0]
+
+Direktvergleich: /home/vsole/data/workspaces/secondmate-migration/data/uebernahme-arbeits-pc-gross/protokolle/suche.sh vercel
+Exitcode, stdout und stderr stimmen vollständig mit dem Index-Aufruf überein.
