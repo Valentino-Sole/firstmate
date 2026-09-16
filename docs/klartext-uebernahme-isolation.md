@@ -43,7 +43,7 @@ Use the curated index and search helpers instead:
 | Session index | `/home/vsole/uebernahme-arbeits-pc/_index/sitzungen.jsonl` |
 | Prompt index | `/home/vsole/uebernahme-arbeits-pc/_index/prompts.tsv` |
 | Plaintext warning | `/home/vsole/uebernahme-arbeits-pc/LIESMICH.md` |
-| Search helper | `/home/vsole/uebernahme-arbeits-pc/suche.sh` |
+| Search helper | `bin/fm-klartext-uebernahme-index.sh --paths` reports the executable copy or missing status; the [script header](../bin/fm-klartext-uebernahme-index.sh) owns path configuration and lookup order |
 
 Firstmate helper:
 
@@ -84,7 +84,7 @@ The guard **allows**:
   `ls`, `stat`, `file`, `wc`, `diff`, and similar).
 - `sqlite3` queries that mention the isolated copy but carry no write-shaped
   SQL marker.
-- `bin/fm-klartext-uebernahme-index.sh` and `suche.sh` from the isolated tree.
+- `bin/fm-klartext-uebernahme-index.sh` and the inventory's `suche.sh`, including the migration home's copy.
 - Commands with no `uebernahme-arbeits-pc` substring (fast prefilter allow).
 
 Set `FM_ALLOW_KLARTEXT_UEBERNAHME_MUTATION=1` in the session environment only

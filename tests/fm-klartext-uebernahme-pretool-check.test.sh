@@ -136,9 +136,61 @@ test_index_helper_paths() {
     "index helper lost overview path"
   assert_contains "$out" "isolated_root=/home/vsole/uebernahme-arbeits-pc" \
     "index helper lost isolated_root"
-  assert_contains "$out" "search_helper=/home/vsole/uebernahme-arbeits-pc/suche.sh" \
-    "index helper lost search helper path"
+  assert_contains "$out" "search_helper=" \
+    "index helper lost search_helper line"
   pass "fm-klartext-uebernahme-index.sh: --paths prints authoritative entry points"
+}
+
+test_index_helper_search_fallback() {
+  local iso_root proto_dir proto_helper out rc
+
+  # Neither location has the helper: error must name both checked paths.
+  iso_root="$TMP_ROOT/idx-neither/isolated"
+  proto_dir="$TMP_ROOT/idx-neither/protokolle"
+  mkdir -p "$iso_root" "$proto_dir"
+  out=$(UEBERNAHME_ROOT="$iso_root" PROTOKOLLE_SUCHE="$proto_dir/suche.sh" \
+    "$ROOT/bin/fm-klartext-uebernahme-index.sh" --search foo 2>&1); rc=$?
+  [ "$rc" -ne 0 ] || fail "search with neither helper present should fail, got rc=0 out=$out"
+  assert_contains "$out" "$iso_root/suche.sh" "neither-case error dropped isolated_root path"
+  assert_contains "$out" "$proto_dir/suche.sh" "neither-case error dropped protokolle path"
+  out=$(UEBERNAHME_ROOT="$iso_root" PROTOKOLLE_SUCHE="$proto_dir/suche.sh" \
+    "$ROOT/bin/fm-klartext-uebernahme-index.sh" --paths 2>&1)
+  assert_contains "$out" "search_helper=missing" "neither-case --paths did not report missing"
+  assert_contains "$out" "$iso_root/suche.sh" "neither-case --paths dropped isolated_root path"
+  assert_contains "$out" "$proto_dir/suche.sh" "neither-case --paths dropped protokolle path"
+
+  # Only the migration home's protokolle copy has it: that one must be used
+  # and print_paths must print the real found path, not the isolated guess.
+  iso_root="$TMP_ROOT/idx-protokolle-only/isolated"
+  proto_dir="$TMP_ROOT/idx-protokolle-only/protokolle"
+  mkdir -p "$iso_root" "$proto_dir"
+  proto_helper="$proto_dir/suche.sh"
+  printf '#!/usr/bin/env bash\necho "found:$1"\n' > "$proto_helper"
+  chmod +x "$proto_helper"
+  out=$(UEBERNAHME_ROOT="$iso_root" PROTOKOLLE_SUCHE="$proto_helper" \
+    "$ROOT/bin/fm-klartext-uebernahme-index.sh" --search bar 2>&1) \
+    || fail "protokolle-only search should succeed: $out"
+  assert_contains "$out" "found:bar" "protokolle-only fallback did not run the found helper"
+  out=$(UEBERNAHME_ROOT="$iso_root" PROTOKOLLE_SUCHE="$proto_helper" \
+    "$ROOT/bin/fm-klartext-uebernahme-index.sh" --paths 2>&1)
+  assert_contains "$out" "search_helper=$proto_helper" \
+    "protokolle-only --paths did not print the actually found path"
+
+  # Both present: the isolated root's own copy wins.
+  local iso_helper
+  iso_helper="$iso_root/suche.sh"
+  printf '#!/usr/bin/env bash\necho "isolated:$1"\n' > "$iso_helper"
+  chmod +x "$iso_helper"
+  out=$(UEBERNAHME_ROOT="$iso_root" PROTOKOLLE_SUCHE="$proto_helper" \
+    "$ROOT/bin/fm-klartext-uebernahme-index.sh" --search baz 2>&1) \
+    || fail "both-present search should succeed: $out"
+  assert_contains "$out" "isolated:baz" "both-present case did not prefer the isolated root copy"
+  out=$(UEBERNAHME_ROOT="$iso_root" PROTOKOLLE_SUCHE="$proto_helper" \
+    "$ROOT/bin/fm-klartext-uebernahme-index.sh" --paths 2>&1)
+  assert_contains "$out" "search_helper=$iso_helper" \
+    "both-present --paths did not print the preferred isolated_root path"
+
+  pass "fm-klartext-uebernahme-index.sh: --search/--paths check both split-inventory locations"
 }
 
 test_harness_wiring() {
@@ -173,5 +225,6 @@ test_non_firstmate_inert
 test_child_worktree_active
 test_policy_owner_direct
 test_index_helper_paths
+test_index_helper_search_fallback
 test_harness_wiring
 test_lint_clean
