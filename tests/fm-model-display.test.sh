@@ -207,6 +207,334 @@ test_sync_probe_live_worker() {
   pass "live sonnet worker verifies effective model claude-sonnet-5"
 }
 
+# OpenCode stores session timestamps as epoch MILLISECONDS, and the probe binds
+# them to the task's spawn_epoch (epoch seconds). These fixtures use a fixed run
+# start so "before" and "after" the current run are unambiguous.
+OC_RUN_EPOCH=1789000000
+OC_RUN_MS=$((OC_RUN_EPOCH * 1000))
+
+write_opencode_meta() {  # <id> <worktree> [spawn-epoch]
+  local id=$1 worktree=$2 epoch=${3:-$OC_RUN_EPOCH}
+  cat > "$STATE/$id.meta" <<EOF
+harness=opencode
+model=sonnet
+requested_model=sonnet
+effective_model=pending
+effective_model_source=spawn-config
+effort=high
+worktree=$worktree
+spawn_epoch=$epoch
+herdr_pane_id=fakepane
+backend=herdr
+EOF
+}
+
+# Mirrors OpenCode's own session and message tables for the columns the probe
+# reads. session.model carries the model picked at launch; only an assistant
+# message proves a model actually answered.
+write_opencode_db() {
+  python3 - "$1" <<'PY'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    """CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      parent_id TEXT,
+      directory TEXT NOT NULL,
+      model TEXT,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL
+    )"""
+)
+con.execute(
+    """CREATE TABLE message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )"""
+)
+con.commit()
+con.close()
+PY
+}
+
+# An assistant turn: providerID and modelID sit at the top level of data.
+insert_opencode_answer() {  # <db> <session-id> <providerID> <modelID> <time_created>
+  python3 - "$1" "$2" "$3" "$4" "$5" <<'PY'
+import json, sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+stamp = int(sys.argv[5])
+con.execute(
+    "INSERT INTO message (id, session_id, time_created, time_updated, data) "
+    "VALUES (?, ?, ?, ?, ?)",
+    (f"msg_{sys.argv[2]}_{stamp}", sys.argv[2], stamp, stamp,
+     json.dumps({"role": "assistant", "providerID": sys.argv[3], "modelID": sys.argv[4]})),
+)
+con.commit()
+con.close()
+PY
+}
+
+# A user turn: it carries only the SELECTED model, nested under data.model.
+insert_opencode_prompt() {  # <db> <session-id> <providerID> <modelID> <time_created>
+  python3 - "$1" "$2" "$3" "$4" "$5" <<'PY'
+import json, sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+stamp = int(sys.argv[5])
+con.execute(
+    "INSERT INTO message (id, session_id, time_created, time_updated, data) "
+    "VALUES (?, ?, ?, ?, ?)",
+    (f"msg_{sys.argv[2]}_{stamp}", sys.argv[2], stamp, stamp,
+     json.dumps({"role": "user",
+                 "model": {"providerID": sys.argv[3], "modelID": sys.argv[4]}})),
+)
+con.commit()
+con.close()
+PY
+}
+
+insert_opencode_session() {  # <db> <id> <directory> <model-json> <time_updated> [time_created] [parent_id]
+  python3 - "$1" "$2" "$3" "$4" "$5" "${6:-$5}" "${7:-}" <<'PY'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    "INSERT INTO session (id, parent_id, directory, model, time_created, time_updated) "
+    "VALUES (?, ?, ?, ?, ?, ?)",
+    (sys.argv[2], sys.argv[7] or None, sys.argv[3], sys.argv[4],
+     int(sys.argv[6]), int(sys.argv[5])),
+)
+con.commit()
+con.close()
+PY
+}
+
+run_opencode_probe() {  # <task-id> <db>
+  local id=$1 db=$2 fakebin fakehome
+  fakebin=$(fm_fakebin "$TMP_ROOT/oc-$id")
+  fakehome="$TMP_ROOT/oc-$id/home"
+  mkdir -p "$fakehome"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+  chmod +x "$fakebin/herdr"
+  HOME="$fakehome" PATH="$fakebin:$PATH" OPENCODE_DB="$db" \
+    "$ROOT/bin/fm-model-sync.sh" "$STATE" "$id" --probe-only
+}
+
+test_opencode_probe_unique_hit() {
+  local id=oc-hit wt db
+  wt="$TMP_ROOT/wt-hit"
+  db="$TMP_ROOT/oc-hit.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_old "$wt/other" \
+    '{"id":"old-model","providerID":"opencode"}' $((OC_RUN_MS + 100))
+  insert_opencode_session "$db" ses_hit "$wt" \
+    '{"id":"launch-flag-model","providerID":"opencode","variant":"default"}' $((OC_RUN_MS + 200))
+  insert_opencode_answer "$db" ses_hit opencode nemotron-3.5-lightning-free $((OC_RUN_MS + 150))
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || fail "opencode unique hit probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/nemotron-3.5-lightning-free ] \
+    || fail "unique OpenCode session should record providerID/id, not requested_model: $(fm_model_effective "$STATE/$id.meta")"
+  [ "$(fm_model_effective_source "$STATE/$id.meta")" = opencode-session ] \
+    || fail "unique OpenCode session source should be opencode-session: $(fm_model_effective_source "$STATE/$id.meta")"
+  pass "OpenCode probe records providerID/id from a unique matching session"
+}
+
+test_opencode_probe_multiple_sessions() {
+  local newer_id=oc-multi-newer tie_id=oc-multi-tie wt db
+  wt="$TMP_ROOT/wt-multi"
+  db="$TMP_ROOT/oc-multi.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_old "$wt" \
+    '{"id":"older-model","providerID":"opencode"}' $((OC_RUN_MS + 100))
+  insert_opencode_session "$db" ses_new "$wt" \
+    '{"id":"newer-model","providerID":"opencode"}' $((OC_RUN_MS + 300))
+  insert_opencode_answer "$db" ses_old opencode older-model $((OC_RUN_MS + 90))
+  insert_opencode_answer "$db" ses_new opencode newer-model $((OC_RUN_MS + 290))
+  write_opencode_meta "$newer_id" "$wt"
+  run_opencode_probe "$newer_id" "$db" >/dev/null || fail "opencode uniquely-newest probe failed"
+  [ "$(fm_model_effective "$STATE/$newer_id.meta")" = opencode/newer-model ] \
+    || fail "uniquely newest OpenCode session should win: $(fm_model_effective "$STATE/$newer_id.meta")"
+
+  db="$TMP_ROOT/oc-multi-tie.db"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_a "$wt" \
+    '{"id":"alpha-model","providerID":"opencode"}' $((OC_RUN_MS + 200))
+  insert_opencode_session "$db" ses_b "$wt" \
+    '{"id":"beta-model","providerID":"opencode"}' $((OC_RUN_MS + 200))
+  insert_opencode_answer "$db" ses_a opencode alpha-model $((OC_RUN_MS + 190))
+  insert_opencode_answer "$db" ses_b opencode beta-model $((OC_RUN_MS + 190))
+  write_opencode_meta "$tie_id" "$wt"
+  run_opencode_probe "$tie_id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$tie_id.meta")" = pending ] \
+    || fail "tied OpenCode sessions must stay pending, not requested_model: $(fm_model_effective "$STATE/$tie_id.meta")"
+  pass "OpenCode probe keeps a unique newest session and stays pending on a timestamp tie"
+}
+
+test_opencode_probe_missing_db() {
+  local id=oc-missing wt db
+  wt="$TMP_ROOT/wt-missing"
+  db="$TMP_ROOT/no-such-opencode.db"
+  mkdir -p "$wt"
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "missing OpenCode db must leave effective pending: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe stays pending when the session database is missing"
+}
+
+test_opencode_probe_invalid_json() {
+  local id=oc-json wt db
+  wt="$TMP_ROOT/wt-json"
+  db="$TMP_ROOT/oc-json.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_bad "$wt" '{"id":"broken"' $((OC_RUN_MS + 200))
+  python3 - "$db" <<'PY'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute(
+    "INSERT INTO message (id, session_id, time_created, time_updated, data) "
+    "VALUES ('msg_bad', 'ses_bad', 1, 1, '{\"role\":\"assistant\"')",
+)
+con.commit()
+con.close()
+PY
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "invalid OpenCode message JSON must stay pending: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe stays pending on invalid session and message JSON"
+}
+
+test_opencode_probe_previous_run_session() {
+  local id=oc-stale wt db
+  wt="$TMP_ROOT/wt-stale"
+  db="$TMP_ROOT/oc-stale.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  # A relaunch reuses the worktree, so the previous run's session row is still
+  # the newest row for this directory until the new agent creates its own.
+  insert_opencode_session "$db" ses_prev "$wt" \
+    '{"id":"previous-run-model","providerID":"opencode"}' \
+    $((OC_RUN_MS - 1000)) $((OC_RUN_MS - 5000))
+  insert_opencode_answer "$db" ses_prev opencode previous-run-model $((OC_RUN_MS - 2000))
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "a previous run's session must not be reported as this run's model: $(fm_model_effective "$STATE/$id.meta")"
+  [ ! -s "$(fm_model_history_file "$STATE" "$id")" ] \
+    || fail "a previous run's session must not enter the model history"
+
+  insert_opencode_session "$db" ses_current "$wt" \
+    '{"id":"current-run-model","providerID":"opencode"}' \
+    $((OC_RUN_MS + 2000)) $((OC_RUN_MS + 1000))
+  insert_opencode_answer "$db" ses_current opencode current-run-model $((OC_RUN_MS + 1900))
+  run_opencode_probe "$id" "$db" >/dev/null || fail "current-run opencode probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/current-run-model ] \
+    || fail "the session this run created should win: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe ignores a previous run's session and reports the current run's"
+}
+
+test_opencode_probe_child_session() {
+  local id=oc-child wt db
+  wt="$TMP_ROOT/wt-child"
+  db="$TMP_ROOT/oc-child.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  # A subagent's child session inherits the parent's directory and can be the
+  # newest row while the worker's own session is still the one that matters.
+  insert_opencode_session "$db" ses_worker "$wt" \
+    '{"id":"worker-model","providerID":"opencode"}' \
+    $((OC_RUN_MS + 1000)) $((OC_RUN_MS + 500))
+  insert_opencode_session "$db" ses_sub "$wt" \
+    '{"id":"subagent-model","providerID":"opencode"}' \
+    $((OC_RUN_MS + 9000)) $((OC_RUN_MS + 8000)) ses_worker
+  insert_opencode_answer "$db" ses_worker opencode worker-model $((OC_RUN_MS + 900))
+  insert_opencode_answer "$db" ses_sub opencode subagent-model $((OC_RUN_MS + 8900))
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || fail "child-session opencode probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/worker-model ] \
+    || fail "a subagent child session must not stand in for the worker: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe reports the worker session, not a newer subagent child session"
+}
+
+test_opencode_probe_requires_an_answered_turn() {
+  local id=oc-unanswered wt db
+  wt="$TMP_ROOT/wt-unanswered"
+  db="$TMP_ROOT/oc-unanswered.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  # OpenCode fills session.model from the --model launch flag before the agent
+  # has answered anything, so on its own it is requested_model laundered
+  # through the database, not runtime evidence.
+  insert_opencode_session "$db" ses_fresh "$wt" \
+    '{"id":"launch-flag-model","providerID":"opencode"}' $((OC_RUN_MS + 200))
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "the launch-selected model alone must stay pending: $(fm_model_effective "$STATE/$id.meta")"
+
+  # The prompt row carries the same selected model, still with nothing answered.
+  insert_opencode_prompt "$db" ses_fresh opencode launch-flag-model $((OC_RUN_MS + 300))
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "a user turn's selected model must stay pending: $(fm_model_effective "$STATE/$id.meta")"
+  [ ! -s "$(fm_model_history_file "$STATE" "$id")" ] \
+    || fail "an unanswered session must not enter the model history"
+
+  # Only a real assistant turn proves which model answered.
+  insert_opencode_answer "$db" ses_fresh opencode answered-model $((OC_RUN_MS + 400))
+  run_opencode_probe "$id" "$db" >/dev/null || fail "answered-turn opencode probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/answered-model ] \
+    || fail "an assistant turn should verify the model that answered: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe verifies only a model an assistant turn proves, never the launch-selected one"
+}
+
+test_opencode_probe_newest_answer_wins() {
+  local id=oc-switch wt db
+  wt="$TMP_ROOT/wt-switch"
+  db="$TMP_ROOT/oc-switch.db"
+  mkdir -p "$wt"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_switch "$wt" \
+    '{"id":"launch-flag-model","providerID":"opencode"}' $((OC_RUN_MS + 500))
+  insert_opencode_answer "$db" ses_switch opencode first-model $((OC_RUN_MS + 100))
+  insert_opencode_answer "$db" ses_switch opencode second-model $((OC_RUN_MS + 200))
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || fail "mid-flight switch opencode probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/second-model ] \
+    || fail "the newest assistant turn should win: $(fm_model_effective "$STATE/$id.meta")"
+
+  # A prompt submitted after the last answer must not undo the proven model.
+  insert_opencode_prompt "$db" ses_switch opencode third-model $((OC_RUN_MS + 300))
+  run_opencode_probe "$id" "$db" >/dev/null || fail "post-prompt opencode probe failed"
+  [ "$(fm_model_effective "$STATE/$id.meta")" = opencode/second-model ] \
+    || fail "an unanswered prompt must not change the proven model: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe follows a mid-flight switch through the newest assistant turn"
+}
+
+test_opencode_probe_foreign_directory() {
+  local id=oc-foreign wt db
+  wt="$TMP_ROOT/wt-foreign"
+  db="$TMP_ROOT/oc-foreign.db"
+  mkdir -p "$wt" "$TMP_ROOT/wt-other"
+  write_opencode_db "$db"
+  insert_opencode_session "$db" ses_other "$TMP_ROOT/wt-other" \
+    '{"id":"other-model","providerID":"opencode"}' $((OC_RUN_MS + 400))
+  insert_opencode_answer "$db" ses_other opencode other-model $((OC_RUN_MS + 390))
+  write_opencode_meta "$id" "$wt"
+  run_opencode_probe "$id" "$db" >/dev/null || true
+  [ "$(fm_model_effective "$STATE/$id.meta")" = pending ] \
+    || fail "foreign-directory OpenCode session must stay pending: $(fm_model_effective "$STATE/$id.meta")"
+  pass "OpenCode probe stays pending when the only session is in another directory"
+}
+
 test_exact_model_detection
 test_record_effective_and_history
 test_display_compact_alias_mismatch
@@ -218,3 +546,12 @@ test_source_label_distinguishes_grok_providers
 test_sync_reprobes_after_exact_effective
 test_sync_serializes_concurrent_probes
 test_sync_probe_live_worker
+test_opencode_probe_unique_hit
+test_opencode_probe_multiple_sessions
+test_opencode_probe_missing_db
+test_opencode_probe_invalid_json
+test_opencode_probe_foreign_directory
+test_opencode_probe_previous_run_session
+test_opencode_probe_child_session
+test_opencode_probe_requires_an_answered_turn
+test_opencode_probe_newest_answer_wins

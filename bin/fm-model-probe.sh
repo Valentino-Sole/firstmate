@@ -2,6 +2,23 @@
 # Probe the effective model for a task from runtime/session metadata only.
 # Prints: model=<id-or-empty> source=<probe-source>
 # Exits 0 when a candidate was read (even if not exact); 1 when nothing found.
+#
+# OpenCode evidence is a read-only query of OPENCODE_DB, or else
+# ${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db.
+# Table session only IDENTIFIES the run's session: it matches meta worktree= to
+# session.directory exactly, keeps only rows the CURRENT run could have created
+# (parent_id IS NULL, so a subagent's child session can never stand in for the
+# worker, and time_created at or after the run's spawn_epoch, so a previous
+# run's leftover session in the same reused worktree can never be reported as
+# this run's model), and takes only the uniquely newest surviving row.
+# The MODEL itself comes from that session's newest assistant message in table
+# message, composed providerID/modelID. session.model is deliberately not read:
+# OpenCode fills it from the --model launch flag before the agent has answered
+# anything, so reporting it would be requested_model laundered through the
+# database rather than runtime evidence. A session that has not yet produced an
+# assistant message therefore stays pending.
+# It never writes that database and never treats requested_model as runtime
+# evidence. Missing, unreadable, invalid, or ambiguous rows yield no candidate.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -117,7 +134,91 @@ probe_herdr_agent_session() {
   esac
 }
 
+probe_opencode_session() {
+  local harness worktree spawn_epoch db model
+  harness=$(fm_model_meta_get "$META" harness)
+  [ "$harness" = opencode ] || return 1
+  worktree=$(fm_model_meta_get "$META" worktree)
+  [ -n "$worktree" ] || return 1
+  spawn_epoch=$(fm_model_meta_get "$META" spawn_epoch)
+  case "$spawn_epoch" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  if [ -n "${OPENCODE_DB:-}" ]; then
+    db=$OPENCODE_DB
+  else
+    db="${XDG_DATA_HOME:-${HOME:-/home/vsole}/.local/share}/opencode/opencode.db"
+  fi
+  [ -f "$db" ] || return 1
+  [ -r "$db" ] || return 1
+  model=$(python3 - "$db" "$worktree" "$spawn_epoch" <<'PY'
+import json
+import os
+import sqlite3
+import sys
+
+db = sys.argv[1]
+directory = sys.argv[2]
+try:
+    run_start_ms = int(sys.argv[3]) * 1000
+except ValueError:
+    sys.exit(1)
+if not os.path.isfile(db) or not os.access(db, os.R_OK):
+    sys.exit(1)
+try:
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+except sqlite3.Error:
+    sys.exit(1)
+provider = ""
+model_id = ""
+try:
+    sessions = con.execute(
+        "SELECT id, time_updated FROM session "
+        "WHERE directory = ? AND parent_id IS NULL AND time_created >= ? "
+        "ORDER BY time_updated DESC",
+        (directory, run_start_ms),
+    ).fetchall()
+    if not sessions:
+        sys.exit(1)
+    if len(sessions) >= 2 and sessions[0][1] == sessions[1][1]:
+        sys.exit(1)
+    turns = con.execute(
+        "SELECT data FROM message WHERE session_id = ? "
+        "ORDER BY time_created DESC, id DESC",
+        (sessions[0][0],),
+    )
+    for (raw,) in turns:
+        try:
+            obj = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(obj, dict) or obj.get("role") != "assistant":
+            continue
+        p = obj.get("providerID")
+        m = obj.get("modelID")
+        if isinstance(p, str) and isinstance(m, str):
+            provider = p.strip()
+            model_id = m.strip()
+        break
+except sqlite3.Error:
+    sys.exit(1)
+finally:
+    con.close()
+if not provider or not model_id:
+    sys.exit(1)
+print(f"{provider}/{model_id}")
+PY
+) || return 1
+  [ -n "$model" ] || return 1
+  printf 'model=%s\nsource=opencode-session\n' "$model"
+  return 0
+}
+
 if probe_herdr_agent_session; then
+  exit 0
+fi
+
+if probe_opencode_session; then
   exit 0
 fi
 
