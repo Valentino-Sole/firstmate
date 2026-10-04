@@ -27,13 +27,14 @@
 
   M.start = function (S) {
     UI.S = S;
-    SB.audio.enabled = S.settings.sound !== false;
+    SB.audio.setSfx(S.settings.sound !== false);
+    SB.audio.setMusic(S.settings.music !== false);
     UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
     shell();
     const stage = document.getElementById("stage");
     if (UI.use3d) {
       try {
-        UI.hub = SB.R3D.createHub(stage, { quality: S.settings.quality, onPick: (id) => UI.openPanel(id) });
+        UI.hub = SB.R3D.createHub(stage, { quality: S.settings.quality, dayCycle: S.settings.dayCycle || "zyklus", homeTier: S.house.tier, realm: S.realm, onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)) });
       } catch (e) {
         console.warn("3D-Insel nicht verfuegbar", e);
         UI.hub = null;
@@ -45,6 +46,9 @@
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
     UI.saveNow();
+    UI.updateMusic();
+    // Helden aus Version 1 waehlen beim ersten Start ihr Reich
+    if (S.migratedFrom) setTimeout(() => UI.showRealmChoice(), 400);
   };
 
   M.replaceState = function (S) {

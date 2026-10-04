@@ -16,11 +16,13 @@ function load() {
   return ctx.SB;
 }
 
-function fresh(cls = "klinge") {
+function fresh(cls = "schildritter") {
   const SB = load();
   let now = 1_750_000_000_000;
   SB.engine.now = () => now;
-  const S = SB.engine.newHero({ name: "Testa", race: "wolkling", gender: "w", cls, look: { skin: "#f2cba8", hair: "#3b2a20", hairStyle: 1, beard: 0 } });
+  const realm = SB.data.CLASSES[cls].realm;
+  const race = Object.keys(SB.data.RACES).find((r) => SB.data.RACES[r].realm === realm);
+  const S = SB.engine.newHero({ name: "Testa", race, gender: "w", cls, look: { hairStyle: 1, beard: 0, tattoo: "runen" } });
   return { SB, E: SB.engine, D: SB.data, S, advance: (ms) => (now += ms), now: () => now };
 }
 
@@ -32,6 +34,8 @@ test("neuer Held hat Startwerte, Ausruestung und drei verschiedene Auftraege", (
   assert.equal(S.quest.offers.length, 3);
   assert.equal(new Set(S.quest.offers.map((o) => o.title)).size, 3);
   assert.equal(Math.floor(E.energy(S)), E.C.ENERGY_MAX);
+  assert.equal(S.realm, "albion");
+  assert.equal(S.look.tattoo, "runen");
 });
 
 test("Auftrag: Start kostet Tatendrang, laeuft ab, Kampf ist deterministisch, Belohnung wird verbucht", () => {
@@ -44,7 +48,7 @@ test("Auftrag: Start kostet Tatendrang, laeuft ab, Kampf ist deterministisch, Be
   advance(E.questDuration(S, o) + 10);
   const f1 = E.questFight(S);
   const f2 = E.questFight(S);
-  assert.deepEqual(f1.result, f2.result, "gleicher Ausgang beim erneuten Laden");
+  assert.deepEqual(f1.chain, f2.chain, "gleicher Ausgang beim erneuten Laden");
   const goldBefore = S.gold;
   const rew = E.resolveQuest(S, f1);
   assert.equal(S.quest.active, null);
@@ -62,7 +66,7 @@ test("Tatendrang regeneriert sich bis zum Maximum", () => {
   advance(E.C.ENERGY_REGEN_MS * 5);
   assert.equal(Math.floor(E.energy(S)), 15);
   advance(E.C.ENERGY_REGEN_MS * 500);
-  assert.equal(E.energy(S), E.C.ENERGY_MAX);
+  assert.equal(E.energy(S), E.energyMax(S));
 });
 
 test("Perlen beschleunigen, Wolkenbraeu ist pro Tag begrenzt", () => {
@@ -106,12 +110,112 @@ test("Laden, Rucksack, Anlegen, Ablegen, Verkaufen", () => {
   assert.equal(S.gold, g + E.sellPrice(it));
 });
 
-test("Gegenstaende anderer Klassen lassen sich nicht anlegen", () => {
-  const { SB, E, S } = fresh("klinge");
+test("Gegenstaende anderer Grundarten lassen sich nicht anlegen, gleiche Grundart reichsuebergreifend schon", () => {
+  const { SB, E, S } = fresh("schildritter");
   const r = SB.util.rng(3);
-  const bow = E.makeItem(r, { level: 3, cls: "wind", slot: "waffe", base: "bogen" });
+  const bow = E.makeItem(r, { level: 3, cls: "mondschuetze", slot: "waffe", base: "bogen" });
   S.inv.push(bow);
   assert.equal(E.equip(S, 0).ok, false);
+  const axe = E.makeItem(r, { level: 3, cls: "sturmhuene", slot: "waffe", base: "axt" });
+  S.inv.push(axe);
+  assert.equal(E.equip(S, 1).ok, true);
+});
+
+test("Vergleich zeigt die Werte vor und nach dem Anlegen", () => {
+  const { SB, E, S } = fresh();
+  const r = SB.util.rng(9);
+  const it = E.makeItem(r, { level: 10, cls: S.cls, slot: "waffe", rarity: "episch" });
+  const pv = E.previewEquip(S, it);
+  assert.ok(pv.after.dmgMax > pv.before.dmgMax);
+  assert.notEqual(S.equip.waffe, it, "Vorschau veraendert den Helden nicht");
+});
+
+test("Seltene Hordenauftraege: mehrere Gegner nacheinander, Lebenspunkte werden mitgenommen", () => {
+  const { E, S, advance } = fresh();
+  S.level = 8;
+  for (let i = 0; i < 300 && !S.quest.offers.some((o) => o.rare); i++) E.refreshOffers(S);
+  const idx = S.quest.offers.findIndex((o) => o.rare);
+  assert.ok(idx >= 0, "seltene Auftraege kommen vor");
+  const o = S.quest.offers[idx];
+  assert.equal(o.waves.length, 3);
+  assert.equal(o.waves[2].boss, true);
+  S.bought.kraft = 500;
+  S.bought.konstitution = 500;
+  assert.equal(E.startQuest(S, idx).ok, true);
+  advance(E.questDuration(S, o) + 5);
+  const f = E.questFight(S);
+  assert.equal(f.foes.length, 3);
+  assert.equal(f.chain.winner, 0);
+  assert.equal(f.chain.waves.length, 3);
+  for (let i = 1; i < 3; i++) assert.ok(f.chain.waves[i].startHp >= f.chain.waves[i - 1].hp[0], "Atem holen zwischen den Gegnern");
+  const rew = E.resolveQuest(S, f);
+  assert.equal(rew.won, true);
+  assert.equal(S.stats.hordes, 1);
+  assert.ok(S.ach.horde);
+});
+
+test("Chronik: Kapitel von Reich und Klasse, freigeschaltet nach Stufe und Reihenfolge", () => {
+  const { E, S, now } = fresh("runenwirker");
+  let ch = E.storyChapters(S);
+  assert.equal(ch.length, 8);
+  assert.equal(ch.filter((c) => c.available).length, 1);
+  S.bought.verstand = 800;
+  S.bought.konstitution = 800;
+  const res = E.storyFight(S, ch.find((c) => c.available).key, now());
+  assert.equal(res.ok, true);
+  const rew = E.resolveStory(S, res.fight, now());
+  assert.equal(rew.won, true);
+  assert.ok(rew.item || rew.itemSold);
+  S.level = 9;
+  ch = E.storyChapters(S);
+  assert.equal(ch.filter((c) => c.done).length, 1);
+  assert.ok(ch.filter((c) => c.available).length >= 2);
+});
+
+test("Heim: Ausbaustufen und Einrichtung geben dauerhafte Boni", () => {
+  const { E, S } = fresh();
+  S.gold = 1e6;
+  S.perlen = 100;
+  assert.equal(E.buyFurniture(S, "staender").ok, false, "braucht eine Steinkate");
+  assert.equal(E.buyFurniture(S, "lager").ok, true);
+  assert.equal(E.energyMax(S), E.C.ENERGY_MAX + 10);
+  assert.equal(E.buyFurniture(S, "truhe").ok, true);
+  assert.equal(E.invSize(S), E.C.INV_SIZE + 2);
+  assert.equal(E.buyHouseTier(S).ok, false, "Stufe 5 noetig");
+  S.level = 5;
+  assert.equal(E.buyHouseTier(S).ok, true);
+  assert.equal(S.house.tier, 1);
+  S.equip.ruestung.armor = 200;
+  const before = E.armorTotal(S);
+  assert.equal(E.buyFurniture(S, "staender").ok, true);
+  assert.ok(E.armorTotal(S) > before);
+});
+
+test("Gilden: gruenden, nur im eigenen Reich beitreten, Rangliste", () => {
+  const { E, S, now } = fresh();
+  S.gold = 1000;
+  const other = E.npcGuilds().find((g) => g.realm !== S.realm);
+  assert.equal(E.joinGuild(S, other).ok, false);
+  const own = E.npcGuilds().find((g) => g.realm === S.realm);
+  assert.equal(E.joinGuild(S, own).ok, true);
+  const gl = E.guildLadder(S, now());
+  assert.ok(gl.find((g) => g.id === own.id).members >= 1);
+  E.leaveGuild(S);
+  assert.equal(E.createGuild(S, "X", "Y").ok, false);
+  assert.equal(E.createGuild(S, "Die Kreidewölfe", "KW2").ok, true);
+  assert.equal(S.gold, 500);
+  assert.equal(S.guild.founder, true);
+});
+
+test("Reichskrieg: Reichs- und Gesamtranglisten", () => {
+  const { E, S, now } = fresh();
+  const st = E.realmStandings(S, now());
+  assert.equal(st.length, 3);
+  assert.ok(st[0].honor >= st[1].honor && st[1].honor >= st[2].honor);
+  const all = E.allHeroes(S, now());
+  const mine = E.realmRanked(all, S.realm);
+  assert.ok(mine.every((h) => h.realm === S.realm));
+  assert.equal(mine.find((h) => h.kind === "me").realmRank >= 1, true);
 });
 
 test("Leuchtturmwache zahlt erst nach Ablauf und blockiert Auftraege", () => {
@@ -132,6 +236,7 @@ test("Arena: Rangliste, Gegnerwahl, Abklingzeit, Ehre", () => {
   assert.equal(all.length, E.C.NPC_COUNT + 1);
   const rivals = E.arenaRivals(S, now());
   assert.ok(rivals.length >= 2);
+  assert.ok(rivals.every((r) => r.realm !== S.realm), "nur Gegner aus anderen Reichen");
   const res = E.arenaFight(S, rivals[0], now());
   assert.equal(res.ok, true);
   const honor = S.honor;
@@ -156,15 +261,18 @@ test("Dungeons: gesperrt bis Stufe, Fortschritt nach Sieg", () => {
   assert.equal(E.dungeonFight(S, 0, now()).ok, true);
 });
 
-test("Wunschbrunnen: ein freier Wurf pro Tag, danach Perlen", () => {
-  const { E, S } = fresh();
-  const p = S.perlen;
+test("Wunschbrunnen: freier Wurf kostet nie Perlen, Perlenwurf nur auf Wunsch, Zeitgeber bis Mitternacht", () => {
+  const { E, S, now } = fresh();
+  S.perlen = 0;
+  const r0 = E.tossWell(S, now(), true);
+  assert.equal(r0.ok, false, "ohne Perlen kein Perlenwurf");
+  assert.equal(S.daily.wellFree, 1, "der freie Wurf bleibt erhalten");
   const r1 = E.tossWell(S);
   assert.equal(r1.ok, true);
   assert.equal(r1.paid, false);
-  const r2 = E.tossWell(S);
-  assert.equal(r2.paid, true);
-  assert.ok(S.perlen >= p - 1);
+  assert.equal(E.tossWell(S).ok, false, "danach nur noch mit Perle");
+  const mid = E.nextMidnight(now());
+  assert.ok(mid > now() && mid - now() <= 86400000);
 });
 
 test("Stufenaufstieg schenkt Perlen und Abzeichen", () => {
@@ -191,23 +299,61 @@ test("Kampfsimulation endet immer und liefert gueltige Lebenspunkte", () => {
 });
 
 test("Spielstand-Code: Hin- und Rueckweg, Schutz vor fremdem Text", () => {
-  const { SB, S } = fresh("rune");
+  const { SB, S } = fresh("runenwirker");
   const code = SB.store.exportCode(S);
   const back = SB.store.importCode(code);
   assert.equal(back.name, S.name);
-  assert.equal(back.cls, "rune");
+  assert.equal(back.cls, "runenwirker");
   assert.throws(() => SB.store.importCode("hallo welt"));
 });
 
-test("Fremde Heldenprofile werden geprueft", () => {
+test("Fremde Heldenprofile werden geprueft, alte Profile umgedeutet", () => {
   const { SB } = fresh();
-  assert.equal(SB.store.sanitizeHero("x", { name: "<b>", cls: "klinge", race: "wolkling" }), null);
-  assert.equal(SB.store.sanitizeHero("x", { name: "Ok", cls: "magier", race: "wolkling" }), null);
-  const h = SB.store.sanitizeHero("x", { name: "Rita <script>", cls: "wind", race: "moosling", level: 1e9, honor: -5, attrs: { geschick: "viel" }, look: { skin: "red" }, gear: { waffe: { base: "bogen", tint: "#zzzzzz" } } });
+  assert.equal(SB.store.sanitizeHero("x", { name: "<b>", cls: "schildritter", race: "albier" }), null);
+  assert.equal(SB.store.sanitizeHero("x", { name: "Ok", cls: "magier", race: "albier" }), null);
+  const h = SB.store.sanitizeHero("x", { name: "Rita <script>", cls: "wind", race: "moosling", level: 1e9, honor: -5, attrs: { geschick: "viel" }, look: { skin: "red", tattoo: "<x>" }, gear: { waffe: { base: "bogen", tint: "#zzzzzz" } }, guild: { id: "p-abc", name: "<i>", tag: "!" } });
   assert.equal(h.name, "Rita script");
+  assert.equal(h.cls, "mondschuetze");
+  assert.equal(h.realm, "hibernia");
   assert.equal(h.level, 300);
   assert.equal(h.honor, 0);
-  assert.equal(h.look.skin, "#f2cba8");
+  assert.equal(h.look.skin, SB.data.RACES.moorling.skins[0]);
+  assert.equal(h.look.tattoo, "keine");
   assert.equal(h.gear.waffe, null);
+  assert.equal(h.guild, null);
   assert.ok(h.fighter.maxHp > 0);
+  assert.equal(SB.store.sanitizeGuild({ id: "p-1234", name: "Gute Gilde", tag: "gg", realm: "midgard" }).tag, "GG");
 });
+
+test("Alte Spielstaende (Version 1) werden uebernommen und duerfen das Reich waehlen", () => {
+  const { SB, E } = fresh();
+  const v1 = {
+    name: "Altheld", race: "hornvolk", gender: "m", cls: "klinge", level: 7, xp: 10, gold: 900, perlen: 9, honor: 300, look: { skin: "#8f5c8c", hair: "#1f1f24", hairStyle: 1, beard: 2, eyes: "#1d1b26" },
+    energy: { val: 80, ts: 0 }, base: { kraft: 15, geschick: 7, verstand: 6, konstitution: 12, glueck: 8 }, bought: { kraft: 10, geschick: 0, verstand: 0, konstitution: 4, glueck: 0 },
+    equip: { waffe: { id: "w1", slot: "waffe", base: "schwert", cls: "klinge", name: "Altes Schwert", rarity: "selten", level: 6, min: 12, max: 20, stats: { kraft: 6 }, value: 120 } },
+    inv: [{ id: "b1", slot: "waffe", base: "bogen", cls: "wind", name: "Alter Bogen", rarity: "gewoehnlich", level: 3, min: 5, max: 9, stats: {}, value: 20 }],
+    quest: { seed: 5, offers: [], active: null }, guard: null, arena: { next: 0, wins: 3, losses: 1 }, dungeons: { progress: {}, next: 0 }, shops: {}, buffs: [], mounts: { owned: [] },
+    bestiary: {}, ach: {}, stats: { quests: 12, wins: 10, losses: 2, arenaWins: 3, bosses: 0, goldEarned: 2000, items: 5 }, daily: { day: "x", wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0 },
+    npcSeed: 77, npcHonor: {}, settings: { sound: true, quality: "hoch", fastFights: false }, tut: 9, created: 0,
+  };
+  const S = E.migrate(v1);
+  assert.ok(S);
+  assert.equal(S.v, 2);
+  assert.equal(S.migratedFrom, 1);
+  assert.equal(S.race, "trollblut");
+  assert.equal(S.cls, "sturmhuene");
+  assert.equal(S.level, 7);
+  assert.equal(S.equip.waffe.arch, "krieger");
+  assert.equal(S.inv[0].arch, "jaeger");
+  assert.ok(S.settings.music !== undefined && S.settings.dayCycle);
+  assert.ok(S.quest.offers.length === 3 && S.quest.offers[0].waves);
+  const kraftBefore = S.base.kraft;
+  assert.equal(E.chooseRealm(S, "albion").ok, true);
+  assert.equal(S.realm, "albion");
+  assert.equal(S.cls, "schildritter");
+  assert.equal(D_REALM(SB, S.race), "albion");
+  assert.equal(S.migratedFrom, undefined);
+  assert.notEqual(S.base.kraft, undefined);
+  assert.ok(Math.abs(S.base.kraft - kraftBefore) <= 3);
+});
+const D_REALM = (SB, race) => SB.data.RACES[race].realm;

@@ -1,4 +1,4 @@
-/* Helden von Schwebfels - Oberflaechen-Kern: Leisten, Panels, Tooltips, Hinweise, Zeitgeber. */
+/* Helden von Schwebfels - Oberflaechen-Kern: Menueleiste, Kopfleiste, Panels, Vergleich, Tooltips, Hinweise, Zeitgeber, Musik. */
 (function () {
   "use strict";
   const SB = (globalThis.SB = globalThis.SB || {});
@@ -12,6 +12,7 @@
   UI.hub = null;
   UI.use3d = false;
   UI.panelId = null;
+  UI.inBattle = false;
   UI.tabs = {};
   UI.qty = 1;
   UI.ACTIONS = {};
@@ -22,18 +23,19 @@
 
   /* ---------- Portraits ---------- */
   UI.NPC_LOOK = {
-    hulda: { race: "wolkling", gender: "w", cls: "rune", look: { skin: "#e8b48f", hair: "#c9532f", hairStyle: 3, beard: 0 }, gear: { ruestung: { base: "robe", tint: "#e9dcc0", style: 0 } } },
-    brumm: { race: "steinbart", gender: "m", cls: "klinge", look: { skin: "#c99878", hair: "#9b3d24", hairStyle: 4, beard: 2 }, gear: { ruestung: { base: "harnisch", tint: "#5a4a3a", style: 0 }, handschuhe: { base: "handschuhe", tint: "#4a3a30" } } },
-    zinnober: { race: "nebelalb", gender: "w", cls: "rune", look: { skin: "#e9e0f2", hair: "#c7a6e0", hairStyle: 2, beard: 0 }, gear: { helm: { base: "hut", tint: "#8f3f8f", rarity: "episch" }, ruestung: { base: "robe", tint: "#5b3fa8", style: 1 } } },
-    funzel: { race: "wolkling", gender: "m", cls: "wind", look: { skin: "#e8b48f", hair: "#e8e2d6", hairStyle: 4, beard: 3 }, gear: { helm: { base: "kappe", tint: "#ffcf3a" }, ruestung: { base: "wams", tint: "#ffcf3a" } } },
-    krawall: { race: "hornvolk", gender: "w", cls: "klinge", look: { skin: "#8f5c8c", hair: "#1f1f24", hairStyle: 2, beard: 0 }, gear: { helm: { base: "helm", tint: "#c9a441", style: 2 }, ruestung: { base: "harnisch", tint: "#c0392b", style: 1 }, umhang: { base: "umhang", tint: "#c9a441" } } },
-    hufnagel: { race: "moosling", gender: "w", cls: "wind", look: { skin: "#a9c98f", hair: "#6aa84f", hairStyle: 3, beard: 0 }, gear: { ruestung: { base: "wams", tint: "#8a5a35" } } },
-    ottilie: { race: "wolkling", gender: "w", cls: "klinge", look: { skin: "#dba27a", hair: "#3b2a20", hairStyle: 2, beard: 0 }, gear: { helm: { base: "kappe", tint: "#2f4f8f" }, ruestung: { base: "harnisch", tint: "#2f4f8f", style: 2 }, umhang: { base: "umhang", tint: "#c0392b" } } },
+    hulda: { race: "albier", realm: "albion", gender: "w", cls: "lichtweber", look: { skin: "#e8b896", hair: "#a8432a", hairStyle: 1, eyes: "#4f7a3a", tattoo: "keine" }, gear: { ruestung: { base: "robe", tint: "#6a4a3a", style: 0 } } },
+    brumm: { race: "kreidezwerg", realm: "albion", gender: "m", cls: "schildritter", look: { skin: "#b98b6c", hair: "#9b3d24", hairStyle: 4, beard: 3, eyes: "#3a2a1e", scar: "auge" }, gear: { ruestung: { base: "harnisch", tint: "#5a4a3a", style: 0 }, handschuhe: { base: "handschuhe", tint: "#4a3a30" } } },
+    zinnober: { race: "sidhe", realm: "hibernia", gender: "w", cls: "dornenrufer", look: { skin: "#d6cfe6", hair: "#c7a6e0", hairStyle: 2, eyes: "#7fffb0", tattoo: "mond", tattooColor: "#b48cff" }, gear: { helm: { base: "hut", tint: "#5a2f6f", rarity: "episch", style: 1 }, ruestung: { base: "robe", tint: "#3a2f5a", style: 1 } } },
+    funzel: { race: "nordmann", realm: "midgard", gender: "m", cls: "wolfsjaeger", look: { skin: "#dcae8c", hair: "#efe6d2", hairStyle: 4, beard: 2, eyes: "#3f6fa8" }, gear: { helm: { base: "kappe", tint: "#7a7470", style: 2 }, ruestung: { base: "wams", tint: "#4a3424" } } },
+    krawall: { race: "trollblut", realm: "midgard", gender: "w", cls: "sturmhuene", look: { skin: "#8a6a8a", hair: "#1f1f24", hairStyle: 3, eyes: "#ffb13b", tattoo: "kriegsbemalung", tattooColor: "#a82424", horns: 0 }, gear: { ruestung: { base: "harnisch", tint: "#5a5f6a", style: 2 }, umhang: { base: "umhang", tint: "#8a2a2a", style: 1 } } },
+    hufnagel: { race: "moorling", realm: "hibernia", gender: "w", cls: "mondschuetze", look: { skin: "#a9b98f", hair: "#4f6a3c", hairStyle: 1, eyes: "#4f7a3a", tattoo: "dornen", tattooColor: "#2f5fd0" }, gear: { ruestung: { base: "wams", tint: "#5a3d2a" } } },
+    ottilie: { race: "albier", realm: "albion", gender: "w", cls: "schildritter", look: { skin: "#c99470", hair: "#2b1d16", hairStyle: 5, eyes: "#3f6fa8", tattoo: "runen", tattooColor: "#e8e2d6", scar: "wange" }, gear: { ruestung: { base: "harnisch", tint: "#9aa4ad", style: 1 }, umhang: { base: "umhang", tint: "#b8322e" } } },
+    seherin: { race: "sidhe", realm: "hibernia", gender: "w", cls: "dornenrufer", look: { skin: "#e6dccc", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "linien", tattooColor: "#4fffb0" }, gear: { helm: { base: "hut", tint: "#2a2a44", style: 0 }, ruestung: { base: "robe", tint: "#3a3a5a", style: 1 } } },
   };
-  UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
   UI.fighterDesc = function (f) {
     if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final };
-    return { kind: "hero", race: f.race, cls: f.cls, gender: f.gender, look: f.look, gear: f.gear };
+    return { kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear };
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final });
   UI.portrait = function (desc, size, bust) {
@@ -67,19 +69,26 @@
     const ey = (cy - Math.sin(a) * 13).toFixed(2);
     const nx = (cx + Math.cos(a) * 11).toFixed(2);
     const ny = (cy - Math.sin(a) * 11).toFixed(2);
-    const col = pct < 0.15 ? "#ff7a59" : pct < 0.4 ? "#f3d08a" : "#52d1b4";
-    let ticks = "";
-    for (let i = 0; i <= 4; i++) {
-      const t = Math.PI * (1 - i / 4);
-      ticks += '<path d="M' + (cx + Math.cos(t) * 15.5).toFixed(1) + " " + (cy - Math.sin(t) * 15.5).toFixed(1) + " L" + (cx + Math.cos(t) * 17.5).toFixed(1) + " " + (cy - Math.sin(t) * 17.5).toFixed(1) + '" stroke="#dcaa4a" stroke-width="1.3"/>';
-    }
+    const col = pct < 0.15 ? "#e0644f" : pct < 0.4 ? "#e8c35a" : "#6fd0a8";
     return (
-      '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#0a141b" stroke="#dcaa4a" stroke-width="2"/>' +
-      ticks +
-      '<path d="M7 23 A13 13 0 0 1 33 23" fill="none" stroke="#24414d" stroke-width="4" stroke-linecap="round"/>' +
+      '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#0c0a10" stroke="#a8823a" stroke-width="2"/>' +
+      '<path d="M7 23 A13 13 0 0 1 33 23" fill="none" stroke="#2a2633" stroke-width="4" stroke-linecap="round"/>' +
       (pct > 0.005 ? '<path d="M7 23 A13 13 0 0 1 ' + ex + " " + ey + '" fill="none" stroke="' + col + '" stroke-width="4" stroke-linecap="round"/>' : "") +
-      '<path d="M20 23 L' + nx + " " + ny + '" stroke="#f3ead6" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="23" r="2.6" fill="#dcaa4a" stroke="#1c1626" stroke-width="1"/>' +
-      '<text x="20" y="35.5" text-anchor="middle" font-size="7" font-weight="800" fill="#f3ead6" font-family="sans-serif">' + Math.floor(val) + "</text></svg>"
+      '<path d="M20 23 L' + nx + " " + ny + '" stroke="#efe6d2" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="23" r="2.6" fill="#c9a441" stroke="#14101a" stroke-width="1"/>' +
+      '<text x="20" y="35.5" text-anchor="middle" font-size="7" font-weight="800" fill="#efe6d2" font-family="sans-serif">' + Math.floor(val) + "</text></svg>"
+    );
+  };
+  // Erfahrung klar darstellen
+  UI.xpInfo = function (S) {
+    const need = E.xpNeed(S.level);
+    return { need, have: S.xp, rest: Math.max(0, need - S.xp), pct: Math.min(100, (S.xp / need) * 100) };
+  };
+  UI.xpBlock = function (S) {
+    const x = UI.xpInfo(S);
+    return (
+      '<div class="xpblock"><div class="xprow"><span class="lv">Stufe ' + S.level + '</span><span class="muted">Erfahrung</span><span class="spacer"></span><span class="lv next">Stufe ' + (S.level + 1) + "</span></div>" +
+      '<div class="xpbig"><i style="width:' + x.pct.toFixed(1) + '%"></i><span class="num">' + U.fmt(x.have) + " / " + U.fmt(x.need) + " EP (" + Math.floor(x.pct) + " %)</span></div>" +
+      '<div class="xprest">Noch <b class="num">' + U.fmt(x.rest) + " EP</b> bis Stufe " + (S.level + 1) + "</div></div>"
     );
   };
 
@@ -106,12 +115,13 @@
   });
   SB.bus.on("achievement", (a) => {
     UI.toast("Abzeichen „" + a.name + "“: +" + a.perlen + (a.perlen === 1 ? " Wolkenperle" : " Wolkenperlen"), "gold", "abzeichen");
+    SB.audio.play("chime");
   });
   SB.bus.on("remote", () => {
-    if (UI.panelId === "arena" || UI.panelId === "ruhmeshalle") UI.renderPanel();
+    if (UI.panelId === "arena" || UI.panelId === "ruhmeshalle" || UI.panelId === "gildenhalle") UI.renderPanel();
   });
 
-  /* ---------- Gegenstands-Karten ---------- */
+  /* ---------- Gegenstaende und Vergleich ---------- */
   UI.itemRef = function (ref) {
     const S = UI.S;
     const p = String(ref).split(":");
@@ -134,40 +144,86 @@
     if (!it || !E.canEquip(S, it)) return false;
     return E.itemScore(it, S.cls) > E.itemScore(S.equip[it.slot], S.cls) * 1.001;
   };
-  UI.itemCard = function (it, opts) {
-    opts = opts || {};
-    const S = UI.S;
-    const R = D.RARITIES[it.rarity];
+  const archName = (a) => (a && D.ARCHETYPES[a] ? D.ARCHETYPES[a].name : "");
+  const itemLines = (it) => {
     const lines = [];
     if (it.min) lines.push(["schaden", "Schaden", U.fmt(it.min) + " bis " + U.fmt(it.max)]);
     if (it.armor) lines.push(["ruestung", "Rüstung", U.fmt(it.armor)]);
     for (const a of D.ATTRS) if (it.stats[a]) lines.push([a, D.ATTR_INFO[a].name, "+" + U.fmt(it.stats[a])]);
+    return lines;
+  };
+  // Auswirkung auf die Heldenwerte, wenn der Gegenstand angelegt wuerde
+  function heroDeltas(it) {
+    const S = UI.S;
+    const pv = E.previewEquip(S, it);
+    const b = pv.before;
+    const a = pv.after;
+    return [
+      ["konstitution", "Lebenspunkte", b.hp, a.hp, U.fmt],
+      ["schaden", "Ø Schaden", (b.dmgMin + b.dmgMax) / 2, (a.dmgMin + a.dmgMax) / 2, (v) => U.fmt(Math.round(v))],
+      ["ruestung", "Schadensminderung", b.reduction * 100, a.reduction * 100, (v) => Math.round(v) + " %"],
+      ["glueck", "Kritisch", b.crit * 100, a.crit * 100, (v) => Math.round(v) + " %"],
+    ];
+  }
+  const sign = (d, fmt) => (d > 0 ? "+" : d < 0 ? "−" : "±") + fmt(Math.abs(d));
+  UI.itemCard = function (it, opts) {
+    opts = opts || {};
+    const S = UI.S;
+    const R = D.RARITIES[it.rarity];
     let cmp = "";
+    const can = S && E.canEquip(S, it);
     const cur = S && S.equip[it.slot];
-    if (opts.compare !== false && cur && cur !== it && E.canEquip(S, it)) {
-      const parts = [];
-      const diff = (label, a, b) => {
-        const d = Math.round(a - b);
-        if (d) parts.push('<span class="' + (d > 0 ? "delta-up" : "delta-down") + '">' + (d > 0 ? "+" : "") + U.fmt(d) + " " + label + "</span>");
-      };
-      if (it.min || cur.min) diff("Ø Schaden", ((it.min || 0) + (it.max || 0)) / 2, ((cur.min || 0) + (cur.max || 0)) / 2);
-      if (it.armor || cur.armor) diff("Rüstung", it.armor || 0, cur.armor || 0);
-      for (const a of D.ATTRS) diff(D.ATTR_INFO[a].name, it.stats[a] || 0, cur.stats[a] || 0);
-      cmp = '<div class="cmp"><div class="muted">Im Vergleich zu „' + esc(cur.name) + "“:</div>" + (parts.length ? parts.join(", ") : "gleichwertig") + "</div>";
-    } else if (opts.compare !== false && it.cls && S && it.cls !== S.cls) {
-      cmp = '<div class="cmp delta-down">Nur für ' + esc(D.CLASSES[it.cls].name) + "</div>";
+    if (opts.compare !== false && S && can && cur !== it) {
+      const rows = heroDeltas(it)
+        .map(([ic, n, b, a, fmt]) => {
+          const d = a - b;
+          if (Math.abs(d) < 0.5) return "";
+          return "<li><span>" + I.ui(ic) + " " + n + '</span><b class="' + (d > 0 ? "delta-up" : "delta-down") + '">' + sign(d, fmt) + "</b></li>";
+        })
+        .join("");
+      cmp = '<div class="cmp"><div class="muted">' + (cur ? "Statt „" + esc(cur.name) + "“ angelegt:" : "Freier Platz, angelegt:") + "</div><ul>" + (rows || "<li><span>gleichwertig</span></li>") + "</ul></div>";
+    } else if (opts.compare !== false && S && !can) {
+      cmp = '<div class="cmp delta-down">Nur für ' + esc(archName(it.arch)) + "-Klassen</div>";
     }
     return (
-      '<div class="itemcard"><h4 class="t-' + it.rarity + '">' + esc(it.name) + '</h4><div class="kind">' + R.name + " · " + UI.slotName(it) + " · Stufe " + it.level + (it.cls ? " · " + D.CLASSES[it.cls].name : "") + "</div><ul>" +
-      lines.map((l) => "<li><span>" + I.ui(l[0]) + " " + l[1] + '</span><b class="num">' + l[2] + "</b></li>").join("") +
+      '<div class="itemcard"><h4 class="t-' + it.rarity + '">' + esc(it.name) + '</h4><div class="kind">' + R.name + " · " + UI.slotName(it) + " · Stufe " + it.level + (it.arch ? " · " + archName(it.arch) : "") + "</div><ul>" +
+      itemLines(it).map((l) => "<li><span>" + I.ui(l[0]) + " " + l[1] + '</span><b class="num">' + l[2] + "</b></li>").join("") +
       "</ul>" + cmp + (opts.price ? '<div class="cmp">' + opts.price + "</div>" : "") + "</div>"
+    );
+  };
+  // Ausfuehrlicher Vergleich fuer den Dialog: angelegt gegen neu, Wert fuer Wert
+  UI.compareTable = function (it) {
+    const S = UI.S;
+    if (!E.canEquip(S, it)) return "";
+    const cur = S.equip[it.slot];
+    if (cur === it) return "";
+    const rowsItem = [];
+    const val = (x, k) => (k === "dmg" ? (x && x.min ? (x.min + x.max) / 2 : 0) : k === "armor" ? (x && x.armor) || 0 : (x && x.stats[k]) || 0);
+    const keys = [];
+    if (it.min || (cur && cur.min)) keys.push(["dmg", "schaden", "Ø Waffenschaden"]);
+    if (it.armor || (cur && cur.armor)) keys.push(["armor", "ruestung", "Rüstung"]);
+    for (const a of D.ATTRS) if ((it.stats[a] || 0) + ((cur && cur.stats[a]) || 0) > 0) keys.push([a, a, D.ATTR_INFO[a].name]);
+    for (const [k, ic, n] of keys) {
+      const a = val(cur, k);
+      const b = val(it, k);
+      const d = Math.round(b - a);
+      rowsItem.push("<tr><td>" + I.ui(ic) + " " + n + '</td><td class="num">' + U.fmt(Math.round(a)) + '</td><td class="num">' + U.fmt(Math.round(b)) + '</td><td class="num ' + (d > 0 ? "delta-up" : d < 0 ? "delta-down" : "") + '">' + (d ? sign(d, U.fmt) : "±0") + "</td></tr>");
+    }
+    const rowsHero = heroDeltas(it).map(([ic, n, a, b, fmt]) => {
+      const d = b - a;
+      return "<tr><td>" + I.ui(ic) + " " + n + '</td><td class="num">' + fmt(a) + '</td><td class="num">' + fmt(b) + '</td><td class="num ' + (d > 0.5 ? "delta-up" : d < -0.5 ? "delta-down" : "") + '">' + (Math.abs(d) >= 0.5 ? sign(d, fmt) : "±0") + "</td></tr>";
+    });
+    return (
+      '<table class="cmptable"><thead><tr><th>Gegenstand</th><th>' + (cur ? "Angelegt" : "Leer") + "</th><th>Neu</th><th>Unterschied</th></tr></thead><tbody>" + rowsItem.join("") +
+      '<tr class="sep"><th colspan="4">Deine Werte danach</th></tr>' + rowsHero.join("") + "</tbody></table>"
     );
   };
   UI.slotHtml = function (it, ref, extra) {
     extra = extra || {};
     if (!it) return '<div class="slot empty">' + (extra.emptyIcon ? I.ui(extra.emptyIcon) : "") + (extra.label ? '<span class="slot-name">' + extra.label + "</span>" : "") + "</div>";
+    const blocked = UI.S && !E.canEquip(UI.S, it);
     return (
-      '<button type="button" class="slot r-' + it.rarity + '" data-item="' + ref + '" data-act="' + (extra.act || "itemInfo") + '" data-ref="' + ref + '" aria-label="' + esc(it.name) + '">' +
+      '<button type="button" class="slot r-' + it.rarity + (blocked ? " blocked" : "") + '" data-item="' + ref + '" data-act="' + (extra.act || "itemInfo") + '" data-ref="' + ref + '" aria-label="' + esc(it.name) + '">' +
       I.item(it) + (extra.upgrade && UI.isUpgrade(it) ? '<span class="up">' + I.ui("pfeil") + "</span>" : "") + (extra.price ? '<span class="price">' + extra.price + "</span>" : "") + "</button>"
     );
   };
@@ -221,6 +277,7 @@
     const m = $("#modal");
     m.hidden = true;
     m.innerHTML = "";
+    delete m.dataset.locked;
   };
   UI.ACTIONS.closeDialog = () => UI.closeDialog();
 
@@ -241,36 +298,41 @@
       price = "Preis: " + UI.gold(it.value);
       actions += '<button class="btn" data-act="buy" data-shop="' + a + '" data-i="' + b + '"' + (S.gold < it.value ? " disabled" : "") + ">Kaufen</button>";
     }
-    UI.dialog(UI.itemCard(it, { price }) + '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + actions + "</div>");
+    UI.dialog(UI.itemCard(it, { price, compare: false }) + UI.compareTable(it) + (E.canEquip(S, it) ? "" : '<p class="delta-down">Nur für ' + esc(archName(it.arch)) + "-Klassen.</p>") + '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + actions + "</div>", { cls: "wide" });
   };
 
-  /* ---------- Kopfleiste und Dock ---------- */
-  const DOCK = [
-    ["heim", "held", "Held"],
+  /* ---------- Menueleiste (links am Desktop, unten am Handy) ---------- */
+  const MENU = [
+    ["held", "held", "Charakter"],
     ["taverne", "taverne", "Taverne"],
-    ["schmiede", "schmiede", "Schmiede"],
-    ["arkanum", "arkanum", "Kurios."],
+    ["steinkreis", "steinkreis", "Chronik"],
     ["arena", "arena", "Arena"],
     ["leuchtturm", "leuchtturm", "Wache"],
     ["tiefen", "tiefen", "Dungeons"],
+    ["schmiede", "schmiede", "Schmiede"],
+    ["arkanum", "arkanum", "Kuriositäten"],
     ["stall", "stall", "Stall"],
-    ["ruhmeshalle", "ruhm", "Ruhm"],
+    ["ruhmeshalle", "ruhm", "Rangliste"],
+    ["gildenhalle", "gilde", "Gilde"],
+    ["heim", "heim", "Heim"],
     ["brunnen", "brunnen", "Brunnen"],
   ];
+  UI.MENU = MENU;
   let lastPortraitKey = "";
   UI.renderTop = function () {
     const S = UI.S;
     const top = $("#topbar");
     if (!top) return;
-    const need = E.xpNeed(S.level);
+    const x = UI.xpInfo(S);
     const en = E.energy(S);
     const key = JSON.stringify(UI.heroDesc(S));
     if (!top.dataset.built) {
       top.innerHTML =
-        '<div class="logo">Schwebfels</div>' +
-        '<button class="me-chip" data-act="open" data-id="heim" aria-label="Dein Held"><span class="porthole" id="mePortrait"></span><span class="me-meta"><span class="me-name"></span><span class="me-sub"></span><span class="xpbar"><i></i></span></span></button>' +
+        '<button class="me-chip" data-act="open" data-id="held" aria-label="Dein Charakter"><span class="porthole" id="mePortrait"></span><span class="me-meta"><span class="me-name"></span><span class="me-sub"></span></span></button>' +
+        '<button class="xpwrap" data-act="open" data-id="held" aria-label="Erfahrung"><span class="xpbar"><i></i><span class="xptext num"></span></span></button>' +
         '<div class="res"><span class="chip" title="Gold" id="resGold"></span><span class="chip" title="Wolkenperlen" id="resPerl"></span><span class="gauge" title="Tatendrang" id="resEnergy"></span><span class="chip hon" title="Ehre" id="resHonor"></span>' +
-        '<button class="iconbtn" data-act="toggleSound" id="soundBtn" aria-label="Ton an oder aus"></button><button class="iconbtn" data-act="open" data-id="einstellungen" aria-label="Einstellungen">' + I.ui("einstellungen") + "</button></div>";
+        '<span class="chip daychip" id="resDay" title="Tageszeit"></span>' +
+        '<button class="iconbtn" data-act="toggleMusic" id="musicBtn" aria-label="Musik an oder aus"></button><button class="iconbtn" data-act="toggleSound" id="soundBtn" aria-label="Klangeffekte an oder aus"></button><button class="iconbtn" data-act="open" data-id="einstellungen" aria-label="Einstellungen">' + I.ui("einstellungen") + "</button></div>";
       top.dataset.built = "1";
     }
     if (key !== lastPortraitKey) {
@@ -278,15 +340,20 @@
       $("#mePortrait").innerHTML = UI.heroPortrait(S);
       if (UI.hub) UI.hub.setHero(UI.heroDesc(S));
     }
-    top.querySelector(".me-name").textContent = S.name;
-    top.querySelector(".me-sub").textContent = innerWidth <= 520 ? "Stufe " + S.level : "Stufe " + S.level + " · " + D.CLASSES[S.cls].name;
-    top.querySelector(".xpbar i").style.width = Math.min(100, (S.xp / need) * 100).toFixed(1) + "%";
-    top.querySelector(".xpbar").title = U.fmt(S.xp) + " / " + U.fmt(need) + " Erfahrung";
+    top.querySelector(".me-name").innerHTML = I.realm(S.realm) + " " + esc(S.name) + (S.guild ? ' <span class="gtag">[' + esc(S.guild.tag) + "]</span>" : "");
+    top.querySelector(".me-sub").textContent = "Stufe " + S.level + " · " + D.CLASSES[S.cls].name;
+    top.querySelector(".xpbar i").style.width = x.pct.toFixed(1) + "%";
+    top.querySelector(".xptext").textContent = innerWidth <= 520 ? U.fmtShort(x.rest) + " EP bis " + (S.level + 1) : "Stufe " + S.level + " · " + U.fmt(x.have) + " / " + U.fmt(x.need) + " EP · noch " + U.fmt(x.rest) + " bis Stufe " + (S.level + 1);
     $("#resGold").innerHTML = I.ui("gold") + '<span class="num">' + U.fmtShort(S.gold) + "</span>";
     $("#resPerl").innerHTML = I.ui("perle") + '<span class="num">' + U.fmt(S.perlen) + "</span>";
-    $("#resEnergy").innerHTML = UI.gauge(en, E.C.ENERGY_MAX) + "<span><small>Tatendrang</small>" + Math.floor(en) + "</span>";
+    $("#resEnergy").innerHTML = UI.gauge(en, E.energyMax(S)) + "<span><small>Tatendrang</small>" + Math.floor(en) + "</span>";
     $("#resHonor").innerHTML = I.ui("ehre") + '<span class="num">' + U.fmt(S.honor) + "</span>";
+    const t = SB.R3D.dayTime(S.settings.dayCycle || "zyklus");
+    const lbl = SB.R3D.dayLabel(t);
+    $("#resDay").innerHTML = I.ui(lbl === "Nacht" || lbl === "Abenddämmerung" ? "mond" : "sonne") + "<span>" + lbl + "</span>";
     $("#soundBtn").innerHTML = I.ui(S.settings.sound ? "ton" : "stumm");
+    $("#musicBtn").innerHTML = I.ui("musik");
+    $("#musicBtn").classList.toggle("off", S.settings.music === false);
   };
 
   UI.badges = function () {
@@ -295,10 +362,11 @@
     const b = {};
     const a = S.quest.active;
     if (a && a.end <= now) b.taverne = "!";
-    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = "3";
+    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare) ? "★" : "3";
     if (S.guard && S.guard.end <= now) b.leuchtturm = "✓";
     if (!E.busy(S, now) && S.arena.next <= now) b.arena = "!";
     if (S.daily.wellFree > 0) b.brunnen = "1";
+    if (!E.busy(S, now) && S.story.next <= now && E.storyChapters(S).some((c) => c.available)) b.steinkreis = "!";
     if (!E.busy(S, now) && S.dungeons.next <= now) {
       for (let d = 0; d < D.DUNGEONS.length; d++) {
         const st = E.dungeonState(S, d);
@@ -309,17 +377,17 @@
       }
     }
     const C = D.CLASSES[S.cls];
-    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it))) b.heim = "+";
+    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it))) b.held = "+";
+    if (!S.guild) b.gildenhalle = "?";
     return b;
   };
   UI.renderDock = function () {
     const dock = $("#dock");
     if (!dock) return;
     const b = UI.badges();
-    dock.innerHTML = DOCK.map(
-      ([id, ic, label]) =>
-        '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>"
-    ).join("");
+    dock.innerHTML =
+      '<div class="side-logo">Schwebfels<small>Die Freistatt der drei Reiche</small></div>' +
+      MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
   };
@@ -327,12 +395,12 @@
     const fb = $(".stage-fallback .fb-grid");
     if (!fb) return;
     fb.innerHTML = D.BUILDINGS.map((bd) => {
-      const ic = (DOCK.find((d) => d[0] === bd.id) || [0, "held"])[1];
+      const ic = (MENU.find((d) => d[0] === bd.id) || [0, "held"])[1];
       return '<button data-act="open" data-id="' + bd.id + '">' + I.ui(ic) + "<b>" + esc(bd.name) + "</b>" + (b[bd.id] ? '<span class="tag">' + b[bd.id] + "</span>" : "") + "</button>";
     }).join("");
   };
 
-  /* Aktivitaetsanzeige ueber dem Dock */
+  /* Aktivitaetsanzeige */
   UI.renderActivity = function () {
     const S = UI.S;
     const box = $("#activity");
@@ -352,7 +420,7 @@
       done = g.end <= now;
       const pct = done ? 100 : ((now - g.start) / (g.end - g.start)) * 100;
       target = "leuchtturm";
-      html = I.ui("leuchtturm") + '<div class="act-text"><div class="act-title">' + (done ? "Wache beendet: Lohn abholen" : "Wache am Leuchtturm") + '</div><div class="progress"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Abholen</span>' : '<b class="num" data-until="' + g.end + '"></b>');
+      html = I.ui("leuchtturm") + '<div class="act-text"><div class="act-title">' + (done ? "Wache beendet: Lohn abholen" : "Wache am Turm") + '</div><div class="progress"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Abholen</span>' : '<b class="num" data-until="' + g.end + '"></b>');
     }
     box.hidden = !html || (UI.panelId && UI.panelId === target);
     box.innerHTML = html;
@@ -370,11 +438,26 @@
     });
   };
 
+  /* ---------- Musik je Ort ---------- */
+  const PANEL_MUSIC = { taverne: "taverne", heim: "heim", steinkreis: "chronik", tiefen: "tiefe", gildenhalle: "taverne" };
+  UI.updateMusic = function () {
+    const S = UI.S;
+    if (!S) return;
+    let ctx;
+    if (UI.inBattle) ctx = "kampf";
+    else if (UI.panelId && PANEL_MUSIC[UI.panelId]) ctx = PANEL_MUSIC[UI.panelId];
+    else {
+      const info = SB.R3D.dayInfo(SB.R3D.dayTime(S.settings.dayCycle || "zyklus"));
+      ctx = info.night > 0.55 ? "nacht" : "tag";
+    }
+    SB.audio.music(ctx);
+  };
+
   /* ---------- Panels ---------- */
   UI.openPanel = function (id) {
     if (!UI.PANELS[id]) return;
     SB.audio.unlock();
-    SB.audio.play("click");
+    SB.audio.play("page");
     UI.panelId = id;
     document.body.classList.add("panel-open");
     const P = $("#panel");
@@ -382,7 +465,7 @@
     P.dataset.id = id;
     UI.renderPanel(true);
     if (UI.hub) {
-      UI.hub.focus(id === "einstellungen" ? null : id);
+      UI.hub.focus(id === "einstellungen" || id === "held" ? null : id);
       const wide = innerWidth > 860;
       UI.hub.setInset(wide ? P.offsetWidth + 24 : 0);
       if (!wide) UI.hub.pause();
@@ -390,8 +473,11 @@
     UI.renderDock();
     UI.renderActivity();
     UI.checkHint();
+    UI.updateMusic();
   };
   UI.closePanel = function () {
+    const def = UI.PANELS[UI.panelId];
+    if (def && def.close) def.close();
     UI.panelId = null;
     document.body.classList.remove("panel-open");
     const P = $("#panel");
@@ -406,12 +492,16 @@
     UI.renderDock();
     UI.renderActivity();
     UI.checkHint();
+    UI.updateMusic();
   };
   UI.ACTIONS.open = (el) => {
     const id = el.dataset.id;
     if (!id) return;
     if (UI.panelId === id && !el.closest("#activity")) UI.closePanel();
-    else UI.openPanel(id);
+    else {
+      if (UI.panelId && UI.PANELS[UI.panelId].close) UI.PANELS[UI.panelId].close();
+      UI.openPanel(id);
+    }
   };
   UI.ACTIONS.closePanel = () => UI.closePanel();
 
@@ -429,6 +519,7 @@
       head = { title: def.title || (bd ? bd.name : ""), role: npc ? npc.name + ", " + npc.role : def.role || "", portrait: bd && bd.npc ? UI.npcPortrait(bd.npc) : def.portrait ? def.portrait() : "" };
     }
     UI.detachHeroView();
+    if (def.beforeRender) def.beforeRender(P);
     P.innerHTML =
       '<div class="panel-head">' + (head.portrait ? '<span class="porthole">' + head.portrait + "</span>" : "") + '<div><h2>' + esc(head.title) + '</h2><div class="role">' + esc(head.role) + '</div></div><button class="iconbtn close" data-act="closePanel" aria-label="Schließen">' + I.ui("schliessen") + '</button></div><div class="panel-body">' + def.render() + "</div>";
     if (def.after) def.after(P);
@@ -479,13 +570,14 @@
     heroViewKey = "";
   };
 
-  /* ---------- Hinweise von Kaept'n Ottilie ---------- */
+  /* ---------- Hinweise von Hueterin Ottilie ---------- */
   const TUT = [
-    { when: () => true, text: (S) => "Willkommen an Bord, " + S.name + "! Ich bin Käpt'n Ottilie, Hafenmeisterin von Schwebfels. In der Taverne „Zur Schiefen Möwe“ warten deine ersten Aufträge.", btn: "Zur Taverne", act: () => UI.openPanel("taverne"), panel: "taverne" },
-    { when: () => UI.panelId === "taverne" && !UI.S.quest.active, text: () => "Jeder Auftrag kostet Tatendrang, der sich mit der Zeit wieder auffüllt. Achte auf die Siegchance: Gemütliche Aufträge sind sicher, halsbrecherische bringen mehr Beute.", btn: "Verstanden" },
-    { when: () => UI.S.stats.quests >= 1 && !UI.S.quest.active, text: () => "Gut gemacht! Gold steckst du am besten in deine Attribute. Klick oben auf dein Portrait oder unten auf „Held“.", btn: "Zum Quartier", act: () => UI.openPanel("heim"), panel: "heim" },
-    { when: () => UI.S.stats.quests >= 3, text: () => "Brumms Schmiede und Zinnobers Kuriositäten verkaufen bessere Ausrüstung. Ein grüner Pfeil zeigt dir, was besser ist als dein jetziger Kram.", btn: "Verstanden" },
-    { when: () => UI.S.level >= 3, text: () => "Kein Tatendrang mehr? Wache am Leuchtturm bringt Gold, in der Arena gibt es Ehre, und der Wunschbrunnen schenkt dir jeden Tag einen Wurf.", btn: "Leinen los!" },
+    { when: () => true, text: (S) => "Willkommen in der Freistatt, " + S.name + ". Ich bin Ottilie und hüte den Frieden auf Schwebfels. In der Taverne „Zur Schiefen Krähe“ warten deine ersten Aufträge.", btn: "Zur Taverne", act: () => UI.openPanel("taverne"), panel: "taverne" },
+    { when: () => UI.panelId === "taverne" && !UI.S.quest.active, text: () => "Jeder Auftrag kostet Tatendrang, der sich mit der Zeit auffüllt. Achte auf die Siegchance. Seltene Hordenaufträge schicken dir mehrere Gegner nacheinander.", btn: "Verstanden" },
+    { when: () => UI.S.stats.quests >= 1 && !UI.S.quest.active, text: () => "Gut gemacht! Gold steckst du am besten in deine Attribute. Im Charakterbogen siehst du auch genau, wie viel Erfahrung dir bis zur nächsten Stufe fehlt.", btn: "Zum Charakter", act: () => UI.openPanel("held"), panel: "held" },
+    { when: () => UI.S.stats.quests >= 3, text: () => "In der Schmiede und bei Madame Zinnober gibt es bessere Ausrüstung. Fährst du mit der Maus über einen Gegenstand, siehst du sofort, wie sich deine Werte verändern würden.", btn: "Verstanden" },
+    { when: () => UI.S.level >= 3, text: () => "Im Steinkreis erzählt die Seherin die Chronik deines Reiches und deiner Klasse. Jedes Kapitel bringt seltene Beute.", btn: "Zum Steinkreis", act: () => UI.openPanel("steinkreis"), panel: "steinkreis" },
+    { when: () => UI.S.level >= 5, text: () => "Im Ring der Reiche kämpfst du gegen Helden aus den anderen Reichen. Ehre bringt dich in der Rangliste nach oben, für dich und für dein Reich.", btn: "Leinen los" },
     { when: () => UI.S.level >= 10, text: () => "Stufe 10! Das Tor zur Tiefe hat sich geöffnet. Dort warten Bosse mit seltener und epischer Beute.", btn: "Ab in die Tiefe", act: () => UI.openPanel("tiefen"), panel: "tiefen" },
   ];
   UI.checkHint = function () {
@@ -497,7 +589,7 @@
       S.tut++;
       step = TUT[S.tut];
     }
-    if (!step || !step.when() || !$("#battle").hidden) {
+    if (!step || !step.when() || UI.inBattle) {
       box.hidden = true;
       return;
     }
@@ -528,12 +620,14 @@
     UI.renderDock();
     UI.renderActivity();
     if (UI.panelId && opts.panel !== false) UI.renderPanel();
+    if (UI.hub) UI.hub.setHome(UI.S.house.tier, UI.S.realm);
     UI.checkHint();
     UI.save();
   };
 
   /* Sekundentakt: Zeitgeber, Zustandswechsel */
   let lastState = "";
+  let musicTimer = 0;
   UI.tick = function () {
     const S = UI.S;
     if (!S) return;
@@ -543,13 +637,14 @@
     const gDone = !!(S.guard && S.guard.end <= now);
     const aReady = S.arena.next <= now;
     const dReady = S.dungeons.next <= now;
-    const st = [qDone, gDone, aReady, dReady, Math.floor(E.energy(S, now))].join("|");
+    const sReady = S.story.next <= now;
+    const st = [qDone, gDone, aReady, dReady, sReady, Math.floor(E.energy(S, now)), S.daily.day].join("|");
     if (st !== lastState) {
       const prev = lastState.split("|");
       if (lastState) {
         if (qDone && prev[0] === "false") {
           UI.toast("Auftrag erledigt! Der Kampf wartet in der Taverne.", "good", "arena");
-          SB.audio.play("coin");
+          SB.audio.play("quest");
         }
         if (gDone && prev[1] === "false") UI.toast("Deine Wache ist vorbei. Funzel hat deinen Lohn bereit.", "good", "leuchtturm");
       }
@@ -557,7 +652,7 @@
       UI.renderTop();
       UI.renderDock();
       UI.renderActivity();
-      if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady))) UI.renderPanel();
+      if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day)) UI.renderPanel();
     } else {
       UI.renderTop();
       const box = $("#activity");
@@ -568,6 +663,10 @@
       }
     }
     UI.updateTimers();
+    if (++musicTimer >= 5) {
+      musicTimer = 0;
+      UI.updateMusic();
+    }
   };
 
   /* Klick-Verteilung ueber data-act */
@@ -587,8 +686,8 @@
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key !== "Escape") return;
-    if (!$("#battle") || !$("#battle").hidden) return;
-    if (!$("#modal").hidden) UI.closeDialog();
+    if (UI.inBattle) return;
+    if (!$("#modal").hidden && !$("#modal").dataset.locked) UI.closeDialog();
     else if (UI.panelId) UI.closePanel();
   });
   document.addEventListener("click", (ev) => {
@@ -597,8 +696,17 @@
 
   UI.ACTIONS.toggleSound = function () {
     UI.S.settings.sound = !UI.S.settings.sound;
-    SB.audio.enabled = UI.S.settings.sound;
+    SB.audio.setSfx(UI.S.settings.sound);
     UI.renderTop();
+    if (UI.panelId === "einstellungen") UI.renderPanel();
+    UI.save();
+  };
+  UI.ACTIONS.toggleMusic = function () {
+    UI.S.settings.music = UI.S.settings.music === false;
+    SB.audio.setMusic(UI.S.settings.music);
+    UI.updateMusic();
+    UI.renderTop();
+    if (UI.panelId === "einstellungen") UI.renderPanel();
     UI.save();
   };
 })();

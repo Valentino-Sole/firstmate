@@ -1,4 +1,4 @@
-/* Helden von Schwebfels - Kampfdarstellung und Charaktererstellung. */
+/* Helden von Schwebfels - Kampfdarstellung (auch mehrere Gegner nacheinander) und Heldenerschaffung. */
 (function () {
   "use strict";
   const SB = (globalThis.SB = globalThis.SB || {});
@@ -16,28 +16,32 @@
       const S = UI.S;
       const root = $("#battle");
       UI.hideTip();
+      UI.inBattle = true;
+      UI.updateMusic();
       if (UI.hub) UI.hub.pause();
       const hero = fight.hero;
-      const foe = fight.foe;
-      const res = fight.result;
+      const foes = fight.foes;
+      const chain = fight.chain;
+      const multi = foes.length > 1;
+      const sub = (f) => "Stufe " + f.level + (f.kind === "monster" ? " · " + (D.ARCH_NAMES[f.arch] || D.MONSTER_TYPES[f.mainKey].profile) : " · " + D.CLASSES[f.cls].name);
       const plate = (f, side) =>
-        '<div class="plate ' + side + '"><span class="porthole">' + UI.portrait(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + esc(f.name) + '</div><div class="plv">Stufe ' + f.level + (f.kind === "monster" ? " · " + D.MONSTER_TYPES[f.mainKey].profile : " · " + D.CLASSES[f.cls].name) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
+        '<div class="plate ' + side + '"><span class="porthole">' + UI.portrait(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
       root.innerHTML =
-        '<div class="bstage"></div><div class="plates">' + plate(hero, "left") + plate(foe, "right") + "</div>" +
+        '<div class="bstage"></div><div class="plates">' + plate(hero, "left") + '<div class="btitle">' + esc(opts.title || "") + (multi ? '<div class="wave">Gegner <b id="waveNo">1</b> von ' + foes.length + "</div>" : "") + "</div>" + plate(foes[0], "right") + "</div>" +
         '<div class="bcontrols"><button class="btn ghost small" data-speed="1">1×</button><button class="btn ghost small" data-speed="2">2×</button><button class="btn ghost small" data-speed="4">4×</button><button class="btn small" data-skip="1">Überspringen</button></div>';
       root.hidden = false;
       document.body.classList.add("in-battle");
       $("#hint").hidden = true;
       const stage = root.querySelector(".bstage");
-      const bars = root.querySelectorAll(".hp");
-      const max = [hero.maxHp, foe.maxHp];
+      const max = [hero.maxHp, foes[0].maxHp];
       const setHp = (side, hp) => {
-        const bar = bars[side];
-        const pct = Math.max(0, hp / max[side]) * 100;
+        const bar = root.querySelectorAll(".hp")[side];
+        if (!bar) return;
+        const pct = Math.max(0, Math.min(1, hp / max[side])) * 100;
         const i = bar.querySelector("i");
         i.style.width = pct.toFixed(1) + "%";
         i.classList.toggle("low", pct < 30);
-        bar.querySelector("span").textContent = U.fmt(Math.max(0, hp));
+        bar.querySelector("span").textContent = U.fmt(Math.max(0, Math.round(hp)));
       };
       let speed = S.settings.fastFights ? 2 : 1;
       let skip = false;
@@ -45,13 +49,15 @@
       markSpeed();
       let battle = null;
       let log = null;
+      let figs = null;
       if (UI.use3d) {
         try {
           battle = SB.R3D.createBattle(stage, {
             setting: opts.setting,
             tint: opts.tint,
+            dayTime: SB.R3D.dayTime(S.settings.dayCycle || "zyklus"),
             left: UI.fighterDesc(hero),
-            right: UI.fighterDesc(foe),
+            right: UI.fighterDesc(foes[0]),
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
             sfx: (n) => SB.audio.play(n),
@@ -62,12 +68,12 @@
           battle = null;
         }
       }
-      let figs = null;
-      if (!battle) {
-        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portrait(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portrait(UI.fighterDesc(foe), 200) + '</div></div><div class="blog" style="top:auto;height:120px"></div>';
+      function fallbackStage(foe) {
+        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portrait(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portrait(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
       }
+      if (!battle) fallbackStage(foes[0]);
       root.onclick = (ev) => {
         const b = ev.target.closest("button");
         if (!b) return;
@@ -78,15 +84,26 @@
         }
         if (b.dataset.skip) skip = true;
       };
-      const names = [hero.name, foe.name];
-      const hpNow = [hero.maxHp, foe.maxHp];
+      let names = [hero.name, foes[0].name];
+      const hpNow = [hero.maxHp, foes[0].maxHp];
       const wait = (ms) => new Promise((r) => setTimeout(r, ms / speed));
+      const say2d = (t) => {
+        log.insertAdjacentHTML("beforeend", "<p>" + t + "</p>");
+        log.scrollTop = log.scrollHeight;
+      };
       async function play2d(ev) {
         const a = ev.a;
         const d = 1 - a;
         if (ev.kind === "stun") {
-          log.insertAdjacentHTML("beforeend", "<p>" + esc(names[a]) + " ist betäubt und setzt aus.</p>");
+          say2d(esc(names[a]) + " ist betäubt und setzt aus.");
           await wait(500);
+          return;
+        }
+        if (ev.kind === "dot") {
+          hpNow[a] = ev.hp[a];
+          setHp(a, hpNow[a]);
+          say2d(esc(names[a]) + " leidet unter Gift: " + U.fmt(ev.dmg) + " Schaden.");
+          await wait(420);
           return;
         }
         for (const h of ev.hits) {
@@ -101,50 +118,102 @@
             SB.audio.play(h.res === "crit" ? "crit" : "hit");
             txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "");
           }
-          log.insertAdjacentHTML("beforeend", "<p>" + txt + "</p>");
-          log.scrollTop = log.scrollHeight;
+          say2d(txt);
           await wait(420);
         }
+        if (ev.heal) {
+          hpNow[a] = ev.hp[a];
+          setHp(a, hpNow[a]);
+          say2d(esc(names[a]) + " heilt sich um " + U.fmt(ev.heal) + ".");
+        }
+        if (ev.poison) say2d(esc(names[d]) + " ist vergiftet.");
+        if (ev.stun) say2d(esc(names[d]) + " ist betäubt.");
+      }
+      function swapFoePlate(i) {
+        const f = foes[i];
+        max[1] = f.maxHp;
+        hpNow[1] = f.maxHp;
+        names = [hero.name, f.name];
+        const old = root.querySelector(".plate.right");
+        old.outerHTML = plate(f, "right");
+        const no = root.querySelector("#waveNo");
+        if (no) no.textContent = i + 1;
       }
       (async () => {
-        for (const ev of res.events) {
-          if (skip) break;
-          if (battle) await battle.play(ev);
-          else await play2d(ev);
+        let lastWave = 0;
+        for (let w = 0; w < chain.waves.length; w++) {
+          lastWave = w;
+          const res = chain.waves[w];
+          if (w > 0) {
+            swapFoePlate(w);
+            if (!skip) {
+              const banner = document.createElement("div");
+              banner.className = "wavebanner";
+              banner.textContent = "Gegner " + (w + 1) + " von " + foes.length + ": " + foes[w].name;
+              root.appendChild(banner);
+              setTimeout(() => banner.remove(), 1800);
+            }
+            const startHp = res.startHp != null ? res.startHp : hpNow[0];
+            if (battle) await battle.nextFoe(UI.fighterDesc(foes[w]), foes[w].maxHp, startHp);
+            else fallbackStage(foes[w]);
+            hpNow[0] = startHp;
+            setHp(0, startHp);
+          }
+          for (const ev of res.events) {
+            if (skip) break;
+            if (battle) await battle.play(ev);
+            else await play2d(ev);
+          }
+          hpNow[0] = res.hp[0];
+          setHp(0, res.hp[0]);
+          setHp(1, res.hp[1]);
+          if (res.winner !== 0) break;
+          if (skip) continue;
+          if (w < chain.waves.length - 1) await wait(500);
         }
-        setHp(0, res.hp[0]);
-        setHp(1, res.hp[1]);
-        if (battle) await battle.finish(res.winner);
+        if (skip && lastWave < chain.waves.length - 1) {
+          const lw = chain.waves.length - 1;
+          swapFoePlate(lw);
+          setHp(0, chain.waves[lw].hp[0]);
+          setHp(1, chain.waves[lw].hp[1]);
+        }
+        const won = chain.winner === 0;
+        if (battle) await battle.finish(won ? 0 : 1);
         else await wait(400);
-        SB.audio.play(res.winner === 0 ? "victory" : "defeat");
-        showResult();
+        SB.audio.play(won ? "victory" : "defeat");
+        showResult(won);
       })();
-      function showResult() {
+      function showResult(win) {
         const r = opts.rewards || {};
-        const win = res.winner === 0;
         const chips = [];
-        if (r.xp) chips.push('<span class="chip">' + I.ui("xp") + " +" + U.fmt(r.xp) + " Erfahrung</span>");
+        if (r.xp) chips.push('<span class="chip">' + I.ui("xp") + " +" + U.fmt(r.xp) + " EP</span>");
         if (r.gold) chips.push('<span class="chip">' + UI.gold(r.gold) + "</span>");
         if (r.honor) chips.push('<span class="chip">' + I.ui("ehre") + " " + (r.honor > 0 ? "+" : "") + U.fmt(r.honor) + " Ehre</span>");
         if (r.perle) chips.push('<span class="chip">' + UI.perlen(r.perle) + "</span>");
         if (r.perlen) chips.push('<span class="chip">' + UI.perlen(r.perlen) + "</span>");
         if (r.itemSold) chips.push('<span class="chip">Rucksack voll: Fund für ' + UI.gold(r.itemSold) + " verkauft</span>");
         let itemHtml = "";
-        if (r.item) itemHtml = '<div style="display:flex;justify-content:center"><div style="width:240px;text-align:left;padding:10px 12px;border-radius:14px;background:#0a141b;border:2px solid ' + D.RARITIES[r.item.rarity].color + '">' + UI.itemCard(r.item) + "</div></div>";
-        const sub = win ? (opts.setting === "arena" ? "Das Publikum tobt!" : opts.setting === "dungeon" ? esc(opts.foeName) + " ist gefallen." : esc(opts.foeName) + " gibt sich geschlagen.") : opts.setting === "arena" ? "Das Publikum buht. Morgen ist ein neuer Tag." : "Diesmal war " + esc(opts.foeName) + " stärker. Bessere Ausrüstung und Attribute helfen.";
+        if (r.item) itemHtml = '<div class="lootcard" style="border-color:' + D.RARITIES[r.item.rarity].color + '"><div class="lootpic r-' + r.item.rarity + '">' + I.item(r.item) + "</div>" + UI.itemCard(r.item) + "</div>";
+        const lastFoe = foes[Math.min(foes.length - 1, chain.waves.length - 1)];
+        let sub;
+        if (win) sub = opts.setting === "arena" ? "Das Publikum tobt! Ehre für " + esc(D.REALMS[S.realm].name) + "." : multi ? "Alle " + foes.length + " Gegner sind besiegt!" : esc(lastFoe.name) + (opts.setting === "dungeon" ? " ist gefallen." : " gibt sich geschlagen.");
+        else sub = opts.setting === "arena" ? "Das Publikum buht. Morgen ist ein neuer Tag." : (multi ? "Gegner " + chain.waves.length + " von " + foes.length + " war zu stark: " : "Diesmal war ") + esc(lastFoe.name) + (multi ? "." : " stärker.") + " Bessere Ausrüstung und Attribute helfen." + (r.xp ? " Ein Trostpreis bleibt dir trotzdem." : "");
+        const x = UI.xpInfo(S);
         const d = UI.dialog(
-          '<div class="result ' + (win ? "win" : "lose") + '"><h2>' + (win ? "Sieg!" : "Niederlage") + '</h2><p class="muted">' + sub + '</p><div class="rewardlist">' + chips.join("") + "</div>" + itemHtml +
+          '<div class="result ' + (win ? "win" : "lose") + '"><h2>' + (win ? (multi ? "Horde besiegt!" : "Sieg!") : "Niederlage") + '</h2><p class="muted">' + sub + '</p><div class="rewardlist">' + chips.join("") + "</div>" + itemHtml +
+            '<div class="xpmini">Stufe ' + S.level + ': <span class="xpbar"><i style="width:' + x.pct.toFixed(1) + '%"></i></span> noch <b class="num">' + U.fmt(x.rest) + "</b> EP bis Stufe " + (S.level + 1) + "</div>" +
             '<div class="actions" style="justify-content:center"><button class="btn big" id="battleDone" data-autofocus>Weiter</button></div></div>'
         );
         d.parentNode.dataset.locked = "1";
         d.querySelector("#battleDone").onclick = () => {
-          delete d.parentNode.dataset.locked;
           UI.closeDialog();
           if (battle) battle.dispose();
           root.hidden = true;
           document.body.classList.remove("in-battle");
           root.innerHTML = "";
           root.onclick = null;
+          UI.inBattle = false;
+          UI.updateMusic();
           if (UI.hub) UI.hub.resume();
           resolve();
         };
@@ -152,64 +221,90 @@
     });
   };
 
-  /* ================= Charaktererstellung ================= */
+  /* ================= Heldenerschaffung ================= */
   let view = null;
   let draft = null;
-  function randomDraft(keepName) {
+  const realmKeys = () => Object.keys(D.REALMS);
+  const racesOf = (realm) => Object.keys(D.RACES).filter((r) => D.RACES[r].realm === realm);
+  const classesOf = (realm) => Object.keys(D.CLASSES).filter((c) => D.CLASSES[c].realm === realm);
+  function randomLook(race) {
     const r = Math.random;
-    const races = Object.keys(D.RACES);
-    const race = races[Math.floor(r() * races.length)];
     const R = D.RACES[race];
-    const cls = Object.keys(D.CLASSES)[Math.floor(r() * 3)];
+    const pick = (a) => a[Math.floor(r() * a.length)];
     return {
-      name: keepName || "",
-      race,
-      gender: r() < 0.5 ? "m" : "w",
-      cls,
-      look: { skin: R.skins[Math.floor(r() * R.skins.length)], hair: R.hairs[Math.floor(r() * R.hairs.length)], hairStyle: Math.floor(r() * 5), beard: r() < 0.5 ? 0 : Math.floor(r() * 4), eyes: "#1d1b26" },
+      skin: pick(R.skins), hair: pick(R.hairs), hairStyle: Math.floor(r() * D.HAIR_STYLES.length), beard: r() < 0.5 ? 0 : Math.floor(r() * D.BEARDS.length),
+      eyes: pick(D.EYES).c, tattoo: r() < 0.55 ? pick(D.TATTOOS).id : "keine", tattooColor: pick(D.TATTOO_COLORS).c, scar: r() < 0.25 ? pick(D.SCARS).id : "keine", horns: Math.floor(r() * 3),
     };
+  }
+  function randomDraft(keepName, realm) {
+    const r = Math.random;
+    realm = realm || realmKeys()[Math.floor(r() * 3)];
+    const race = racesOf(realm)[Math.floor(r() * 2)];
+    const cls = classesOf(realm)[Math.floor(r() * 4)];
+    return { name: keepName || "", realm, race, gender: r() < 0.5 ? "m" : "w", cls, look: randomLook(race) };
   }
   function previewDesc() {
     const C = D.CLASSES[draft.cls];
+    const tint = C.material === "platte" ? "#9aa4ad" : C.material === "leder" ? "#5a3d2a" : D.REALMS[draft.realm].color;
     return {
       kind: "hero",
       race: draft.race,
       cls: draft.cls,
+      realm: draft.realm,
       gender: draft.gender,
       look: draft.look,
       gear: {
-        waffe: { base: C.weapons[0], tint: "#8a5a35", rarity: "gewoehnlich", style: 0 },
-        ruestung: { base: C.chest, tint: C.material === "platte" ? "#9aa4ad" : C.material === "leder" ? "#8a5a35" : "#5b4fbf", rarity: "gewoehnlich", style: 0 },
-        stiefel: { base: "stiefel", tint: "#5a4a3a", rarity: "gewoehnlich", style: 0 },
+        waffe: { base: C.weapons[0], tint: "#6b4a2f", rarity: "selten", style: 0 },
+        ruestung: { base: C.chest, tint, rarity: "gewoehnlich", style: 1 },
+        stiefel: { base: "stiefel", tint: "#4a3a2a", rarity: "gewoehnlich", style: 0 },
+        nebenhand: { base: C.offhand, rarity: "gewoehnlich", style: 0 },
+        umhang: { base: "umhang", tint: D.REALMS[draft.realm].color, style: 0 },
       },
     };
-  }
-  function renderForm() {
-    const f = $("#create .cform");
-    const R = D.RACES[draft.race];
-    const C = D.CLASSES[draft.cls];
-    const sw = (arr, key) => '<div class="swatches">' + arr.map((c) => '<button type="button" class="sw' + (draft.look[key] === c ? " on" : "") + '" style="background:' + c + '" data-cact="look" data-k="' + key + '" data-v="' + c + '" aria-label="Farbe ' + c + '"></button>').join("") + "</div>";
-    const opt = (key, n, labels) => '<div class="choices">' + labels.map((l, i) => '<button type="button" class="choice' + (draft.look[key] === i ? " on" : "") + '" data-cact="lookn" data-k="' + key + '" data-v="' + i + '">' + l + "</button>").join("") + "</div>";
-    f.innerHTML =
-      '<label for="heroName"><h3 style="margin-top:0">Name deines Helden</h3></label><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
-      '<p class="delta-down" id="nameErr" hidden></p>' +
-      "<h3>Volk</h3><div class=\"choices\">" + Object.keys(D.RACES).map((id) => '<button type="button" class="choice' + (draft.race === id ? " on" : "") + '" data-cact="race" data-v="' + id + '">' + D.RACES[id].name + "</button>").join("") + "</div>" +
-      '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
-      "<h3>Klasse</h3><div class=\"choices cls-choices\">" + Object.keys(D.CLASSES).map((id) => '<button type="button" class="choice' + (draft.cls === id ? " on" : "") + '" data-cact="cls" data-v="' + id + '">' + I.classCrest(id) + "<br>" + D.CLASSES[id].name + "<small>" + D.ATTR_INFO[D.CLASSES[id].main].name + "</small></button>").join("") + "</div>" +
-      '<p class="desc">' + esc(C.desc) + " Spezialangriff: " + esc(C.special.name) + ".</p>" +
-      '<h3>Erscheinung</h3><div class="choices" style="grid-template-columns:repeat(2,1fr)"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Breitschultrig</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Schmal</button></div>' +
-      '<h3 style="font-size:16px">Haut</h3>' + sw(R.skins, "skin") +
-      '<h3 style="font-size:16px">Haare</h3>' + sw(R.hairs, "hair") +
-      opt("hairStyle", 5, ["Kurz", "Strubbelig", "Lang", "Zopf", "Glatze"]) +
-      '<h3 style="font-size:16px">Bart</h3>' + opt("beard", 4, ["Keiner", "Kinnbart", "Vollbart", "Schnauzer"]) +
-      '<div class="row" style="margin-top:18px"><button type="button" class="btn ghost" data-cact="random">Zufällig</button><button type="button" class="btn ghost" data-cact="import">Spielstand laden</button><span class="spacer"></span><button type="button" class="btn big" data-cact="start">In See stechen</button></div>';
-    const inp = f.querySelector("#heroName");
-    inp.addEventListener("input", () => (draft.name = inp.value));
   }
   function modsText(mods) {
     const parts = [];
     for (const a of D.ATTRS) if (mods[a]) parts.push((mods[a] > 0 ? "+" : "") + mods[a] + " " + D.ATTR_INFO[a].name);
     return parts.length ? "(" + parts.join(", ") + ")" : "";
+  }
+  function renderForm() {
+    const f = $("#create .cform");
+    const R = D.RACES[draft.race];
+    const C = D.CLASSES[draft.cls];
+    const L = draft.look;
+    const sw = (arr, key) =>
+      '<div class="swatches">' + arr.map((c) => {
+        const col = typeof c === "string" ? c : c.c;
+        return '<button type="button" class="sw' + (L[key] === col ? " on" : "") + (typeof c === "object" && c.glow ? " glowsw" : "") + '" style="background:' + col + '" data-cact="look" data-k="' + key + '" data-v="' + col + '" title="' + esc(typeof c === "object" ? c.name : col) + '" aria-label="' + esc(typeof c === "object" ? c.name : "Farbe") + '"></button>';
+      }).join("") + "</div>";
+    const opt = (key, labels, ids) => '<div class="choices">' + labels.map((l, i) => {
+      const v = ids ? ids[i] : i;
+      return '<button type="button" class="choice' + (L[key] === v ? " on" : "") + '" data-cact="' + (ids ? "looks" : "lookn") + '" data-k="' + key + '" data-v="' + v + '">' + esc(l) + "</button>";
+    }).join("") + "</div>";
+    f.innerHTML =
+      '<div class="step"><span class="stepno">1</span><h3>Wähle dein Reich</h3></div><div class="realmcards small">' +
+      realmKeys().map((r) => '<button type="button" class="realmcard r-' + r + (draft.realm === r ? " on" : "") + '" data-cact="realm" data-v="' + r + '">' + I.realm(r) + "<h3>" + esc(D.REALMS[r].name) + "</h3><i>„" + esc(D.REALMS[r].motto) + "“</i></button>").join("") + "</div>" +
+      '<p class="desc">' + esc(D.REALMS[draft.realm].desc) + "</p>" +
+      '<div class="step"><span class="stepno">2</span><h3>Klasse</h3></div><div class="choices cls-choices">' +
+      classesOf(draft.realm).map((id) => '<button type="button" class="choice' + (draft.cls === id ? " on" : "") + '" data-cact="cls" data-v="' + id + '">' + I.classCrest(id) + "<br>" + D.CLASSES[id].name + "<small>" + D.CLASSES[id].archName + "</small></button>").join("") + "</div>" +
+      '<p class="desc"><b>' + esc(C.archName) + ":</b> " + esc(C.desc) + "<br><b>" + esc(C.special.name) + ":</b> " + esc(C.special.desc) + "</p>" +
+      '<div class="step"><span class="stepno">3</span><h3>Volk</h3></div><div class="choices" style="grid-template-columns:repeat(2,1fr)">' +
+      racesOf(draft.realm).map((id) => '<button type="button" class="choice' + (draft.race === id ? " on" : "") + '" data-cact="race" data-v="' + id + '">' + D.RACES[id].name + "</button>").join("") + "</div>" +
+      '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
+      '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
+      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span><button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button></div>' +
+      "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
+      (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
+      "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
+      "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor") +
+      "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id)) +
+      (R.horns ? "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]) : "") +
+      '<div class="step"><span class="stepno">5</span><h3>Name</h3></div><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
+      '<p class="delta-down" id="nameErr" hidden></p>' +
+      '<div class="row" style="margin-top:18px"><button type="button" class="btn ghost" data-cact="random">Alles zufällig</button><button type="button" class="btn ghost" data-cact="import">Spielstand laden</button><span class="spacer"></span><button type="button" class="btn big" data-cact="start">Für ' + esc(D.REALMS[draft.realm].name) + "!</button></div>";
+    const inp = f.querySelector("#heroName");
+    inp.addEventListener("input", () => (draft.name = inp.value));
+    $("#create").dataset.realm = draft.realm;
   }
   function updateView() {
     if (view) view.set(previewDesc());
@@ -222,7 +317,7 @@
     const box = $("#create");
     draft = randomDraft("");
     box.innerHTML =
-      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>Eine Stadt auf einer Wolkeninsel, drei Aufträge an der Wand und jede Menge Ärger darunter. Erschaffe deinen Helden.</p></div></div><div class="cform"></div>';
+      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div></div><div class="cform"></div>';
     box.hidden = false;
     const cv = box.querySelector(".cview");
     if (UI.use3d) {
@@ -241,21 +336,35 @@
       SB.audio.unlock();
       const act = b.dataset.cact;
       const v = b.dataset.v;
-      if (act === "race") {
+      const keep = $("#heroName") ? $("#heroName").value : draft.name;
+      if (act === "realm") {
+        if (draft.realm !== v) {
+          const archIdx = classesOf(draft.realm).indexOf(draft.cls);
+          const raceIdx = racesOf(draft.realm).indexOf(draft.race);
+          draft.realm = v;
+          draft.cls = classesOf(v)[Math.max(0, archIdx)];
+          draft.race = racesOf(v)[Math.max(0, raceIdx)];
+          const R = D.RACES[draft.race];
+          draft.look.skin = R.skins[0];
+          draft.look.hair = R.hairs[0];
+          SB.audio.play("horn");
+        }
+      } else if (act === "race") {
         draft.race = v;
         const R = D.RACES[v];
         draft.look.skin = R.skins[0];
         draft.look.hair = R.hairs[0];
       } else if (act === "cls") draft.cls = v;
       else if (act === "gender") draft.gender = v;
-      else if (act === "look") draft.look[b.dataset.k] = v;
+      else if (act === "look" || act === "looks") draft.look[b.dataset.k] = v;
       else if (act === "lookn") draft.look[b.dataset.k] = +v;
-      else if (act === "random") draft = randomDraft(draft.name);
+      else if (act === "randomLook") draft.look = randomLook(draft.race);
+      else if (act === "random") draft = randomDraft(keep);
       else if (act === "import") {
         UI.ACTIONS.importSave();
         return;
       } else if (act === "start") {
-        const name = draft.name.trim().replace(/\s+/g, " ");
+        const name = keep.trim().replace(/\s+/g, " ");
         const err = $("#nameErr");
         if (!/^[\p{L}\p{N}][\p{L}\p{N} '\-]{1,15}$/u.test(name)) {
           err.hidden = false;
@@ -267,11 +376,12 @@
         const st = E.newHero({ name, race: draft.race, gender: draft.gender, cls: draft.cls, look: draft.look });
         UI.closeCreate();
         onDone(st);
+        const C = D.CLASSES[st.cls];
+        UI.dialog('<h2>' + esc(C.name) + " aus " + esc(D.REALMS[st.realm].name) + "</h2><p>" + esc(C.prolog) + '</p><p class="muted">' + esc(D.LORE) + '</p><div class="actions"><button class="btn" data-act="closeDialog">Auf nach Schwebfels</button></div>');
         return;
       }
-      SB.audio.play("click");
-      const keep = $("#heroName") ? $("#heroName").value : draft.name;
       if (act !== "random") draft.name = keep;
+      SB.audio.play("click");
       renderForm();
       updateView();
     };

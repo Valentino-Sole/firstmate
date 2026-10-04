@@ -1,4 +1,4 @@
-/* Helden von Schwebfels - Panels der Gebaeude und ihre Aktionen. */
+/* Helden von Schwebfels - Panels der Orte und ihre Aktionen. */
 (function () {
   "use strict";
   const SB = (globalThis.SB = globalThis.SB || {});
@@ -13,12 +13,13 @@
   const S = () => UI.S;
 
   const LINES = {
-    hulda: ["Setz dich, Held. Die Aufträge hängen am Brett, das Bier steht hinter mir.", "Wer mit leerem Magen kämpft, kämpft halb so gut. Sagt meine Oma. Die hat nie gekämpft.", "Drei Aufträge, drei Abenteuer. Und alle drei schlecht bezahlt, aber ehrlich."],
+    hulda: ["Setz dich, Held. Die Aufträge hängen am Brett, der Met steht hinter mir.", "In der Krähe ist jedes Reich willkommen. Prügeleien bitte draußen, die Stühle sind neu.", "Manche Aufträge sind selten. Dann kommen die Biester gleich in Horden. Nimm einen zweiten Krug mit."],
     brumm: ["Hrmpf. Fass nichts an, was noch glüht.", "Gute Klinge, guter Preis. Billige Klinge, kurzes Leben.", "Ich schmiede seit dreihundert Jahren. Die ersten zweihundert waren Übung."],
-    zinnober: ["Ah, ein Kunde! Oder ein Dieb? Bei dir bin ich mir noch nicht sicher.", "Alles hier ist magisch. Außer dem Staub. Wobei, der vielleicht auch.", "Dieser Ring hat einem König gehört. Oder einem Koch. Die Handschrift war schlecht."],
-    krawall: ["WILLKOMMEN IN DER WOLKENARENA! Ich rufe immer so. Ich kann nicht anders.", "Das Publikum will Blut sehen. Oder wenigstens blaue Flecken.", "Ehre gewinnt man hier im Dutzend. Verlieren geht schneller."],
-    funzel: ["Das Licht muss brennen. Immer. Ich mach das seit vierzig Jahren und habe nie geblinzelt.", "Wache halten ist einfach: Du schaust raus, die Wolken schauen rein.", "Zahle pro Schicht. Pünktlich. Meistens."],
-    hufnagel: ["Pass auf, wo du hintrittst. Wolkenesel sind sauber, die Ziegen nicht.", "Mit einem Reittier bist du schneller am Auftrag und schneller wieder in der Taverne.", "Der Greif beißt nur Leute, die er nicht mag. Er mag niemanden."],
+    zinnober: ["Ah, ein Kunde! Oder ein Dieb? Bei dir bin ich mir noch nicht sicher.", "Alles hier ist magisch. Außer dem Staub. Wobei, der vielleicht auch.", "Dieser Ring gehörte einer Feenkönigin. Sagt zumindest der Ring."],
+    krawall: ["Willkommen im Ring der Reiche! Hier kämpft Albion gegen Midgard gegen Hibernia, und alle gegen den Sand in den Stiefeln.", "Jeder Sieg bringt Ehre, dir und deinem Reich. Jede Niederlage bringt Geschichten.", "Hier drin gibt es keinen Frieden der Freistatt. Nur Regeln. Ein paar."],
+    funzel: ["Das Feuer muss brennen. Immer. Ich mach das seit vierzig Jahren und habe nie geblinzelt.", "Wache halten ist einfach: Du schaust in den Nebel, der Nebel schaut zurück.", "Zahle pro Schicht. Pünktlich. Meistens."],
+    hufnagel: ["Pass auf, wo du hintrittst. Der Greif ist sauber, die Hirsche nicht.", "Mit einem Reittier bist du schneller am Auftrag und schneller wieder in der Taverne.", "Der Greif beißt nur Leute, die er nicht mag. Er mag niemanden."],
+    seherin: ["Die Steine erinnern sich an alles. Sie warten nur darauf, dass jemand zuhört.", "Jedes Reich hat seine Geschichte. Und jeder Held schreibt ein Stück davon.", "Unter den Splittern regt sich etwas. Die Chronik ist noch nicht zu Ende geschrieben."],
   };
   const line = (npc) => {
     const arr = LINES[npc];
@@ -31,13 +32,13 @@
   const busyNote = () => {
     const b = E.busy(S());
     if (!b) return "";
-    return '<div class="say">' + (b.what === "quest" ? "Du bist gerade auf einem Auftrag unterwegs." : "Du schiebst gerade Wache am Leuchtturm.") + "</div>";
+    return '<div class="say">' + (b.what === "quest" ? "Du bist gerade auf einem Auftrag unterwegs." : "Du hältst gerade Wache am Turm.") + "</div>";
   };
   const estCache = new Map();
-  function estimate(hero, foe, key) {
+  function estimate(hero, foes, key) {
     const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block;
     if (estCache.has(k)) return estCache.get(k);
-    const v = E.estimateWin(hero, foe, 40, key);
+    const v = E.estimateWin(hero, foes, 30, key);
     estCache.set(k, v);
     if (estCache.size > 200) estCache.delete(estCache.keys().next().value);
     return v;
@@ -47,8 +48,10 @@
       UI.toast(res.msg, "bad");
       return false;
     }
-    return true;
+    return res && res.ok !== false;
   }
+  const realmChip = (realm) => '<span class="realmchip r-' + realm + '">' + I.realm(realm) + " " + esc(D.REALMS[realm].name) + "</span>";
+  const guildTag = (g) => (g ? ' <span class="gtag">[' + esc(g.tag) + "]</span>" : "");
 
   /* ================= Taverne ================= */
   P.taverne = {
@@ -56,12 +59,13 @@
       const s = S();
       const now = E.now();
       const en = E.energy(s, now);
+      const max = E.energyMax(s);
       let h = say("hulda");
       h +=
-        '<div class="row" style="margin-bottom:12px"><span class="gauge" style="padding-right:12px">' + UI.gauge(en, E.C.ENERGY_MAX) + "<span><small>Tatendrang</small>" + Math.floor(en) + " / " + E.C.ENERGY_MAX + "</span></span>" +
-        (en < E.C.ENERGY_MAX ? '<span class="muted">+1 in <b class="num" data-until="' + (now + E.nextEnergyIn(s, now)) + '"></b></span>' : "") +
-        '<span class="spacer"></span><button class="btn small" data-act="brew"' + (s.daily.brews >= E.C.BREW_MAX ? " disabled" : "") + ">Wolkenbräu +" + E.C.BREW_ENERGY + " · 1 " + I.ui("perle") + "</button></div>" +
-        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " Krüge Wolkenbräu erhältlich.</div>";
+        '<div class="row" style="margin-bottom:12px"><span class="gauge" style="padding-right:12px">' + UI.gauge(en, max) + "<span><small>Tatendrang</small>" + Math.floor(en) + " / " + max + "</span></span>" +
+        (en < max ? '<span class="muted">+1 in <b class="num" data-until="' + (now + E.nextEnergyIn(s, now)) + '"></b></span>' : "") +
+        '<span class="spacer"></span><button class="btn small" data-act="brew"' + (s.daily.brews >= E.C.BREW_MAX ? " disabled" : "") + ">Nebelmet +" + E.C.BREW_ENERGY + " · 1 " + I.ui("perle") + "</button></div>" +
+        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " Krüge Nebelmet erhältlich.</div>";
       if (s.guard) return h + busyNote();
       const a = s.quest.active;
       if (a) {
@@ -69,11 +73,11 @@
         const mon = E.questMonster(o);
         const fin = a.end <= now;
         h +=
-          '<div class="quest"><div class="mon">' + UI.portrait(UI.monDesc(mon), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
+          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
           '<div class="progress"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="foot">' +
           (fin
-            ? '<button class="btn big done-pulse" data-act="questFight">Kampf gegen ' + esc(mon.name) + "</button>"
+            ? '<button class="btn big done-pulse" data-act="questFight">' + (o.rare ? "Die Horde stellen" : "Kampf gegen " + esc(mon.name)) + "</button>"
             : '<span>Unterwegs nach ' + esc(o.place) + ': <b class="num" data-until="' + a.end + '"></b></span><span class="spacer"></span><button class="btn small" data-act="questSkip">Sofort ankommen · 1 ' + I.ui("perle") + "</button>") +
           "</div></div></div>";
         return h;
@@ -82,30 +86,33 @@
       h += '<div class="quests">';
       s.quest.offers.forEach((o, i) => {
         const mon = E.questMonster(o);
-        const c = estimate(hero, E.questFoe(o, hero), o.id);
+        const c = estimate(hero, E.questFoes(o, hero), o.id);
         const dur = E.questDuration(s, o);
+        const waves = o.rare
+          ? '<div class="waves"><span class="tag rare">Seltener Auftrag</span> ' + o.waves.length + " Gegner nacheinander, ohne Pause:" + '<div class="wavepics">' + o.waves.map((w, k) => '<span class="wp' + (w.boss ? " boss" : "") + '" title="' + esc(E.monById(w.monster).name) + '">' + UI.portrait(UI.monDesc(E.monById(w.monster), w.boss), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div></div>"
+          : "";
         h +=
-          '<div class="quest"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
+          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
           '<div class="meta">' + pips(o.diff) + "<span>" + E.DIFF[o.diff].name + "</span><span>" + I.ui("uhr") + " " + U.fmtTime(dur) + "</span><span>" + I.ui("tatendrang") + " " + o.energy + "</span>" + chanceTxt(c) + "</div>" +
-          '<div class="rewards"><span>' + I.ui("xp") + ' <span class="num">' + U.fmt(o.xp) + "</span></span><span>" + UI.gold(o.gold) + "</span>" +
+          '<div class="rewards"><span>' + I.ui("xp") + ' <span class="num">' + U.fmt(o.xp) + " EP</span></span><span>" + UI.gold(o.gold) + "</span>" +
           (o.perle ? "<span>" + UI.perlen(o.perle) + "</span>" : "") +
           (o.item ? '<button type="button" class="mini-item r-' + o.item.rarity + '" data-item="offer:' + i + '" data-act="itemInfo" data-ref="offer:' + i + '" aria-label="' + esc(o.item.name) + '">' + I.item(o.item) + "</button>" : "") +
-          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + ' · Gegner: ' + esc(mon.name) + ' (Stufe ' + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
+          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
       });
       h += "</div>";
-      if (en < 6) h += '<div class="say" style="margin-top:12px">Dein Tatendrang ist erschöpft. Ein Wolkenbräu hilft, oder du schiebst so lange Wache am Leuchtturm.</div>';
+      if (en < 6) h += '<div class="say" style="margin-top:12px">Dein Tatendrang ist erschöpft. Ein Krug Nebelmet hilft, oder du hältst so lange Wache am Turm.</div>';
       return h;
     },
   };
   A.brew = () => {
     if (!done(E.buyBrew(S()))) return;
     SB.audio.play("coin");
-    UI.toast("Hulda schenkt dir ein Wolkenbräu ein. Prost!", "good", "taverne");
+    UI.toast("Hulda schenkt dir einen Nebelmet ein. Skål!", "good", "taverne");
     UI.refresh();
   };
   A.questStart = (el) => {
     if (!done(E.startQuest(S(), +el.dataset.i))) return;
-    SB.audio.play("click");
+    SB.audio.play("quest");
     UI.refresh();
   };
   A.questSkip = () => {
@@ -119,8 +126,7 @@
     const offer = fight.offer;
     const rew = E.resolveQuest(s, fight);
     UI.saveNow();
-    const mon = E.questMonster(offer);
-    await UI.runBattle(fight, { setting: "quest", title: offer.title, rewards: rew, foeName: mon.name });
+    await UI.runBattle(fight, { setting: "quest", title: offer.title, rewards: rew, rare: offer.rare });
     UI.refresh();
   };
 
@@ -143,9 +149,8 @@
           for (const p of D.POTIONS) {
             const c = E.potionCost(s, p);
             const active = s.buffs.find((b) => b.id === p.id && b.until > now);
-            const color = p.id === "baerenkraft" ? "#e0644f" : p.id === "eisenhaut" ? "#9aa4ad" : p.id === "glueckspilztee" ? "#74d86f" : "#c47bff";
             h +=
-              '<div class="card"><div class="pic">' + I.potion(color) + "</div><div><h4>" + esc(p.name) + '</h4><div class="muted" style="font-size:13px">' + esc(p.desc) + "</div>" +
+              '<div class="card"><div class="pic">' + I.potion(p.color) + "</div><div><h4>" + esc(p.name) + '</h4><div class="muted" style="font-size:13px">' + esc(p.desc) + "</div>" +
               (active ? '<div style="font-size:12.5px">Wirkt noch <b class="num" data-until="' + active.until + '"></b></div>' : "") +
               '</div><button class="btn small" data-act="potion" data-id="' + p.id + '">' + (c.gold ? UI.gold(c.gold) : UI.perlen(c.perlen)) + "</button></div>";
           }
@@ -158,9 +163,10 @@
   }
   function invSection(title) {
     const s = S();
-    let h = '<div class="section-title">' + I.ui("rucksack") + " " + (title || "Rucksack") + ' <span class="muted" style="font-family:var(--font-body);font-size:14px">' + s.inv.length + " / " + E.C.INV_SIZE + "</span></div>";
+    const size = E.invSize(s);
+    let h = '<div class="section-title">' + I.ui("rucksack") + " " + (title || "Rucksack") + ' <span class="muted small">' + s.inv.length + " / " + size + "</span></div>";
     h += '<div class="grid6">';
-    for (let i = 0; i < E.C.INV_SIZE; i++) h += s.inv[i] ? UI.slotHtml(s.inv[i], "inv:" + i, { upgrade: true }) : '<div class="slot empty"></div>';
+    for (let i = 0; i < size; i++) h += s.inv[i] ? UI.slotHtml(s.inv[i], "inv:" + i, { upgrade: true }) : '<div class="slot empty"></div>';
     return h + "</div>";
   }
   P.schmiede = shopPanel("schmiede", "brumm");
@@ -172,7 +178,7 @@
   A.buy = (el) => {
     const res = E.buyItem(S(), el.dataset.shop, +el.dataset.i);
     if (!done(res)) return;
-    SB.audio.play("buy");
+    SB.audio.play(el.dataset.shop === "schmiede" ? "anvil" : "buy");
     UI.closeDialog();
     UI.toast("Gekauft: " + res.item.name, "good", "rucksack");
     UI.refresh();
@@ -204,17 +210,19 @@
     UI.refresh();
   };
 
-  /* ================= Held ================= */
-  P.heim = {
+  /* ================= Charakter ================= */
+  P.held = {
     head() {
       const s = S();
-      return { title: s.name, role: D.RACES[s.race].name + " · " + D.CLASSES[s.cls].name + " · Stufe " + s.level, portrait: UI.heroPortrait(s) };
+      return { title: s.name, role: D.REALMS[s.realm].name + " · " + D.RACES[s.race].name + " · " + D.CLASSES[s.cls].name + " · Stufe " + s.level, portrait: UI.heroPortrait(s) };
     },
     render() {
-      const tab = UI.tabs.heim || "ausruestung";
-      let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="heim" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      const tab = UI.tabs.held || "ausruestung";
+      let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["aussehen", "Aussehen"], ["geschichte", "Geschichte"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="held" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
       if (tab === "bestiarium") return h + bestiary();
       if (tab === "abzeichen") return h + achievements();
+      if (tab === "aussehen") return h + looks();
+      if (tab === "geschichte") return h + history();
       return h + sheet();
     },
     after(el) {
@@ -224,18 +232,21 @@
   };
   A.tab = (el) => {
     UI.tabs[el.dataset.panel] = el.dataset.tab;
+    SB.audio.play("page");
     UI.renderPanel(true);
   };
   function sheet() {
     const s = S();
     const sum = E.heroSummary(s);
     const C = D.CLASSES[s.cls];
+    const AR = D.ARCHETYPES[C.arch];
     const left = ["helm", "amulett", "ruestung", "umhang", "handschuhe"];
     const right = ["waffe", "nebenhand", "ring", "talisman", "stiefel"];
     const slotIcon = { helm: "held", amulett: "abzeichen", ruestung: "ruestung", umhang: "ruestung", handschuhe: "kraft", waffe: "schaden", nebenhand: "ruestung", ring: "perle", talisman: "glueck", stiefel: "geschick" };
     const col = (arr) => '<div class="col">' + arr.map((sl) => UI.slotHtml(s.equip[sl], "eq:" + sl, { emptyIcon: slotIcon[sl], label: D.SLOT_INFO[sl].name })).join("") + "</div>";
-    let h = '<div class="sheet">' + col(left) + '<div class="heroview" id="heroViewSlot"></div>' + col(right) + "</div>";
-    h += '<div class="section-title">Attribute <span class="muted" style="font-family:var(--font-body);font-size:13px">Gold: ' + UI.gold(s.gold) + "</span></div>";
+    let h = UI.xpBlock(s);
+    h += '<div class="sheet">' + col(left) + '<div class="heroview" id="heroViewSlot"></div>' + col(right) + "</div>";
+    h += '<div class="section-title">Attribute <span class="muted small">Gold: ' + UI.gold(s.gold) + "</span></div>";
     h += '<div class="row" style="margin-bottom:8px"><span class="muted">Kaufmenge</span>' + [1, 5, 10].map((q) => '<button class="tab' + (UI.qty === q ? " on" : "") + '" data-act="qty" data-q="' + q + '">×' + q + "</button>").join("") + "</div>";
     h += '<div class="attrs">';
     for (const a of D.ATTRS) {
@@ -247,16 +258,21 @@
     }
     h += "</div>";
     const mount = D.MOUNTS.filter((m) => s.mounts.owned.indexOf(m.id) >= 0).sort((a, b) => b.cut - a.cut)[0];
+    const special = [];
+    if (AR.block) special.push(["ruestung", "Block", Math.round(sum.block * 100) + " %"]);
+    if (AR.evade) special.push(["geschick", "Ausweichen", Math.round(sum.evade * 100) + " %"]);
+    if (AR.unblockable) special.push(["verstand", "Zauber", "nicht auszuweichen"]);
+    if (AR.firstStrike) special.push(["tatendrang", "Erstschlag", "immer"]);
     h +=
       '<div class="stats"><div><span>' + I.ui("konstitution") + ' Lebenspunkte</span><b class="num">' + U.fmt(sum.hp) + "</b></div>" +
       "<div><span>" + I.ui("schaden") + ' Schaden</span><b class="num">' + U.fmt(sum.dmgMin) + " bis " + U.fmt(sum.dmgMax) + "</b></div>" +
       "<div><span>" + I.ui("ruestung") + ' Rüstung</span><b class="num">' + U.fmt(sum.armor) + " (" + Math.round(sum.reduction * 100) + " %)</b></div>" +
-      "<div><span>" + I.ui("glueck") + ' Kritisch</span><b class="num">' + Math.round(sum.crit * 100) + " %</b></div>" +
-      "<div><span>" + I.ui(s.cls === "klinge" ? "ruestung" : "geschick") + " " + (s.cls === "klinge" ? "Block" : s.cls === "wind" ? "Ausweichen" : "Zauber") + '</span><b class="num">' + (s.cls === "klinge" ? Math.round(sum.block * 100) + " %" : s.cls === "wind" ? Math.round(sum.evade * 100) + " %" : "unaufhaltsam") + "</b></div>" +
+      "<div><span>" + I.ui("glueck") + ' Kritisch</span><b class="num">' + Math.round(sum.crit * 100) + " % · ×" + String(AR.critMult || 2).replace(".", ",") + "</b></div>" +
+      special.map(([ic, n, v]) => "<div><span>" + I.ui(ic) + " " + n + '</span><b class="num">' + v + "</b></div>").join("") +
       "<div><span>" + I.ui("ehre") + ' Ehre</span><b class="num">' + U.fmt(s.honor) + "</b></div>" +
-      "<div><span>" + I.ui("stall") + ' Reittier</span><b>' + (mount ? esc(mount.name) : "keins") + "</b></div>" +
-      "<div><span>" + I.ui("xp") + ' Erfahrung</span><b class="num">' + U.fmt(s.xp) + " / " + U.fmt(E.xpNeed(s.level)) + "</b></div></div>";
-    h += '<div class="muted" style="font-size:13px;margin-top:8px">Spezialangriff jede vierte Aktion: <b>' + esc(C.special.name) + "</b>. " + esc(C.special.desc) + "</div>";
+      "<div><span>" + I.ui("stall") + " Reittier</span><b>" + (mount ? esc(mount.name) : "keins") + "</b></div>" +
+      "<div><span>" + I.ui("gilde") + " Gilde</span><b>" + (s.guild ? esc(s.guild.name) : "keine") + "</b></div></div>";
+    h += '<div class="special"><b>' + esc(C.special.name) + "</b> (jede vierte Aktion): " + esc(C.special.desc) + "</div>";
     const buffs = E.activeBuffs(s);
     if (buffs.length) h += '<div class="muted" style="font-size:13px;margin-top:6px">Aktive Tränke: ' + buffs.map((b) => esc(D.POTIONS.find((p) => p.id === b.id).name) + ' (<span class="num" data-until="' + b.until + '"></span>)').join(", ") + "</div>";
     h += invSection();
@@ -272,12 +288,55 @@
     SB.audio.play("coin");
     UI.refresh();
   };
+  // Spiegel: Aussehen jederzeit kostenlos aendern
+  function looks() {
+    const s = S();
+    const R = D.RACES[s.race];
+    const L = s.look;
+    const sw = (arr, key, glowList) =>
+      '<div class="swatches">' + arr.map((c) => {
+        const col = typeof c === "string" ? c : c.c;
+        const glow = typeof c === "object" && c.glow;
+        return '<button type="button" class="sw' + (L[key] === col ? " on" : "") + (glow ? " glowsw" : "") + '" style="background:' + col + '" data-act="look" data-k="' + key + '" data-v="' + col + '" title="' + esc(typeof c === "object" ? c.name : col) + '" aria-label="' + esc(typeof c === "object" ? c.name : "Farbe") + '"></button>';
+      }).join("") + "</div>";
+    const opt = (key, labels, ids) => '<div class="choices">' + labels.map((l, i) => {
+      const v = ids ? ids[i] : i;
+      return '<button type="button" class="choice' + (L[key] === v ? " on" : "") + '" data-act="lookn" data-k="' + key + '" data-v="' + v + '"' + (ids ? ' data-str="1"' : "") + ">" + esc(l) + "</button>";
+    }).join("") + "</div>";
+    let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
+    h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
+    h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
+    if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
+    h += "<h4>Augen</h4>" + sw(D.EYES, "eyes");
+    h += "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor");
+    h += "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id));
+    if (R.horns) h += "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]);
+    h += "</div></div>";
+    return h;
+  }
+  A.look = (el) => {
+    E.setLook(S(), { [el.dataset.k]: el.dataset.v });
+    SB.audio.play("click");
+    UI.refresh();
+  };
+  A.lookn = (el) => {
+    E.setLook(S(), { [el.dataset.k]: el.dataset.str ? el.dataset.v : +el.dataset.v });
+    SB.audio.play("click");
+    UI.refresh();
+  };
+  function history() {
+    const s = S();
+    const C = D.CLASSES[s.cls];
+    const RM = D.REALMS[s.realm];
+    let h = '<div class="lore"><h3>Die Welt</h3><p>' + esc(D.LORE) + "</p></div>";
+    h += '<div class="lore realm-' + s.realm + '"><h3>' + I.realm(s.realm) + " " + esc(RM.name) + ' <small>„' + esc(RM.motto) + "“</small></h3><p>" + esc(RM.desc) + "</p></div>";
+    h += '<div class="lore"><h3>' + esc(C.name) + '</h3><p class="muted">' + esc(C.desc) + "</p><p>" + esc(C.prolog) + '</p><button class="btn small" data-act="open" data-id="steinkreis">Zur Chronik im Steinkreis</button></div>';
+    return h;
+  }
   function bestiary() {
     const s = S();
     const all = D.MONSTERS.map((m) => ({ id: m.id, name: m.name, desc: UI.monDesc(m) }));
-    D.DUNGEONS.forEach((d) =>
-      d.bosses.forEach((b, i) => all.push({ id: d.id + "-" + i, name: b.name, desc: UI.monDesc(b, true, b.final) }))
-    );
+    D.DUNGEONS.forEach((d) => d.bosses.forEach((b, i) => all.push({ id: d.id + "-" + i, name: b.name, desc: UI.monDesc(b, true, b.final) })));
     const found = all.filter((m) => s.bestiary[m.id]).length;
     let h = '<div class="muted" style="margin-bottom:10px">' + found + " von " + all.length + " Wesen entdeckt. Jedes entdeckte Wesen bringt dir dauerhaft +0,5 % Erfahrung und Gold aus Aufträgen (derzeit +" + (found * 0.5).toFixed(1).replace(".", ",") + " %).</div>";
     h += '<div class="bestiary">';
@@ -297,7 +356,49 @@
     return h;
   }
 
-  /* ================= Arena ================= */
+  /* ================= Chronik im Steinkreis ================= */
+  P.steinkreis = {
+    render() {
+      const s = S();
+      const now = E.now();
+      const C = D.CLASSES[s.cls];
+      const RM = D.REALMS[s.realm];
+      let h = say("seherin");
+      h += '<div class="lore realm-' + s.realm + '"><h3>' + I.realm(s.realm) + " Chronik von " + esc(RM.name) + '</h3><p class="muted small">' + esc(C.prolog) + "</p></div>";
+      const busy = E.busy(s, now);
+      if (busy) h += busyNote();
+      else if (s.story.next > now) h += '<div class="say">Du musst dich nach deiner Niederlage erst sammeln: <b class="num" data-until="' + s.story.next + '"></b></div>';
+      const hero = E.heroFighter(s, now);
+      h += '<div class="chapters">';
+      for (const ch of E.storyChapters(s)) {
+        const foes = ch.foes.map((f) => (f.mon ? Object.assign({}, E.monById(f.mon), { boss: f.boss, final: f.final }) : f));
+        let status = "";
+        if (ch.done) status = '<span class="tag">Abgeschlossen</span>';
+        else if (ch.available) {
+          const c = estimate(hero, E.storyFoes(s, ch, hero), "story" + ch.key);
+          status = chanceTxt(c) + '<span class="spacer"></span><button class="btn" data-act="storyFight" data-k="' + ch.key + '"' + (busy || s.story.next > now ? " disabled" : "") + ">" + (foes.length > 1 ? "Kapitel bestreiten (" + foes.length + " Gegner)" : "Kapitel bestreiten") + "</button>";
+        } else status = '<span class="muted">' + (s.level < ch.lv ? "Ab Stufe " + ch.lv : "Erst das vorige Kapitel abschließen") + "</span>";
+        h +=
+          '<div class="chapter' + (ch.done ? " done" : ch.available ? " open" : " locked") + '"><div class="ch-head"><span class="ch-kind">' + (ch.kind === "realm" ? "Chronik von " + esc(RM.name) : "Pfad: " + esc(C.name)) + " · Stufe " + ch.lv + "</span><h3>" + esc(ch.t) + "</h3></div>" +
+          "<p>" + esc(ch.x) + "</p>" +
+          '<div class="wavepics">' + foes.map((f, k) => '<span class="wp' + (f.boss ? " boss" : "") + '" title="' + esc(f.name) + '">' + (ch.done || ch.available ? UI.portrait(UI.monDesc(f, f.boss, f.final), 96) : I.ui("schaedel")) + "<i>" + (k + 1) + "</i></span>").join("") + '<span class="foe-names">' + foes.map((f) => esc(f.name)).join(", ") + "</span></div>" +
+          '<div class="foot">' + status + "</div></div>";
+      }
+      h += "</div>";
+      return h;
+    },
+  };
+  A.storyFight = async (el) => {
+    const s = S();
+    const res = E.storyFight(s, el.dataset.k);
+    if (!done(res)) return;
+    const rew = E.resolveStory(s, res.fight);
+    UI.saveNow();
+    await UI.runBattle(res.fight, { setting: "story", title: res.fight.chapter.t, rewards: rew });
+    UI.refresh();
+  };
+
+  /* ================= Arena: Ring der Reiche ================= */
   P.arena = {
     render() {
       const s = S();
@@ -305,25 +406,28 @@
       const remote = SB.remoteHeroes || null;
       const all = E.allHeroes(s, now, remote);
       const me = all.find((h) => h.kind === "me");
+      const mine = E.realmRanked(all, s.realm);
+      const myR = mine.find((h) => h.kind === "me");
+      const standings = E.realmStandings(s, now, remote);
       let h = say("krawall");
-      h += '<div class="row" style="margin-bottom:10px"><span class="chip">' + I.ui("ehre") + " " + U.fmt(s.honor) + ' Ehre</span><span class="chip">Platz ' + me.rank + " von " + all.length + "</span>" + '<span class="chip">' + s.arena.wins + " Siege</span></div>";
-      if (remote && remote.length) h += '<div class="muted" style="font-size:13px;margin-bottom:8px">' + remote.length + " echte Mitspieler sind in der Rangliste. Sie erkennst du am Zeichen „Spieler“.</div>";
+      h += '<div class="row" style="margin-bottom:10px"><span class="chip">' + I.ui("ehre") + " " + U.fmt(s.honor) + ' Ehre</span><span class="chip">Global Platz ' + me.rank + "</span>" + '<span class="chip">' + I.realm(s.realm) + " Platz " + myR.realmRank + " in " + esc(D.REALMS[s.realm].name) + '</span><span class="chip">' + s.arena.wins + " Siege</span></div>";
+      h += '<div class="realmbar">' + standings.map((r) => '<div class="rb r-' + r.id + '" style="flex:' + Math.max(1, r.honor) + '"><span>' + I.realm(r.id) + " " + esc(D.REALMS[r.id].name) + " · " + U.fmtShort(r.honor) + "</span></div>").join("") + "</div>";
+      if (remote && remote.length) h += '<div class="muted small" style="margin-bottom:8px">' + remote.length + " echte Mitspieler sind in den Ranglisten. Du erkennst sie am Zeichen „Spieler“.</div>";
       const busy = E.busy(s, now);
       if (busy) h += busyNote();
-      else if (s.arena.next > now)
-        h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
+      else if (s.arena.next > now) h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
       const rivals = E.arenaRivals(s, now, remote);
       const hero = E.heroFighter(s, now);
-      h += '<div class="section-title">Herausforderer</div><div class="cards">';
+      h += '<div class="section-title">Herausforderer aus den anderen Reichen</div><div class="cards">';
       rivals.forEach((r) => {
         const f = r.fighter || E.npcFighter(r);
-        const c = estimate(hero, f, "arena" + r.id + r.level);
+        const c = estimate(hero, [f], "arena" + r.id + r.level);
         h +=
-          '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</h4>" +
-          '<div class="muted" style="font-size:13px">' + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · Platz " + r.rank + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
+          '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</h4>" +
+          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · Platz " + r.rank + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
           '<button class="btn" data-act="arenaFight" data-id="' + esc(r.id) + '"' + (busy || s.arena.next > now ? " disabled" : "") + ">Herausfordern</button></div>";
       });
-      h += "</div>";
+      h += '</div><div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn ghost small" data-act="open" data-id="ruhmeshalle">Alle Ranglisten</button></div>';
       return h;
     },
   };
@@ -340,11 +444,12 @@
     if (!done(res)) return;
     const rew = E.resolveArena(s, res.fight, now);
     UI.saveNow();
-    await UI.runBattle(res.fight, { setting: "arena", title: "Wolkenarena", rewards: rew, foeName: opp.name });
+    SB.audio.play("horn");
+    await UI.runBattle(res.fight, { setting: "arena", title: "Ring der Reiche", rewards: rew });
     UI.refresh();
   };
 
-  /* ================= Leuchtturm ================= */
+  /* ================= Wachturm ================= */
   UI.shifts = 4;
   P.leuchtturm = {
     render() {
@@ -366,7 +471,7 @@
       const pay = E.shiftPay(s);
       h +=
         '<div class="section-title">Wache übernehmen</div><p class="muted">Eine Schicht dauert ' + E.C.SHIFT_MS / 60000 + " Minuten und bringt " + UI.gold(pay) + ". Während der Wache kannst du keine Aufträge annehmen und nicht kämpfen.</p>" +
-        '<label for="shiftRange" class="row"><b>' + UI.shifts + " Schichten</b><span class=\"muted\">(" + (UI.shifts * E.C.SHIFT_MS) / 60000 + " Minuten)</span><span class=\"spacer\"></span>Lohn: " + UI.gold(pay * UI.shifts) + "</label>" +
+        '<label for="shiftRange" class="row"><b>' + UI.shifts + ' Schichten</b><span class="muted">(' + (UI.shifts * E.C.SHIFT_MS) / 60000 + ' Minuten)</span><span class="spacer"></span>Lohn: ' + UI.gold(pay * UI.shifts) + "</label>" +
         '<input type="range" id="shiftRange" min="1" max="' + E.C.SHIFT_MAX + '" value="' + UI.shifts + '">' +
         '<div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn big" data-act="guardStart">Wache antreten</button></div>';
       return h;
@@ -384,7 +489,7 @@
   };
   A.guardStart = () => {
     if (!done(E.startGuard(S(), UI.shifts))) return;
-    UI.toast("Funzel drückt dir eine Laterne in die Hand.", "", "leuchtturm");
+    UI.toast("Funzel drückt dir eine Fackel in die Hand.", "", "leuchtturm");
     UI.refresh();
   };
   A.guardCancel = (el) => {
@@ -408,11 +513,11 @@
   P.tiefen = {
     title: "Das Tor zur Tiefe",
     role: "Bosse, Beute und schlechte Luft",
-    portrait: () => '<span style="display:grid;place-items:center;height:100%">' + I.ui("tiefen") + "</span>",
+    portrait: () => '<span class="iconport">' + I.ui("tiefen") + "</span>",
     render() {
       const s = S();
       const now = E.now();
-      let h = '<div class="say">Unter den Wolken liegen Orte, die niemand freiwillig betritt. Jeder Boss lässt beim ersten Sieg garantiert seltene Beute fallen.</div>';
+      let h = '<div class="say">Unter den Splittern liegen Orte, die niemand freiwillig betritt. Jeder Boss lässt beim Sieg garantiert seltene Beute fallen.</div>';
       const busy = E.busy(s, now);
       if (busy) h += busyNote();
       else if (s.dungeons.next > now) h += '<div class="say">Du brauchst noch <b class="num" data-until="' + s.dungeons.next + '"></b> Erholung. <button class="btn small" data-act="dungeonSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
@@ -425,20 +530,20 @@
         let btn = "";
         if (!st.unlocked) {
           pic = I.ui("tiefen");
-          info = '<div class="muted" style="font-size:13px">Öffnet sich ab Stufe ' + dg.unlock + (d > 0 ? " und nach dem ersten Boss des vorigen Dungeons" : "") + ".</div>";
+          info = '<div class="muted small">Öffnet sich ab Stufe ' + dg.unlock + (d > 0 ? " und nach dem ersten Boss des vorigen Dungeons" : "") + ".</div>";
         } else if (st.done) {
           pic = UI.portrait(UI.monDesc(dg.bosses[7], true, true), 128);
-          info = '<div style="font-size:13px" class="delta-up">Gesäubert! Alle acht Bosse besiegt.</div>';
+          info = '<div class="small delta-up">Gesäubert! Alle acht Bosse besiegt.</div>';
         } else {
           const b = E.bossFor(d, st.cleared);
           const foe = E.monsterFighter(b.mon, b.L, b.power, { boss: true, final: b.final });
-          const c = estimate(hero, foe, b.mon.id);
+          const c = estimate(hero, [foe], b.mon.id);
           pic = UI.portrait(UI.monDesc(b.mon, true, b.final), 128);
-          info = '<div style="font-size:13px">Boss ' + (st.cleared + 1) + "/8: <b>" + esc(b.mon.name) + "</b> · Stufe " + b.L + "</div>" + chanceTxt(c);
+          info = '<div class="small">Boss ' + (st.cleared + 1) + "/8: <b>" + esc(b.mon.name) + "</b> · Stufe " + b.L + "</div>" + chanceTxt(c);
           btn = '<button class="btn" data-act="dungeonFight" data-d="' + d + '"' + (busy || s.dungeons.next > now ? " disabled" : "") + ">Angreifen</button>";
         }
         h +=
-          '<div class="card' + (st.unlocked ? "" : " locked") + '"><div class="pic">' + pic + "</div><div><h4>" + esc(dg.name) + '</h4><div class="muted" style="font-size:12.5px">' + esc(dg.desc) + "</div>" +
+          '<div class="card' + (st.unlocked ? "" : " locked") + '" style="--theme:' + dg.theme + '"><div class="pic dpic">' + pic + "</div><div><h4>" + esc(dg.name) + '</h4><div class="muted small">' + esc(dg.desc) + "</div>" +
           '<div class="pips" style="margin:5px 0">' + dg.bosses.map((_, i) => '<i class="' + (i < st.cleared ? "on" : "") + '"></i>').join("") + "</div>" + info + "</div>" + btn + "</div>";
       });
       return h + "</div>";
@@ -455,7 +560,8 @@
     if (!done(res)) return;
     const rew = E.resolveDungeon(s, res.fight);
     UI.saveNow();
-    await UI.runBattle(res.fight, { setting: "dungeon", tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew, foeName: res.fight.boss.mon.name });
+    SB.audio.play("roar");
+    await UI.runBattle(res.fight, { setting: "dungeon", tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
     UI.refresh();
   };
 
@@ -465,13 +571,12 @@
       const s = S();
       let h = say("hufnagel");
       h += '<div class="muted" style="margin-bottom:10px">Reittiere verkürzen die Reisezeit zu jedem Auftrag dauerhaft. Es zählt immer dein schnellstes Tier.</div><div class="cards">';
-      const colors = { esel: "#c9d2d8", ziege: "#e8d6b0", greif: "#e0b04a", wal: "#4f8fd8" };
       for (const m of D.MOUNTS) {
         const owned = s.mounts.owned.indexOf(m.id) >= 0;
         const cost = m.cost.gold ? UI.gold(m.cost.gold) : UI.perlen(m.cost.perlen);
         h +=
-          '<div class="card"><div class="pic"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="' + colors[m.id] + '" stroke="#1c1626" stroke-width="2.4"/><text x="32" y="40" text-anchor="middle" font-size="22" font-weight="800" fill="#1c1626" font-family="sans-serif">-' + Math.round(m.cut * 100) + "%</text></svg></div>" +
-          "<div><h4>" + esc(m.name) + '</h4><div class="muted" style="font-size:13px">' + esc(m.desc) + "</div></div>" +
+          '<div class="card"><div class="pic"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="mt' + m.id + '" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset=".4" stop-color="' + m.color + '"/><stop offset="1" stop-color="#14101a"/></radialGradient></defs><circle cx="32" cy="32" r="27" fill="url(#mt' + m.id + ')" stroke="#c9a441" stroke-width="2.4"/><text x="32" y="40" text-anchor="middle" font-size="20" font-weight="800" fill="#f4ecd8" stroke="#14101a" stroke-width=".8" font-family="sans-serif">-' + Math.round(m.cut * 100) + "%</text></svg></div>" +
+          "<div><h4>" + esc(m.name) + '</h4><div class="muted small">' + esc(m.desc) + "</div></div>" +
           (owned ? '<span class="tag">Im Stall</span>' : '<button class="btn small" data-act="mount" data-id="' + m.id + '">' + cost + "</button>") + "</div>";
       }
       return h + "</div>";
@@ -484,41 +589,57 @@
     UI.refresh();
   };
 
-  /* ================= Ruhmeshalle ================= */
+  /* ================= Halle der Helden: Ranglisten ================= */
   P.ruhmeshalle = {
-    role: "Die Besten von Schwebfels",
-    portrait: () => '<span style="display:grid;place-items:center;height:100%">' + I.ui("ruhm") + "</span>",
+    role: "Ranglisten der Helden, Gilden und Reiche",
+    portrait: () => '<span class="iconport">' + I.ui("ruhm") + "</span>",
     render() {
       const s = S();
-      const all = E.allHeroes(s, E.now(), SB.remoteHeroes || null);
-      const me = all.find((h) => h.kind === "me");
+      const now = E.now();
+      const remote = SB.remoteHeroes || null;
+      const tab = UI.tabs.ruhmeshalle || "helden";
+      let h = '<div class="tabs">' + [["helden", "Alle Helden"], ["reich", "Mein Reich"], ["gilden", "Gilden"], ["reiche", "Reichskrieg"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="ruhmeshalle" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      if (tab === "reiche") {
+        const st = E.realmStandings(s, now, remote);
+        h += '<div class="muted" style="margin-bottom:8px">Die Ehre aller Helden eines Reiches zählt im Reichskrieg. Jeder Sieg im Ring stärkt dein Reich.</div>';
+        h += st.map((r) => '<div class="realmrow r-' + r.id + (r.id === s.realm ? " mine" : "") + '"><span class="rk">' + r.rank + "</span>" + I.realm(r.id) + '<div><b>' + esc(D.REALMS[r.id].name) + '</b><div class="muted small">' + r.heroes + " Helden · bester Held: " + esc(r.top ? r.top.name : "") + '</div></div><b class="num">' + U.fmt(r.honor) + " Ehre</b></div>").join("");
+        return h;
+      }
+      if (tab === "gilden") {
+        const gl = E.guildLadder(s, now, remote, SB.remoteGuilds || null);
+        h += '<table class="fame"><thead><tr><th>Platz</th><th>Gilde</th><th>Reich</th><th>Mitglieder</th><th>Ehre</th></tr></thead><tbody>';
+        h += gl.map((g) => "<tr" + (s.guild && s.guild.id === g.id ? ' class="me"' : "") + '><td class="num">' + g.rank + "</td><td>" + esc(g.name) + ' <span class="gtag">[' + esc(g.tag) + "]</span>" + (g.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</td><td>" + I.realm(g.realm) + '</td><td class="num">' + g.members + '</td><td class="num">' + U.fmt(g.honor) + "</td></tr>").join("");
+        return h + "</tbody></table>";
+      }
+      let all = E.allHeroes(s, now, remote);
+      if (tab === "reich") all = E.realmRanked(all, s.realm).map((x) => Object.assign({}, x, { rank: x.realmRank }));
+      const me = all.find((x) => x.kind === "me");
       const rows = [];
       const show = new Set();
       for (let i = 0; i < Math.min(10, all.length); i++) show.add(i);
       for (let i = Math.max(0, me.rank - 6); i < Math.min(all.length, me.rank + 5); i++) show.add(i);
       let prev = -1;
       [...show].sort((a, b) => a - b).forEach((i) => {
-        if (prev >= 0 && i > prev + 1) rows.push('<tr class="gap"><td colspan="5">⋯</td></tr>');
+        if (prev >= 0 && i > prev + 1) rows.push('<tr class="gap"><td colspan="6">⋯</td></tr>');
         prev = i;
-        const h = all[i];
+        const x = all[i];
         rows.push(
-          "<tr" + (h.kind === "me" ? ' class="me"' : ' data-act="heroInfo" data-id="' + esc(h.id) + '"') + '><td class="num">' + h.rank + "</td><td>" + esc(h.name) + (h.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + (h.kind === "me" ? ' <span class="tag">Du</span>' : "") + "</td><td>" + I.classCrest(h.cls) + '</td><td class="num">' + h.level + '</td><td class="num">' + U.fmt(h.honor) + "</td></tr>"
+          "<tr" + (x.kind === "me" ? ' class="me"' : ' data-act="heroInfo" data-id="' + esc(x.id) + '"') + '><td class="num">' + x.rank + "</td><td>" + esc(x.name) + guildTag(x.guild) + (x.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + (x.kind === "me" ? ' <span class="tag">Du</span>' : "") + "</td><td>" + I.realm(x.realm) + "</td><td>" + I.classCrest(x.cls) + '</td><td class="num">' + x.level + '</td><td class="num">' + U.fmt(x.honor) + "</td></tr>"
         );
       });
-      return '<div class="muted" style="margin-bottom:8px">Ehre gibt es in der Wolkenarena. Klick auf einen Namen für Details.</div><table class="fame"><thead><tr><th>Platz</th><th>Held</th><th>Klasse</th><th>Stufe</th><th>Ehre</th></tr></thead><tbody>' + rows.join("") + "</tbody></table>";
+      return h + '<div class="muted small" style="margin-bottom:8px">Ehre gibt es im Ring der Reiche. Klick auf einen Namen für Details.</div><table class="fame"><thead><tr><th>Platz</th><th>Held</th><th>Reich</th><th>Klasse</th><th>Stufe</th><th>Ehre</th></tr></thead><tbody>' + rows.join("") + "</tbody></table>";
     },
   };
   A.heroInfo = (el) => {
     const s = S();
-    const h = E.allHeroes(s, E.now(), SB.remoteHeroes || null).find((x) => x.id === el.dataset.id);
-    if (!h) return;
-    const f = h.fighter || E.npcFighter(h);
-    const hp = f.maxHp;
+    const x = E.allHeroes(s, E.now(), SB.remoteHeroes || null).find((y) => y.id === el.dataset.id);
+    if (!x) return;
+    const f = x.fighter || E.npcFighter(x);
     UI.dialog(
-      '<div class="row" style="align-items:flex-start"><span class="porthole" style="width:96px;height:96px">' + UI.portrait(UI.fighterDesc(f), 160, true) + '</span><div><h2 style="margin:0">' + esc(h.name) + "</h2>" +
-        '<div class="muted">' + D.RACES[h.race].name + " · " + D.CLASSES[h.cls].name + " · Stufe " + h.level + "</div><div>Platz " + h.rank + " · " + U.fmt(h.honor) + " Ehre</div></div></div>" +
-        '<div class="stats"><div><span>Lebenspunkte</span><b class="num">' + U.fmt(hp) + "</b></div>" + D.ATTRS.map((a) => "<div><span>" + I.ui(a) + " " + D.ATTR_INFO[a].name + '</span><b class="num">' + U.fmt(f.attrs[a]) + "</b></div>").join("") + "</div>" +
-        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button><button class="btn" data-act="openArena">Zur Arena</button></div>'
+      '<div class="row" style="align-items:flex-start"><span class="porthole" style="width:96px;height:96px">' + UI.portrait(UI.fighterDesc(f), 160, true) + '</span><div><h2 style="margin:0">' + esc(x.name) + guildTag(x.guild) + "</h2>" +
+        '<div class="muted">' + realmChip(x.realm) + " " + D.RACES[x.race].name + " · " + D.CLASSES[x.cls].name + " · Stufe " + x.level + "</div><div>Platz " + x.rank + " · " + U.fmt(x.honor) + " Ehre" + (x.guild ? " · Gilde " + esc(x.guild.name) : "") + "</div></div></div>" +
+        '<div class="stats"><div><span>Lebenspunkte</span><b class="num">' + U.fmt(f.maxHp) + "</b></div>" + D.ATTRS.map((a) => "<div><span>" + I.ui(a) + " " + D.ATTR_INFO[a].name + '</span><b class="num">' + U.fmt(f.attrs[a]) + "</b></div>").join("") + "</div>" +
+        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + (x.realm !== s.realm ? '<button class="btn" data-act="openArena">Zum Ring</button>' : "") + "</div>"
     );
   };
   A.openArena = () => {
@@ -526,28 +647,203 @@
     UI.openPanel("arena");
   };
 
-  /* ================= Wunschbrunnen ================= */
-  const COIN_FRONT =
-    '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M14 40 C8 40 8 31 15 30 C15 22 26 20 29 26 C32 18 46 19 46 28 C54 27 56 38 49 40 Z" fill="#fff3c4" stroke="#6a4d18" stroke-width="3" stroke-linejoin="round"/><path d="M22 46 L42 46 M26 51 L38 51" stroke="#6a4d18" stroke-width="3" stroke-linecap="round"/></svg>';
-  UI.lastWell = null;
-  P.brunnen = {
-    role: "Ein Wurf am Tag ist frei",
-    portrait: () => '<span style="display:grid;place-items:center;height:100%">' + I.ui("brunnen") + "</span>",
+  /* ================= Gildenhalle ================= */
+  P.gildenhalle = {
+    role: "Gemeinsam für das Reich",
+    portrait: () => '<span class="iconport">' + I.ui("gilde") + "</span>",
     render() {
       const s = S();
+      const now = E.now();
+      const remote = SB.remoteHeroes || null;
+      const gl = E.guildLadder(s, now, remote, SB.remoteGuilds || null);
+      let h = "";
+      if (s.guild) {
+        const g = gl.find((x) => x.id === s.guild.id) || Object.assign({ rank: "?", members: 1, honor: s.honor }, s.guild);
+        const members = E.allHeroes(s, now, remote).filter((x) => x.guild && x.guild.id === s.guild.id);
+        h +=
+          '<div class="guildhead r-' + s.realm + '">' + I.ui("gilde") + "<div><h3>" + esc(s.guild.name) + ' <span class="gtag">[' + esc(s.guild.tag) + "]</span></h3>" +
+          '<div class="muted">' + realmChip(s.realm) + " · Platz " + g.rank + " der Gilden · " + U.fmt(g.honor) + " Ehre · " + members.length + " Mitglieder</div></div></div>";
+        h += '<div class="section-title">Mitglieder</div><table class="fame"><thead><tr><th>Held</th><th>Klasse</th><th>Stufe</th><th>Ehre</th></tr></thead><tbody>';
+        h += members.map((x) => "<tr" + (x.kind === "me" ? ' class="me"' : ' data-act="heroInfo" data-id="' + esc(x.id) + '"') + "><td>" + esc(x.name) + (x.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</td><td>" + I.classCrest(x.cls) + '</td><td class="num">' + x.level + '</td><td class="num">' + U.fmt(x.honor) + "</td></tr>").join("");
+        h += '</tbody></table><div class="row" style="margin-top:14px"><span class="muted small">Die Ehre aller Mitglieder zählt für die Gildenrangliste.</span><span class="spacer"></span><button class="btn ghost small" data-act="leaveGuild">Gilde verlassen</button></div>';
+        return h;
+      }
+      h += '<div class="say">Eine Gilde bündelt die Ehre ihrer Mitglieder. Du kannst nur einer Gilde deines eigenen Reiches beitreten.</div>';
+      h += '<div class="section-title">Gilden von ' + esc(D.REALMS[s.realm].name) + '</div><div class="cards">';
+      const own = E.allGuilds(s, SB.remoteGuilds || null).filter((g) => g.realm === s.realm);
+      for (const g of own) {
+        const L = gl.find((x) => x.id === g.id);
+        h +=
+          '<div class="card"><div class="pic iconport">' + I.realm(g.realm) + "</div><div><h4>" + esc(g.name) + ' <span class="gtag">[' + esc(g.tag) + "]</span>" + (g.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + '</h4><div class="muted small">' + (L ? "Platz " + L.rank + " · " + L.members + " Mitglieder · " + U.fmt(L.honor) + " Ehre" : "Noch ohne Mitglieder") + "</div></div>" +
+          '<button class="btn small" data-act="joinGuild" data-id="' + esc(g.id) + '">Beitreten</button></div>';
+      }
+      h += "</div>";
+      h +=
+        '<div class="section-title">Eigene Gilde gründen</div><div class="guildform"><label>Name<input id="gName" maxlength="24" placeholder="z. B. Die Nebelwölfe"></label><label>Kürzel<input id="gTag" maxlength="4" placeholder="NW"></label>' +
+        '<button class="btn" data-act="createGuild">Gründen für ' + UI.gold(E.C.GUILD_COST) + "</button></div><p class=\"muted small\" id=\"gErr\"></p>";
+      return h;
+    },
+  };
+  A.joinGuild = (el) => {
+    const s = S();
+    const g = E.allGuilds(s, SB.remoteGuilds || null).find((x) => x.id === el.dataset.id);
+    if (!done(E.joinGuild(s, g))) return;
+    SB.audio.play("horn");
+    UI.toast("Willkommen in der Gilde „" + g.name + "“!", "good", "gilde");
+    UI.saveNow();
+    SB.store.publishHero(s, true);
+    UI.refresh();
+  };
+  A.leaveGuild = (el) => {
+    if (!el.dataset.sure) {
+      UI.dialog('<h2>Gilde verlassen?</h2><p>Deine Ehre zählt dann nicht mehr für die Gilde.</p><div class="actions"><button class="btn ghost" data-act="closeDialog">Bleiben</button><button class="btn danger" data-act="leaveGuild" data-sure="1">Verlassen</button></div>');
+      return;
+    }
+    const s = S();
+    const wasFounder = s.guild && s.guild.founder;
+    E.leaveGuild(s);
+    UI.closeDialog();
+    if (wasFounder) SB.store.removeGuild();
+    SB.store.publishHero(s, true);
+    UI.refresh();
+  };
+  A.createGuild = () => {
+    const s = S();
+    const name = document.getElementById("gName").value;
+    const tag = document.getElementById("gTag").value;
+    const res = E.createGuild(s, name, tag, SB.store.uid ? "p-" + SB.store.uid : null);
+    if (!done(res)) return;
+    SB.audio.play("horn");
+    UI.toast("Die Gilde „" + res.guild.name + "“ ist gegründet!", "gold", "gilde");
+    UI.saveNow();
+    SB.store.publishGuild(s);
+    SB.store.publishHero(s, true);
+    UI.refresh();
+  };
+
+  /* ================= Heim ================= */
+  let homeView = null;
+  let homeEl = null;
+  P.heim = {
+    title: "Dein Heim",
+    role: "Ruhe, Trophäen und dauerhafte Boni",
+    portrait: () => '<span class="iconport">' + I.ui("heim") + "</span>",
+    render() {
+      const s = S();
+      const T = D.HOUSE_TIERS[s.house.tier];
+      const next = D.HOUSE_TIERS[s.house.tier + 1];
+      let h = '<div class="homeview" id="homeSlot"></div>';
+      h += '<div class="housecard"><div><h3>' + esc(T.name) + '</h3><div class="muted small">' + esc(T.desc) + "</div></div>";
+      if (next)
+        h += '<div class="next"><div class="small">Ausbau zur <b>' + esc(next.name) + "</b>" + (s.level < next.lv ? ' <span class="delta-down">(ab Stufe ' + next.lv + ")</span>" : "") + "</div>" + '<button class="btn small" data-act="houseUp"' + (s.level < next.lv || s.gold < next.cost || (next.perlen && s.perlen < next.perlen) ? " disabled" : "") + ">" + UI.gold(next.cost) + (next.perlen ? " + " + UI.perlen(next.perlen) : "") + "</button></div>";
+      else h += '<span class="tag">Vollständig ausgebaut</span>';
+      h += "</div>";
+      h += '<div class="section-title">Einrichtung</div><div class="furn">';
+      for (const f of D.FURNITURE) {
+        const lv = E.furn(s, f.id);
+        const c = E.furnCost(s, f.id);
+        const bonus = lv * f.per;
+        const locked = c && s.house.tier < c.tier;
+        h +=
+          '<div class="frow' + (UI.homeFocus === f.id ? " focus" : "") + '" id="f-' + f.id + '"><div><b>' + esc(f.name) + "</b> " + (lv ? '<span class="tag">' + esc(f.levels[lv - 1]) + "</span>" : '<span class="muted small">noch nicht vorhanden</span>') +
+          '<div class="muted small">' + esc(f.desc) + (lv ? " Jetzt: +" + bonus + f.unit + " " + esc(f.bonus) + "." : "") + "</div></div>" +
+          (c
+            ? '<button class="btn small" data-act="furnBuy" data-id="' + f.id + '"' + (locked || s.gold < c.gold ? " disabled" : "") + ">" + (lv ? "Verbessern: " : "Kaufen: ") + esc(c.name) + " · " + UI.gold(c.gold) + "</button>" + (locked ? '<div class="muted small">Benötigt ' + esc(D.HOUSE_TIERS[c.tier].name) + "</div>" : "")
+            : '<span class="tag">Höchste Stufe</span>') +
+          "</div>";
+      }
+      h += "</div>";
+      return h;
+    },
+    after(el) {
+      const slot = el.querySelector("#homeSlot");
+      if (!slot) return;
+      const s = S();
+      if (!UI.use3d) {
+        slot.innerHTML = '<div class="hv-fallback">' + I.ui("heim") + "</div>";
+        return;
+      }
+      if (!homeEl) {
+        homeEl = document.createElement("div");
+        homeEl.style.cssText = "position:absolute;inset:0";
+      }
+      slot.appendChild(homeEl);
+      if (!homeView) {
+        homeView = SB.R3D.createHome(homeEl, {
+          quality: s.settings.quality,
+          onPick: (id) => {
+            UI.homeFocus = id;
+            UI.renderPanel();
+            const row = document.getElementById("f-" + id);
+            if (row) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          },
+        });
+      }
+      const furn = {};
+      for (const f of D.FURNITURE) {
+        const lv = E.furn(s, f.id);
+        if (lv) furn[f.id] = lv - 1;
+      }
+      const key = JSON.stringify([s.house.tier, furn, s.realm, UI.heroDesc(s)]);
+      if (key !== homeEl.dataset.key) {
+        homeEl.dataset.key = key;
+        homeView.update({ tier: s.house.tier, furn, realm: s.realm, hero: UI.heroDesc(s) });
+      }
+    },
+    beforeRender() {
+      if (homeEl && homeEl.parentNode) homeEl.parentNode.removeChild(homeEl);
+    },
+    close() {
+      if (homeView) homeView.dispose();
+      homeView = null;
+      homeEl = null;
+    },
+  };
+  A.houseUp = () => {
+    const res = E.buyHouseTier(S());
+    if (!done(res)) return;
+    SB.audio.play("levelup");
+    UI.toast("Dein Heim ist jetzt eine " + res.name + "!", "gold", "heim");
+    UI.refresh();
+    if (homeView) homeView.cheer();
+  };
+  A.furnBuy = (el) => {
+    const res = E.buyFurniture(S(), el.dataset.id);
+    if (!done(res)) return;
+    SB.audio.play("anvil");
+    UI.homeFocus = el.dataset.id;
+    UI.toast("Neu im Heim: " + res.name, "good", "heim");
+    UI.refresh();
+  };
+
+  /* ================= Wunschbrunnen ================= */
+  const COIN_FRONT =
+    '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M32 10 L36 26 L52 26 L39 36 L44 52 L32 42 L20 52 L25 36 L12 26 L28 26 Z" fill="#fff3c4" stroke="#6a4d18" stroke-width="2.6" stroke-linejoin="round"/></svg>';
+  UI.lastWell = null;
+  P.brunnen = {
+    role: "Einmal am Tag wirft jeder umsonst",
+    portrait: () => '<span class="iconport">' + I.ui("brunnen") + "</span>",
+    render() {
+      const s = S();
+      const now = E.now();
       const free = s.daily.wellFree > 0;
+      const paidLeft = E.C.WELL_PAID_MAX - s.daily.wellPaid;
       let h = '<div class="say">Man sagt, der Brunnen erfüllt Wünsche. Meistens wünscht er sich allerdings Münzen.</div>';
       h += '<div class="well"><div class="coin" id="coin"><div class="face">' + COIN_FRONT + '</div><div class="face back">' + I.ui("perle") + "</div></div></div>";
-      h += '<div class="row" style="justify-content:center">' + (free ? '<button class="btn big" data-act="well">Kostenlos werfen</button>' : '<button class="btn big" data-act="well"' + (s.daily.wellPaid >= E.C.WELL_PAID_MAX ? " disabled" : "") + ">Werfen · 1 " + I.ui("perle") + "</button>") + "</div>";
-      h += '<p class="muted" style="text-align:center">' + (free ? "Dein freier Wurf für heute wartet." : "Weitere Würfe heute: " + (E.C.WELL_PAID_MAX - s.daily.wellPaid)) + "</p>";
+      h += '<div class="wellbox' + (free ? " ready" : "") + '"><div class="wl-title">' + I.ui("sanduhr") + " Freier Wurf</div>";
+      if (free) h += '<div class="wl-big">Bereit!</div><button class="btn big" data-act="well">Kostenlos werfen</button>';
+      else h += '<div class="muted">Heute schon geworfen. Der nächste freie Wurf kommt um Mitternacht:</div><div class="wl-big num" data-until="' + E.nextMidnight(now) + '"></div>';
+      h += "</div>";
+      h +=
+        '<div class="wellbox"><div class="wl-title">' + I.ui("perle") + " Zusätzlicher Wurf</div><div class=\"muted small\">Kostet eine Wolkenperle. Nur wenn du willst, deine Perlen bleiben sonst gespart. Heute noch " + paidLeft + " möglich, du hast " + s.perlen + ' Perlen.</div><button class="btn ghost" data-act="wellPerl"' + (paidLeft <= 0 || s.perlen < 1 ? " disabled" : "") + ">Mit 1 Wolkenperle werfen</button></div>";
       if (UI.lastWell) h += '<div class="say" style="text-align:center;font-style:normal" id="wellResult">' + UI.lastWell + "</div>";
       h += '<div class="section-title">Mögliche Gaben</div><ul class="muted" style="margin:0;padding-left:20px">' + D.WELL_PRIZES.map((p) => "<li>" + esc(p.label) + "</li>").join("") + "</ul>";
       return h;
     },
   };
-  A.well = () => {
+  function toss(usePerl) {
     const s = S();
-    const res = E.tossWell(s);
+    const res = E.tossWell(s, E.now(), usePerl);
     if (!done(res)) return;
     const coin = document.getElementById("coin");
     SB.audio.play("well");
@@ -566,23 +862,27 @@
       setTimeout(() => UI.refresh(), 1650);
     } else UI.refresh();
     UI.saveNow();
-  };
+  }
+  A.well = () => toss(false);
+  A.wellPerl = () => toss(true);
 
   /* ================= Einstellungen ================= */
   P.einstellungen = {
     title: "Einstellungen",
-    role: "Spielstand und Darstellung",
-    portrait: () => '<span style="display:grid;place-items:center;height:100%">' + I.ui("einstellungen") + "</span>",
+    role: "Spielstand, Darstellung und Klang",
+    portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
       const s = S();
       const q = s.settings.quality;
+      const dc = s.settings.dayCycle || "zyklus";
       let h = '<div class="section-title">Darstellung</div><div class="row">' + [["hoch", "3D mit Schatten"], ["niedrig", "3D schlicht"], ["aus", "Ohne 3D"]].map(([id, n]) => '<button class="tab' + (q === id ? " on" : "") + '" data-act="quality" data-q="' + id + '">' + n + "</button>").join("") + "</div>";
-      h += '<p class="muted" style="font-size:13px">Die Änderung wird nach dem Neuladen der Seite wirksam.</p>';
+      h += '<p class="muted small">Die Änderung wird nach dem Neuladen der Seite wirksam.</p>';
+      h += '<div class="section-title">Tag und Nacht</div><div class="row">' + [["zyklus", "Automatisch (20 Minuten)"], ["echtzeit", "Echte Uhrzeit"], ["tag", "Immer Tag"], ["nacht", "Immer Nacht"]].map(([id, n]) => '<button class="tab' + (dc === id ? " on" : "") + '" data-act="dayCycle" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
-      h += '<div class="section-title">Ton</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + "</button></div>";
-      h += '<div class="section-title">Spielstand</div><p class="muted" style="font-size:13px">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
+      h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
+      h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
-      h += '<div class="section-title">Über das Spiel</div><p class="muted" style="font-size:13px">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
+      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
   };
@@ -591,6 +891,14 @@
     UI.saveNow();
     UI.renderPanel();
     UI.toast("Gespeichert. Lade die Seite neu, um die Darstellung zu wechseln.", "", "einstellungen");
+  };
+  A.dayCycle = (el) => {
+    S().settings.dayCycle = el.dataset.v;
+    if (UI.hub) UI.hub.setDayCycle(el.dataset.v);
+    UI.save();
+    UI.renderPanel();
+    UI.renderTop();
+    UI.updateMusic();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;
@@ -632,10 +940,35 @@
   };
   A.resetHero = (el) => {
     if (!el.dataset.sure) {
-      UI.dialog('<h2>Wirklich neu beginnen?</h2><p>Dein Held <b>' + esc(S().name) + "</b> geht dabei verloren, außer du sicherst vorher den Spielstand als Code.</p><div class=\"actions\"><button class=\"btn ghost\" data-act=\"closeDialog\">Behalten</button><button class=\"btn danger\" data-act=\"resetHero\" data-sure=\"1\">Neu beginnen</button></div>");
+      UI.dialog("<h2>Wirklich neu beginnen?</h2><p>Dein Held <b>" + esc(S().name) + '</b> geht dabei verloren, außer du sicherst vorher den Spielstand als Code.</p><div class="actions"><button class="btn ghost" data-act="closeDialog">Behalten</button><button class="btn danger" data-act="resetHero" data-sure="1">Neu beginnen</button></div>');
       return;
     }
     UI.closeDialog();
     SB.main.newHero();
+  };
+
+  /* ================= Reichswahl fuer Helden aus Version 1 ================= */
+  UI.showRealmChoice = function () {
+    const s = S();
+    const arch = E.archOf(s);
+    const cards = Object.keys(D.REALMS)
+      .map((r) => {
+        const RM = D.REALMS[r];
+        const C = D.CLASSES[E.CLASS_FOR[r][arch]];
+        return '<button class="realmcard r-' + r + '" data-act="chooseRealm" data-r="' + r + '">' + I.realm(r) + "<h3>" + esc(RM.name) + '</h3><i>„' + esc(RM.motto) + "“</i><p>" + esc(RM.desc) + '</p><div class="muted small">Deine Klasse dort: <b>' + esc(C.name) + "</b>. " + esc(C.special.name) + ": " + esc(C.special.desc) + "</div></button>";
+      })
+      .join("");
+    const d = UI.dialog('<h2>Die Welt hat sich verändert</h2><p>' + esc(D.LORE) + '</p><p><b>Wähle das Reich, für das ' + esc(s.name) + " kämpft.</b> Stufe, Gold, Ausrüstung und Erfolge bleiben erhalten.</p><div class=\"realmcards\">" + cards + "</div>", { cls: "wide" });
+    d.parentNode.dataset.locked = "1";
+  };
+  A.chooseRealm = (el) => {
+    const s = S();
+    E.chooseRealm(s, el.dataset.r);
+    UI.closeDialog();
+    SB.audio.play("horn");
+    UI.toast("Für " + D.REALMS[s.realm].name + "! Du bist jetzt " + D.CLASSES[s.cls].name + ".", "gold", "held");
+    UI.saveNow();
+    UI.refresh();
+    UI.dialog('<h2>' + esc(D.CLASSES[s.cls].name) + "</h2><p>" + esc(D.CLASSES[s.cls].prolog) + '</p><div class="actions"><button class="btn" data-act="closeDialog">Auf geht es</button></div>');
   };
 })();

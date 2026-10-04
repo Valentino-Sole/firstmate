@@ -1036,11 +1036,11 @@
     gildenhalle: [8.8, -7.2],
     ruhmeshalle: [3.6, -8.6],
     arkanum: [-2.4, -9.2],
-    steinkreis: [-7.6, -6.0],
+    steinkreis: [-8.4, -6.6],
     schmiede: [-9.8, -1.6],
     tiefen: [-10.8, 3.8],
   };
-  const LABEL_H = { brunnen: 3.6, taverne: 5.6, heim: 3.8, stall: 3.8, leuchtturm: 9.0, arena: 4.6, gildenhalle: 5.0, ruhmeshalle: 4.3, arkanum: 9.6, steinkreis: 3.4, schmiede: 4.8, tiefen: 4.8 };
+  const LABEL_H = { brunnen: 3.6, taverne: 4.5, heim: 3.8, stall: 3.8, leuchtturm: 9.0, arena: 4.6, gildenhalle: 5.0, ruhmeshalle: 4.3, arkanum: 9.6, steinkreis: 3.4, schmiede: 4.8, tiefen: 4.8 };
 
   R.createHub = function (el, opts) {
     init();
@@ -1273,7 +1273,8 @@
     const ravens = [];
     for (let i = 0; i < 5; i++) {
       const b = raven();
-      ravens.push({ b, ph: rng() * 6, r: 10 + rng() * 9, h: 11 + rng() * 4, sp: 0.15 + rng() * 0.15 });
+      b.scale.setScalar(0.7);
+      ravens.push({ b, ph: rng() * 6, r: 16 + rng() * 10, h: 17 + rng() * 5, sp: 0.1 + rng() * 0.1 });
       scene.add(b);
     }
     const flies = fireflies(rng, hi ? 140 : 70, 13, 0.4, 3.0, "#d9ff8a");
@@ -1485,7 +1486,7 @@
         last = now;
         return;
       }
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       const t = now / 1000;
       const k = 1 - Math.pow(0.0015, dt);
@@ -1732,7 +1733,7 @@
     function frame(now) {
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       rotY += (goalY - rotY) * Math.min(1, dt * 8);
       if (model) {
@@ -1996,7 +1997,7 @@
     function frame(now) {
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       const t = now / 1000;
       rot += (goalRot - rot) * Math.min(1, dt * 6);
@@ -2302,13 +2303,13 @@
     const fx = [];
     function frame(now) {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       const t = now / 1000;
       for (let i = tweens.length - 1; i >= 0; i--) {
         const tw = tweens[i];
         tw.t += dt * speed;
-        const u = Math.min(1, tw.t / tw.dur);
+        const u = Math.max(0, Math.min(1, tw.t / tw.dur));
         tw.fn(u);
         if (u >= 1) {
           tweens.splice(i, 1);
@@ -2680,13 +2681,14 @@
       await wait(0.15);
     }
 
-    return {
+    const api = {
+      _F: F,
       play,
       setSpeed(s) {
         speed = s;
       },
       // Naechster Gegner einer Mehrfach-Begegnung
-      async nextFoe(desc, foeHp) {
+      async nextFoe(desc, foeHp, heroHp) {
         const old = F[1];
         clearStars(old);
         setAura(old, null);
@@ -2709,6 +2711,11 @@
         nf.m.play("idle");
         F[0].m.play("idle");
         ring(nf, "#ffffff");
+        if (heroHp != null && heroHp > hp[0]) {
+          floatText(F[0], "+" + SB.util.fmt(Math.round(heroHp - hp[0])), "heal");
+          rising(F[0], "#7fffb0", 10);
+        }
+        if (heroHp != null) hp[0] = heroHp;
       },
       async finish(winner) {
         const W = F[winner];
@@ -2730,5 +2737,7 @@
         killRenderer(renderer);
       },
     };
+    R._lastBattle = api;
+    return api;
   };
 })();

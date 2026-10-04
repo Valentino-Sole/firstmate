@@ -66,13 +66,16 @@
   };
 
   /* Oeffentliches Profil: nur Spielwerte, keine Kontodaten */
-  St.publishHero = async function (S) {
+  St.publishHero = async function (S, force) {
     if (!db || !St.uid) return;
     const f = SB.engine.heroFighter(S);
     const pub = {
+      v: 2,
       name: S.name,
       race: S.race,
+      realm: S.realm,
       cls: S.cls,
+      guild: S.guild ? { id: S.guild.id, name: S.guild.name, tag: S.guild.tag } : null,
       gender: S.gender,
       look: S.look,
       level: S.level,
@@ -86,7 +89,7 @@
       updatedAt: Date.now(),
     };
     const json = JSON.stringify(Object.assign({}, pub, { updatedAt: 0 }));
-    if (json === lastHeroJson) return;
+    if (json === lastHeroJson && !force) return;
     try {
       await db.doc("heroes/" + St.uid).set(pub);
       lastHeroJson = json;
@@ -98,10 +101,25 @@
   /* Fremde Daten pruefen, bevor sie ins Spiel gelangen */
   const HEX = /^#[0-9a-fA-F]{6}$/;
   const num = (v, a, b) => (typeof v === "number" && isFinite(v) ? Math.max(a, Math.min(b, v)) : a);
+  const OLD_RACE = { wolkling: "albier", steinbart: "kreidezwerg", hornvolk: "trollblut", nebelalb: "sidhe", moosling: "moorling" };
+  const OLD_ARCH = { klinge: "krieger", wind: "jaeger", rune: "magier" };
+  const cleanText = (v, n) => String(v || "").replace(/[^\p{L}\p{N} '\-]/gu, "").slice(0, n).trim();
+  St.sanitizeGuild = function (g) {
+    if (!g || typeof g !== "object") return null;
+    const id = String(g.id || "");
+    if (!/^[pg]-[\w-]{2,80}$/.test(id)) return null;
+    const name = cleanText(g.name, 24);
+    const tag = cleanText(g.tag, 4).toUpperCase();
+    if (name.length < 3 || tag.length < 2) return null;
+    return { id, name, tag, realm: D.REALMS[g.realm] ? g.realm : null };
+  };
   St.sanitizeHero = function (id, h) {
     if (!h || typeof h !== "object") return null;
-    if (!D.CLASSES[h.cls] || !D.RACES[h.race]) return null;
-    const name = String(h.name || "").replace(/[^\p{L}\p{N} '\-]/gu, "").slice(0, 18).trim();
+    if (!D.RACES[h.race] && OLD_RACE[h.race]) h = Object.assign({}, h, { race: OLD_RACE[h.race] });
+    if (!D.RACES[h.race]) return null;
+    if (!D.CLASSES[h.cls] && OLD_ARCH[h.cls]) h = Object.assign({}, h, { cls: SB.engine.CLASS_FOR[D.RACES[h.race].realm][OLD_ARCH[h.cls]] });
+    if (!D.CLASSES[h.cls]) return null;
+    const name = cleanText(h.name, 18);
     if (name.length < 2) return null;
     const look = h.look || {};
     const gear = {};
@@ -119,14 +137,20 @@
       kind: "real",
       name,
       race: h.race,
+      realm: D.CLASSES[h.cls].realm,
       cls: h.cls,
       gender: h.gender === "w" ? "w" : "m",
+      guild: h.guild ? St.sanitizeGuild(Object.assign({ realm: D.CLASSES[h.cls].realm }, h.guild)) : null,
       look: {
-        skin: HEX.test(look.skin) ? look.skin : "#f2cba8",
-        hair: HEX.test(look.hair) ? look.hair : "#3b2a20",
-        eyes: HEX.test(look.eyes) ? look.eyes : "#1d1b26",
-        hairStyle: num(look.hairStyle, 0, 4) | 0,
-        beard: num(look.beard, 0, 3) | 0,
+        skin: HEX.test(look.skin) ? look.skin : D.RACES[h.race].skins[0],
+        hair: HEX.test(look.hair) ? look.hair : D.RACES[h.race].hairs[0],
+        eyes: HEX.test(look.eyes) ? look.eyes : "#3a2a1e",
+        hairStyle: num(look.hairStyle, 0, D.HAIR_STYLES.length - 1) | 0,
+        beard: num(look.beard, 0, D.BEARDS.length - 1) | 0,
+        tattoo: D.TATTOOS.find((t) => t.id === look.tattoo) ? look.tattoo : "keine",
+        tattooColor: HEX.test(look.tattooColor) ? look.tattooColor : "#2f5fd0",
+        scar: D.SCARS.find((t) => t.id === look.scar) ? look.scar : "keine",
+        horns: num(look.horns, 0, 2) | 0,
       },
       level,
       honor: Math.round(num(h.honor, 0, 1e7)),
@@ -176,8 +200,42 @@
             SB.remoteHeroes = null;
           }
         );
+      db.collection("guilds")
+        .limit(200)
+        .onSnapshot(
+          (qs) => {
+            const list = [];
+            for (const d of qs.docs) {
+              const g = St.sanitizeGuild(d.data());
+              if (g && g.realm && g.id === "p-" + d.id) list.push(Object.assign({ kind: "real" }, g));
+            }
+            SB.remoteGuilds = list;
+            SB.bus.emit("remote", list);
+          },
+          () => {
+            SB.remoteGuilds = null;
+          }
+        );
     } catch (e) {
       console.warn("Cloud nicht verfuegbar", e && e.code);
+    }
+  };
+
+  /* Gilden echter Spieler: der Gruender veroeffentlicht sie unter seiner Kennung */
+  St.publishGuild = async function (S) {
+    if (!db || !St.uid || !S.guild || !S.guild.founder) return;
+    try {
+      await db.doc("guilds/" + St.uid).set({ id: "p-" + St.uid, name: S.guild.name, tag: S.guild.tag, realm: S.guild.realm, updatedAt: Date.now() });
+    } catch (e) {
+      console.warn("Gilde nicht veroeffentlicht", e && e.code);
+    }
+  };
+  St.removeGuild = async function () {
+    if (!db || !St.uid) return;
+    try {
+      await db.doc("guilds/" + St.uid).delete();
+    } catch (e) {
+      console.warn("Gilde nicht entfernt", e && e.code);
     }
   };
 

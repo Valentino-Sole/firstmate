@@ -1408,7 +1408,8 @@
         wg.position.set(0, -0.02, 0.02);
         parts.handR.add(wg);
       } else {
-        wg.rotation.set(PI / 2, 0, 0);
+        // Klinge nach vorn und leicht nach aussen, nicht vor das Gesicht
+        wg.rotation.set(dual ? 2.75 : 2.15, 0, dual ? 0 : 0.25);
         wg.position.set(0, -0.03, 0.02);
         parts.handR.add(wg);
       }
@@ -1416,7 +1417,7 @@
       parts.weapon = wg;
       if (dual) {
         const w2 = buildWeapon(wpn, realmArg);
-        w2.rotation.set(PI / 2, 0, 0);
+        w2.rotation.set(2.75, 0, 0);
         w2.position.set(0, -0.03, 0.02);
         w2.scale.setScalar(0.82);
         parts.handL.add(w2);

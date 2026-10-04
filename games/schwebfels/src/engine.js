@@ -108,6 +108,7 @@
     MAX_ACTIONS: 90,
     NPC_COUNT: 150,
     GUILD_COST: 500,
+    CHAIN_BREATHER: 0.12,
   };
   E.xpNeed = (L) => Math.round(80 * Math.pow(L, 1.75) + 40);
   E.goldBase = (L) => Math.round(6 + 3.2 * Math.pow(L, 1.42));
@@ -657,7 +658,10 @@
     let hp = hero.maxHp;
     let winner = 0;
     for (let i = 0; i < foes.length; i++) {
+      // Zwischen zwei Gegnern kurz Atem holen: ein kleiner Teil der Lebenspunkte kehrt zurueck
+      if (i > 0) hp = Math.min(hero.maxHp, hp + Math.round(hero.maxHp * E.C.CHAIN_BREATHER));
       const res = E.simulate(hero, foes[i], seed + ":" + i, { hp: [hp, null] });
+      res.startHp = hp;
       waves.push(res);
       hp = res.hp[0];
       if (res.winner !== 0) {
@@ -795,9 +799,9 @@
     if (rare) {
       const minions = pool.filter((m) => m.id !== mon.id);
       waves = [
-        { monster: U.pick(r, minions.length ? minions : pool).id, mlevel: Math.max(1, mlevel - 1), power: DIFF[diff].power * 0.72 },
-        { monster: U.pick(r, minions.length ? minions : pool).id, mlevel: Math.max(1, mlevel - 1), power: DIFF[diff].power * 0.72 },
-        { monster: mon.id, mlevel, power: DIFF[diff].power * 0.95, boss: true },
+        { monster: U.pick(r, minions.length ? minions : pool).id, mlevel: Math.max(1, mlevel - 1), power: DIFF[diff].power * E.HORDE.minion },
+        { monster: U.pick(r, minions.length ? minions : pool).id, mlevel: Math.max(1, mlevel - 1), power: DIFF[diff].power * E.HORDE.minion },
+        { monster: mon.id, mlevel, power: DIFF[diff].power * E.HORDE.boss, boss: true },
       ];
     } else waves = [{ monster: mon.id, mlevel, power: DIFF[diff].power }];
     const offer = {
@@ -812,6 +816,8 @@
     if (rare || r() < 0.3 + 0.08 * diff) offer.item = E.makeItem(r, { level: L + U.ri(r, 0, 1), cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + (rare ? 1 : 0), minRarity: rare ? "ungewoehnlich" : null });
     return offer;
   };
+  // Staerke der Gegner in Hordenauftraegen: der Held kaempft ohne Pause gegen alle nacheinander
+  E.HORDE = { minion: 0.6, boss: 0.9 };
   E.refreshOffers = function (S) {
     const r = U.rng(S.quest.seed++);
     const used = { tpl: [], mons: [] };
@@ -925,7 +931,9 @@
       if (f.mon) mon = E.monById(f.mon);
       else mon = { id: "story-" + S.realm + "-" + ch.key + "-" + i, name: f.name, arch: f.arch, color: f.color, accent: f.accent };
       const L = ch.lv + (f.boss ? 1 : 0);
-      const p = f.final ? 1.0 : f.boss ? 0.95 : 0.78;
+      // Mehrere Gegner nacheinander: jeder einzelne ist schwaecher, die Kette bleibt eine Herausforderung
+      const n = ch.foes.length;
+      const p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
       return E.monsterFighter(mon, L, E.adaptPower(hero, L, p), { boss: !!f.boss, final: !!f.final });
     });
   };
