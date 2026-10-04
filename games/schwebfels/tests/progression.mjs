@@ -9,12 +9,13 @@ const E = SB.engine;
 const D = SB.data;
 const clsArg = process.argv[2] || "all";
 const target = Number(process.argv[3] || 30);
-const classes = clsArg === "all" ? Object.keys(D.CLASSES) : [clsArg];
+const classes = clsArg === "all" ? ["schildritter", "nebelschleicher", "mondschuetze", "runenwirker"] : clsArg === "alle12" ? Object.keys(D.CLASSES) : [clsArg];
 
 function play(cls, seed) {
   let now = 1_700_000_000_000 + seed * 1e7;
   E.now = () => now;
-  const S = E.newHero({ name: "Sim" + cls + seed, race: "wolkling", gender: "m", cls, look: {} });
+  const race = Object.keys(D.RACES).find((x) => D.RACES[x].realm === D.CLASSES[cls].realm);
+  const S = E.newHero({ name: "Sim" + cls + seed, race, gender: "m", cls, look: {} });
   const r = SB.util.rng(seed * 991 + 7);
   const bands = {};
   let quests = 0;
@@ -57,7 +58,7 @@ function play(cls, seed) {
     // Spieler waehlt den lohnendsten Auftrag mit brauchbarer Siegchance
     const offers = S.quest.offers;
     const hero = E.heroFighter(S, now);
-    const est = offers.map((o) => E.estimateWin(hero, E.questFoe(o, hero), 20, o.id));
+    const est = offers.map((o) => E.estimateWin(hero, E.questFoes(o, hero), 20, o.id));
     let idx = -1;
     let best = -1;
     offers.forEach((o, i) => {
@@ -85,7 +86,7 @@ function play(cls, seed) {
     b.n++;
     b.c[o.diff]++;
     if (rew.won) b.w[o.diff]++;
-    b.acts += fight.result.events.length;
+    b.acts += fight.chain.waves.reduce((a, w) => a + w.events.length, 0);
     const hf = E.heroFighter(S, now);
     const mf = E.modelHeroFighter(S.level, cls, 1);
     b.main += hf.attrs[C.main] / mf.attrs[C.main];
