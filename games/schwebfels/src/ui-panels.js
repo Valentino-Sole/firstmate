@@ -16,9 +16,10 @@
     hulda: ["Setz dich, Held. Die Aufträge hängen am Brett, der Met steht hinter mir.", "In der Krähe ist jedes Reich willkommen. Prügeleien bitte draußen, die Stühle sind neu.", "Manche Aufträge sind selten. Dann kommen die Biester gleich in Horden. Nimm einen zweiten Krug mit."],
     brumm: ["Hrmpf. Fass nichts an, was noch glüht.", "Gute Klinge, guter Preis. Billige Klinge, kurzes Leben.", "Ich schmiede seit dreihundert Jahren. Die ersten zweihundert waren Übung."],
     zinnober: ["Ah, ein Kunde! Oder ein Dieb? Bei dir bin ich mir noch nicht sicher.", "Alles hier ist magisch. Außer dem Staub. Wobei, der vielleicht auch.", "Dieser Ring gehörte einer Feenkönigin. Sagt zumindest der Ring."],
-    krawall: ["Willkommen im Ring der Reiche! Hier kämpft Albion gegen Midgard gegen Hibernia, und alle gegen den Sand in den Stiefeln.", "Jeder Sieg bringt Ehre, dir und deinem Reich. Jede Niederlage bringt Geschichten.", "Hier drin gibt es keinen Frieden der Freistatt. Nur Regeln. Ein paar."],
+    krawall: ["Willkommen im Ring der Reiche! Hier kämpft Albion gegen Midgard gegen Hibernia, und alle gegen den Sand in den Stiefeln.", "Jeder Sieg bringt Ehre, dir und deinem Reich. Jede Niederlage bringt Geschichten.", "Ich suche dir Gegner, die zu dir passen. Einer leicht, zwei ebenbürtig, einer zum Zähneausbeißen."],
     funzel: ["Das Feuer muss brennen. Immer. Ich mach das seit vierzig Jahren und habe nie geblinzelt.", "Wache halten ist einfach: Du schaust in den Nebel, der Nebel schaut zurück.", "Zahle pro Schicht. Pünktlich. Meistens."],
     hufnagel: ["Pass auf, wo du hintrittst. Der Greif ist sauber, die Hirsche nicht.", "Mit einem Reittier bist du schneller am Auftrag und schneller wieder in der Taverne.", "Der Greif beißt nur Leute, die er nicht mag. Er mag niemanden."],
+    mondhaendler: ["Willkommen, Nachtwandler. Was ich verkaufe, glänzt nur im Mondlicht. Am Tag bin ich nie hier gewesen.", "Die Nachtwesen kommen, wenn die anderen schlafen. Wer sie bannt, findet Beute, die kein Schmied kennt.", "Drei Jagden pro Nacht, mehr erlaubt der Mond nicht. Er ist da sehr eigen."],
     seherin: ["Die Steine erinnern sich an alles. Sie warten nur darauf, dass jemand zuhört.", "Jedes Reich hat seine Geschichte. Und jeder Held schreibt ein Stück davon.", "Unter den Splittern regt sich etwas. Die Chronik ist noch nicht zu Ende geschrieben."],
   };
   const line = (npc) => {
@@ -176,7 +177,7 @@
     UI.refresh();
   };
   A.buy = (el) => {
-    const res = E.buyItem(S(), el.dataset.shop, +el.dataset.i);
+    const res = el.dataset.shop === "mond" ? E.buyMoonItem(S(), +el.dataset.i, UI.isNight()) : E.buyItem(S(), el.dataset.shop, +el.dataset.i);
     if (!done(res)) return;
     SB.audio.play(el.dataset.shop === "schmiede" ? "anvil" : "buy");
     UI.closeDialog();
@@ -418,13 +419,15 @@
       else if (s.arena.next > now) h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
       const rivals = E.arenaRivals(s, now, remote);
       const hero = E.heroFighter(s, now);
-      h += '<div class="section-title">Herausforderer aus den anderen Reichen</div><div class="cards">';
+      h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div><div class="cards">';
       rivals.forEach((r) => {
-        const f = r.fighter || E.npcFighter(r);
+        const f = E.rivalFighter(r);
         const c = estimate(hero, [f], "arena" + r.id + r.level);
+        const tier = c >= 0.68 ? ["leicht", "Leicht"] : c >= 0.42 ? ["fair", "Ebenbürtig"] : ["schwer", "Schwer"];
+        const where = r.kind === "wander" ? "Wanderkämpfer" : "Platz " + r.rank;
         h +=
-          '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</h4>" +
-          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · Platz " + r.rank + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
+          '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + ' <span class="tier t-' + tier[0] + '">' + tier[1] + "</span></h4>" +
+          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · " + where + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
           '<button class="btn" data-act="arenaFight" data-id="' + esc(r.id) + '"' + (busy || s.arena.next > now ? " disabled" : "") + ">Herausfordern</button></div>";
       });
       h += '</div><div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn ghost small" data-act="open" data-id="ruhmeshalle">Alle Ranglisten</button></div>';
@@ -438,14 +441,74 @@
   A.arenaFight = async (el) => {
     const s = S();
     const now = E.now();
-    const opp = E.allHeroes(s, now, SB.remoteHeroes || null).find((h) => h.id === el.dataset.id);
-    if (!opp) return;
+    const opp = E.arenaRivals(s, now, SB.remoteHeroes || null).find((h) => h.id === el.dataset.id);
+    if (!opp) {
+      UI.toast("Dieser Herausforderer ist weitergezogen.", "", "arena");
+      UI.refresh();
+      return;
+    }
     const res = E.arenaFight(s, opp, now);
     if (!done(res)) return;
     const rew = E.resolveArena(s, res.fight, now);
     UI.saveNow();
     SB.audio.play("horn");
     await UI.runBattle(res.fight, { setting: "arena", title: "Ring der Reiche", rewards: rew });
+    UI.refresh();
+  };
+
+  /* ================= Mondtor: nur bei Nacht ================= */
+  P.mondtor = {
+    render() {
+      const s = S();
+      const now = E.now();
+      const mode = s.settings.dayCycle || "zyklus";
+      const night = UI.isNight();
+      let h = say("mondhaendler");
+      if (!night) {
+        const wait = E.nightChangeIn(mode, now);
+        h += '<div class="wellbox"><div class="wl-title">' + I.ui("mond") + " Das Mondtor ist geschlossen</div>";
+        if (wait === Infinity) h += '<div class="muted">In den Einstellungen ist „immer Tag“ gewählt. Stelle den Tag-Nacht-Wechsel auf „Zyklus“ oder „echte Uhrzeit“, damit die Nacht kommen kann.</div><button class="btn small ghost" data-act="open" data-id="einstellungen">Zu den Einstellungen</button>';
+        else h += '<div class="muted">Es öffnet sich, sobald es Nacht wird. Noch:</div><div class="wl-big num" data-until="' + (now + wait) + '"></div>';
+        h += "</div>";
+        h += '<div class="section-title">Was dich nachts erwartet</div><ul class="muted" style="margin:0;padding-left:20px"><li>Nachtjagd: zwei Nachtwesen deiner Heimatinsel nacheinander, ' + E.C.NIGHT_HUNTS + " Jagden pro Tag, kostet keinen Tatendrang.</li><li>Sichere Beute: immer mindestens ein seltener Gegenstand.</li><li>Selene Silberblick verkauft drei besondere Stücke, eines davon episch.</li></ul>";
+        return h;
+      }
+      const tab = UI.tabs.mondtor || "jagd";
+      h += '<div class="tabs">' + [["jagd", "Nachtjagd"], ["laden", "Mondhändlerin"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="mondtor" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      const wait = E.nightChangeIn(mode, now);
+      if (wait !== Infinity) h += '<div class="muted small" style="margin-bottom:8px">' + I.ui("mond") + ' Das Tor bleibt noch <b class="num" data-until="' + (now + wait) + '"></b> offen.</div>';
+      if (tab === "laden") {
+        const items = E.moonShop(s, now);
+        h += '<div class="section-title">Ware im Mondlicht</div><div class="grid6 shop">';
+        items.forEach((it, i) => {
+          h += it ? UI.slotHtml(it, "shop:mond:" + i, { upgrade: true, price: '<span class="num">' + U.fmtShort(it.value) + "</span> " + I.ui("gold") }) : '<div class="slot empty"><span class="slot-name">verkauft</span></div>';
+        });
+        h += '</div><div class="muted small" style="margin-top:8px">Neue Ware gibt es jeden Tag. Selene verkauft nur, solange es Nacht ist.</div>';
+        return h;
+      }
+      const left = E.nightHuntsLeft(s);
+      const busy = E.busy(s, now);
+      const hero = E.heroFighter(s, now);
+      const foes = E.nightHuntPreview(s, now);
+      const c = estimate(hero, foes, "nacht" + s.daily.day + s.daily.nightHunts);
+      h +=
+        '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
+        '<div class="wavepics">' + foes.map((f, k) => '<span class="wp' + (k ? " boss" : "") + '" title="' + esc(f.name) + '">' + UI.portrait(UI.monDesc(f, !!k), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div>" +
+        '<div class="foot">' + chanceTxt(c) + '<span class="muted small">Noch ' + left + " von " + E.C.NIGHT_HUNTS + ' Jagden heute</span><span class="spacer"></span>' +
+        (busy ? '<span class="muted">Du bist gerade beschäftigt.</span>' : '<button class="btn" data-act="nightHunt"' + (left <= 0 ? " disabled" : "") + ">Zur Jagd</button>") +
+        "</div></div></div>";
+      h += '<div class="muted small">Belohnung bei Sieg: viel Erfahrung und Gold, ein Gegenstand mindestens „selten“, manchmal eine Wolkenperle.</div>';
+      return h;
+    },
+  };
+  A.nightHunt = async () => {
+    const s = S();
+    const res = E.nightHunt(s, UI.isNight());
+    if (!done(res)) return;
+    const rew = E.resolveNightHunt(s, res.fight);
+    UI.saveNow();
+    SB.audio.play("horn");
+    await UI.runBattle(res.fight, { setting: "story", dayTime: 0.02, title: "Nachtjagd", rewards: rew });
     UI.refresh();
   };
 
@@ -878,6 +941,7 @@
       let h = '<div class="section-title">Darstellung</div><div class="row">' + [["hoch", "3D mit Schatten"], ["niedrig", "3D schlicht"], ["aus", "Ohne 3D"]].map(([id, n]) => '<button class="tab' + (q === id ? " on" : "") + '" data-act="quality" data-q="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<p class="muted small">Die Änderung wird nach dem Neuladen der Seite wirksam.</p>';
       h += '<div class="section-title">Tag und Nacht</div><div class="row">' + [["zyklus", "Automatisch (20 Minuten)"], ["echtzeit", "Echte Uhrzeit"], ["tag", "Immer Tag"], ["nacht", "Immer Nacht"]].map(([id, n]) => '<button class="tab' + (dc === id ? " on" : "") + '" data-act="dayCycle" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
+      h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";

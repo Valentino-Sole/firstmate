@@ -1,4 +1,4 @@
-/* Helden von Schwebfels - 3D-Schauplaetze: Freistatt-Insel im Nebelmeer, Heldenansicht, Heim, Kampfbuehne, Portraits.
+/* Helden von Schwebfels - 3D-Schauplaetze: Heimatinsel des Reiches im Nebelmeer (Formen je Reich in r3d-realms.js), Heldenansicht, Heim, Kampfbuehne, Portraits.
    Mystische Stimmung: gedaempfte Farben, Nebel, Gluehwuermchen, Polarlicht bei Nacht, automatischer Tag-Nacht-Wechsel. */
 (function () {
   "use strict";
@@ -53,49 +53,29 @@
     return t * t * (3 - 2 * t);
   };
 
-  /* ---------- Tageszeit ---------- */
-  const CYCLE_MS = 20 * 60 * 1000;
-  // 0 = Mitternacht, 0.5 = Mittag
-  R.dayTime = function (mode, now) {
-    now = now || Date.now();
-    if (mode === "tag") return 0.5;
-    if (mode === "nacht") return 0.02;
-    if (mode === "echtzeit") {
-      const d = new Date(now);
-      return (d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600) / 24;
-    }
-    return (now / CYCLE_MS + 0.3) % 1;
-  };
-  R.dayInfo = function (t) {
-    const sunH = -Math.cos(t * 2 * PI);
-    const day = smooth(-0.12, 0.3, sunH);
-    const dusk = Math.max(0, 1 - Math.abs(sunH - 0.02) / 0.28);
-    return { t, sunH, day, dusk, night: 1 - day };
-  };
+  /* ---------- Tageszeit (Rechnung liegt im Spielkern, damit Nachtinhalte auch ohne 3D funktionieren) ---------- */
+  R.dayTime = (mode, now) => SB.engine.dayTime(mode, now);
+  R.dayInfo = (t) => SB.engine.dayInfo(t);
   R.dayLabel = function (t) {
     const i = R.dayInfo(t);
     if (i.dusk > 0.45) return t < 0.5 ? "Morgengrauen" : "Abenddämmerung";
     return i.day > 0.5 ? "Tag" : "Nacht";
   };
-  // Mystische Farbpalette je Tageszeit
-  function palette(info) {
-    const dayTop = "#36557f";
-    const dayBot = "#8fa2ad";
-    const duskTop = "#2b2c5a";
-    const duskBot = "#c27556";
-    const nightTop = "#04060f";
-    const nightBot = "#141f38";
-    const top = lerpC(nightTop, dayTop, info.day).lerp(col(duskTop), info.dusk * 0.6);
-    const bot = lerpC(nightBot, dayBot, info.day).lerp(col(duskBot), info.dusk * 0.75);
-    const fog = bot.clone().lerp(col(info.day > 0.5 ? "#6e8290" : "#18223a"), 0.35);
+  // Mystische Farbpalette je Tageszeit; jedes Reich bringt seinen eigenen Himmel mit
+  const DEF_SKY = { dayTop: "#36557f", dayBot: "#8fa2ad", duskTop: "#2b2c5a", duskBot: "#c27556", nightTop: "#04060f", nightBot: "#141f38", fogDay: "#6e8290", fogNight: "#18223a", sunDay: "#ffe9c8", hemiGround: "#4a3e30" };
+  function palette(info, sky) {
+    sky = sky || DEF_SKY;
+    const top = lerpC(sky.nightTop, sky.dayTop, info.day).lerp(col(sky.duskTop), info.dusk * 0.6);
+    const bot = lerpC(sky.nightBot, sky.dayBot, info.day).lerp(col(sky.duskBot), info.dusk * 0.75);
+    const fog = bot.clone().lerp(col(info.day > 0.5 ? sky.fogDay : sky.fogNight), 0.35);
     return {
       top,
       bot,
       fog,
-      sun: lerpC("#8fa6ff", "#ffe9c8", info.day).lerp(col("#ff9a62"), info.dusk * 0.7),
+      sun: lerpC("#8fa6ff", sky.sunDay, info.day).lerp(col("#ff9a62"), info.dusk * 0.7),
       sunI: 1.3 + 1.2 * info.day,
       hemiSky: lerpC("#6a7ac8", "#d8e2ee", info.day),
-      hemiGround: lerpC("#2a2438", "#4a3e30", info.day),
+      hemiGround: lerpC("#2a2438", sky.hemiGround, info.day),
       hemiI: 1.0 + 0.3 * info.day,
     };
   }
@@ -540,7 +520,13 @@
       prismGeo.rotateX(-PI / 2);
     }
     const sy = h / 1.5;
-    return mesh(prismGeo, mat, { p: [0, 0.5 * sy, 0], s: [w, sy, d / 1.732] });
+    const m = mesh(prismGeo, mat, { p: [0, 0.5 * sy, 0], s: [w, sy, d / 1.732] });
+    m.userData.roof = "gable";
+    return m;
+  }
+  function roofCone(m) {
+    m.userData.roof = "cone";
+    return m;
   }
   function fire(night, size) {
     const g = grp();
@@ -558,7 +544,7 @@
     return g;
   }
 
-  /* ---------- Gebaeude der Freistatt ---------- */
+  /* ---------- Grundformen der Gebaeude (Albion; andere Reiche in r3d-realms.js) ---------- */
   const B = {};
   const mats = () => ({
     plaster: pm("plain", "#a89c84"),
@@ -664,7 +650,7 @@
     b.add(mesh(G.cyl(1.1, 1.35, 4.6, 10), pm("stone", "#5e5868", { flat: true }), { p: [0, 2.3, 0], r: [0, 0, 0.04] }));
     b.add(mesh(G.cyl(1.25, 1.1, 0.6, 10), pm("stone", "#4a4552", { flat: true }), { p: [0.1, 4.8, 0] }));
     const roofM = pm("stone", "#3a2f5a", { flat: true });
-    b.add(mesh(G.cone(1.7, 2.2, 10), roofM, { p: [0.15, 6.2, 0] }));
+    b.add(roofCone(mesh(G.cone(1.7, 2.2, 10), roofM, { p: [0.15, 6.2, 0] })));
     b.add(mesh(G.cone(0.6, 1.2, 8), roofM, { p: [0.45, 7.6, -0.1], r: [-0.3, 0, 0.45] }));
     for (let i = 0; i < 4; i++) {
       const a = -0.8 + i * 0.55;
@@ -732,7 +718,7 @@
       const a = (i / 8) * PI * 2;
       b.add(mesh(G.box(0.12, 0.8, 0.12), m.beam, { p: [Math.cos(a) * 1.3, 6.3, Math.sin(a) * 1.3] }));
     }
-    b.add(mesh(G.cone(1.7, 1.4, 8), m.slate, { p: [0, 7.4, 0] }));
+    b.add(roofCone(mesh(G.cone(1.7, 1.4, 8), m.slate, { p: [0, 7.4, 0] })));
     b.add(mesh(G.cyl(0.5, 0.35, 0.3, 8), m.iron, { p: [0, 6.05, 0] }));
     const f = fire(N, 1.6);
     f.position.set(0, 6.2, 0);
@@ -923,7 +909,7 @@
     b.add(R.haloSprite("#6fc0ff", 2.2, 0.45, [0, 0.9, 0]));
     b.userData.water = water;
     for (const x of [-0.85, 0.85]) b.add(mesh(G.cyl(0.08, 0.09, 1.9, 6), pm("wood", "#3a2a1e"), { p: [x, 1.4, 0] }));
-    b.add(mesh(G.cone(1.4, 0.9, 4), pm("stone", "#2f3644", { flat: true }), { p: [0, 2.7, 0], r: [0, PI / 4, 0] }));
+    b.add(roofCone(mesh(G.cone(1.4, 0.9, 4), pm("stone", "#2f3644", { flat: true }), { p: [0, 2.7, 0], r: [0, PI / 4, 0] })));
     b.add(mesh(G.cyl(0.04, 0.04, 1.7, 6), pm("wood", "#3a2a1e"), { p: [0, 2.15, 0], r: [0, 0, PI / 2] }));
     b.add(mesh(G.cyl(0.18, 0.15, 0.25, 10), pm("wood", "#5a4130"), { p: [0.3, 1.6, 0] }));
     for (let i = 0; i < 6; i++) {
@@ -993,6 +979,8 @@
   B.heim = function (rng, N, ctx) {
     return homeExterior(ctx.homeTier || 0, N, ctx.realm || "albion");
   };
+  // Bausteine fuer r3d-realms.js
+  R._sc = { gableRoof, fire, lantern, standingStone, gnarledTree, pine, deadTree, shrooms, crystals, rock, island, heightAt, tiled, dot, griffin: () => griffin(), B, nightMats };
 
   function skyWhale(rng) {
     const w = grp();
@@ -1040,17 +1028,18 @@
     schmiede: [-9.8, -1.6],
     tiefen: [-10.8, 3.8],
   };
-  const LABEL_H = { brunnen: 3.6, taverne: 4.5, heim: 3.8, stall: 3.8, leuchtturm: 9.0, arena: 4.6, gildenhalle: 5.0, ruhmeshalle: 4.3, arkanum: 9.6, steinkreis: 3.4, schmiede: 4.8, tiefen: 4.8 };
+  const LABEL_H = { mondtor: 5.4, brunnen: 3.6, taverne: 4.5, heim: 3.8, stall: 3.8, leuchtturm: 9.0, arena: 4.6, gildenhalle: 5.0, ruhmeshalle: 4.3, arkanum: 9.6, steinkreis: 3.4, schmiede: 4.8, tiefen: 4.8 };
 
   R.createHub = function (el, opts) {
     init();
     opts = opts || {};
+    const E = SB.engine;
     const quality = opts.quality || "hoch";
     const hi = quality === "hoch";
+    const D = SB.data;
     const renderer = makeRenderer(el, { shadows: hi, maxDpr: hi ? 1.75 : 1.25 });
     const scene = new T.Scene();
     const camera = new T.PerspectiveCamera(40, 1, 0.5, 700);
-    const rng = R.rng(42);
     let dayMode = opts.dayCycle || "zyklus";
     const sky = skyDome();
     scene.add(sky);
@@ -1074,7 +1063,8 @@
     }
     scene.add(sun);
     scene.add(sun.target);
-    const stars = starField(rng, 900);
+    const skyRng = R.rng(42);
+    const stars = starField(skyRng, 900);
     scene.add(stars);
     const moon = moonSprite();
     scene.add(moon);
@@ -1089,21 +1079,16 @@
     sea2.material.opacity = 0.35;
     sea2.userData.tex.repeat.set(4, 4);
     scene.add(sea2);
-    const N = nightMats();
-
-    const world = grp();
-    scene.add(world);
-    const paths = Object.values(LAYOUT).map(([x, z]) => [0.5, 0.8, x * 0.92, z * 0.92]);
-    const isl = island(14, 12, rng, { paths, plaza: [0.5, 0.8, 3.0], grass: "#3d5a3e", grass2: "#55603c", dirt: "#5e5040", rock: "#5e5a54", roots: 22 });
-    world.add(isl);
-    // Pflastersteine auf dem Platz
-    const cob = pm("stone", "#6a645c", { flat: true });
-    for (let i = 0; i < 26; i++) {
-      const a = rng() * PI * 2;
-      const r = Math.sqrt(rng()) * 2.8;
-      world.add(mesh(G.cyl(0.25 + rng() * 0.15, 0.3, 0.06, 6), cob, { p: [0.5 + Math.cos(a) * r, 0.03, 0.8 + Math.sin(a) * r], r: [0, rng(), 0], shadow: false }));
+    const whale = skyWhale(skyRng);
+    scene.add(whale);
+    const ravens = [];
+    for (let i = 0; i < 5; i++) {
+      const b = raven();
+      b.scale.setScalar(0.7);
+      ravens.push({ b, ph: skyRng() * 6, r: 16 + skyRng() * 10, h: 17 + skyRng() * 5, sp: 0.1 + skyRng() * 0.1 });
+      scene.add(b);
     }
-    // Wasserfaelle
+    // Wasserfaelle (Textur geteilt)
     const fallTex = (() => {
       const c = document.createElement("canvas");
       c.width = 32;
@@ -1117,28 +1102,35 @@
       t.wrapS = t.wrapT = T.RepeatWrapping;
       return t;
     })();
-    const falls = [];
-    for (const a of [2.4, 4.0]) {
-      const fm = new T.MeshBasicMaterial({ map: fallTex, color: col("#bfe0ff"), transparent: true, opacity: 0.55, depthWrite: false, side: T.DoubleSide });
-      const f = new T.Mesh(new T.PlaneGeometry(1.4, 16), fm);
-      f.position.set(Math.cos(a) * 14.3, -8, Math.sin(a) * 14.3);
-      f.rotation.y = -a + PI / 2;
-      world.add(f);
-      falls.push(fm);
-      const mm = R.haloSprite("#cfe8ff", 5, 0.25, [Math.cos(a) * 14.3, -15, Math.sin(a) * 14.3]);
-      world.add(mm);
-    }
 
-    // Gebaeude
-    const buildings = {};
-    const pickables = [];
-    const anim = { smoke: [], flags: [], beam: null, portal: null, runes: null, float: null, orbit: null, water: null, swing: null, orb: null, stones: null, griffin: null, homeFlag: null, sparks: [] };
+    /* ---- Heimatinsel des Reiches: wird bei einem Reichswechsel neu gebaut ---- */
+    let realm = D.REALMS[opts.realm] ? opts.realm : "albion";
     let homeTier = opts.homeTier || 0;
-    let realm = opts.realm || "albion";
+    let TH = R.realmTheme(realm);
+    let N = null;
+    let world = null;
+    let isl = null;
+    let buildings = {};
+    const pickables = [];
+    let anim = null;
+    let islets = [];
+    let villagers = [];
+    let life = [];
+    let flyList = [];
+    let wisps = null;
+    let weather = null;
+    let gate = null;
+    let paths = [];
+    let rng = null;
+    const placeAt = (obj, x, z) => {
+      obj.position.set(x, heightAt(isl, x, z) - 0.05, z);
+      world.add(obj);
+    };
     function placeBuilding(id) {
       const [x, z] = LAYOUT[id];
       if (buildings[id]) world.remove(buildings[id]);
-      const bg = B[id](rng, N, { homeTier, realm });
+      const bg = R.realmBuilding(realm, id)(rng, N, { homeTier, realm });
+      R.realmFinish(realm, bg);
       bg.position.set(x, 0, z);
       bg.rotation.y = Math.atan2(0.5 - x, 10 - z);
       bg.userData.bid = id;
@@ -1170,10 +1162,12 @@
       if (u.griffin) anim.griffin = u.griffin;
       if (u.flag) anim.homeFlag = u.flag;
       if (u.guildBanners) anim.guildBanners = u.guildBanners;
-      if (u.sparks) anim.sparks.push({ b: bg, p: u.sparks });
+      if (u.sparks) {
+        anim.sparks = anim.sparks.filter((s) => s.id !== id);
+        anim.sparks.push({ id, b: bg, p: u.sparks });
+      }
       return bg;
     }
-    for (const id in LAYOUT) placeBuilding(id);
     function rebuildPickables() {
       for (const p of pickables) scene.remove(p);
       pickables.length = 0;
@@ -1182,128 +1176,455 @@
         const bb = new T.Box3().setFromObject(bg);
         const size = bb.getSize(new T.Vector3());
         const center = bb.getCenter(new T.Vector3());
-        const hit = new T.Mesh(new T.BoxGeometry(Math.min(size.x, 7) + 0.4, size.y + 0.4, Math.min(size.z, 7) + 0.4), new T.MeshBasicMaterial({ visible: false }));
+        const hit = new T.Mesh(new T.BoxGeometry(Math.min(size.x, 7) + 0.4, Math.min(size.y, 9) + 0.4, Math.min(size.z, 7) + 0.4), new T.MeshBasicMaterial({ visible: false }));
         hit.position.copy(center);
         hit.userData.bid = id;
         scene.add(hit);
         pickables.push(hit);
       }
     }
-    rebuildPickables();
-
-    // Vegetation, Steine, Laternen
-    const blocked = Object.values(LAYOUT).map(([x, z]) => [x, z, 3.2]).concat([[0.5, 0.8, 3.4]]);
-    const free = (x, z, r) => !blocked.some(([bx, bz, br]) => Math.hypot(bx - x, bz - z) < br + r) && !paths.some((p) => {
-      const vx = p[2] - p[0];
-      const vz = p[3] - p[1];
-      const t = Math.max(0, Math.min(1, ((x - p[0]) * vx + (z - p[1]) * vz) / (vx * vx + vz * vz)));
-      return Math.hypot(x - p[0] - vx * t, z - p[1] - vz * t) < 1.1 + r;
-    });
-    const placeAt = (obj, x, z) => {
-      obj.position.set(x, heightAt(isl, x, z) - 0.05, z);
-      world.add(obj);
-    };
-    let placed = 0;
-    for (let tries = 0; tries < 700 && placed < 38; tries++) {
-      const a = rng() * PI * 2;
-      const r = 3.5 + rng() * 9.8;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (!free(x, z, 0.8)) continue;
-      if (z > 6 && Math.abs(x) < 6) continue;
-      const kind = rng();
-      const tr = kind < 0.45 ? gnarledTree(rng) : kind < 0.85 ? pine(rng) : deadTree(rng);
-      tr.rotation.y = rng() * PI * 2;
-      placeAt(tr, x, z);
-      blocked.push([x, z, 1.0]);
-      placed++;
+    // Bewohner: Leute des eigenen Reiches in Alltagskleidung
+    function citizen(rr, rk, o) {
+      o = o || {};
+      const races = Object.keys(D.RACES).filter((r) => D.RACES[r].realm === rk);
+      const race = o.race || races[Math.floor(rr() * races.length)];
+      const R0 = D.RACES[race];
+      const clsList = Object.keys(D.CLASSES).filter((c) => D.CLASSES[c].realm === rk);
+      const cls = o.cls || clsList[Math.floor(rr() * clsList.length)];
+      const look = {
+        skin: R0.skins[Math.floor(rr() * 4)], hair: R0.hairs[Math.floor(rr() * 5)], hairStyle: Math.floor(rr() * 6), beard: Math.floor(rr() * 5),
+        tattoo: rr() < 0.35 ? D.TATTOOS[1 + Math.floor(rr() * 6)].id : "keine", tattooColor: D.TATTOO_COLORS[Math.floor(rr() * 7)].c, eyes: D.EYES[Math.floor(rr() * 4)].c,
+      };
+      const v = R.buildHero({ race, cls, realm: rk, gender: o.gender || (rr() < 0.5 ? "m" : "w"), look, gear: o.gear || {} });
+      v.obj.scale.multiplyScalar(o.scale || 0.72);
+      return v;
     }
-    for (let i = 0; i < 40; i++) {
-      const a = rng() * PI * 2;
-      const r = 3.6 + rng() * 9.8;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (!free(x, z, 0.3)) continue;
-      const k = i % 4;
-      const o = k === 0 ? shrooms(rng) : k === 1 ? crystals(rng, ["#8fd8ff", "#b48cff", "#7fffb0"][i % 3]) : rock(rng);
-      placeAt(o, x, z);
+    const mugMat = () => pm("wood", "#7a5232");
+    function mug() {
+      const g = grp();
+      g.add(mesh(G.cyl(0.075, 0.065, 0.16, 10), mugMat()));
+      g.add(mesh(G.cyl(0.07, 0.07, 0.03, 10), pm("plain", "#f2ead8"), { p: [0, 0.08, 0] }));
+      g.add(mesh(G.torus(0.045, 0.012, PI, 4, 8), mugMat(), { p: [0.08, 0, 0], r: [0, 0, -PI / 2] }));
+      return g;
     }
-    // kleine Steinkreise und Runensteine verstreut
-    for (let i = 0; i < 5; i++) {
-      const a = rng() * PI * 2;
-      const r = 6 + rng() * 6;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (!free(x, z, 0.5)) continue;
-      const s = standingStone(rng, 1.2 + rng(), ["#9fd8ff", "#7fffb0", "#e8c35a"][i % 3]);
-      s.scale.setScalar(0.7);
-      s.rotation.y = rng() * PI;
-      placeAt(s, x, z);
+    function frameOf(bg, lx, lz) {
+      // Weltposition und Drehung eines Punktes vor einem Gebaeude
+      const c = Math.cos(bg.rotation.y);
+      const s = Math.sin(bg.rotation.y);
+      return [bg.position.x + lx * c + lz * s, bg.position.z - lx * s + lz * c];
     }
-    for (const id of ["taverne", "arena", "heim", "stall", "arkanum", "ruhmeshalle", "gildenhalle", "steinkreis"]) {
-      const [x, z] = LAYOUT[id];
-      const lx = x * 0.55 + 0.9;
-      const lz = z * 0.55 + 0.5;
-      const l = lantern(N);
-      l.rotation.y = rng() * PI * 2;
-      placeAt(l, lx, lz);
-    }
-    // Schwebende Felsen mit Ruinen
-    const islets = [];
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * PI * 2 + 0.4;
-      const d = 24 + i * 3;
-      const isg = grp([Math.cos(a) * d, -4 + (i % 3) * 3, Math.sin(a) * d]);
-      const small = island(2.4 + rng() * 1.4, 4 + rng() * 3, rng, { grass: "#3a5038", grass2: "#4a5a38", rock: "#5a5650", roots: 5, hills: 0.4 });
-      isg.add(small);
-      if (i % 2) isg.add(gnarledTree(rng));
-      else {
-        for (let k = 0; k < 3; k++) {
-          const s = standingStone(rng, 1.4 + rng(), k === 1 ? "#9fd8ff" : null);
-          s.position.set((k - 1) * 0.9, 0, (rng() - 0.5) * 0.5);
-          s.scale.setScalar(0.7);
-          isg.add(s);
+    function buildLife() {
+      const rr = R.rng(99 + realm.length);
+      const others = Object.keys(D.REALMS).filter((r) => r !== realm);
+      // Biergarten vor der Taverne: Tische, Baenke, Leute mit Krug
+      const tav = buildings.taverne;
+      const [px, pz] = frameOf(tav, 1.3, 2.7);
+      const patio = grp([tav.position.x, heightAt(isl, px, pz) - 0.03, tav.position.z], [0, tav.rotation.y, 0]);
+      world.add(patio);
+      const wood = pm("wood", "#5a4130");
+      let seat = 0;
+      for (const [tx, tz] of [[0.4, 2.6], [2.2, 2.5]]) {
+        const tb = grp([tx, 0, tz]);
+        tb.add(mesh(G.box(1.4, 0.07, 0.62), wood, { p: [0, 0.72, 0] }));
+        for (const [lx, lz] of [[-0.6, -0.24], [0.6, -0.24], [-0.6, 0.24], [0.6, 0.24]]) tb.add(mesh(G.box(0.07, 0.7, 0.07), wood, { p: [lx, 0.35, lz] }));
+        for (const s of [-1, 1]) {
+          tb.add(mesh(G.box(1.4, 0.06, 0.28), wood, { p: [0, 0.42, s * 0.62] }));
+          for (const lx of [-0.6, 0.6]) tb.add(mesh(G.box(0.06, 0.4, 0.06), wood, { p: [lx, 0.2, s * 0.62] }));
+        }
+        const m1 = mug();
+        m1.position.set(0.3, 0.84, 0.05);
+        tb.add(m1);
+        patio.add(tb);
+        for (const s of [-1, 1]) {
+          if (seat >= 4) continue;
+          const v = citizen(rr, rr() < 0.85 ? realm : others[0], { gear: rr() < 0.4 ? { umhang: { base: "umhang", tint: D.REALMS[realm].color } } : {} });
+          v.obj.position.set(tx + (seat % 2 ? 0.35 : -0.3), 0, tz + s * 0.66);
+          v.obj.rotation.y = s > 0 ? PI : 0;
+          v.hold = "drink";
+          v.drinkPh = rr() * 7;
+          const mm = mug();
+          mm.position.set(0, -0.06, 0.07);
+          mm.rotation.x = -0.4;
+          v.parts.handR.add(mm);
+          patio.add(v.obj);
+          life.push({ update: (dt) => v.update(dt) });
+          seat++;
         }
       }
-      islets.push({ g: isg, ph: rng() * 6, y: isg.position.y });
-      scene.add(isg);
-    }
-    const whale = skyWhale(rng);
-    scene.add(whale);
-    const ravens = [];
-    for (let i = 0; i < 5; i++) {
-      const b = raven();
-      b.scale.setScalar(0.7);
-      ravens.push({ b, ph: rng() * 6, r: 16 + rng() * 10, h: 17 + rng() * 5, sp: 0.1 + rng() * 0.1 });
-      scene.add(b);
-    }
-    const flies = fireflies(rng, hi ? 140 : 70, 13, 0.4, 3.0, "#d9ff8a");
-    world.add(flies);
-    const wisps = mistWisps(rng, hi ? 16 : 8, 13, 0.3);
-    world.add(wisps);
+      // Ein Spielmann am Tisch, der aufsteht und jubelt
+      const bard = citizen(rr, realm, { gear: { umhang: { base: "umhang", tint: "#6a2a5a" } } });
+      bard.obj.position.set(1.3, 0, 3.7);
+      bard.obj.rotation.y = PI;
+      patio.add(bard.obj);
+      let bardT = 3;
+      life.push({
+        update: (dt) => {
+          bardT -= dt;
+          if (bardT <= 0) {
+            bard.play("victory", 1.4);
+            bardT = 5 + rr() * 6;
+          }
+          bard.update(dt);
+        },
+      });
+      blocked.push([px, pz, 2.6]);
 
-    // Held und Bewohner der Freistatt
-    let heroModel = null;
-    const villagers = [];
-    const vr = R.rng(7);
-    const vSpots = [[-3.2, 3.0, 0.8, "albion"], [5.2, 1.4, -1.2, "midgard"], [-5.4, -3.2, 0.4, "hibernia"], [-6.2, -4.4, 2.6, "seherin"]];
-    for (const [x, z, ry, rk] of vSpots) {
-      let v;
-      if (rk === "seherin") {
-        v = R.buildHero({ race: "sidhe", cls: "dornenrufer", realm: "hibernia", gender: "w", look: { skin: "#d6cfe6", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "mond", tattooColor: "#4fffb0" }, gear: { ruestung: { base: "robe", tint: "#3a3a5a", style: 1 }, helm: { base: "hut", tint: "#2a2a44", style: 0 }, waffe: { base: "stab", rarity: "episch", style: 1 } } });
-      } else {
-        const races = Object.keys(SB.data.RACES).filter((r) => SB.data.RACES[r].realm === rk);
-        const race = races[Math.floor(vr() * races.length)];
-        const R0 = SB.data.RACES[race];
-        const clsList = Object.keys(SB.data.CLASSES).filter((c) => SB.data.CLASSES[c].realm === rk);
-        v = R.buildHero({ race, cls: clsList[Math.floor(vr() * clsList.length)], realm: rk, gender: vr() < 0.5 ? "m" : "w", look: { skin: R0.skins[Math.floor(vr() * 4)], hair: R0.hairs[Math.floor(vr() * 5)], hairStyle: Math.floor(vr() * 6), beard: Math.floor(vr() * 5) }, gear: { umhang: { base: "umhang", tint: SB.data.REALMS[rk].color } } });
+      // Zwei Kaempfer im Ring der Reiche, Zuschauer am Rand
+      const ar = buildings.arena;
+      const ring = grp([ar.position.x, heightAt(isl, ar.position.x, ar.position.z) + 0.08, ar.position.z], [0, ar.rotation.y, 0]);
+      world.add(ring);
+      const duo = grp();
+      ring.add(duo);
+      const fA = citizen(rr, realm, { gear: { waffe: { base: "schwert", rarity: "selten", style: 1 }, nebenhand: { base: "schild", style: 0 }, ruestung: { base: "platte", style: 1 }, helm: { base: "helm", style: 0 } }, cls: E.CLASS_FOR[realm].krieger, scale: 0.78 });
+      const or = others[Math.floor(rr() * 2)];
+      const fB = citizen(rr, or, { gear: { waffe: { base: "axt", rarity: "episch", style: 2 }, ruestung: { base: "leder", style: 2 }, umhang: { base: "umhang", tint: D.REALMS[or].color } }, cls: E.CLASS_FOR[or].schurke, scale: 0.78 });
+      fA.obj.position.set(-0.8, 0, 0);
+      fA.obj.rotation.y = PI / 2;
+      fB.obj.position.set(0.8, 0, 0);
+      fB.obj.rotation.y = -PI / 2;
+      duo.add(fA.obj, fB.obj);
+      const sparkM = new T.SpriteMaterial({ map: dot(), color: col("#ffd9a0"), transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: 0 });
+      const spark = new T.Sprite(sparkM);
+      spark.position.set(0, 1.05, 0);
+      spark.scale.setScalar(0.9);
+      duo.add(spark);
+      let duelT = 1;
+      let turn = 0;
+      let flashT = 0;
+      let rounds = 0;
+      life.push({
+        update: (dt) => {
+          duo.rotation.y += dt * 0.12;
+          duelT -= dt;
+          if (duelT <= 0) {
+            const a = turn ? fB : fA;
+            const d = turn ? fA : fB;
+            rounds++;
+            const special = rounds % 6 === 0;
+            a.play(special ? "special" : "attack", special ? 0.9 : 0.55);
+            const reaction = rr();
+            setTimeout(() => {
+              d.play(reaction < 0.35 ? "block" : reaction < 0.6 ? "evade" : "hit", 0.45);
+              flashT = 0.25;
+            }, special ? 420 : 280);
+            turn = 1 - turn;
+            duelT = special ? 1.6 : 1.0 + rr() * 0.5;
+          }
+          if (flashT > 0) flashT -= dt;
+          sparkM.opacity = Math.max(0, flashT * 3.2);
+          fA.update(dt);
+          fB.update(dt);
+        },
+      });
+      const fans = [];
+      for (let i = 0; i < (hi ? 4 : 2); i++) {
+        const a = PI / 2 + (i - 1.5) * 0.32;
+        const v = citizen(rr, i === 3 ? or : realm, { gear: rr() < 0.5 ? { umhang: { base: "umhang", tint: D.REALMS[i === 3 ? or : realm].color } } : {} });
+        v.obj.position.set(Math.cos(a) * 4.2, 0, Math.sin(a) * 4.2);
+        v.obj.rotation.y = -a - PI / 2;
+        ring.add(v.obj);
+        fans.push({ v, t: rr() * 5 });
       }
-      v.obj.position.set(x, heightAt(isl, x, z), z);
-      v.obj.rotation.y = ry;
-      v.obj.scale.multiplyScalar(0.72);
-      world.add(v.obj);
-      villagers.push(v);
+      life.push({
+        update: (dt) => {
+          for (const f of fans) {
+            f.t -= dt;
+            if (f.t <= 0) {
+              f.v.play("victory", 1.2);
+              f.t = 3 + rr() * 6;
+            }
+            f.v.update(dt);
+          }
+        },
+      });
+      // Schmied am Amboss
+      const sm = buildings.schmiede;
+      const an = sm.userData.anvil || [0.7, 1.9];
+      const smithG = grp([sm.position.x, heightAt(isl, sm.position.x, sm.position.z), sm.position.z], [0, sm.rotation.y, 0]);
+      world.add(smithG);
+      const smith = citizen(rr, realm, { gear: { waffe: { base: "hammer", rarity: "gewoehnlich", style: 0 }, ruestung: { base: "leder", tint: "#4a3424", style: 0 } }, cls: E.CLASS_FOR[realm].krieger, gender: "m" });
+      smith.obj.position.set(an[0] - 0.62, 0, an[1] + 0.05);
+      smith.obj.rotation.y = PI / 2;
+      smith.hold = "hammer";
+      smithG.add(smith.obj);
+      life.push({ update: (dt) => smith.update(dt) });
+      // Passanten auf den Wegen
+      for (const [to, ph] of (hi ? [["steinkreis", 0], ["stall", 3], ["gildenhalle", 6]] : [["stall", 3]])) {
+        const v = citizen(rr, rr() < 0.8 ? realm : others[1], { gear: rr() < 0.5 ? { umhang: { base: "umhang" } } : {} });
+        const tp = LAYOUT[to];
+        const a0 = [0.5 + tp[0] * 0.12, 0.8 + tp[1] * 0.12];
+        const a1 = [tp[0] * 0.72, tp[1] * 0.72];
+        world.add(v.obj);
+        const st = { u: (ph / 10) % 1, dir: 1, wait: 0 };
+        const len = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]);
+        life.push({
+          update: (dt) => {
+            if (st.wait > 0) {
+              st.wait -= dt;
+              v.hold = null;
+              if (st.wait <= 0) st.dir *= -1;
+            } else {
+              v.hold = "walk";
+              st.u += (dt * 0.75 * st.dir) / len;
+              if (st.u >= 1 || st.u <= 0) {
+                st.u = Math.max(0, Math.min(1, st.u));
+                st.wait = 1.5 + rr() * 2.5;
+              }
+            }
+            const x = a0[0] + (a1[0] - a0[0]) * st.u;
+            const z = a0[1] + (a1[1] - a0[1]) * st.u;
+            v.obj.position.set(x, heightAt(isl, x, z) - 0.03, z);
+            v.obj.rotation.y = Math.atan2((a1[0] - a0[0]) * st.dir, (a1[1] - a0[1]) * st.dir);
+            v.update(dt);
+          },
+        });
+      }
     }
+    let blocked = [];
+    // Mondtor: kleine Felsinsel hinten links, nur bei Nacht offen
+    const MOON = [-16.8, 0.8, -12.6];
+    function buildGate() {
+      const g = grp(MOON);
+      g.rotation.y = Math.atan2(0.5 - MOON[0], 10 - MOON[2]);
+      const small = island(3.4, 5, rng, { grass: TH.ground.grass, grass2: TH.ground.grass2, dirt: TH.ground.dirt, rock: TH.ground.rock, roots: 6, hills: 0.3, vineGlow: "#cfe0ff" });
+      g.add(small);
+      const st = pm("stone", "#5c5c6c", { flat: true });
+      for (const s of [-1, 1]) {
+        g.add(mesh(G.box(0.55, 3.3, 0.55), st, { p: [s * 1.25, 1.65, 0] }));
+        g.add(mesh(G.box(0.75, 0.3, 0.75), st, { p: [s * 1.25, 0.15, 0] }));
+      }
+      g.add(mesh(G.torus(1.25, 0.28, PI, 6, 18), st, { p: [0, 3.3, 0] }));
+      const runeM = new T.MeshLambertMaterial({ color: col("#3a3a4a"), emissive: col("#cfe0ff"), emissiveIntensity: 0.1 });
+      for (const s of [-1, 1]) for (let i = 0; i < 3; i++) g.add(mesh(G.box(0.1, 0.32, 0.02), runeM, { p: [s * 1.25, 0.9 + i * 0.75, 0.29], r: [0, 0, i % 2 ? 0.4 : -0.3] }));
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const cx = c.getContext("2d");
+      const gr = cx.createRadialGradient(64, 64, 4, 64, 64, 64);
+      gr.addColorStop(0, "#ffffff");
+      gr.addColorStop(0.35, "#cfe0ff");
+      gr.addColorStop(0.8, "#3a4a8a");
+      gr.addColorStop(1, "#0a0c1a");
+      cx.fillStyle = gr;
+      cx.fillRect(0, 0, 128, 128);
+      cx.fillStyle = "rgba(10,12,26,0.85)";
+      cx.beginPath();
+      cx.arc(76, 52, 26, 0, PI * 2);
+      cx.fill();
+      cx.fillStyle = "#f2f6ff";
+      cx.beginPath();
+      cx.arc(60, 56, 24, 0, PI * 2);
+      cx.fill();
+      cx.fillStyle = "#3a4a8a";
+      cx.beginPath();
+      cx.arc(70, 50, 22, 0, PI * 2);
+      cx.fill();
+      const tex = new T.CanvasTexture(c);
+      tex.colorSpace = T.SRGBColorSpace;
+      const portalM = new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide });
+      const portal = new T.Mesh(new T.CircleGeometry(1.0, 32), portalM);
+      portal.position.set(0, 1.95, 0);
+      portal.scale.set(0.98, 1.45, 1);
+      g.add(portal);
+      const halo = R.haloSprite("#cfe0ff", 5, 0.0, [0, 2.0, 0.3]);
+      g.add(halo);
+      // Haendlerin Selene, nur bei Nacht
+      const selene = R.buildHero({ race: "sidhe", cls: "lichtweber", realm: "hibernia", gender: "w", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { ruestung: { base: "robe", tint: "#2a3260", style: 1 }, helm: { base: "kappe", tint: "#1e2448", style: 0 }, umhang: { base: "umhang", tint: "#1e2448" } } });
+      selene.obj.scale.multiplyScalar(0.75);
+      selene.obj.position.set(2.1, 0, 0.9);
+      selene.obj.rotation.y = -0.5;
+      const lantern2 = grp([0, 0, 0]);
+      lantern2.add(mesh(G.sph(0.09, 8, 6), emis("#cfe0ff", 1.4)));
+      lantern2.add(R.haloSprite("#cfe0ff", 0.9, 0.7));
+      lantern2.position.set(0, -0.12, 0.08);
+      selene.parts.handL.add(lantern2);
+      g.add(selene.obj);
+      // Lichtbruecke aus schwebenden Steinen
+      const bridge = grp();
+      const stepM = new T.MeshLambertMaterial({ color: col("#6a6a7a"), emissive: col("#cfe0ff"), emissiveIntensity: 0, transparent: true, opacity: 0 });
+      const from = new T.Vector3(-9.6, 0, -9.0);
+      const to = new T.Vector3(MOON[0] + 2.6, MOON[1], MOON[2] + 2.4);
+      const steps = [];
+      for (let i = 0; i < 7; i++) {
+        const u = (i + 0.5) / 7;
+        const p = from.clone().lerp(to, u);
+        p.y += Math.sin(u * PI) * 0.8;
+        const s = mesh(G.cyl(0.42, 0.3, 0.14, 8), stepM, { p: [p.x, p.y, p.z] });
+        s.userData.y0 = p.y;
+        bridge.add(s);
+        steps.push(s);
+      }
+      world.add(bridge);
+      g.userData.update = (t, dt, night) => {
+        const on = smooth(0.35, 0.65, night);
+        portalM.opacity = on * 0.95;
+        portal.rotation.z += dt * 0.3;
+        halo.material.opacity = on * 0.55;
+        runeM.emissiveIntensity = 0.1 + on * 1.4;
+        stepM.opacity = on;
+        stepM.emissiveIntensity = on * 0.9;
+        bridge.visible = on > 0.02;
+        steps.forEach((s, i) => (s.position.y = s.userData.y0 + Math.sin(t * 1.3 + i) * 0.08));
+        selene.obj.visible = on > 0.5;
+        if (selene.obj.visible) selene.update(dt);
+      };
+      g.userData.bid = "mondtor";
+      world.add(g);
+      return g;
+    }
+    function buildWorld() {
+      TH = R.realmTheme(realm);
+      N = nightMats();
+      rng = R.rng(42 + realm.length * 7);
+      anim = { smoke: [], flags: [], beam: null, portal: null, runes: null, float: null, orbit: null, water: null, swing: null, orb: null, stones: null, griffin: null, homeFlag: null, sparks: [], sparkList: [] };
+      islets = [];
+      villagers = [];
+      life = [];
+      flyList = [];
+      buildings = {};
+      world = grp();
+      scene.add(world);
+      paths = Object.values(LAYOUT).map(([x, z]) => [0.5, 0.8, x * 0.92, z * 0.92]);
+      const gd = TH.ground;
+      isl = island(14, 12, rng, { paths, plaza: [0.5, 0.8, 3.0], grass: gd.grass, grass2: gd.grass2, dirt: gd.dirt, rock: gd.rock, roots: TH.roots + 8, vineGlow: gd.vineGlow });
+      world.add(isl);
+      const cob = pm("stone", gd.cob, { flat: true });
+      for (let i = 0; i < 26; i++) {
+        const a = rng() * PI * 2;
+        const r = Math.sqrt(rng()) * 2.8;
+        world.add(mesh(G.cyl(0.25 + rng() * 0.15, 0.3, 0.06, 6), cob, { p: [0.5 + Math.cos(a) * r, 0.03, 0.8 + Math.sin(a) * r], r: [0, rng(), 0], shadow: false }));
+      }
+      for (const a of [2.4, 4.0]) {
+        const frozen = realm === "midgard";
+        const fm = new T.MeshBasicMaterial({ map: fallTex, color: col(frozen ? "#e8f4ff" : "#bfe0ff"), transparent: true, opacity: frozen ? 0.7 : 0.55, depthWrite: false, side: T.DoubleSide });
+        const f = new T.Mesh(new T.PlaneGeometry(1.4, 16), fm);
+        f.position.set(Math.cos(a) * 14.3, -8, Math.sin(a) * 14.3);
+        f.rotation.y = -a + PI / 2;
+        world.add(f);
+        world.add(R.haloSprite("#cfe8ff", 5, 0.25, [Math.cos(a) * 14.3, -15, Math.sin(a) * 14.3]));
+      }
+      for (const id in LAYOUT) placeBuilding(id);
+      gate = buildGate();
+      buildings.mondtor = gate;
+      rebuildPickables();
+      blocked = Object.values(LAYOUT).map(([x, z]) => [x, z, 3.2]).concat([[0.5, 0.8, 3.4], [2.6, 3.4, 1.2]]);
+      buildLife();
+      const free = (x, z, r) => !blocked.some(([bx, bz, br]) => Math.hypot(bx - x, bz - z) < br + r) && !paths.some((p) => {
+        const vx = p[2] - p[0];
+        const vz = p[3] - p[1];
+        const t = Math.max(0, Math.min(1, ((x - p[0]) * vx + (z - p[1]) * vz) / (vx * vx + vz * vz)));
+        return Math.hypot(x - p[0] - vx * t, z - p[1] - vz * t) < 1.1 + r;
+      });
+      let placed = 0;
+      for (let tries = 0; tries < 700 && placed < 36; tries++) {
+        const a = rng() * PI * 2;
+        const r = 3.5 + rng() * 9.8;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (!free(x, z, 0.8)) continue;
+        if (z > 6 && Math.abs(x) < 6) continue;
+        const tr = R.realmTree(realm, rng);
+        tr.rotation.y = rng() * PI * 2;
+        placeAt(tr, x, z);
+        blocked.push([x, z, 1.0]);
+        placed++;
+      }
+      const decoN = realm === "hibernia" ? 60 : 44;
+      for (let i = 0; i < decoN; i++) {
+        const a = rng() * PI * 2;
+        const r = 3.6 + rng() * 9.8;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (!free(x, z, 0.3)) continue;
+        const o = R.realmDeco(realm, rng, i);
+        o.rotation.y = rng() * PI * 2;
+        placeAt(o, x, z);
+      }
+      for (let i = 0; i < 5; i++) {
+        const a = rng() * PI * 2;
+        const r = 6 + rng() * 6;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (!free(x, z, 0.5)) continue;
+        const s = standingStone(rng, 1.2 + rng(), ["#9fd8ff", "#7fffb0", "#e8c35a"][i % 3]);
+        s.scale.setScalar(0.7);
+        s.rotation.y = rng() * PI;
+        placeAt(s, x, z);
+      }
+      for (const id of ["taverne", "arena", "heim", "stall", "arkanum", "ruhmeshalle", "gildenhalle", "steinkreis"]) {
+        const [x, z] = LAYOUT[id];
+        const l = lantern(N);
+        l.rotation.y = rng() * PI * 2;
+        placeAt(l, x * 0.55 + 0.9, z * 0.55 + 0.5);
+      }
+      // Kleine schwebende Felsen ringsum
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * PI * 2 + 0.4;
+        const d = 24 + i * 3;
+        const isg = grp([Math.cos(a) * d, -4 + (i % 3) * 3, Math.sin(a) * d]);
+        isg.add(island(2.4 + rng() * 1.4, 4 + rng() * 3, rng, { grass: gd.grass, grass2: gd.grass2, rock: gd.rock, roots: 5, hills: 0.4, vineGlow: gd.vineGlow }));
+        if (i % 2) isg.add(R.realmTree(realm, rng));
+        else
+          for (let k = 0; k < 3; k++) {
+            const s = standingStone(rng, 1.4 + rng(), k === 1 ? gd.vineGlow : null);
+            s.position.set((k - 1) * 0.9, 0, (rng() - 0.5) * 0.5);
+            s.scale.setScalar(0.7);
+            isg.add(s);
+          }
+        islets.push({ g: isg, ph: rng() * 6, y: isg.position.y });
+        world.add(isg);
+      }
+      // Wahrzeichen des Reiches hinter der Insel, die anderen Reiche fern im Dunst
+      const lm = R.realmLandmark(realm, N, rng);
+      lm.position.set(4, -7, -46);
+      world.add(lm);
+      anim.flags.push(...lm.userData.flags);
+      islets.push({ g: lm, ph: 1.3, y: lm.position.y, amp: 0.25 });
+      const far = hi ? Object.keys(D.REALMS).filter((r) => r !== realm) : [];
+      far.forEach((r2, i) => {
+        const g = R.realmLandmark(r2, N, rng, { radius: 9 });
+        const x = i ? 52 : -54;
+        g.position.set(x, -2 + i * 3, -66 - i * 6);
+        g.scale.setScalar(0.5);
+        g.rotation.y = Math.atan2(-x, 36);
+        world.add(g);
+        islets.push({ g, ph: 2 + i, y: g.position.y, amp: 0.6 });
+      });
+      // Gluehwuermchen und Feenlichter, Nebelschwaden, Wetter
+      const fc = TH.flies;
+      fc.forEach((c, i) => {
+        const f = fireflies(rng, Math.round((hi ? 140 : 70) / fc.length) + (realm === "hibernia" ? 20 : 0), 13, 0.4, 3.0, c);
+        world.add(f);
+        flyList.push(f);
+      });
+      wisps = mistWisps(rng, hi ? 16 : 8, 13, 0.3);
+      world.add(wisps);
+      weather = R.realmWeather(TH.weather, rng, hi);
+      world.add(weather);
+      // Bewohner
+      const vr = R.rng(7 + realm.length);
+      const spots = [[5.2, 1.4, -1.2], [-1.8, -3.4, 0.4], [3.0, -4.6, 2.2]];
+      for (const [x, z, ry] of spots) {
+        const v = citizen(vr, realm, { gear: { umhang: { base: "umhang", tint: D.REALMS[realm].color } } });
+        v.obj.position.set(x, heightAt(isl, x, z), z);
+        v.obj.rotation.y = ry;
+        world.add(v.obj);
+        villagers.push(v);
+      }
+      const seer = R.buildHero({ race: "sidhe", cls: "dornenrufer", realm: "hibernia", gender: "w", look: { skin: "#d6cfe6", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "mond", tattooColor: "#4fffb0" }, gear: { ruestung: { base: "robe", tint: "#3a3a5a", style: 1 }, helm: { base: "hut", tint: "#2a2a44", style: 0 }, waffe: { base: "stab", rarity: "episch", style: 1 } } });
+      seer.obj.position.set(-6.2, heightAt(isl, -6.2, -4.4), -4.4);
+      seer.obj.rotation.y = 2.6;
+      seer.obj.scale.multiplyScalar(0.72);
+      world.add(seer.obj);
+      villagers.push(seer);
+    }
+    function rebuildWorld() {
+      if (world) scene.remove(world);
+      buildWorld();
+      if (heroModel) world.add(heroModel.obj);
+      applyDaytime(R.dayTime(dayMode));
+    }
+    let heroModel = null;
+    buildWorld();
 
     // Kamera
     const cam = { az: 0.05, pol: 1.04, rad: 40, target: new T.Vector3(0, 0.2, 0) };
@@ -1432,7 +1753,7 @@
     const under = col("#0a0d18");
     function applyDaytime(t) {
       info = R.dayInfo(t);
-      const P = palette(info);
+      const P = palette(info, TH.sky);
       const a = t * 2 * PI;
       sunDir.set(Math.sin(a) * 0.55, -Math.cos(a), 0.45).normalize();
       const lightDir = info.sunH > -0.05 ? sunDir : sunDir.clone().negate();
@@ -1455,6 +1776,10 @@
       sea.material.color.copy(P.bot).multiplyScalar(0.9);
       sea2.material.color.copy(P.fog);
       renderer.toneMappingExposure = 1.05 + 0.25 * info.night;
+      if (labels.mondtor) {
+        labels.mondtor.classList.toggle("asleep", info.night < 0.5);
+        labels.mondtor.classList.toggle("moonlit", info.night >= 0.5);
+      }
     }
     applyDaytime(R.dayTime(dayMode));
 
@@ -1559,7 +1884,7 @@
             anim.sparkList.splice(i, 1);
           }
         }
-      for (const is of islets) is.g.position.y = is.y + Math.sin(t * 0.4 + is.ph) * 0.5;
+      for (const is of islets) is.g.position.y = is.y + Math.sin(t * 0.4 + is.ph) * (is.amp || 0.5);
       const wa = t * 0.025;
       whale.position.set(Math.cos(wa) * 48, 10 + Math.sin(t * 0.3) * 2, Math.sin(wa) * 48);
       whale.rotation.y = -wa + PI;
@@ -1573,10 +1898,14 @@
       sea.userData.tex.offset.x += dt * 0.004;
       sea2.userData.tex.offset.y += dt * 0.006;
       fallTex.offset.y += dt * 0.8;
-      flies.userData.update(t, 0.15 + 0.85 * info.night);
+      for (const f of flyList) f.userData.update(t, 0.15 + 0.85 * info.night);
       wisps.userData.update(dt, scene.fog.color, 0.08 + 0.1 * info.day + 0.06 * info.dusk);
-      aur.userData.update(t, smooth(0.5, 0.95, info.night) * 0.8);
+      if (weather) weather.userData.update(dt, t, info);
+      aur.userData.update(t, smooth(0.5, 0.95, info.night) * (0.3 + 0.7 * TH.aurora));
+      if (gate) gate.userData.update(t, dt, info.night);
+      for (const l of life) l.update(dt);
       for (const id in buildings) {
+        if (id === "mondtor") continue;
         const b = buildings[id];
         const target = id === hover ? 1.05 : 1;
         const s = b.scale.x + (target - b.scale.x) * Math.min(1, dt * 10);
@@ -1593,20 +1922,24 @@
       setHero(desc) {
         if (heroModel) world.remove(heroModel.obj);
         heroModel = R.buildHero(desc);
-        heroModel.obj.position.set(2.6, 0, 3.4);
+        heroModel.obj.position.set(2.6, heightAt(isl, 2.6, 3.4), 3.4);
         heroModel.obj.rotation.y = 0.15;
         heroModel.obj.scale.multiplyScalar(0.82);
         world.add(heroModel.obj);
-        if (desc.realm && desc.realm !== realm) {
+        if (desc.realm && desc.realm !== realm && D.REALMS[desc.realm]) {
           realm = desc.realm;
-          placeBuilding("heim");
-          rebuildPickables();
+          rebuildWorld();
         }
       },
+      realm: () => realm,
       setHome(tier, realmId) {
         if (tier === homeTier && (!realmId || realmId === realm)) return;
         homeTier = tier;
-        if (realmId) realm = realmId;
+        if (realmId && realmId !== realm && D.REALMS[realmId]) {
+          realm = realmId;
+          rebuildWorld();
+          return;
+        }
         placeBuilding("heim");
         rebuildPickables();
       },
@@ -2135,7 +2468,9 @@
     scene.add(front);
     const N = nightMats();
     const info = R.dayInfo(setting === "dungeon" ? 0.02 : opts.dayTime != null ? opts.dayTime : S.t);
-    const P = palette(info);
+    // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
+    const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
+    const P = palette(info, TH ? TH.sky : null);
     if (setting === "dungeon") {
       const tint = col(opts.tint || "#8f7cff");
       sky.userData.recolor(col("#05040a"), tint.clone().multiplyScalar(0.18), col("#020205"));
@@ -2165,7 +2500,8 @@
       sea.material.color.copy(P.bot);
       scene.add(sea);
     }
-    const stage = island(8, 7, rng, { grass: S.grass, grass2: S.grass2, dirt: S.dirt, rock: S.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : "#7fffc8" });
+    const GD = TH ? TH.ground : S;
+    const stage = island(8, 7, rng, { grass: GD.grass, grass2: GD.grass2, dirt: GD.dirt, rock: GD.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : TH ? TH.ground.vineGlow : "#7fffc8" });
     scene.add(stage);
     const flickers = [];
     const extras = [];
@@ -2229,15 +2565,20 @@
       }
     } else {
       for (let i = 0; i < 7; i++) {
-        const tr = i % 3 === 0 ? pine(rng) : gnarledTree(rng);
+        const tr = TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
         tr.position.set(-7 + i * 2.3 + rng(), 0, -4 - rng() * 2);
         scene.add(tr);
       }
       for (let i = 0; i < 6; i++) {
-        const s = i % 2 ? shrooms(rng) : rock(rng);
+        const s = TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
         s.position.set(-6 + rng() * 12, 0.05, -1.5 - rng() * 2.5);
         scene.add(s);
       }
+    }
+    const weather = TH ? R.realmWeather(TH.weather, rng, false) : null;
+    if (weather) {
+      weather.scale.setScalar(0.6);
+      scene.add(weather);
     }
     const flies = fireflies(rng, 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a");
     scene.add(flies);
@@ -2332,6 +2673,7 @@
         if (o.userData.flick) o.scale.y = 1 + Math.sin(t * 13 + o.userData.flick) * 0.15;
       });
       flies.userData.update(t, setting === "dungeon" ? 0.9 : 0.3 + 0.6 * info.night);
+      if (weather) weather.userData.update(dt, t, info);
       wisps.userData.update(dt, scene.fog.color, 0.12);
       aur.userData.update(t, setting === "dungeon" ? 0 : smooth(0.5, 0.95, info.night) * 0.7);
       camera.position.copy(camBase);

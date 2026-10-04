@@ -31,13 +31,23 @@
     hufnagel: { race: "moorling", realm: "hibernia", gender: "w", cls: "mondschuetze", look: { skin: "#a9b98f", hair: "#4f6a3c", hairStyle: 1, eyes: "#4f7a3a", tattoo: "dornen", tattooColor: "#2f5fd0" }, gear: { ruestung: { base: "wams", tint: "#5a3d2a" } } },
     ottilie: { race: "albier", realm: "albion", gender: "w", cls: "schildritter", look: { skin: "#c99470", hair: "#2b1d16", hairStyle: 5, eyes: "#3f6fa8", tattoo: "runen", tattooColor: "#e8e2d6", scar: "wange" }, gear: { ruestung: { base: "harnisch", tint: "#9aa4ad", style: 1 }, umhang: { base: "umhang", tint: "#b8322e" } } },
     seherin: { race: "sidhe", realm: "hibernia", gender: "w", cls: "dornenrufer", look: { skin: "#e6dccc", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "linien", tattooColor: "#4fffb0" }, gear: { helm: { base: "hut", tint: "#2a2a44", style: 0 }, ruestung: { base: "robe", tint: "#3a3a5a", style: 1 } } },
+    mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
+  UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
   UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
+  UI.foeRealm = function (m) {
+    const S = UI.S;
+    const rs = m && m.realms;
+    if (rs && rs.length) return S && rs.indexOf(S.realm) >= 0 ? S.realm : rs[0];
+    if (m && m.id && /^(nacht-|story-)/.test(m.id)) return S ? S.realm : null;
+    return null;
+  };
   UI.fighterDesc = function (f) {
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final };
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return { kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear };
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
     const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';
@@ -316,6 +326,7 @@
     ["gildenhalle", "gilde", "Gilde"],
     ["heim", "heim", "Heim"],
     ["brunnen", "brunnen", "Brunnen"],
+    ["mondtor", "mond", "Mondtor"],
   ];
   UI.MENU = MENU;
   let lastPortraitKey = "";
@@ -379,6 +390,7 @@
     const C = D.CLASSES[S.cls];
     if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it))) b.held = "+";
     if (!S.guild) b.gildenhalle = "?";
+    if (UI.isNight() && E.nightHuntsLeft(S) > 0 && !E.busy(S, now)) b.mondtor = "☾";
     return b;
   };
   UI.renderDock = function () {
@@ -386,7 +398,7 @@
     if (!dock) return;
     const b = UI.badges();
     dock.innerHTML =
-      '<div class="side-logo">Schwebfels<small>Die Freistatt der drei Reiche</small></div>' +
+      '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
       MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
@@ -439,17 +451,16 @@
   };
 
   /* ---------- Musik je Ort ---------- */
-  const PANEL_MUSIC = { taverne: "taverne", heim: "heim", steinkreis: "chronik", tiefen: "tiefe", gildenhalle: "taverne" };
+  const PANEL_MUSIC = { taverne: "taverne", heim: "heim", steinkreis: "chronik", tiefen: "tiefe", gildenhalle: "taverne", mondtor: "nacht" };
   UI.updateMusic = function () {
     const S = UI.S;
     if (!S) return;
     let ctx;
     if (UI.inBattle) ctx = "kampf";
     else if (UI.panelId && PANEL_MUSIC[UI.panelId]) ctx = PANEL_MUSIC[UI.panelId];
-    else {
-      const info = SB.R3D.dayInfo(SB.R3D.dayTime(S.settings.dayCycle || "zyklus"));
-      ctx = info.night > 0.55 ? "nacht" : "tag";
-    }
+    else ctx = UI.isNight() ? "nacht" : "tag";
+    // Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders
+    if (ctx === "tag" || ctx === "nacht" || ctx === "taverne" || ctx === "kampf") ctx += ":" + S.realm;
     SB.audio.music(ctx);
   };
 
@@ -572,13 +583,14 @@
 
   /* ---------- Hinweise von Hueterin Ottilie ---------- */
   const TUT = [
-    { when: () => true, text: (S) => "Willkommen in der Freistatt, " + S.name + ". Ich bin Ottilie und hüte den Frieden auf Schwebfels. In der Taverne „Zur Schiefen Krähe“ warten deine ersten Aufträge.", btn: "Zur Taverne", act: () => UI.openPanel("taverne"), panel: "taverne" },
+    { when: () => true, text: (S) => "Willkommen auf " + D.REALMS[S.realm].isle + ", " + S.name + ". Ich bin Ottilie und hüte deine Heimatinsel. In der Taverne „Zur Schiefen Krähe“ warten deine ersten Aufträge.", btn: "Zur Taverne", act: () => UI.openPanel("taverne"), panel: "taverne" },
     { when: () => UI.panelId === "taverne" && !UI.S.quest.active, text: () => "Jeder Auftrag kostet Tatendrang, der sich mit der Zeit auffüllt. Achte auf die Siegchance. Seltene Hordenaufträge schicken dir mehrere Gegner nacheinander.", btn: "Verstanden" },
     { when: () => UI.S.stats.quests >= 1 && !UI.S.quest.active, text: () => "Gut gemacht! Gold steckst du am besten in deine Attribute. Im Charakterbogen siehst du auch genau, wie viel Erfahrung dir bis zur nächsten Stufe fehlt.", btn: "Zum Charakter", act: () => UI.openPanel("held"), panel: "held" },
     { when: () => UI.S.stats.quests >= 3, text: () => "In der Schmiede und bei Madame Zinnober gibt es bessere Ausrüstung. Fährst du mit der Maus über einen Gegenstand, siehst du sofort, wie sich deine Werte verändern würden.", btn: "Verstanden" },
     { when: () => UI.S.level >= 3, text: () => "Im Steinkreis erzählt die Seherin die Chronik deines Reiches und deiner Klasse. Jedes Kapitel bringt seltene Beute.", btn: "Zum Steinkreis", act: () => UI.openPanel("steinkreis"), panel: "steinkreis" },
     { when: () => UI.S.level >= 5, text: () => "Im Ring der Reiche kämpfst du gegen Helden aus den anderen Reichen. Ehre bringt dich in der Rangliste nach oben, für dich und für dein Reich.", btn: "Leinen los" },
     { when: () => UI.S.level >= 10, text: () => "Stufe 10! Das Tor zur Tiefe hat sich geöffnet. Dort warten Bosse mit seltener und epischer Beute.", btn: "Ab in die Tiefe", act: () => UI.openPanel("tiefen"), panel: "tiefen" },
+    { when: () => UI.S.level >= 2 && UI.isNight(), text: () => "Es ist Nacht. Hinter dem Steinkreis leuchtet jetzt das Mondtor: Dort warten Nachtjagden und die Händlerin Selene, aber nur bis zum Morgengrauen.", btn: "Zum Mondtor", act: () => UI.openPanel("mondtor"), panel: "mondtor" },
   ];
   UI.checkHint = function () {
     const S = UI.S;
@@ -638,7 +650,8 @@
     const aReady = S.arena.next <= now;
     const dReady = S.dungeons.next <= now;
     const sReady = S.story.next <= now;
-    const st = [qDone, gDone, aReady, dReady, sReady, Math.floor(E.energy(S, now)), S.daily.day].join("|");
+    const night = UI.isNight();
+    const st = [qDone, gDone, aReady, dReady, sReady, Math.floor(E.energy(S, now)), S.daily.day, night].join("|");
     if (st !== lastState) {
       const prev = lastState.split("|");
       if (lastState) {
@@ -647,12 +660,18 @@
           SB.audio.play("quest");
         }
         if (gDone && prev[1] === "false") UI.toast("Deine Wache ist vorbei. Funzel hat deinen Lohn bereit.", "good", "leuchtturm");
+        if (String(night) !== prev[7]) {
+          if (night) UI.toast("Die Nacht bricht herein. Das Mondtor hat sich geöffnet.", "good", "mond");
+          else UI.toast("Der Morgen graut. Das Mondtor schließt sich bis zur nächsten Nacht.", "", "sonne");
+          UI.updateMusic();
+          UI.checkHint();
+        }
       }
       lastState = st;
       UI.renderTop();
       UI.renderDock();
       UI.renderActivity();
-      if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day)) UI.renderPanel();
+      if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day || prev[7] !== String(night))) UI.renderPanel();
     } else {
       UI.renderTop();
       const box = $("#activity");

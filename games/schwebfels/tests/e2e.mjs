@@ -1,5 +1,6 @@
-// Browser-Durchlauf (Version 2): Reichswahl, Held mit Tattoo, Aufträge, Horde, Chronik, alle Orte, Gilde, Heim,
-// Brunnen, Arena, Dungeon, Speichern, Übernahme eines alten Spielstands, Mobilansicht.
+// Browser-Durchlauf (Version 3): Reichswahl, Held mit Tattoo, Aufträge, Horde, Chronik, alle Orte, Gilde, Heim,
+// Brunnen, Arena mit vier passenden Gegnern, Dungeon, Mondtor bei Tag und Nacht (Nachtjagd, Mondhändlerin),
+// Speichern, Übernahme eines alten Spielstands, Mobilansicht mit Hibernia.
 // Aufruf: node tests/e2e.mjs [ausgabeordner]   (erwartet vorher: node build.mjs)
 // Nutzt das global installierte Playwright und Chromium mit Software-WebGL.
 import { createRequire } from "node:module";
@@ -232,6 +233,8 @@ await page.evaluate(() => {
 });
 await open(page, "arena");
 await shot(page, "21-arena");
+const nRivals = await page.$$eval('[data-act="arenaFight"]', (l) => l.length);
+if (nRivals !== 4) errors.push("Arena: " + nRivals + " statt 4 Herausforderer");
 await page.click('[data-act="arenaFight"]:not([disabled])');
 await playBattle(page, "22-arena");
 
@@ -249,6 +252,15 @@ await shot(page, "23-dungeon-offen");
 await page.click('[data-act="dungeonFight"]:not([disabled])');
 await playBattle(page, "23b-dungeon");
 
+step("Mondtor bei Tag");
+await page.evaluate(() => {
+  SB.ui.S.settings.dayCycle = "tag";
+  SB.ui.refresh();
+});
+await open(page, "mondtor");
+await shot(page, "24a-mondtor-tag");
+if (await page.$('#panel [data-act="nightHunt"]')) errors.push("Mondtor: Nachtjagd am Tag möglich");
+
 step("Einstellungen und Nacht");
 await page.click('#topbar [data-id="einstellungen"]');
 await page.waitForTimeout(500);
@@ -256,6 +268,28 @@ await page.click('[data-act="dayCycle"][data-v="nacht"]');
 await page.click('[data-act="closePanel"]');
 await page.waitForTimeout(2500);
 await shot(page, "24-insel-nacht");
+
+step("Mondtor bei Nacht: Nachtjagd und Mondhändlerin");
+await open(page, "mondtor");
+await shot(page, "24b-mondtor-nacht");
+const huntsBefore = await page.evaluate(() => SB.engine.nightHuntsLeft(SB.ui.S));
+await page.click('[data-act="nightHunt"]');
+await playBattle(page, "24c-nachtjagd");
+const huntsAfter = await page.evaluate(() => SB.engine.nightHuntsLeft(SB.ui.S));
+if (huntsAfter !== huntsBefore - 1) errors.push("Nachtjagd wurde nicht gezählt");
+await page.click('[data-act="tab"][data-panel="mondtor"][data-tab="laden"]');
+await page.waitForTimeout(600);
+await shot(page, "24d-mondhaendlerin");
+await page.evaluate(() => {
+  SB.ui.S.gold = 1e7;
+  SB.ui.refresh();
+});
+await page.click('#panel .shop .slot:not(.empty)');
+await page.waitForTimeout(400);
+await page.click('#modal [data-act="buy"]');
+await page.waitForTimeout(400);
+const sold = await page.evaluate(() => SB.ui.S.shops.mond.items.filter((x) => x === null).length);
+if (sold !== 1) errors.push("Mondhändlerin: Kauf nicht verbucht");
 
 step("Speichern und neu laden");
 const before = await page.evaluate(() => JSON.stringify({ n: SB.ui.S.name, q: SB.ui.S.stats.quests, g: SB.ui.S.gold, r: SB.ui.S.realm, gu: SB.ui.S.guild && SB.ui.S.guild.tag }));
@@ -303,12 +337,16 @@ await mob.goto(url);
 await mob.waitForSelector("#create:not([hidden])");
 await mob.waitForTimeout(1200);
 await shot(mob, "30-mobil-erstellung");
+await mob.click('[data-cact="realm"][data-v="hibernia"]');
+await mob.waitForTimeout(400);
 await mob.fill("#heroName", "Pim");
 await mob.click('[data-cact="start"]');
 await mob.waitForSelector("#topbar .me-sub");
 await mob.click('#modal [data-act="closeDialog"]');
 await mob.waitForTimeout(2000);
 await shot(mob, "31-mobil-insel");
+const mobRealm = await mob.evaluate(() => SB.ui.S.realm);
+if (mobRealm !== "hibernia") errors.push("Mobil: Reich " + mobRealm + " statt hibernia");
 await mob.click('#hint [data-act="hintNext"]');
 await mob.waitForTimeout(800);
 await shot(mob, "32-mobil-taverne");

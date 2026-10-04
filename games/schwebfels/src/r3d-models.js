@@ -389,140 +389,153 @@
       for (const s of [-1, 1]) blob(cx + s * 30, eyeY, 30, 20, "#000", 0.85);
       blob(cx, eyeY + 40, 34, 18, "#000", 0.35);
     }
-    // Tattoos
+    // Tattoos: nur im Gesicht, kraeftige Linien mit dunklem Rand, damit sie auch klein gut lesbar sind
     const tc = o.tc || "#2f5fd0";
+    const tcC = new T.Color(tc);
+    const light = tcC.r * 0.3 + tcC.g * 0.59 + tcC.b * 0.11 > 0.55;
+    const edge = light ? "rgba(40,30,30,0.55)" : "rgba(255,255,255,0.0)";
     const paint = (fn) => {
-      for (const [ctx, col] of [[g, tc], o.tglow ? [ge, tc] : null].filter(Boolean)) {
+      // Kontur zuerst (bei hellen Farben), dann Farbe; leuchtende Farben zusaetzlich in die Leuchtkarte,
+      // dunkle Farben schwach, damit die Zeichnung bei Nacht nicht verschwindet
+      const passes = [[g, edge, 1.0, 4], [g, tc, 0.95, 0], [ge, tc, o.tglow ? 1 : 0.22, 0]];
+      for (const [ctx, colr, alpha, extra] of passes) {
+        if (colr === edge && !light) continue;
         ctx.save();
-        ctx.strokeStyle = col;
-        ctx.fillStyle = col;
+        ctx.strokeStyle = colr;
+        ctx.fillStyle = colr;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.globalAlpha = ctx === g ? 0.85 : 1;
-        fn(ctx);
+        ctx.globalAlpha = alpha;
+        fn(ctx, extra);
         ctx.restore();
       }
     };
+    const lw = (x, w, extra) => (x.lineWidth = w + (extra || 0));
     switch (o.tattoo) {
       case "runen":
-        paint((x) => {
-          x.lineWidth = 3;
-          const rune = (px, py, k) => {
+        // Runenreihe ueber der Stirn und senkrechte Runen unter beiden Augen
+        paint((x, ex) => {
+          lw(x, 6, ex);
+          const rune = (px, py, k, sz) => {
+            sz = sz || 13;
             x.beginPath();
-            x.moveTo(px, py - 9);
-            x.lineTo(px, py + 9);
+            x.moveTo(px, py - sz);
+            x.lineTo(px, py + sz);
             if (k % 3 === 0) {
-              x.moveTo(px, py - 9);
-              x.lineTo(px + 6, py - 3);
-              x.lineTo(px, py + 2);
+              x.moveTo(px, py - sz);
+              x.lineTo(px + sz * 0.7, py - sz * 0.3);
+              x.lineTo(px, py + sz * 0.2);
             } else if (k % 3 === 1) {
-              x.moveTo(px - 6, py - 6);
-              x.lineTo(px + 6, py + 2);
+              x.moveTo(px - sz * 0.6, py - sz * 0.6);
+              x.lineTo(px + sz * 0.6, py + sz * 0.2);
             } else {
-              x.moveTo(px, py - 2);
-              x.lineTo(px + 6, py - 8);
-              x.moveTo(px, py - 2);
-              x.lineTo(px - 6, py - 8);
+              x.moveTo(px, py - sz * 0.2);
+              x.lineTo(px + sz * 0.6, py - sz * 0.8);
+              x.moveTo(px, py - sz * 0.2);
+              x.lineTo(px - sz * 0.6, py - sz * 0.8);
             }
             x.stroke();
           };
-          rune(cx, eyeY - 36, 0);
-          rune(cx - 16, eyeY - 30, 1);
-          rune(cx + 16, eyeY - 30, 2);
+          rune(cx - 26, eyeY - 40, 1, 11);
+          rune(cx, eyeY - 44, 0, 13);
+          rune(cx + 26, eyeY - 40, 2, 11);
           for (const s of [-1, 1]) {
-            rune(cx + s * 44, eyeY + 18, s > 0 ? 1 : 2);
-            rune(cx + s * 52, eyeY + 38, 0);
+            rune(cx + s * 30, eyeY + 26, s > 0 ? 0 : 2, 12);
+            rune(cx + s * 50, eyeY + 14, 1, 10);
           }
         });
         break;
       case "knoten":
-        paint((x) => {
-          x.lineWidth = 3;
-          for (const s of [-1, 1]) {
-            const px = cx + s * 46;
-            const py = eyeY + 26;
+        // keltisches Knotenwerk um ein Auge und ueber die Stirn
+        paint((x, ex) => {
+          lw(x, 5, ex);
+          const knot = (px, py, r) => {
             for (let i = 0; i < 3; i++) {
-              const a = (i / 3) * PI * 2;
+              const a = (i / 3) * PI * 2 - PI / 2;
               x.beginPath();
-              x.arc(px + Math.cos(a) * 7, py + Math.sin(a) * 7, 8, 0, PI * 2);
+              x.arc(px + Math.cos(a) * r * 0.75, py + Math.sin(a) * r * 0.75, r, 0, PI * 2);
               x.stroke();
             }
-          }
+          };
+          knot(cx, eyeY - 40, 9);
           x.beginPath();
-          x.arc(cx, eyeY - 34, 8, 0, PI * 2);
+          x.arc(cx + 27, eyeY - 2, 24, 0.95 * PI, 2.45 * PI);
           x.stroke();
-          x.beginPath();
-          x.moveTo(cx - 22, eyeY - 34);
-          x.lineTo(cx + 22, eyeY - 34);
-          x.stroke();
+          knot(cx + 44, eyeY + 26, 8);
+          knot(cx - 46, eyeY + 24, 6);
         });
         break;
       case "kriegsbemalung":
-        paint((x) => {
-          x.globalAlpha *= 0.9;
+        // breiter Balken quer ueber die Augen, Streifen am Kinn
+        paint((x, ex) => {
           x.beginPath();
-          x.moveTo(cx - 70, eyeY - 12);
-          x.quadraticCurveTo(cx, eyeY - 20, cx + 70, eyeY - 12);
-          x.lineTo(cx + 66, eyeY + 12);
-          x.quadraticCurveTo(cx, eyeY + 4, cx - 66, eyeY + 12);
+          x.moveTo(cx - 74, eyeY - 16 - ex);
+          x.quadraticCurveTo(cx, eyeY - 26 - ex, cx + 74, eyeY - 16 - ex);
+          x.lineTo(cx + 70, eyeY + 14 + ex);
+          x.quadraticCurveTo(cx, eyeY + 6 + ex, cx - 70, eyeY + 14 + ex);
           x.closePath();
           x.fill();
-          x.lineWidth = 5;
+          lw(x, 8, ex);
           for (const s of [-1, 0, 1]) {
             x.beginPath();
-            x.moveTo(cx + s * 10, eyeY + 50);
-            x.lineTo(cx + s * 12, eyeY + 76);
+            x.moveTo(cx + s * 13, eyeY + 52);
+            x.lineTo(cx + s * 15, eyeY + 78);
             x.stroke();
           }
         });
         break;
       case "linien":
-        paint((x) => {
-          x.lineWidth = 4;
+        // Stammeslinien: zwei geschwungene Bahnen ueber jede Wange und ein Stirnstrich
+        paint((x, ex) => {
+          lw(x, 5, ex);
           for (const s of [-1, 1]) {
             for (let k = 0; k < 2; k++) {
               x.beginPath();
-              x.moveTo(cx + s * (24 + k * 9), eyeY - 40);
-              x.quadraticCurveTo(cx + s * (60 + k * 8), eyeY + 6, cx + s * (34 + k * 10), eyeY + 56);
+              x.moveTo(cx + s * (18 + k * 10), eyeY - 44);
+              x.quadraticCurveTo(cx + s * (56 + k * 9), eyeY + 4, cx + s * (32 + k * 10), eyeY + 56);
               x.stroke();
             }
           }
           x.beginPath();
-          x.moveTo(cx, eyeY - 50);
-          x.lineTo(cx, eyeY - 18);
+          x.moveTo(cx, eyeY - 58);
+          x.lineTo(cx, eyeY - 20);
           x.stroke();
         });
         break;
       case "mond":
-        paint((x) => {
+        // grosse Mondsichel auf der Stirn, Punktbogen unter den Augen
+        paint((x, ex) => {
           x.beginPath();
-          x.arc(cx, eyeY - 34, 14, 0.25 * PI, 1.75 * PI, false);
-          x.arc(cx + 6, eyeY - 34, 11, 1.65 * PI, 0.35 * PI, true);
+          x.arc(cx, eyeY - 40, 19 + ex / 2, 0.25 * PI, 1.75 * PI, false);
+          x.arc(cx + 8, eyeY - 40, 15 - ex / 2, 1.65 * PI, 0.35 * PI, true);
           x.closePath();
           x.fill();
           for (const s of [-1, 1]) {
-            x.beginPath();
-            x.arc(cx + s * 40, eyeY + 24, 3, 0, PI * 2);
-            x.arc(cx + s * 48, eyeY + 34, 2.5, 0, PI * 2);
-            x.fill();
+            for (let i = 0; i < 4; i++) {
+              x.beginPath();
+              x.arc(cx + s * (22 + i * 9), eyeY + 18 + i * 3, 4.5 + ex / 2, 0, PI * 2);
+              x.fill();
+            }
           }
         });
         break;
       case "dornen":
-        paint((x) => {
-          x.lineWidth = 3;
+        // Dornenranke von der Stirn ueber das linke Auge bis zur Wange
+        paint((x, ex) => {
+          lw(x, 6, ex);
           x.beginPath();
-          x.moveTo(cx - 10, eyeY - 52);
-          x.bezierCurveTo(cx - 60, eyeY - 30, cx - 20, eyeY + 20, cx - 58, eyeY + 60);
+          x.moveTo(cx + 8, eyeY - 56);
+          x.bezierCurveTo(cx - 50, eyeY - 40, cx - 10, eyeY + 10, cx - 56, eyeY + 50);
           x.stroke();
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             const t = i / 6;
-            const px = cx - 10 - 40 * Math.sin(t * PI) - t * 30;
-            const py = eyeY - 50 + t * 106;
+            const px = cx + 8 - 64 * t + Math.sin(t * PI) * -14;
+            const py = eyeY - 56 + t * 106;
             x.beginPath();
-            x.moveTo(px, py);
-            x.lineTo(px + (i % 2 ? 9 : -9), py - 5);
-            x.lineTo(px + (i % 2 ? 3 : -3), py + 3);
+            x.moveTo(px - 4, py + 2);
+            x.lineTo(px + (i % 2 ? 14 : -14), py - 7);
+            x.lineTo(px + 4, py + 4);
+            x.closePath();
             x.fill();
           }
         });
@@ -630,7 +643,7 @@
     t.colorSpace = T.SRGBColorSpace;
     t.anisotropy = 4;
     let em = null;
-    if (o.eyeGlow || o.tglow || o.undead) {
+    if (o.eyeGlow || o.tglow || o.undead || (o.tattoo && o.tattoo !== "keine")) {
       em = new T.CanvasTexture(e);
       em.colorSpace = T.SRGBColorSpace;
     }
@@ -641,77 +654,6 @@
       m.emissiveIntensity = 1;
     }
     return (FACE[key] = m);
-  }
-
-  // Arm-Tattoo: Haut mit umlaufenden Mustern (Kapsel-UV: u rundherum, v entlang)
-  const ARMT = {};
-  function armTex(skin, tattoo, tc, tglow) {
-    const key = skin + "|" + tattoo + "|" + tc + "|" + (tglow ? 1 : 0);
-    if (ARMT[key]) return ARMT[key];
-    const W = 256;
-    const H = 128;
-    const c = canvas(W, H);
-    const g = c.getContext("2d");
-    const e = canvas(W, H);
-    const ge = e.getContext("2d");
-    ge.fillStyle = "#000";
-    ge.fillRect(0, 0, W, H);
-    const base = new T.Color(skin);
-    const gr = g.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, "#" + base.clone().multiplyScalar(1.05).getHexString());
-    gr.addColorStop(1, "#" + base.clone().multiplyScalar(0.8).getHexString());
-    g.fillStyle = gr;
-    g.fillRect(0, 0, W, H);
-    if (tattoo && tattoo !== "keine") {
-      for (const x of tglow ? [g, ge] : [g]) {
-        x.save();
-        x.strokeStyle = tc;
-        x.fillStyle = tc;
-        x.lineWidth = 4;
-        x.globalAlpha = x === g ? 0.85 : 1;
-        // zwei Baender mit Muster, das sich um den Arm zieht
-        for (const by of [38, 70]) {
-          x.beginPath();
-          x.moveTo(0, by - 9);
-          x.lineTo(W, by - 9);
-          x.moveTo(0, by + 9);
-          x.lineTo(W, by + 9);
-          x.stroke();
-          for (let i = 0; i < 8; i++) {
-            const px = i * 32 + 16;
-            x.beginPath();
-            if (tattoo === "runen") {
-              x.moveTo(px, by - 6);
-              x.lineTo(px, by + 6);
-              x.lineTo(px + 6, by);
-            } else if (tattoo === "knoten") {
-              x.arc(px, by, 5, 0, PI * 2);
-            } else if (tattoo === "dornen") {
-              x.moveTo(px - 8, by + 6);
-              x.lineTo(px, by - 6);
-              x.lineTo(px + 8, by + 6);
-            } else if (tattoo === "mond") {
-              x.arc(px, by, 5, 0.3 * PI, 1.7 * PI);
-            } else {
-              x.moveTo(px - 10, by);
-              x.quadraticCurveTo(px, by - 8, px + 10, by);
-            }
-            x.stroke();
-          }
-        }
-        x.restore();
-      }
-    }
-    const t = new T.CanvasTexture(c);
-    t.colorSpace = T.SRGBColorSpace;
-    const m = new T.MeshPhongMaterial({ map: t, specular: new T.Color("#2a2622"), shininess: 14 });
-    if (tglow && tattoo && tattoo !== "keine") {
-      const em = new T.CanvasTexture(e);
-      em.colorSpace = T.SRGBColorSpace;
-      m.emissive = new T.Color("#ffffff");
-      m.emissiveMap = em;
-    }
-    return (ARMT[key] = m);
   }
 
   // Wappen fuer Schilde und Waffenroecke
@@ -1356,7 +1298,7 @@
 
     /* Arme: Schulter, Ellbogen, Hand */
     const bareArms = mat === "leder" && !(gear.helm && false);
-    const armSkin = bareArms ? armTex(look.skin, look.tattoo, tcol.c, !!tcol.glow) : null;
+    const armSkin = bareArms ? skinM : null;
     const sleeveM = arch === "krieger" ? pmat("cloth", pantsC) : arch === "magier" ? pmat("cloth", armorC || realmCloth) : pmat("leather", shirtC);
     const handM = gear.handschuhe ? (arch === "krieger" ? pmat("metal", shade(gear.handschuhe.tint || armorC || RM.metal, 1)) : pmat("leather", gear.handschuhe.tint || "#4a3424")) : skinM;
     const upL = 0.3 * h;
@@ -1457,6 +1399,7 @@
     model.dual = !!dual;
     model.ranged = !!(wpn && SB.data.BASES[wpn.base] && SB.data.BASES[wpn.base].ranged);
     model.weaponBase = wpn ? wpn.base : null;
+    model.hipH = hipY;
     model.height = (hipY + shY + 0.45) * scale;
     model.headY = (hipY + shY + 0.21) * scale;
     model.projColor = arch === "magier" ? (realm === "albion" ? "#ffd27a" : realm === "midgard" ? "#9fd8ff" : "#7fffb0") : arch === "jaeger" ? "#e9d8a6" : "#ffd25a";
@@ -1863,6 +1806,42 @@
           shR = [-sw * 0.5 + s.shR[0] * 0.5, s.shR[1]];
         }
         y = -0.03 + Math.abs(Math.cos(t * 9)) * 0.04;
+        break;
+      }
+      case "sit":
+      case "drink": {
+        // Sitzen auf einer Bank; beim Trinken hebt die rechte Hand den Krug zum Mund
+        const seat = (m.hipH || 0.95) - 0.5;
+        y = -seat + br * 0.01;
+        hipL = -1.45;
+        hipR = -1.45;
+        knL = 1.45;
+        knR = 1.45;
+        lean = 0.05 + Math.sin(t * 0.7) * 0.04;
+        shL = [-0.5, 0.15];
+        elL = -0.9;
+        if (name === "drink") {
+          const c = (t + (m.drinkPh || 0)) % 7;
+          const k = c < 1.8 ? bell(c / 1.8) : 0;
+          shR = [-0.6 - 1.3 * k, -0.25 + 0.15 * k];
+          elR = -1.0 - 1.0 * k;
+          headX = -0.35 * k;
+          lean = 0.05 - 0.15 * k;
+        } else {
+          shR = [-0.5, -0.15];
+          elR = -0.9;
+        }
+        break;
+      }
+      case "hammer": {
+        // Schmied: ruhiges Schlagen auf den Amboss
+        const c = (t * 1.1) % 1;
+        const up = c < 0.6 ? ease(c / 0.6) : 1 - ease((c - 0.6) / 0.4);
+        shR = [-0.6 - 1.9 * up, -0.2];
+        elR = -1.2 + 0.7 * up;
+        shL = [-0.8, 0.3];
+        elL = -1.2;
+        lean = 0.25 - 0.1 * up;
         break;
       }
       case "defeat": {

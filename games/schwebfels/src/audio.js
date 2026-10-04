@@ -1,5 +1,8 @@
 /* Helden von Schwebfels - Klangeffekte und Musik, live mit WebAudio erzeugt (keine fremden Aufnahmen).
-   Musik je Ort: Insel bei Tag und bei Nacht, Taverne, Kampf, Tiefe (Dungeon), Heim, Chronik. */
+   Musik je Ort: Insel bei Tag und bei Nacht, Taverne, Kampf, Tiefe (Dungeon), Heim, Chronik.
+   Jedes Reich klingt anders: Albion hoefisch (Laute, Schalmei, Trommel im Dreiertakt),
+   Midgard duester nordisch (Bordun, Fidel, Kriegstrommeln, Horn, tiefer Chor),
+   Hibernia keltisch (Harfe, Flöte mit Verzierungen, Rahmentrommel im Jig). */
 (function () {
   "use strict";
   const SB = (globalThis.SB = globalThis.SB || {});
@@ -298,6 +301,100 @@
     }
   }
 
+  // Weitere Instrumente fuer die Reichsmusik
+  function vib(o, t, dur, rate, depth) {
+    const c = A.ctx;
+    const lfo = c.createOscillator();
+    lfo.frequency.value = rate;
+    const lg = c.createGain();
+    lg.gain.setValueAtTime(0, t);
+    lg.gain.linearRampToValueAtTime(depth, t + Math.min(0.3, dur * 0.5));
+    lfo.connect(lg);
+    lg.connect(o.detune);
+    lfo.start(t);
+    lfo.stop(t + dur + 0.05);
+  }
+  function voice(n, t, dur, vol, o) {
+    // gemeinsamer Baustein: Oszillator, Filter, Huellkurve
+    const c = A.ctx;
+    const osc = c.createOscillator();
+    osc.type = o.type || "sawtooth";
+    osc.frequency.value = hz(n);
+    if (o.vib) vib(osc, t, dur, o.vib[0], o.vib[1]);
+    const f = c.createBiquadFilter();
+    f.type = o.filter || "lowpass";
+    f.frequency.value = o.freq || 1500;
+    if (o.q) f.Q.value = o.q;
+    const g = c.createGain();
+    const at = o.attack || 0.02;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + at);
+    g.gain.setValueAtTime(vol, t + Math.max(at, dur * (o.hold || 0.7)));
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    osc.connect(f);
+    f.connect(g);
+    g.connect(musicBus);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+  const shawm = (n, t, dur, vol) => voice(n, t, dur, vol, { type: "sawtooth", filter: "bandpass", freq: hz(n) * 2.2, q: 1.4, attack: 0.04, vib: [5.5, 8] });
+  const fiddle = (n, t, dur, vol) => {
+    voice(n, t, dur, vol, { type: "sawtooth", freq: 1900, attack: 0.14, hold: 0.6, vib: [5, 14] });
+    voice(n, t, dur, vol * 0.4, { type: "sawtooth", freq: 900, attack: 0.2, hold: 0.6 });
+  };
+  const horn = (n, t, dur, vol) => voice(n, t, dur, vol, { type: "sawtooth", freq: 650, attack: 0.25, hold: 0.75, vib: [4, 5] });
+  const choir = (n, t, dur, vol) => {
+    voice(n, t, dur, vol, { type: "sawtooth", filter: "bandpass", freq: 520, q: 5, attack: 0.5, hold: 0.6 });
+    voice(n, t, dur, vol * 0.7, { type: "sawtooth", filter: "bandpass", freq: 880, q: 5, attack: 0.6, hold: 0.6 });
+  };
+  function harp(n, t, dur, vol) {
+    const c = A.ctx;
+    const f = c.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.setValueAtTime(4200, t);
+    f.frequency.exponentialRampToValueAtTime(900, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    for (const [type, mul, v] of [["triangle", 1, 1], ["sine", 2, 0.35]]) {
+      const o = c.createOscillator();
+      o.type = type;
+      o.frequency.value = hz(n) * mul;
+      const og = c.createGain();
+      og.gain.value = v;
+      o.connect(og);
+      og.connect(f);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+    f.connect(g);
+    g.connect(musicBus);
+  }
+  function whistle(n, t, dur, vol, orn) {
+    // Blechfloete: Verzierung (kurzer Vorschlag) und etwas Atem
+    if (orn) {
+      voice(n + 2, t, 0.07, vol * 0.8, { type: "sine", freq: 6000, attack: 0.01, hold: 0.5 });
+      t += 0.06;
+      dur -= 0.06;
+    }
+    voice(n, t, dur, vol, { type: "sine", freq: 6000, attack: 0.03, hold: 0.75, vib: [6, 10] });
+    noise(Math.min(0.3, dur), vol * 0.25, "bandpass", hz(n), 0, null, musicBus, t, 8);
+  }
+  function clap(t, vol) {
+    noise(0.07, vol, "bandpass", 1600, 0, null, musicBus, t, 1.2);
+    noise(0.05, vol * 0.6, "bandpass", 1300, 0, null, musicBus, t + 0.012, 1.2);
+  }
+  function snare(t, vol) {
+    noise(0.12, vol, "highpass", 1800, 0, null, musicBus, t);
+    tone(220, 0.08, "triangle", vol * 0.5, 0, 160, musicBus, t);
+  }
+  // Melodie schrittweise durch eine Tonleiter fuehren
+  function walk(song, r, span) {
+    song.pos = Math.max(0, Math.min(song.scale.length - 1, (song.pos == null ? 3 : song.pos) + Math.floor(r() * (span || 3)) - Math.floor((span || 3) / 2)));
+    return song.scale[song.pos];
+  }
+
   // Tonleitern und Akkorde als MIDI-Noten
   const SONGS = {
     tag: {
@@ -405,7 +502,179 @@
       },
     },
   };
+
+  /* ---------- Albion: hoefisch, Dur und Mixolydisch, Dreiertakt ---------- */
+  SONGS["tag:albion"] = {
+    bpm: 96, beats: 3,
+    chords: [[50, 54, 57], [48, 52, 55], [43, 47, 50], [45, 49, 52], [50, 54, 57], [48, 52, 55], [43, 47, 50], [50, 54, 57]],
+    scale: [62, 64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 8];
+      bass(ch[0] - 12, t, sp * 2.6, 0.11);
+      [0, 2, 1].forEach((k, i) => pluck(ch[k] + 12, t + i * sp, sp * 1.1, 0.055));
+      pluck(ch[2] + 24, t + sp * 1.5, sp * 0.8, 0.035);
+      drum("frame", t, 0.28);
+      drum("hat", t + sp * 2, 0.04);
+      if (b % 8 < 6) {
+        shawm(walk(this, r) + 12, t, sp * 1.4, 0.035);
+        shawm(walk(this, r) + 12, t + sp * 1.5, sp * 1.4, 0.035);
+      } else shawm(ch[0] + 24, t, sp * 2.8, 0.035);
+    },
+  };
+  SONGS["nacht:albion"] = {
+    bpm: 58, beats: 4,
+    chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 48, 52]],
+    scale: [62, 64, 65, 67, 69, 70, 72, 74],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch.map((n) => n + 12), t, sp * 4.2, 0.03, 650);
+      bass(ch[0] - 12, t, sp * 4, 0.07);
+      [0, 1, 2, 1].forEach((k, i) => pluck(ch[k] + 12, t + i * sp, sp * 2, 0.045));
+      if (r() < 0.7) flute(walk(this, r) + 12, t + sp, sp * 2.4, 0.035);
+      if (b % 4 === 3) bell(ch[2] + 24, t + sp * 3, 0.03);
+    },
+  };
+  SONGS["kampf:albion"] = {
+    bpm: 132, beats: 4,
+    chords: [[38, 45, 50], [34, 41, 46], [36, 43, 48], [33, 40, 45]],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      for (let i = 0; i < 4; i++) bass(ch[0] + (i === 2 ? 7 : 0), t + i * sp, sp * 0.8, 0.13);
+      drum("kick", t, 0.45);
+      drum("tom", t + sp * 2, 0.35);
+      snare(t + sp, 0.18);
+      snare(t + sp * 3, 0.18);
+      snare(t + sp * 3.5, 0.1);
+      // Fanfare der Ritter
+      if (b % 2 === 0) [0, 1, 2].forEach((k, i) => shawm(ch[k] + 24, t + i * sp * 0.5, sp * 0.5, 0.05));
+      else shawm(ch[2] + 24, t, sp * 2, 0.05);
+      pad(ch.map((n) => n + 24), t, sp * 3.9, 0.025, 1400);
+    },
+  };
+
+  /* ---------- Midgard: duester, Bordun, Aeolisch, schwere Trommeln ---------- */
+  SONGS["tag:midgard"] = {
+    bpm: 66, beats: 4,
+    chords: [[38, 45], [38, 45], [36, 43], [41, 48]],
+    scale: [62, 64, 65, 67, 69, 70, 72, 74],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch, t, sp * 4.2, 0.05, 420);
+      drum("boom", t, 0.22);
+      drum("tom", t + sp * 2, 0.22);
+      if (b % 2 === 1) drum("tom", t + sp * 3.5, 0.15);
+      fiddle(walk(this, r) , t, sp * 1.9, 0.04);
+      fiddle(walk(this, r), t + sp * 2, sp * 1.9, 0.04);
+      if (b % 8 === 7) {
+        horn(45, t, sp * 1.5, 0.06);
+        horn(50, t + sp * 1.5, sp * 2.5, 0.06);
+      }
+    },
+  };
+  SONGS["nacht:midgard"] = {
+    bpm: 48, beats: 4,
+    chords: [[38, 45], [36, 43], [34, 41], [33, 40]],
+    scale: [57, 60, 62, 64, 65, 67, 69],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch, t, sp * 4.3, 0.045, 300);
+      choir(ch[1] + 12, t, sp * 4, 0.035);
+      noise(sp * 4, 0.03, "bandpass", 500, 0, 1600, musicBus, t, 2);
+      if (r() < 0.6) fiddle(this.scale[Math.floor(r() * this.scale.length)] + 12, t + sp, sp * 2.6, 0.03);
+      if (b % 4 === 0) drum("boom", t, 0.2);
+    },
+  };
+  SONGS["taverne:midgard"] = {
+    bpm: 112, beats: 4,
+    chords: [[50, 57], [48, 55], [46, 53], [45, 52]],
+    scale: [62, 64, 65, 67, 69, 71, 72, 74],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch, t, sp * 4.1, 0.035, 600);
+      for (let i = 0; i < 4; i++) drum("kick", t + i * sp, 0.4);
+      clap(t + sp, 0.22);
+      clap(t + sp * 3, 0.22);
+      for (let i = 0; i < 4; i++) fiddle(walk(this, r) + 12, t + i * sp, sp * 0.95, 0.035);
+      if (b % 4 === 3) horn(ch[0], t + sp * 2, sp * 2, 0.05);
+    },
+  };
+  SONGS["kampf:midgard"] = {
+    bpm: 120, beats: 4,
+    chords: [[38, 45, 50], [36, 43, 48], [34, 41, 46], [33, 40, 45]],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      drum("boom", t, 0.3);
+      for (let i = 0; i < 8; i++) drum(i % 2 ? "tom" : "kick", t + i * sp * 0.5, i % 4 === 0 ? 0.45 : 0.25);
+      for (let i = 0; i < 4; i++) bass(ch[0], t + i * sp, sp * 0.9, 0.12);
+      horn(ch[1], t, sp * 3.8, 0.05);
+      horn(ch[2], t, sp * 3.8, 0.04);
+      if (b % 2 === 1) {
+        clap(t + sp * 3, 0.3);
+        noise(0.18, 0.12, "bandpass", 700, 0, 400, musicBus, t + sp * 3, 3);
+      }
+      if (b % 4 === 3) choir(ch[2] + 12, t, sp * 4, 0.04);
+    },
+  };
+
+  /* ---------- Hibernia: keltisch, Dorisch, Jig im Sechsachteltakt ---------- */
+  SONGS["tag:hibernia"] = {
+    bpm: 120, beats: 6,
+    chords: [[50, 54, 57], [48, 52, 55], [50, 54, 57], [45, 49, 52]],
+    scale: [62, 64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      bass(ch[0] - 12, t, sp * 2.8, 0.09);
+      bass(ch[0] - 12, t + sp * 3, sp * 2.8, 0.08);
+      [0, 1, 2, 2, 1, 0].forEach((k, i) => harp(ch[k] + 12 + (i > 2 ? 12 : 0), t + i * sp, sp * 2.2, 0.05));
+      drum("frame", t, 0.32);
+      drum("frame", t + sp * 3, 0.26);
+      drum("hat", t + sp * 2, 0.03);
+      drum("hat", t + sp * 5, 0.03);
+      for (let i = 0; i < 6; i += r() < 0.3 ? 2 : 1) whistle(walk(this, r) + 12, t + i * sp, sp * 0.95, 0.03, r() < 0.2);
+    },
+  };
+  SONGS["nacht:hibernia"] = {
+    bpm: 54, beats: 4,
+    chords: [[52, 55, 59], [50, 54, 57], [48, 52, 55], [50, 54, 57]],
+    scale: [64, 66, 67, 69, 71, 73, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch.map((n) => n + 12), t, sp * 4.2, 0.025, 700);
+      [0, 1, 2, 1, 2, 0, 1, 2].forEach((k, i) => harp(ch[k] + 12 + (i > 3 ? 12 : 0), t + i * sp * 0.5, sp * 2.5, 0.04));
+      if (r() < 0.6) whistle(walk(this, r) + 12, t + sp * 2, sp * 1.8, 0.025, r() < 0.4);
+      for (let i = 0; i < 3; i++) if (r() < 0.4) bell(this.scale[Math.floor(r() * this.scale.length)] + 12, t + r() * sp * 4, 0.025);
+    },
+  };
+  SONGS["taverne:hibernia"] = {
+    bpm: 140, beats: 4,
+    chords: [[50, 54, 57], [48, 52, 55], [47, 50, 54], [45, 49, 52]],
+    scale: [62, 64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      bass(ch[0] - 12, t, sp * 1.8, 0.1);
+      bass(ch[2] - 12, t + sp * 2, sp * 1.8, 0.09);
+      for (let i = 0; i < 4; i++) pluck(ch[i % 3] + 12, t + i * sp + sp * 0.5, sp * 0.5, 0.035);
+      for (let i = 0; i < 8; i++) drum(i % 4 === 0 ? "frame" : "hat", t + i * sp * 0.5, i % 4 === 0 ? 0.3 : 0.035);
+      for (let i = 0; i < 8; i++) whistle(walk(this, r) + 12, t + i * sp * 0.5, sp * 0.48, 0.028, i === 0 && r() < 0.5);
+    },
+  };
+  SONGS["kampf:hibernia"] = {
+    bpm: 150, beats: 6,
+    chords: [[40, 47, 52], [38, 45, 50], [36, 43, 48], [38, 45, 50]],
+    scale: [64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      for (let i = 0; i < 6; i++) drum(i === 0 || i === 3 ? "frame" : "hat", t + i * sp, i === 0 || i === 3 ? 0.42 : 0.06);
+      drum("kick", t, 0.4);
+      bass(ch[0], t, sp * 2.8, 0.13);
+      bass(ch[0], t + sp * 3, sp * 2.8, 0.12);
+      [0, 1, 2, 0, 1, 2].forEach((k, i) => harp(ch[k] + 24, t + i * sp, sp, 0.04));
+      if (b % 2 === 0) for (let i = 0; i < 6; i++) whistle(walk(this, r) + 12, t + i * sp, sp * 0.9, 0.03, false);
+      else fiddle(ch[2] + 24, t, sp * 5.5, 0.035);
+    },
+  };
   A.SONGS = Object.keys(SONGS);
+  A._songDefs = SONGS;
 
   let sched = null;
   let cur = null;
@@ -442,13 +711,14 @@
     g.setValueAtTime(g.value, c.currentTime);
     g.linearRampToValueAtTime(0.0001, c.currentTime + 0.6);
     setTimeout(() => {
-      cur = A.musicOn && SONGS[context] ? context : null;
+      const key = SONGS[context] ? context : String(context).split(":")[0];
+      cur = A.musicOn && SONGS[key] ? key : null;
       barNo = 0;
       nextBar = c.currentTime + 0.1;
       if (cur) {
         g.cancelScheduledValues(c.currentTime);
         g.setValueAtTime(0.0001, c.currentTime);
-        g.linearRampToValueAtTime(cur === "kampf" ? 0.75 : 0.85, c.currentTime + 1.5);
+        g.linearRampToValueAtTime(cur.indexOf("kampf") === 0 ? 0.75 : 0.85, c.currentTime + 1.5);
       }
     }, 650);
   };

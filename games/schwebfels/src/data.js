@@ -15,22 +15,22 @@
   };
 
   const LORE =
-    "Vor tausend Jahren zerbrach der Weltstein. Seine Splitter tragen bis heute drei Reiche durch das Nebelmeer: das ritterliche Albion, das frostige Midgard und das verwunschene Hibernia. Dazwischen schwebt Schwebfels, die Freistatt, in der jeder Krieg ruhen muss. Doch die Splitter werden schwächer, und aus der Tiefe darunter kriecht etwas herauf.";
+    "Vor tausend Jahren zerbrach der Weltstein. Seine Splitter tragen bis heute drei Reiche durch das Nebelmeer, und die Welt der schwebenden Inseln heißt seitdem Schwebfels. Jedes Reich hat seine Heimatinsel: das ritterliche Albion die Burginsel Kreidenfels, das frostige Midgard das Schneeland Hrimholm, das verwunschene Hibernia den Feenhain Glenfeyn. Nur im Ring der Reiche treffen sie offen aufeinander. Doch die Splitter werden schwächer, und aus der Tiefe darunter kriecht etwas herauf.";
 
   const REALMS = {
     albion: {
       name: "Albion", color: "#b8322e", dark: "#5a1414", accent: "#e8c35a", metal: "#c9ccd2", trim: "#d9a441",
-      motto: "Durch Eid und Eisen",
+      motto: "Durch Eid und Eisen", isle: "Kreidenfels",
       desc: "Das Königreich der Kreideklippen. Ritterorden, Klöster und alte Steinkreise, unter denen ein König schläft.",
     },
     midgard: {
       name: "Midgard", color: "#2f5fa8", dark: "#14284a", accent: "#cfe3ff", metal: "#aab6c4", trim: "#9fc3e8",
-      motto: "Kälte formt Helden",
+      motto: "Kälte formt Helden", isle: "Hrimholm",
       desc: "Die Frostlande des Nordens. Langhäuser, Runensteine und Götter, die seit drei Wintern schweigen.",
     },
     hibernia: {
       name: "Hibernia", color: "#2f8f4f", dark: "#123a22", accent: "#9fffc8", metal: "#b9c4a8", trim: "#c9b066",
-      motto: "Der Hain vergisst nicht",
+      motto: "Der Hain vergisst nicht", isle: "Glenfeyn",
       desc: "Das Nebelland im Westen. Uralte Wälder, Feenhügel und Hügelgräber, in denen das Alte Volk schläft.",
     },
   };
@@ -277,7 +277,7 @@
   /* Reichsgeschichte: fuenf Hauptkapitel je Reich */
   const REALM_STORY = {
     albion: [
-      { lv: 1, t: "Der Eid am Kreidekreis", x: "Albion schickt dich nach Schwebfels, um den Waffenstillstand zu bewachen. Kaum betrittst du die Freistatt, kriechen Grabkriecher aus dem Nebel und fallen über die Pilger her. Zeig der Insel, was ein Eid Albions wert ist.", foes: [{ mon: "grabkriecher" }, { mon: "grabkriecher" }] },
+      { lv: 1, t: "Der Eid am Kreidekreis", x: "Albion schickt dich nach Kreidenfels, um die Pilgerwege zu bewachen. Kaum betrittst du die Insel, kriechen Grabkriecher aus dem Nebel und fallen über die Pilger her. Zeig der Insel, was ein Eid Albions wert ist.", foes: [{ mon: "grabkriecher" }, { mon: "grabkriecher" }] },
       { lv: 6, t: "Die Glocke ohne Kirche", x: "Nachts läutet über Kreidefurt eine Glocke, die es nicht mehr gibt. Wer ihr folgt, kehrt nicht zurück. Der Abt bittet dich, dem Geläut zu folgen, bevor er es selbst tut.", foes: [{ mon: "hohlkultist" }, { mon: "knochenlaeufer" }, { name: "Der Glöckner ohne Gesicht", arch: "schemen", color: "#cfd8e6", accent: "#ffcf5a", boss: true }] },
       { lv: 12, t: "Das Schwert im Moor", x: "Ein Bauer fand im Eschenmoor ein Schwert, das leuchtet, sobald Midgarder in der Nähe sind. Jetzt wollen es alle haben. Leider will es auch das Moor zurück.", foes: [{ mon: "faulschlund" }, { mon: "sumpftroll" }, { name: "Moorkönig Gramwasser", arch: "troll", color: "#3a4a2a", accent: "#d9f27a", boss: true }] },
       { lv: 18, t: "Der schlafende König", x: "Unter dem Steinkreis schläft ein König, der wiederkehren soll, wenn Albion ihn braucht. Jemand versucht, ihn vor der Zeit zu wecken, mit sehr verbotenen Mitteln.", foes: [{ mon: "blutkultist" }, { mon: "blutkultist" }, { name: "Morgauth die Weckerin", arch: "kultist", color: "#3a1422", accent: "#ff3a5a", boss: true }] },
@@ -391,48 +391,80 @@
   };
 
   const MONSTERS = [
-    { id: "grabkriecher", name: "Grabkriecher", arch: "ghul", color: "#9a9a7a", accent: "#7fffb0", lv: [1, 7] },
-    { id: "moorschlund", name: "Moorschlund", arch: "schlund", color: "#5a6a3a", accent: "#d9f27a", lv: [1, 6] },
-    { id: "nachtgoblin", name: "Nachtgoblin", arch: "goblin", color: "#6a8a4a", accent: "#ffcf5a", lv: [1, 7] },
-    { id: "grauwolf", name: "Grauwolf", arch: "wolf", color: "#7a7470", accent: "#ffcf5a", lv: [2, 8] },
-    { id: "sporling", name: "Sporling", arch: "pilz", color: "#a8643a", accent: "#e6ff5a", lv: [1, 7] },
-    { id: "klippenkrebs", name: "Klippenkrebs", arch: "krebs", color: "#8a5a3a", accent: "#ff7a3d", lv: [1, 6] },
-    { id: "hohlkultist", name: "Hohlkultist", arch: "kultist", color: "#3a3346", accent: "#c47bff", lv: [6, 15] },
-    { id: "aasflatterer", name: "Aasflatterer", arch: "fledermaus", color: "#3a2f3a", accent: "#ff5a3d", lv: [6, 14] },
-    { id: "netzlauerer", name: "Netzlauerer", arch: "spinne", color: "#4a3a2a", accent: "#ff3a3a", lv: [7, 15] },
-    { id: "lehmgolem", name: "Lehmgolem", arch: "golem", color: "#8a6a4a", accent: "#ffb13b", lv: [8, 16] },
-    { id: "knochenlaeufer", name: "Knochenläufer", arch: "ghul", color: "#d9cfb8", accent: "#4fa9ff", lv: [6, 15] },
-    { id: "faulschlund", name: "Faulschlund", arch: "schlund", color: "#4a3a4a", accent: "#c47bff", lv: [7, 16] },
-    { id: "sumpftroll", name: "Sumpftroll", arch: "troll", color: "#4f6a4a", accent: "#ffcf5a", lv: [14, 25] },
-    { id: "grabritter", name: "Grabritter", arch: "todesritter", color: "#4a4f5a", accent: "#7fffb0", lv: [15, 25] },
-    { id: "sporenschrecken", name: "Sporenschrecken", arch: "pilz", color: "#6a3f8a", accent: "#d9f27a", lv: [14, 24] },
-    { id: "fahlerschemen", name: "Fahler Schemen", arch: "schemen", color: "#a8b8c8", accent: "#9fe3ff", lv: [15, 26] },
-    { id: "felsgolem", name: "Felsgolem", arch: "golem", color: "#6a6e76", accent: "#59d1ff", lv: [16, 26] },
-    { id: "dornenhirte", name: "Dornenhirte", arch: "baum", color: "#4a3a2a", accent: "#c0392b", lv: [15, 25] },
-    { id: "frostwolf", name: "Frostwolf", arch: "wolf", color: "#c8dcef", accent: "#4fa9ff", lv: [24, 35] },
-    { id: "kristallweberin", name: "Kristallweberin", arch: "spinne", color: "#3f8a96", accent: "#e9fbff", lv: [24, 36] },
-    { id: "knochenfuerst", name: "Knochenfürst", arch: "ghul", color: "#e9e0c8", accent: "#ff3a3a", lv: [25, 36] },
-    { id: "blutkultist", name: "Blutkultist", arch: "kultist", color: "#5a1414", accent: "#ff3a5a", lv: [24, 35] },
-    { id: "donnerkrebs", name: "Donnerkrebs", arch: "krebs", color: "#2f4f8f", accent: "#ffe45a", lv: [26, 36] },
-    { id: "irrlichtschemen", name: "Irrlichtschemen", arch: "schemen", color: "#6fdfa8", accent: "#2a7a5a", lv: [25, 36] },
-    { id: "schwelwurm", name: "Schwelwurm", arch: "drache", color: "#8a2f1f", accent: "#ffcf5a", lv: [34, 48] },
-    { id: "eisengolem", name: "Eisengolem", arch: "golem", color: "#4d5660", accent: "#ff7a3d", lv: [34, 47] },
-    { id: "schattenwolf", name: "Schattenwolf", arch: "wolf", color: "#2a2633", accent: "#c47bff", lv: [35, 48] },
-    { id: "bergtroll", name: "Bergtroll", arch: "troll", color: "#6a7a8a", accent: "#9fe3ff", lv: [34, 48] },
-    { id: "giftmorchel", name: "Giftmorchel", arch: "pilz", color: "#3f6a2a", accent: "#e6ff5a", lv: [34, 47] },
-    { id: "moderhirte", name: "Moderhirte", arch: "baum", color: "#2f2a1f", accent: "#7fffb0", lv: [36, 48] },
-    { id: "sturmdrache", name: "Sturmdrache", arch: "drache", color: "#2f3f8f", accent: "#9fe3ff", lv: [46, 999] },
-    { id: "leerenschemen", name: "Leerenschemen", arch: "schemen", color: "#1f1b2e", accent: "#c47bff", lv: [46, 999] },
-    { id: "obsidiangolem", name: "Obsidiangolem", arch: "golem", color: "#1f1c26", accent: "#ff5a8a", lv: [46, 999] },
-    { id: "leerenspinne", name: "Leerenspinne", arch: "spinne", color: "#1a1626", accent: "#c47bff", lv: [46, 999] },
-    { id: "todesritter", name: "Todesritter", arch: "todesritter", color: "#1f2026", accent: "#ff3a3a", lv: [46, 999] },
-    { id: "urschlund", name: "Urschlund", arch: "schlund", color: "#2a1f3a", accent: "#ff5a3d", lv: [46, 999] },
+    { id: "grabkriecher", name: "Grabkriecher", arch: "ghul", color: "#9a9a7a", accent: "#7fffb0", lv: [1, 7], realms: ["albion"] },
+    { id: "moorschlund", name: "Moorschlund", arch: "schlund", color: "#5a6a3a", accent: "#d9f27a", lv: [1, 6], realms: ["albion", "hibernia"] },
+    { id: "nachtgoblin", name: "Nachtgoblin", arch: "goblin", color: "#6a8a4a", accent: "#ffcf5a", lv: [1, 7], realms: ["albion", "hibernia"] },
+    { id: "grauwolf", name: "Grauwolf", arch: "wolf", color: "#7a7470", accent: "#ffcf5a", lv: [1, 8], realms: ["albion", "midgard"] },
+    { id: "sporling", name: "Sporling", arch: "pilz", color: "#a8643a", accent: "#e6ff5a", lv: [1, 7], realms: ["hibernia"] },
+    { id: "klippenkrebs", name: "Klippenkrebs", arch: "krebs", color: "#8a5a3a", accent: "#ff7a3d", lv: [1, 6], realms: ["albion"] },
+    { id: "hohlkultist", name: "Hohlkultist", arch: "kultist", color: "#3a3346", accent: "#c47bff", lv: [6, 15], realms: ["albion"] },
+    { id: "aasflatterer", name: "Aasflatterer", arch: "fledermaus", color: "#3a2f3a", accent: "#ff5a3d", lv: [6, 14], realms: ["albion", "hibernia"] },
+    { id: "netzlauerer", name: "Netzlauerer", arch: "spinne", color: "#4a3a2a", accent: "#ff3a3a", lv: [7, 15], realms: ["hibernia", "midgard"] },
+    { id: "lehmgolem", name: "Lehmgolem", arch: "golem", color: "#8a6a4a", accent: "#ffb13b", lv: [8, 16], realms: ["albion"] },
+    { id: "knochenlaeufer", name: "Knochenläufer", arch: "ghul", color: "#d9cfb8", accent: "#4fa9ff", lv: [6, 15], realms: ["albion"] },
+    { id: "faulschlund", name: "Faulschlund", arch: "schlund", color: "#4a3a4a", accent: "#c47bff", lv: [7, 16], realms: ["hibernia"] },
+    { id: "sumpftroll", name: "Sumpftroll", arch: "troll", color: "#4f6a4a", accent: "#ffcf5a", lv: [14, 25], realms: ["hibernia", "midgard"] },
+    { id: "grabritter", name: "Grabritter", arch: "todesritter", color: "#4a4f5a", accent: "#7fffb0", lv: [15, 25], realms: ["albion"] },
+    { id: "sporenschrecken", name: "Sporenschrecken", arch: "pilz", color: "#6a3f8a", accent: "#d9f27a", lv: [14, 24], realms: ["hibernia"] },
+    { id: "fahlerschemen", name: "Fahler Schemen", arch: "schemen", color: "#a8b8c8", accent: "#9fe3ff", lv: [15, 26], realms: ["albion", "midgard"] },
+    { id: "felsgolem", name: "Felsgolem", arch: "golem", color: "#6a6e76", accent: "#59d1ff", lv: [16, 26], realms: ["albion", "midgard"] },
+    { id: "dornenhirte", name: "Dornenhirte", arch: "baum", color: "#4a3a2a", accent: "#c0392b", lv: [15, 25], realms: ["hibernia"] },
+    { id: "frostwolf", name: "Frostwolf", arch: "wolf", color: "#c8dcef", accent: "#4fa9ff", lv: [24, 35], realms: ["midgard"] },
+    { id: "kristallweberin", name: "Kristallweberin", arch: "spinne", color: "#3f8a96", accent: "#e9fbff", lv: [24, 36], realms: ["midgard", "hibernia"] },
+    { id: "knochenfuerst", name: "Knochenfürst", arch: "ghul", color: "#e9e0c8", accent: "#ff3a3a", lv: [25, 36], realms: ["albion"] },
+    { id: "blutkultist", name: "Blutkultist", arch: "kultist", color: "#5a1414", accent: "#ff3a5a", lv: [24, 35], realms: ["albion"] },
+    { id: "donnerkrebs", name: "Donnerkrebs", arch: "krebs", color: "#2f4f8f", accent: "#ffe45a", lv: [26, 36], realms: ["midgard", "albion"] },
+    { id: "irrlichtschemen", name: "Irrlichtschemen", arch: "schemen", color: "#6fdfa8", accent: "#2a7a5a", lv: [25, 36], realms: ["hibernia"] },
+    { id: "schwelwurm", name: "Schwelwurm", arch: "drache", color: "#8a2f1f", accent: "#ffcf5a", lv: [34, 48], realms: ["albion"] },
+    { id: "eisengolem", name: "Eisengolem", arch: "golem", color: "#4d5660", accent: "#ff7a3d", lv: [34, 47], realms: ["albion"] },
+    { id: "schattenwolf", name: "Schattenwolf", arch: "wolf", color: "#2a2633", accent: "#c47bff", lv: [35, 48], realms: ["midgard", "hibernia", "albion"] },
+    { id: "bergtroll", name: "Bergtroll", arch: "troll", color: "#6a7a8a", accent: "#9fe3ff", lv: [34, 48], realms: ["midgard"] },
+    { id: "giftmorchel", name: "Giftmorchel", arch: "pilz", color: "#3f6a2a", accent: "#e6ff5a", lv: [34, 47], realms: ["hibernia"] },
+    { id: "moderhirte", name: "Moderhirte", arch: "baum", color: "#2f2a1f", accent: "#7fffb0", lv: [36, 48], realms: ["hibernia"] },
+    { id: "sturmdrache", name: "Sturmdrache", arch: "drache", color: "#2f3f8f", accent: "#9fe3ff", lv: [46, 999], realms: ["midgard", "albion"] },
+    { id: "leerenschemen", name: "Leerenschemen", arch: "schemen", color: "#1f1b2e", accent: "#c47bff", lv: [46, 999], realms: ["albion", "midgard", "hibernia"] },
+    { id: "obsidiangolem", name: "Obsidiangolem", arch: "golem", color: "#1f1c26", accent: "#ff5a8a", lv: [46, 999], realms: ["albion", "midgard"] },
+    { id: "leerenspinne", name: "Leerenspinne", arch: "spinne", color: "#1a1626", accent: "#c47bff", lv: [46, 999], realms: ["hibernia"] },
+    { id: "todesritter", name: "Todesritter", arch: "todesritter", color: "#1f2026", accent: "#ff3a3a", lv: [46, 999], realms: ["albion", "midgard"] },
+    { id: "urschlund", name: "Urschlund", arch: "schlund", color: "#2a1f3a", accent: "#ff5a3d", lv: [46, 999], realms: ["hibernia"] },
+    // Reichstypische Gegner: Midgard (Frost, Trolle, Wiedergaenger), Hibernia (Feenwesen, Moore, Haine)
+    { id: "eiskobold", name: "Eiskobold", arch: "goblin", color: "#8aa8c8", accent: "#9fe3ff", lv: [1, 7], realms: ["midgard"] },
+    { id: "draugling", name: "Draugling", arch: "ghul", color: "#7a8a9a", accent: "#9fe3ff", lv: [1, 7], realms: ["midgard"] },
+    { id: "feenwolf", name: "Feenwolf", arch: "wolf", color: "#4f7a5a", accent: "#9fffc8", lv: [2, 8], realms: ["hibernia"] },
+    { id: "runenhexe", name: "Runenhexe", arch: "kultist", color: "#3a4a6a", accent: "#9fd8ff", lv: [6, 15], realms: ["midgard"] },
+    { id: "reifgolem", name: "Reifgolem", arch: "golem", color: "#a8bcd0", accent: "#9fe3ff", lv: [8, 16], realms: ["midgard"] },
+    { id: "draugrfuerst", name: "Draugrfürst", arch: "ghul", color: "#5a6a7a", accent: "#9fe3ff", lv: [15, 25], realms: ["midgard"] },
+    { id: "nebeldruide", name: "Nebeldruide", arch: "kultist", color: "#2f5a3a", accent: "#9fffc8", lv: [24, 35], realms: ["hibernia"] },
+    { id: "eiswyrm", name: "Eiswyrm", arch: "drache", color: "#dfeaf4", accent: "#4fa9ff", lv: [34, 48], realms: ["midgard"] },
+    { id: "smaragdwyrm", name: "Smaragdwyrm", arch: "drache", color: "#2f8a5a", accent: "#9fffc8", lv: [46, 999], realms: ["hibernia"] },
   ];
+
+  // Nachtwesen fuer das Mondtor: nur bei Nacht, je Reich eigene Geschoepfe
+  const NIGHT_FOES = {
+    albion: [
+      { id: "nacht-weissefrau", name: "Die Weiße Frau", arch: "schemen", color: "#e6ecff", accent: "#9fd8ff" },
+      { id: "nacht-grabwaechter", name: "Grabwächter", arch: "ghul", color: "#8a8a9a", accent: "#e6ecff" },
+      { id: "nacht-mahr", name: "Nachtmahr", arch: "wolf", color: "#1f1c2a", accent: "#e6ecff" },
+      { id: "nacht-hexer", name: "Mondhexer", arch: "kultist", color: "#2a2a4a", accent: "#bfd0ff" },
+    ],
+    midgard: [
+      { id: "nacht-wiedergaenger", name: "Wiedergänger", arch: "ghul", color: "#6a7a8a", accent: "#bfe8ff" },
+      { id: "nacht-mondwolf", name: "Mondwolf", arch: "wolf", color: "#c8d4e4", accent: "#e6ecff" },
+      { id: "nacht-alb", name: "Nachtalb", arch: "goblin", color: "#3a4256", accent: "#bfe8ff" },
+      { id: "nacht-nordlicht", name: "Nordlichtschemen", arch: "schemen", color: "#5fdfb0", accent: "#b48cff" },
+    ],
+    hibernia: [
+      { id: "nacht-irrlicht", name: "Irrlicht", arch: "schemen", color: "#7fffb0", accent: "#e6ff8a" },
+      { id: "nacht-moorhexe", name: "Moorhexe", arch: "kultist", color: "#2a3a2a", accent: "#9fffc8" },
+      { id: "nacht-sternspinne", name: "Sternspinne", arch: "spinne", color: "#2a2a4a", accent: "#e6ecff" },
+      { id: "nacht-mondpilz", name: "Mondmorchel", arch: "pilz", color: "#4a4a8a", accent: "#bfd0ff" },
+    ],
+  };
 
   const DUNGEONS = [
     {
       id: "pilzgrotte", name: "Die Sporengrotte", unlock: 10, base: 10, theme: "#5f9f4a",
-      desc: "Unter der Freistatt wächst etwas. Es riecht nach Waldboden und nach Absicht.",
+      desc: "Unter deiner Heimatinsel wächst etwas. Es riecht nach Waldboden und nach Absicht.",
       bosses: [
         { name: "Sporenwächter Muff", arch: "pilz", color: "#8a6a4a", accent: "#e6ff5a" },
         { name: "Glibbmutter", arch: "schlund", color: "#4a6a3a", accent: "#d9f27a" },
@@ -530,7 +562,7 @@
     { t: "Zerbrechliche Fracht", x: "Eine Kiste mit der Aufschrift „Nicht öffnen, flüstert“ muss nach {o}. Unterwegs wartet {m}. Die Kiste flüstert übrigens wirklich." },
     { t: "Nachtruhe für {o}", x: "Seit Tagen heult {m} in {o} schief und sehr laut den Mond an. Die Anwohner wünschen ein Ende des Konzerts." },
     { t: "Pilze mit Leibwache", x: "{p} braucht Pilze aus {o}. Die Pilze haben allerdings einen Leibwächter: {m}." },
-    { t: "Die Steuerprüfung", x: "Das Steueramt der Freistatt bittet um Mithilfe. {m} haust seit drei Jahren in {o} und hat noch nie Steuern gezahlt." },
+    { t: "Die Steuerprüfung", x: "Das Steueramt der Insel bittet um Mithilfe. {m} haust seit drei Jahren in {o} und hat noch nie Steuern gezahlt." },
     { t: "Ein Brief nach {o}", x: "Ein Liebesbrief muss sicher nach {o}. Der letzte Bote hat gekündigt, nachdem er {m} begegnet ist." },
     { t: "Wegezoll", x: "Auf der Hängebrücke nach {o} verlangt {m} plötzlich Zoll. Niemand weiß, wer das genehmigt hat." },
     { t: "Geräusche im Keller", x: "{p} hört Geräusche im Keller. Der Keller liegt dummerweise in {o}. Und dort unten wohnt jetzt {m}." },
@@ -603,7 +635,7 @@
   const ACHIEVEMENTS = [
     { id: "ersterSieg", name: "Erste Schramme", desc: "Gewinne deinen ersten Kampf.", perlen: 1 },
     { id: "quest10", name: "Fleißige Hände", desc: "Schließe 10 Aufträge ab.", perlen: 2 },
-    { id: "quest50", name: "Die halbe Freistatt kennt dich", desc: "Schließe 50 Aufträge ab.", perlen: 4 },
+    { id: "quest50", name: "Die halbe Insel kennt dich", desc: "Schließe 50 Aufträge ab.", perlen: 4 },
     { id: "quest150", name: "Auftragslegende", desc: "Schließe 150 Aufträge ab.", perlen: 8 },
     { id: "horde", name: "Hordenbrecher", desc: "Gewinne einen seltenen Hordenauftrag.", perlen: 2 },
     { id: "stufe10", name: "Zweistellig", desc: "Erreiche Stufe 10.", perlen: 3 },
@@ -621,6 +653,7 @@
     { id: "kapitel3", name: "Chronist", desc: "Schließe drei Kapitel der Chronik ab.", perlen: 4 },
     { id: "gilde", name: "Gemeinsam stark", desc: "Tritt einer Gilde bei oder gründe eine.", perlen: 2 },
     { id: "heim", name: "Eigene vier Wände", desc: "Baue dein Heim zur Steinkate aus.", perlen: 3 },
+    { id: "mondjaeger", name: "Kind der Nacht", desc: "Gewinne 5 Nachtjagden am Mondtor.", perlen: 4 },
   ];
 
   const WELL_PRIZES = [
@@ -635,7 +668,7 @@
   ];
 
   const NPCS = {
-    ottilie: { name: "Hüterin Ottilie", role: "Wächterin der Freistatt" },
+    ottilie: { name: "Hüterin Ottilie", role: "Wächterin deiner Heimatinsel" },
     hulda: { name: "Hulda Humpenhold", role: "Wirtin der Schiefen Krähe" },
     brumm: { name: "Brumm Eisenbart", role: "Schmied" },
     zinnober: { name: "Madame Zinnober", role: "Händlerin für Kuriositäten" },
@@ -643,6 +676,7 @@
     krawall: { name: "Baronin Krawall", role: "Herrin des Rings der Reiche" },
     hufnagel: { name: "Henrietta Hufnagel", role: "Stallmeisterin" },
     seherin: { name: "Die Seherin Maeve", role: "Hüterin der Chronik" },
+    mondhaendler: { name: "Selene Silberblick", role: "Händlerin, die nur nachts kommt" },
   };
 
   const BUILDINGS = [
@@ -658,12 +692,13 @@
     { id: "gildenhalle", name: "Gildenhalle", short: "Gilde" },
     { id: "brunnen", name: "Wunschbrunnen", short: "Brunnen" },
     { id: "heim", name: "Dein Heim", short: "Heim" },
+    { id: "mondtor", name: "Das Mondtor", short: "Mondtor", npc: "mondhaendler", night: true },
   ];
 
   SB.data = {
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
-    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
+    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
     POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS,
   };
 })();

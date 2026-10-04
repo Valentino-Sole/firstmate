@@ -3,6 +3,7 @@
 Ein eigenständiges Browser-Rollenspiel, das die **Struktur** von Shakes & Fidget (Playa Games) aufgreift, aber eigene Welt, eigene Figuren, eigene Texte, eigene Formeln und eine eigene 3D-Optik hat.
 Es wurden keine Grafiken, Namen oder Texte des Vorbilds übernommen.
 Version 2 ergänzt eine Welt mit drei verfeindeten Reichen, deren Grundidee (drei Reiche mit eigenen Klassen, die gegeneinander kämpfen) an Dark Age of Camelot erinnert; Namen der Reiche stammen aus alter Sage (Albion, Midgard, Hibernia), alle Klassen, Völker, Figuren und Geschichten sind eigene Schöpfungen.
+Version 3 gibt jedem Reich eine eigene Heimatinsel, eigene Musik und eigene Monster. Vorbild für die Stimmung ist, wie die drei Reiche bei Dark Age of Camelot angelegt sind: Albion nach der Artussage (Ritter, Burgen), Midgard nach nordischer Mythologie (Trolle, Riesen, Schnee), Hibernia nach keltischer Sage (Wälder, Magie); Quelle: Wikipedia-Artikel „Dark Age of Camelot“.
 
 ## 1. Wie Shakes & Fidget aufgebaut ist
 
@@ -15,9 +16,17 @@ Kernaussagen, die dort übereinstimmend beschrieben sind:
 - **Arena** und **Ruhmeshalle**, **Gilden** mit eigener Rangliste, **Dungeons** ab Stufe 10, **Stadtwache**, **Reittiere**, ein **Glücksrad** mit täglichem Freidreh.
 - Automatisch ablaufende Kämpfe; Klassen mit festen Eigenschaften.
 
-## 2. Welt von Version 2
+## 2. Welt
 
-Vor tausend Jahren zerbrach der Weltstein. Drei Splitter tragen die Reiche durch das Nebelmeer, dazwischen schwebt **Schwebfels**, die Freistatt, in der jeder Krieg ruhen muss.
+Vor tausend Jahren zerbrach der Weltstein. Seine Splitter tragen drei Reiche durch das Nebelmeer, die Welt der schwebenden Inseln heißt **Schwebfels**. Jeder Held lebt auf der Heimatinsel seines Reiches; nur im Ring der Reiche treffen die Reiche offen aufeinander.
+
+| Heimatinsel | Landschaft | Gebäude | Wetter und Licht | Musik |
+|---|---|---|---|---|
+| **Kreidenfels** (Albion) | Kreideklippen, Wiesen, Eichen, Pappeln, Blumen, Heuballen | Fachwerk, Steintürme mit Zinnen und roten Kegeldächern, Turnierzelte, eine Burg auf eigenem Felsen | warmes Licht, goldene Pollen | höfisch: Laute, Schalmei, Trommel im Dreiertakt |
+| **Hrimholm** (Midgard) | Schnee, Tannen, Birken, Runensteine, Eiskristalle | Langhäuser mit Grassodendach, gekreuzten Giebelbrettern und Drachenköpfen, Schildwände, Palisadenring, ein Frostgipfel mit großer Halle und Ahnenstatue | Schneefall, kaltes Licht, starkes Nordlicht | düster: Bordun, Fidel, Kriegstrommeln, Horn, tiefer Chor |
+| **Glenfeyn** (Hibernia) | sattes Grün, bunte Feenbäume, Riesenpilze, Farne, Blumenwiesen | Rundhäuser mit Moosdach und Feenlaternen, Feenwarte im Baum, Steinkreis-Arena, ein leuchtender Weltenbaum | Blütenblätter, bunte Feenlichter | keltisch: Harfe, Flöte mit Verzierungen, Rahmentrommel im Jig |
+
+Auf der Insel ist Leben: Leute trinken vor der Taverne aus Krügen, ein Spielmann jubelt, im Ring kämpfen zwei Helden vor Zuschauern, der Schmied schlägt auf den Amboss, Passanten gehen ihre Wege. In der Ferne schweben die Inseln der anderen Reiche im Dunst.
 
 | Reich | Motto | Völker | Klassen (Krieger, Schurke, Jäger, Magier) |
 |---|---|---|---|
@@ -32,17 +41,18 @@ Vor tausend Jahren zerbrach der Weltstein. Drei Splitter tragen die Reiche durch
 
 | Vorbild | Schwebfels | Eigene Note |
 |---|---|---|
-| 2D-Comicgrafik | prozedurale **3D-Welt** mit handgemalt wirkenden Texturen | Freistatt-Insel im Nebelmeer mit Steinkreis, Wasserfällen ins Nichts, Glühwürmchen, Himmelswal; **automatischer Tag-Nacht-Wechsel** (20 Minuten, echte Uhrzeit, immer Tag oder immer Nacht) mit Mond, Sternen und Polarlicht |
-| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen |
+| 2D-Comicgrafik | prozedurale **3D-Welt** mit handgemalt wirkenden Texturen | Heimatinsel des eigenen Reiches im Nebelmeer mit Steinkreis, Wasserfällen ins Nichts, Glühwürmchen, Himmelswal; **automatischer Tag-Nacht-Wechsel** (20 Minuten, echte Uhrzeit, immer Tag oder immer Nacht) mit Mond, Sternen und Polarlicht |
+| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; Gegner aus der Tierwelt der eigenen Heimatinsel; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen |
 | Bier gegen Pilze | Nebelmet gegen **Wolkenperlen** | Perlen gibt es nur im Spiel, kein Echtgeld; Perlen werden nie ungefragt ausgegeben |
 | Charakterbild mit Slots | **Charakterbogen** im gleichen Aufbau | Große Erfahrungsleiste mit „noch X EP bis Stufe Y“, in der Kopfleiste immer sichtbar; **Vergleichstabelle** beim Anlegen (Wert für Wert und die eigenen Werte danach) |
-| Aussehen | Haut, Haare, Bart, Augen (auch glühend), **Tätowierungen** in sieben Mustern und Farben (teils leuchtend), Narben, Hörner | Jederzeit kostenlos änderbar |
+| Aussehen | Haut, Haare, Bart, Augen (auch glühend), **Gesichtstätowierungen** in sieben Mustern und Farben (teils leuchtend, kräftig gezeichnet), Narben, Hörner | Jederzeit kostenlos änderbar |
 | Geschichte | **Chronik** im Steinkreis | Je Reich fünf Kapitel, je Klasse drei; Kapitel mit mehreren Gegnern, seltene und epische Belohnungen |
-| Arena und Ruhmeshalle | **Ring der Reiche**, **Halle der Helden** | Gegner nur aus den anderen Reichen; Ranglisten global, je Reich, für Gilden und als **Reichskrieg** (Summe der Ehre je Reich) |
+| Arena und Ruhmeshalle | **Ring der Reiche**, **Halle der Helden** | Vier Herausforderer aus den anderen Reichen, immer passend zur eigenen Stärke (einer leicht, zwei ebenbürtig, einer schwer); echte Mitspieler haben Vorrang, sonst tritt ein Wanderkämpfer gleicher Stufe an. Ranglisten global, je Reich, für Gilden und als **Reichskrieg** (Summe der Ehre je Reich) |
 | Gilden | **Gildenhalle** | Gilden des eigenen Reiches beitreten oder gründen; in claude.ai sehen echte Mitspieler die Gilde |
 | Stadtwache | **Wachturm** | Schichten zu 5 Minuten |
 | Dungeons | **Das Tor zur Tiefe** | 6 Dungeons mit je 8 Bossen |
 | Glücksrad | **Wunschbrunnen** | Freier Wurf mit sichtbarem **Zeitgeber bis Mitternacht**, Perlenwurf nur als eigener Knopf |
+| (kein Gegenstück) | **Mondtor** | Öffnet sich nur bei Nacht: drei Nachtjagden pro Tag gegen zwei Nachtwesen der eigenen Insel (sichere seltene Beute, kein Tatendrang) und die Händlerin Selene mit drei besonderen Stücken |
 | (kein Gegenstück) | **Heim** | Vier Ausbaustufen (Zeltlager bis Turmfeste) und sieben Einrichtungen mit dauerhaften Boni, als begehbare 3D-Ansicht |
 | Album, Erfolge | **Bestiarium**, **Abzeichen** | 20 Abzeichen mit Perlen-Belohnung |
 
@@ -63,11 +73,13 @@ Kämpfe laufen automatisch und abwechselnd ab, höchstens 90 Aktionen; ab der 30
 - `tests/progression.mjs`: simulierter Spieler; alle Grundarten erreichen Stufe 30 nach rund 12 bis 15 Spielstunden reinem Tatendrang, ohne Abwärtsspirale.
 - Hordenaufträge: gemütlich fast immer, ordentlich rund 90 %, halsbrecherisch bewusst schwer (25 bis 50 %) bei 1,5-facher Belohnung.
 - Chronik-Kapitel: auf der Kapitelstufe mit durchschnittlicher Ausrüstung meist 60 bis 100 %.
+- Nachtjagd: mit durchschnittlicher Ausrüstung je nach Klasse und Stufe etwa 55 bis 95 %.
+- Arena: die vier Herausforderer liegen bei etwa 75, 60, 45 und 30 % Siegchance.
 
 ## 6. Technik
 
 - Reines HTML, CSS und JavaScript; `build.mjs` bündelt alles zu einer Datei.
 - 3D mit three.js 0.160 (vom CDN). Figuren, Monster, Gebäude, Waffen und alle Texturen entstehen zur Laufzeit im Code (Canvas-Malerei, Formen, Röhren, Drehkörper). Ohne WebGL schaltet das Spiel auf eine 2D-Ansicht um.
-- Musik und Klänge werden live mit WebAudio erzeugt: eigene Stücke für Insel bei Tag und Nacht, Taverne, Kampf, Dungeon, Heim und Chronik.
+- Musik und Klänge werden live mit WebAudio erzeugt: eigene Stücke für Insel bei Tag und Nacht, Taverne, Kampf, Dungeon, Heim und Chronik; Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders.
 - Speichern im Browser (localStorage) und als Spielstand-Code; in claude.ai zusätzlich privat im Konto, mit öffentlichem Heldenprofil für Arena und Ranglisten und öffentlichen Gildenprofilen.
 - Spielstände aus Version 1 werden übernommen; beim ersten Start wählt der Held sein Reich, Stufe, Gold, Ausrüstung und Erfolge bleiben.

@@ -357,3 +357,87 @@ test("Alte Spielstaende (Version 1) werden uebernommen und duerfen das Reich wae
   assert.ok(Math.abs(S.base.kraft - kraftBefore) <= 3);
 });
 const D_REALM = (SB, race) => SB.data.RACES[race].realm;
+
+test("Arena: vier Herausforderer, Staerke passend gestaffelt, Auswahl bleibt bis zum Kampf", () => {
+  for (const cls of ["schildritter", "runenwirker", "schattentaenzer"]) {
+    const { E, S, now, advance } = fresh(cls);
+    S.level = 12;
+    const r1 = E.arenaRivals(S, now());
+    assert.equal(r1.length, 4);
+    assert.ok(r1.every((r) => r.realm !== S.realm));
+    assert.ok(r1.every((r) => Math.abs(r.level - S.level) <= 3), "nur Gegner nahe der eigenen Stufe");
+    const chances = r1.map((r) => r.chance);
+    assert.ok(Math.max(...chances) >= 0.55, "mindestens ein leichterer Gegner");
+    assert.ok(Math.min(...chances) <= 0.5, "mindestens ein schwerer Gegner");
+    advance(60 * 1000);
+    const r2 = E.arenaRivals(S, now());
+    assert.deepEqual(r2.map((r) => r.id), r1.map((r) => r.id), "Auswahl bleibt stabil");
+    const res = E.arenaFight(S, r2[r2.length - 1], now());
+    assert.equal(res.ok, true);
+    E.resolveArena(S, res.fight, now());
+    assert.equal(S.arena.rivals, null, "nach dem Kampf neue Auswahl");
+  }
+});
+
+test("Tag und Nacht: Modi, Wechselzeit, Mondtor nur nachts", () => {
+  const { E, S, now, advance } = fresh();
+  assert.equal(E.isNight("tag", now()), false);
+  assert.equal(E.isNight("nacht", now()), true);
+  assert.equal(E.nightChangeIn("tag", now()), Infinity);
+  const dt = E.nightChangeIn("zyklus", now());
+  assert.ok(dt > 0 && dt <= E.C.DAY_CYCLE_MS);
+  const before = E.isNight("zyklus", now());
+  advance(dt + 1000);
+  assert.notEqual(E.isNight("zyklus", now()), before);
+  assert.equal(E.nightHunt(S, false, now()).ok, false, "am Tag geschlossen");
+  assert.equal(E.buyMoonItem(S, 0, false, now()).ok, false, "Haendlerin nur nachts");
+});
+
+test("Nachtjagd: zwei Nachtwesen der Heimatinsel, drei pro Tag, sichere Beute", () => {
+  const { E, D, S, now, advance } = fresh("wolfsjaeger");
+  S.level = 8;
+  const ids = D.NIGHT_FOES.midgard.map((m) => m.id);
+  for (let i = 0; i < E.C.NIGHT_HUNTS; i++) {
+    const res = E.nightHunt(S, true, now());
+    assert.equal(res.ok, true);
+    assert.equal(res.fight.foes.length, 2);
+    assert.ok(res.fight.foes.every((f) => ids.indexOf(f.id) >= 0), "Nachtwesen aus Midgard");
+    res.fight.chain = { winner: 0, waves: [] };
+    const inv = S.inv.length;
+    const rew = E.resolveNightHunt(S, res.fight);
+    assert.ok(rew.xp > 0 && rew.gold > 0);
+    assert.ok(S.inv.length === inv + 1 || rew.itemSold > 0, "Beute");
+    if (rew.item) assert.ok(D.RARITY_ORDER.indexOf(rew.item.rarity) >= 2, "mindestens selten");
+  }
+  assert.equal(E.nightHuntsLeft(S), 0);
+  assert.equal(E.nightHunt(S, true, now()).ok, false);
+  advance(86400000);
+  E.tick(S, now());
+  assert.equal(E.nightHuntsLeft(S), E.C.NIGHT_HUNTS, "naechster Tag");
+});
+
+test("Mondhaendlerin: drei Stuecke, eines episch, gekaufte Plaetze bleiben leer", () => {
+  const { E, D, S, now } = fresh();
+  S.gold = 1e7;
+  const items = E.moonShop(S, now());
+  assert.equal(items.length, 3);
+  assert.equal(items[2].rarity === "episch" || items[2].rarity === "legendaer", true);
+  const res = E.buyMoonItem(S, 0, true, now());
+  assert.equal(res.ok, true);
+  assert.equal(E.moonShop(S, now())[0], null);
+  assert.ok(D.RARITY_ORDER.indexOf(res.item.rarity) >= 2);
+});
+
+test("Auftraege zeigen Gegner der eigenen Heimatinsel", () => {
+  for (const [cls, realm] of [["sturmhuene", "midgard"], ["hainwaechter", "hibernia"], ["schildritter", "albion"]]) {
+    const { E, S } = fresh(cls);
+    for (const L of [1, 10, 20, 30, 40, 50]) {
+      const pool = E.monstersFor(L, realm);
+      assert.ok(pool.length >= 3);
+      assert.ok(pool.every((m) => !m.realms || m.realms.indexOf(realm) >= 0), realm + " Stufe " + L);
+    }
+    S.level = 20;
+    E.refreshOffers(S);
+    for (const o of S.quest.offers) for (const w of o.waves) assert.ok(E.monById(w.monster).realms.indexOf(realm) >= 0);
+  }
+});

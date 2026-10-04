@@ -296,7 +296,7 @@
       bestiary: {},
       ach: {},
       stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 },
-      daily: { day: U.dayKey(now), wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0 },
+      daily: { day: U.dayKey(now), wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
       npcSeed: U.hash("npc:" + opts.name + now),
       npcHonor: {},
       settings: { sound: true, music: true, quality: "hoch", fastFights: false, dayCycle: "zyklus" },
@@ -357,6 +357,8 @@
     S.house.furn = S.house.furn || {};
     S.guild = S.guild || null;
     S.seen = S.seen || {};
+    S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
+    S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
     for (const s of D.SLOTS) if (!(s in S.equip)) S.equip[s] = null;
@@ -522,7 +524,7 @@
     const prof = { hpMult: T.hpMult, armorCap: T.armorCap, block: T.block, evade: T.evade, unblockable: T.unblockable, dmgMult: T.dmgMult, special: T.special, critMult: 2, critBonus: 0 };
     const wAvg = m.weapon * (0.85 + 0.15 * p) + (E.baseDmg(L)[0] + E.baseDmg(L)[1]) / 2;
     return {
-      kind: "monster", id: mon.id, name: mon.name, arch: mon.arch, color: mon.color, accent: mon.accent,
+      kind: "monster", id: mon.id, name: mon.name, arch: mon.arch, color: mon.color, accent: mon.accent, realms: mon.realms || null,
       boss: !!opts.boss, final: !!opts.final, level: L, mainKey: type, attrs, prof,
       maxHp: Math.round(attrs.konstitution * prof.hpMult * (L + 1) * hpBoost),
       wMin: Math.max(1, Math.round(wAvg * 0.8)), wMax: Math.max(2, Math.round(wAvg * 1.2)),
@@ -696,6 +698,39 @@
     if (cur >= E.energyMax(S)) return 0;
     return (1 - (cur - Math.floor(cur))) * E.C.ENERGY_REGEN_MS;
   };
+  /* Tageszeit: 0 = Mitternacht, 0.5 = Mittag. Modi: zyklus (20 Minuten), echtzeit, tag, nacht */
+  E.C.DAY_CYCLE_MS = 20 * 60 * 1000;
+  E.dayTime = function (mode, now) {
+    now = now || E.now();
+    if (mode === "tag") return 0.5;
+    if (mode === "nacht") return 0.02;
+    if (mode === "echtzeit") {
+      const d = new Date(now);
+      return (d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600) / 24;
+    }
+    return (now / E.C.DAY_CYCLE_MS + 0.3) % 1;
+  };
+  const smooth = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  E.dayInfo = function (t) {
+    const sunH = -Math.cos(t * 2 * Math.PI);
+    const day = smooth(-0.12, 0.3, sunH);
+    const dusk = Math.max(0, 1 - Math.abs(sunH - 0.02) / 0.28);
+    return { t, sunH, day, dusk, night: 1 - day };
+  };
+  E.isNight = (mode, now) => E.dayInfo(E.dayTime(mode, now)).night >= 0.5;
+  // Millisekunden bis zum naechsten Wechsel zwischen Tag und Nacht (Infinity, wenn er nie kommt)
+  E.nightChangeIn = function (mode, now) {
+    now = now || E.now();
+    if (mode === "tag" || mode === "nacht") return Infinity;
+    const cur = E.isNight(mode, now);
+    const step = mode === "echtzeit" ? 60000 : 5000;
+    const span = mode === "echtzeit" ? 86400000 : E.C.DAY_CYCLE_MS;
+    for (let dt = step; dt <= span; dt += step) if (E.isNight(mode, now + dt) !== cur) return dt;
+    return Infinity;
+  };
   E.nextMidnight = function (now) {
     const d = new Date(now || E.now());
     d.setHours(24, 0, 0, 0);
@@ -705,7 +740,7 @@
     now = now || E.now();
     const day = U.dayKey(now);
     if (S.daily.day !== day) {
-      S.daily = { day, wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0 };
+      S.daily = { day, wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 };
       toast("Ein neuer Tag auf Schwebfels. Der Wunschbrunnen glitzert wieder.", "info");
     }
     for (const k of ["schmiede", "arkanum"]) if (!S.shops[k] || now - S.shops[k].ts > E.C.SHOP_REFRESH) E.refreshShop(S, k, true);
@@ -769,8 +804,14 @@
   const DIFF = [null, { name: "Gemütlich", power: 0.88, reward: 0.85 }, { name: "Ordentlich", power: 0.97, reward: 1.0 }, { name: "Halsbrecherisch", power: 1.06, reward: 1.35 }];
   E.DIFF = DIFF;
   E.TIERS = TIERS;
-  E.monstersFor = function (L) {
-    let list = D.MONSTERS.filter((m) => L >= m.lv[0] && L <= m.lv[1]);
+  // Gegner passend zur Stufe; mit Reich bevorzugt die Geschoepfe der eigenen Heimatinsel
+  E.monstersFor = function (L, realm) {
+    const fits = (m) => L >= m.lv[0] && L <= m.lv[1];
+    let list = D.MONSTERS.filter(fits);
+    if (realm) {
+      const own = list.filter((m) => !m.realms || m.realms.indexOf(realm) >= 0);
+      if (own.length >= 3) return own;
+    }
     if (list.length < 3) list = D.MONSTERS.slice().sort((a, b) => Math.abs((a.lv[0] + Math.min(a.lv[1], 60)) / 2 - L) - Math.abs((b.lv[0] + Math.min(b.lv[1], 60)) / 2 - L)).slice(0, 6);
     return list;
   };
@@ -779,7 +820,7 @@
     const tier = TIERS[idx % 3 === 0 ? U.ri(r, 0, 1) : idx % 3 === 1 ? 1 : U.ri(r, 1, 2)];
     const diff = U.wpick(r, [{ d: 1, w: 38 }, { d: 2, w: 42 }, { d: 3, w: 20 }]).d;
     const rare = L >= 3 && r() < 0.08 + 0.04 * diff;
-    const pool = E.monstersFor(L);
+    const pool = E.monstersFor(L, S.realm);
     let mon = U.pick(r, pool);
     for (let k = 0; k < 6 && used.mons.indexOf(mon.id) >= 0; k++) mon = U.pick(r, pool);
     used.mons.push(mon.id);
@@ -975,6 +1016,88 @@
     return rew;
   };
 
+  /* ---------------- Mondtor: nur bei Nacht ---------------- */
+  E.C.NIGHT_HUNTS = 3;
+  E.NIGHT_POWER = { minion: 0.69, boss: 0.9 };
+  E.nightHuntsLeft = (S) => Math.max(0, E.C.NIGHT_HUNTS - ((S.daily && S.daily.nightHunts) || 0));
+  // Die Nachtjagd: zwei Nachtwesen der eigenen Heimatinsel nacheinander
+  E.nightHuntFoes = function (S, hero, n) {
+    const list = D.NIGHT_FOES[S.realm] || D.NIGHT_FOES.albion;
+    const r = U.rng(U.hash(S.name + S.daily.day + ":" + n));
+    const a = U.pick(r, list);
+    let b = U.pick(r, list);
+    for (let k = 0; k < 6 && b.id === a.id; k++) b = U.pick(r, list);
+    const L = S.level;
+    return [
+      E.monsterFighter(a, L, E.adaptPower(hero, L, E.NIGHT_POWER.minion), {}),
+      E.monsterFighter(b, L + 1, E.adaptPower(hero, L + 1, E.NIGHT_POWER.boss), { boss: true }),
+    ];
+  };
+  E.nightHuntPreview = function (S, now) {
+    const hero = E.heroFighter(S, now);
+    return E.nightHuntFoes(S, hero, (S.daily.nightHunts || 0) + 1);
+  };
+  E.nightHunt = function (S, night, now) {
+    now = now || E.now();
+    if (!night) return { ok: false, msg: "Das Mondtor öffnet sich erst, wenn es Nacht wird." };
+    if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
+    if (E.nightHuntsLeft(S) <= 0) return { ok: false, msg: "Für heute Nacht sind die Nachtwesen gebannt. Morgen wieder." };
+    const hero = E.heroFighter(S, now);
+    const n = (S.daily.nightHunts || 0) + 1;
+    const foes = E.nightHuntFoes(S, hero, n);
+    const chain = E.simulateChain(hero, foes, U.hash(S.name + "nacht" + S.daily.day + n));
+    return { ok: true, fight: { hero, foes, chain, n } };
+  };
+  E.resolveNightHunt = function (S, fight) {
+    const won = fight.chain.winner === 0;
+    S.daily.nightHunts = (S.daily.nightHunts || 0) + 1;
+    const rew = { won, xp: 0, gold: 0, item: null, itemSold: 0, perle: 0 };
+    const L = S.level;
+    if (won) {
+      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (1 + E.xpBonus(S)));
+      rew.gold = Math.round(E.goldBase(L) * 1.8 * (1 + E.goldBonus(S)));
+      E.gainGold(S, rew.gold);
+      const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
+      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 }), rew);
+      if (r() < 0.35) {
+        S.perlen += 1;
+        rew.perle = 1;
+      }
+      for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
+      S.stats.wins++;
+      S.stats.nightHunts = (S.stats.nightHunts || 0) + 1;
+    } else {
+      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 0.3);
+      S.stats.losses++;
+    }
+    E.gainXp(S, rew.xp);
+    E.checkAch(S);
+    return rew;
+  };
+  // Der Mondhaendler: drei besondere Stuecke je Nacht, mindestens selten, oft episch
+  E.moonShop = function (S, now) {
+    now = now || E.now();
+    const day = U.dayKey(now);
+    const cur = S.shops.mond;
+    if (!cur || cur.day !== day || cur.level !== S.level) {
+      const r = U.rng(U.hash(S.name + "mond" + day + S.level));
+      const items = [0, 1, 2].map((i) => {
+        const it = E.makeItem(r, { level: S.level + 1, cls: S.cls, slot: U.pick(r, D.SLOTS), minRarity: i === 2 ? "episch" : "selten", boost: 1.2 });
+        it.value = Math.round(it.value * 1.6);
+        return it;
+      });
+      // bereits gekaufte Plaetze bleiben am selben Tag leer
+      const sold = cur && cur.day === day ? cur.items.map((x) => x === null) : [false, false, false];
+      S.shops.mond = { day, level: S.level, ts: now, items: items.map((it, i) => (sold[i] ? null : it)) };
+    }
+    return S.shops.mond.items;
+  };
+  E.buyMoonItem = function (S, idx, night, now) {
+    if (!night) return { ok: false, msg: "Selene Silberblick verkauft nur bei Nacht." };
+    E.moonShop(S, now);
+    return E.buyItem(S, "mond", idx);
+  };
+
   /* ---------------- Wachturm ---------------- */
   E.shiftPay = (S) => Math.round(E.goldBase(S.level) * 0.8);
   E.startGuard = function (S, shifts, now) {
@@ -1148,23 +1271,76 @@
   };
 
   /* ---------------- Arena: Ring der Reiche ---------------- */
+  /* Vier Herausforderer aus den anderen Reichen, deren Staerke zum Helden passt:
+     einer leicht, zwei ausgeglichen, einer schwer. Echte Mitspieler und Helden der Ranglisten haben Vorrang,
+     fehlt ein passender, tritt ein Wanderkaempfer gleicher Stufe an. Die Auswahl bleibt bis zum naechsten Kampf. */
+  E.ARENA_TARGETS = [{ c: 0.78, label: "Leicht" }, { c: 0.58, label: "Ausgeglichen" }, { c: 0.46, label: "Ausgeglichen" }, { c: 0.32, label: "Schwer" }];
+  E.wanderFighter = function (w) {
+    const f = E.modelHeroFighter(w.level, w.cls, w.q);
+    Object.assign(f, { name: w.name, race: w.race, realm: w.realm, gender: w.gender, look: w.look, gear: E.npcGear(w), kind: "hero" });
+    if (D.CLASSES[w.cls].arch === "krieger" && (!f.gear.nebenhand || f.gear.nebenhand.base !== "schild")) f.prof.block = 0;
+    return f;
+  };
+  E.rivalFighter = (opp) => opp.fighter || (opp.kind === "wander" ? E.wanderFighter(opp) : E.npcFighter(opp));
   E.arenaRivals = function (S, now, remote) {
     now = now || E.now();
+    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm;
     const all = E.allHeroes(S, now, remote);
     const me = all.find((h) => h.kind === "me");
-    const foes = all.filter((h) => h.kind !== "me" && h.realm !== S.realm);
-    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + Math.floor(now / E.C.ARENA_CD));
-    const near = (lo, hi) => {
-      const pool = foes.filter((h) => h.honor >= me.honor * lo && h.honor <= me.honor * hi);
-      return pool.length ? U.pick(r, pool) : null;
-    };
-    const picks = [near(1.1, 2.0), near(0.85, 1.15), near(0.4, 0.9)];
-    const fallback = foes.slice().sort((a, b) => Math.abs(a.honor - me.honor) - Math.abs(b.honor - me.honor));
-    const out = [];
-    for (const p of picks.concat(fallback)) {
-      if (p && !out.find((x) => x.id === p.id)) out.push(p);
-      if (out.length >= 3) break;
+    const byId = {};
+    all.forEach((h) => (byId[h.id] = h));
+    const cache = S.arena.rivals;
+    if (cache && cache.stamp === stamp && cache.until > now) {
+      const list = cache.list.map((e) => (e.kind === "wander" ? e : byId[e.id] ? Object.assign({}, byId[e.id], { tier: e.tier, chance: e.chance }) : null)).filter(Boolean);
+      if (list.length === cache.list.length) return list;
     }
+    const hero = E.heroFighter(S, now);
+    const L = S.level;
+    const span = Math.max(3, Math.round(L * 0.12));
+    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + L * 31);
+    const est = (f, salt) => E.estimateWin(hero, [f], 24, "ar" + salt);
+    let pool = all.filter((h) => h.kind !== "me" && h.realm !== S.realm && Math.abs(h.level - L) <= span);
+    pool.sort((a, b) => (a.kind === "real" ? -1 : 0) - (b.kind === "real" ? -1 : 0) || r() - 0.5);
+    pool = pool.slice(0, 24).map((h) => Object.assign({}, h, { chance: est(E.rivalFighter(h), h.id) }));
+    const out = [];
+    E.ARENA_TARGETS.forEach((tg, ti) => {
+      let best = null;
+      for (const h of pool) {
+        if (out.find((x) => x.id === h.id)) continue;
+        const d = Math.abs(h.chance - tg.c) - (h.kind === "real" ? 0.05 : 0);
+        if (d <= 0.13 && (!best || d < best.d)) best = { h, d };
+      }
+      if (best) {
+        out.push(Object.assign(best.h, { tier: ti }));
+        return;
+      }
+      // Wanderkaempfer: Staerke so lange anpassen, bis die Siegchance zum Ziel passt
+      const realms = Object.keys(D.REALMS).filter((x) => x !== S.realm);
+      const realm = realms[(ti + Math.floor(r() * 2)) % realms.length];
+      const races = Object.keys(D.RACES).filter((x) => D.RACES[x].realm === realm);
+      const race = U.pick(r, races);
+      const R0 = D.RACES[race];
+      const cls = E.CLASS_FOR[realm][U.pick(r, Object.keys(D.ARCHETYPES))];
+      const w = {
+        id: "w-" + U.hash(stamp + ti + now), kind: "wander", name: U.pick(r, D.NPC_FIRST) + " " + U.pick(r, D.NPC_LAST), race, realm, cls,
+        gender: r() < 0.5 ? "m" : "w", level: Math.max(1, L + (tg.c < 0.4 ? 1 : tg.c > 0.7 ? -1 : 0)), q: 1, gearSeed: Math.floor(r() * 1e9), guild: null, tier: ti,
+        look: { skin: U.pick(r, R0.skins), hair: U.pick(r, R0.hairs), hairStyle: U.ri(r, 0, 5), beard: U.ri(r, 0, 4), eyes: U.pick(r, D.EYES).c, tattoo: r() < 0.6 ? U.pick(r, D.TATTOOS).id : "keine", tattooColor: U.pick(r, D.TATTOO_COLORS).c, scar: r() < 0.3 ? U.pick(r, D.SCARS).id : "keine", horns: U.ri(r, 0, 2) },
+      };
+      let lo = 0.15;
+      let hi = 1.8;
+      for (let k = 0; k < 7; k++) {
+        w.q = (lo + hi) / 2;
+        const c = est(E.wanderFighter(w), w.id + k);
+        if (c > tg.c) lo = w.q;
+        else hi = w.q;
+      }
+      w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
+      w.chance = est(E.wanderFighter(w), w.id);
+      w.honor = Math.max(0, Math.round(me.honor * (1.3 - tg.c * 0.6)));
+      out.push(w);
+    });
+    out.sort((a, b) => b.chance - a.chance);
+    S.arena.rivals = { stamp, until: now + 30 * 60 * 1000, list: out.map((h) => (h.kind === "wander" ? h : { id: h.id, kind: h.kind, tier: h.tier, chance: h.chance })) };
     return out;
   };
   E.arenaFight = function (S, opp, now) {
@@ -1173,7 +1349,7 @@
     if (S.arena.next > now) return { ok: false, msg: "Baronin Krawall lässt dich noch nicht wieder in den Ring." };
     if (opp.realm === S.realm) return { ok: false, msg: "Im Ring kämpfen nur Helden verschiedener Reiche." };
     const hero = E.heroFighter(S, now);
-    const foe = opp.fighter || E.npcFighter(opp);
+    const foe = E.rivalFighter(opp);
     const chain = E.simulateChain(hero, [foe], U.hash(S.name + opp.id + now));
     return { ok: true, fight: { hero, foes: [foe], chain, opp } };
   };
@@ -1184,6 +1360,7 @@
     const gain = U.clamp(Math.round(22 + (opp.honor - S.honor) / 15), 6, 60);
     const rew = { won, honor: 0, gold: 0, xp: 0 };
     S.arena.next = now + E.C.ARENA_CD;
+    S.arena.rivals = null;
     if (won) {
       S.honor += gain;
       rew.honor = gain;
@@ -1452,6 +1629,7 @@
     if (S.level >= 25) E.grantAch(S, "stufe25");
     if (S.level >= 40) E.grantAch(S, "stufe40");
     if (S.stats.arenaWins >= 10) E.grantAch(S, "arena10");
+    if ((S.stats.nightHunts || 0) >= 5) E.grantAch(S, "mondjaeger");
     if (Object.keys(S.bestiary).length >= 12) E.grantAch(S, "bestiarium12");
     if (now !== undefined) {
       const me = E.allHeroes(S, now, SB.remoteHeroes || null).find((h) => h.kind === "me");

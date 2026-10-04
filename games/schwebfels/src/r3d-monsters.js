@@ -778,6 +778,55 @@
   // Alte Bauplaene der ersten Version auf die neuen abbilden
   const ALIAS = { schleim: "schlund", kobold: "goblin", skelett: "ghul", flatterer: "fledermaus", geist: "schemen", krabbe: "krebs", ritter: "todesritter" };
 
+  // Geschoepfe passen zu ihrer Heimatinsel: Raureif und Eiszapfen in Midgard, Moos und Leuchtpilze in Hibernia
+  function realmDecor(root, realm, seed, P) {
+    const body = root.children[0] || root;
+    // Nur feste Koerperteile zaehlen (keine Leuchtsprites), und die Oberkante nahe der Koerpermitte
+    root.updateMatrixWorld(true);
+    const pts = [];
+    const v = new T.Vector3();
+    body.traverse((o) => {
+      if (!o.isMesh || o.material.transparent || !o.geometry.attributes.position) return;
+      const pos = o.geometry.attributes.position;
+      const step = Math.max(1, Math.floor(pos.count / 60));
+      for (let i = 0; i < pos.count; i += step) pts.push(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).clone());
+    });
+    if (!pts.length) return;
+    const bb = new T.Box3().setFromPoints(pts);
+    const r = R.rng(R.hash ? R.hash(seed) : 7);
+    const w = Math.min(1.6, bb.max.x - bb.min.x);
+    const d = Math.min(1.6, bb.max.z - bb.min.z);
+    const cx = (bb.max.x + bb.min.x) / 2;
+    const cz = (bb.max.z + bb.min.z) / 2;
+    let top = bb.min.y;
+    for (const p of pts) if (Math.abs(p.x - cx) < w * 0.22 && Math.abs(p.z - cz) < Math.max(0.25, d * 0.3) && p.y > top) top = p.y;
+    const g = grp();
+    if (realm === "midgard") {
+      const ice = M.emis("#cfeaff", 0.45);
+      for (let i = 0; i < 6; i++) {
+        const sz = 0.05 + r() * 0.06;
+        g.add(mesh(G.octa(sz), ice, { p: [cx + (r() - 0.5) * w * 0.3, top - 0.02 - r() * 0.06, cz + (r() - 0.5) * d * 0.25], s: [0.6, 2.2, 0.6], r: [(r() - 0.5) * 0.8, r(), (r() - 0.5) * 0.8] }));
+      }
+      for (let i = 0; i < 5; i++) g.add(mesh(G.sph(0.05 + r() * 0.04, 6, 5), M.pmat("plain", "#eef6ff"), { p: [cx + (r() - 0.5) * w * 0.3, top - 0.04, cz + (r() - 0.5) * d * 0.25], s: [1.4, 0.5, 1.2] }));
+      g.add(R.haloSprite("#bfe8ff", Math.max(1.2, w * 1.2), 0.1, [cx, top * 0.6, cz]));
+    } else {
+      const moss = M.pmat("plain", "#3f8a3a", { flat: true });
+      for (let i = 0; i < 6; i++) g.add(mesh(G.ico(0.07 + r() * 0.06, 0), moss, { p: [cx + (r() - 0.5) * w * 0.3, top - 0.03, cz + (r() - 0.5) * d * 0.25], s: [1.3, 0.45, 1.3] }));
+      const shroomC = ["#9fffc8", "#ff9fe0", "#ffe08a"][Math.floor(r() * 3)];
+      for (let i = 0; i < 3; i++) {
+        const x = cx + (r() - 0.5) * w * 0.25;
+        const z = cz + (r() - 0.5) * d * 0.2;
+        g.add(mesh(G.cyl(0.012, 0.016, 0.08, 5), M.pmat("plain", "#e8e0cc"), { p: [x, top - 0.02, z] }));
+        g.add(mesh(G.cap(0.045, Math.PI * 0.5), M.emis(shroomC, 0.9), { p: [x, top + 0.02, z], s: [1, 0.6, 1] }));
+      }
+      g.add(R.haloSprite(shroomC, Math.max(0.8, w * 0.8), 0.25, [cx, top, cz]));
+    }
+    // Schwebende Wesen tragen den Schmuck an ihrem schwebenden Koerper
+    const target = (P && P.hover) || body;
+    target.updateMatrixWorld(true);
+    g.applyMatrix4(new T.Matrix4().copy(target.matrixWorld).invert());
+    target.add(g);
+  }
   R.buildMonster = function (m) {
     if (!T) init();
     const root = grp();
@@ -785,6 +834,7 @@
     const arch = B[m.arch] ? m.arch : ALIAS[m.arch] || "ghul";
     const mm = Object.assign({ color: "#6a6a6a", accent: "#ff5a3d" }, m, { arch });
     B[arch](mm, root, P);
+    if (m.realm === "midgard" || m.realm === "hibernia") realmDecor(root, m.realm, arch + mm.color, P);
     if (m.boss) {
       const s = m.final ? 1.4 : 1.2;
       root.scale.setScalar(s);

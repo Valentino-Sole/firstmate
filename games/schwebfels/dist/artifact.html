@@ -84,6 +84,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .hub-label.hover, .hub-label:hover { background: linear-gradient(#5a4a22, #2e2614); border-color: var(--gold); }
 .hl-badge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--blood); color: #fff; font: 700 11px var(--font-body); display: inline-grid; place-items: center; }
 .hub-label.ready { animation: bob 1.6s ease-in-out infinite; }
+.hub-label.asleep { opacity: 0.55; filter: grayscale(0.7); }
+.hub-label.moonlit { border-color: #cfe0ff; color: #e6ecff; box-shadow: 0 0 10px rgba(207, 224, 255, 0.45); }
 @keyframes bob { 50% { margin-top: -4px; } }
 
 /* Kopfleiste */
@@ -242,6 +244,10 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .chance.good { color: var(--jade); }
 .chance.ok { color: var(--gold-hi); }
 .chance.bad { color: #ff7a59; }
+.tier { display: inline-block; font: 800 10.5px var(--font-body); padding: 1px 6px; border-radius: 3px; vertical-align: 1px; font-style: normal; }
+.tier.t-leicht { background: #1f3a2c; color: var(--jade); }
+.tier.t-fair { background: #3a3218; color: var(--gold-hi); }
+.tier.t-schwer { background: #3a1c18; color: #ff7a59; }
 .mini-item { width: 36px; height: 36px; border-radius: 4px; background: radial-gradient(#3a3040, #160f1a); display: inline-grid; place-items: center; cursor: pointer; border: 2px solid var(--r-gewoehnlich); vertical-align: middle; padding: 1px; }
 .mini-item svg { width: 30px; height: 30px; }
 .tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 3px; background: var(--jade); color: var(--ink); font-weight: 800; vertical-align: 1px; font-family: var(--font-body); font-style: normal; }
@@ -630,22 +636,22 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   const LORE =
-    "Vor tausend Jahren zerbrach der Weltstein. Seine Splitter tragen bis heute drei Reiche durch das Nebelmeer: das ritterliche Albion, das frostige Midgard und das verwunschene Hibernia. Dazwischen schwebt Schwebfels, die Freistatt, in der jeder Krieg ruhen muss. Doch die Splitter werden schwächer, und aus der Tiefe darunter kriecht etwas herauf.";
+    "Vor tausend Jahren zerbrach der Weltstein. Seine Splitter tragen bis heute drei Reiche durch das Nebelmeer, und die Welt der schwebenden Inseln heißt seitdem Schwebfels. Jedes Reich hat seine Heimatinsel: das ritterliche Albion die Burginsel Kreidenfels, das frostige Midgard das Schneeland Hrimholm, das verwunschene Hibernia den Feenhain Glenfeyn. Nur im Ring der Reiche treffen sie offen aufeinander. Doch die Splitter werden schwächer, und aus der Tiefe darunter kriecht etwas herauf.";
 
   const REALMS = {
     albion: {
       name: "Albion", color: "#b8322e", dark: "#5a1414", accent: "#e8c35a", metal: "#c9ccd2", trim: "#d9a441",
-      motto: "Durch Eid und Eisen",
+      motto: "Durch Eid und Eisen", isle: "Kreidenfels",
       desc: "Das Königreich der Kreideklippen. Ritterorden, Klöster und alte Steinkreise, unter denen ein König schläft.",
     },
     midgard: {
       name: "Midgard", color: "#2f5fa8", dark: "#14284a", accent: "#cfe3ff", metal: "#aab6c4", trim: "#9fc3e8",
-      motto: "Kälte formt Helden",
+      motto: "Kälte formt Helden", isle: "Hrimholm",
       desc: "Die Frostlande des Nordens. Langhäuser, Runensteine und Götter, die seit drei Wintern schweigen.",
     },
     hibernia: {
       name: "Hibernia", color: "#2f8f4f", dark: "#123a22", accent: "#9fffc8", metal: "#b9c4a8", trim: "#c9b066",
-      motto: "Der Hain vergisst nicht",
+      motto: "Der Hain vergisst nicht", isle: "Glenfeyn",
       desc: "Das Nebelland im Westen. Uralte Wälder, Feenhügel und Hügelgräber, in denen das Alte Volk schläft.",
     },
   };
@@ -892,7 +898,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   /* Reichsgeschichte: fuenf Hauptkapitel je Reich */
   const REALM_STORY = {
     albion: [
-      { lv: 1, t: "Der Eid am Kreidekreis", x: "Albion schickt dich nach Schwebfels, um den Waffenstillstand zu bewachen. Kaum betrittst du die Freistatt, kriechen Grabkriecher aus dem Nebel und fallen über die Pilger her. Zeig der Insel, was ein Eid Albions wert ist.", foes: [{ mon: "grabkriecher" }, { mon: "grabkriecher" }] },
+      { lv: 1, t: "Der Eid am Kreidekreis", x: "Albion schickt dich nach Kreidenfels, um die Pilgerwege zu bewachen. Kaum betrittst du die Insel, kriechen Grabkriecher aus dem Nebel und fallen über die Pilger her. Zeig der Insel, was ein Eid Albions wert ist.", foes: [{ mon: "grabkriecher" }, { mon: "grabkriecher" }] },
       { lv: 6, t: "Die Glocke ohne Kirche", x: "Nachts läutet über Kreidefurt eine Glocke, die es nicht mehr gibt. Wer ihr folgt, kehrt nicht zurück. Der Abt bittet dich, dem Geläut zu folgen, bevor er es selbst tut.", foes: [{ mon: "hohlkultist" }, { mon: "knochenlaeufer" }, { name: "Der Glöckner ohne Gesicht", arch: "schemen", color: "#cfd8e6", accent: "#ffcf5a", boss: true }] },
       { lv: 12, t: "Das Schwert im Moor", x: "Ein Bauer fand im Eschenmoor ein Schwert, das leuchtet, sobald Midgarder in der Nähe sind. Jetzt wollen es alle haben. Leider will es auch das Moor zurück.", foes: [{ mon: "faulschlund" }, { mon: "sumpftroll" }, { name: "Moorkönig Gramwasser", arch: "troll", color: "#3a4a2a", accent: "#d9f27a", boss: true }] },
       { lv: 18, t: "Der schlafende König", x: "Unter dem Steinkreis schläft ein König, der wiederkehren soll, wenn Albion ihn braucht. Jemand versucht, ihn vor der Zeit zu wecken, mit sehr verbotenen Mitteln.", foes: [{ mon: "blutkultist" }, { mon: "blutkultist" }, { name: "Morgauth die Weckerin", arch: "kultist", color: "#3a1422", accent: "#ff3a5a", boss: true }] },
@@ -1006,48 +1012,80 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   const MONSTERS = [
-    { id: "grabkriecher", name: "Grabkriecher", arch: "ghul", color: "#9a9a7a", accent: "#7fffb0", lv: [1, 7] },
-    { id: "moorschlund", name: "Moorschlund", arch: "schlund", color: "#5a6a3a", accent: "#d9f27a", lv: [1, 6] },
-    { id: "nachtgoblin", name: "Nachtgoblin", arch: "goblin", color: "#6a8a4a", accent: "#ffcf5a", lv: [1, 7] },
-    { id: "grauwolf", name: "Grauwolf", arch: "wolf", color: "#7a7470", accent: "#ffcf5a", lv: [2, 8] },
-    { id: "sporling", name: "Sporling", arch: "pilz", color: "#a8643a", accent: "#e6ff5a", lv: [1, 7] },
-    { id: "klippenkrebs", name: "Klippenkrebs", arch: "krebs", color: "#8a5a3a", accent: "#ff7a3d", lv: [1, 6] },
-    { id: "hohlkultist", name: "Hohlkultist", arch: "kultist", color: "#3a3346", accent: "#c47bff", lv: [6, 15] },
-    { id: "aasflatterer", name: "Aasflatterer", arch: "fledermaus", color: "#3a2f3a", accent: "#ff5a3d", lv: [6, 14] },
-    { id: "netzlauerer", name: "Netzlauerer", arch: "spinne", color: "#4a3a2a", accent: "#ff3a3a", lv: [7, 15] },
-    { id: "lehmgolem", name: "Lehmgolem", arch: "golem", color: "#8a6a4a", accent: "#ffb13b", lv: [8, 16] },
-    { id: "knochenlaeufer", name: "Knochenläufer", arch: "ghul", color: "#d9cfb8", accent: "#4fa9ff", lv: [6, 15] },
-    { id: "faulschlund", name: "Faulschlund", arch: "schlund", color: "#4a3a4a", accent: "#c47bff", lv: [7, 16] },
-    { id: "sumpftroll", name: "Sumpftroll", arch: "troll", color: "#4f6a4a", accent: "#ffcf5a", lv: [14, 25] },
-    { id: "grabritter", name: "Grabritter", arch: "todesritter", color: "#4a4f5a", accent: "#7fffb0", lv: [15, 25] },
-    { id: "sporenschrecken", name: "Sporenschrecken", arch: "pilz", color: "#6a3f8a", accent: "#d9f27a", lv: [14, 24] },
-    { id: "fahlerschemen", name: "Fahler Schemen", arch: "schemen", color: "#a8b8c8", accent: "#9fe3ff", lv: [15, 26] },
-    { id: "felsgolem", name: "Felsgolem", arch: "golem", color: "#6a6e76", accent: "#59d1ff", lv: [16, 26] },
-    { id: "dornenhirte", name: "Dornenhirte", arch: "baum", color: "#4a3a2a", accent: "#c0392b", lv: [15, 25] },
-    { id: "frostwolf", name: "Frostwolf", arch: "wolf", color: "#c8dcef", accent: "#4fa9ff", lv: [24, 35] },
-    { id: "kristallweberin", name: "Kristallweberin", arch: "spinne", color: "#3f8a96", accent: "#e9fbff", lv: [24, 36] },
-    { id: "knochenfuerst", name: "Knochenfürst", arch: "ghul", color: "#e9e0c8", accent: "#ff3a3a", lv: [25, 36] },
-    { id: "blutkultist", name: "Blutkultist", arch: "kultist", color: "#5a1414", accent: "#ff3a5a", lv: [24, 35] },
-    { id: "donnerkrebs", name: "Donnerkrebs", arch: "krebs", color: "#2f4f8f", accent: "#ffe45a", lv: [26, 36] },
-    { id: "irrlichtschemen", name: "Irrlichtschemen", arch: "schemen", color: "#6fdfa8", accent: "#2a7a5a", lv: [25, 36] },
-    { id: "schwelwurm", name: "Schwelwurm", arch: "drache", color: "#8a2f1f", accent: "#ffcf5a", lv: [34, 48] },
-    { id: "eisengolem", name: "Eisengolem", arch: "golem", color: "#4d5660", accent: "#ff7a3d", lv: [34, 47] },
-    { id: "schattenwolf", name: "Schattenwolf", arch: "wolf", color: "#2a2633", accent: "#c47bff", lv: [35, 48] },
-    { id: "bergtroll", name: "Bergtroll", arch: "troll", color: "#6a7a8a", accent: "#9fe3ff", lv: [34, 48] },
-    { id: "giftmorchel", name: "Giftmorchel", arch: "pilz", color: "#3f6a2a", accent: "#e6ff5a", lv: [34, 47] },
-    { id: "moderhirte", name: "Moderhirte", arch: "baum", color: "#2f2a1f", accent: "#7fffb0", lv: [36, 48] },
-    { id: "sturmdrache", name: "Sturmdrache", arch: "drache", color: "#2f3f8f", accent: "#9fe3ff", lv: [46, 999] },
-    { id: "leerenschemen", name: "Leerenschemen", arch: "schemen", color: "#1f1b2e", accent: "#c47bff", lv: [46, 999] },
-    { id: "obsidiangolem", name: "Obsidiangolem", arch: "golem", color: "#1f1c26", accent: "#ff5a8a", lv: [46, 999] },
-    { id: "leerenspinne", name: "Leerenspinne", arch: "spinne", color: "#1a1626", accent: "#c47bff", lv: [46, 999] },
-    { id: "todesritter", name: "Todesritter", arch: "todesritter", color: "#1f2026", accent: "#ff3a3a", lv: [46, 999] },
-    { id: "urschlund", name: "Urschlund", arch: "schlund", color: "#2a1f3a", accent: "#ff5a3d", lv: [46, 999] },
+    { id: "grabkriecher", name: "Grabkriecher", arch: "ghul", color: "#9a9a7a", accent: "#7fffb0", lv: [1, 7], realms: ["albion"] },
+    { id: "moorschlund", name: "Moorschlund", arch: "schlund", color: "#5a6a3a", accent: "#d9f27a", lv: [1, 6], realms: ["albion", "hibernia"] },
+    { id: "nachtgoblin", name: "Nachtgoblin", arch: "goblin", color: "#6a8a4a", accent: "#ffcf5a", lv: [1, 7], realms: ["albion", "hibernia"] },
+    { id: "grauwolf", name: "Grauwolf", arch: "wolf", color: "#7a7470", accent: "#ffcf5a", lv: [1, 8], realms: ["albion", "midgard"] },
+    { id: "sporling", name: "Sporling", arch: "pilz", color: "#a8643a", accent: "#e6ff5a", lv: [1, 7], realms: ["hibernia"] },
+    { id: "klippenkrebs", name: "Klippenkrebs", arch: "krebs", color: "#8a5a3a", accent: "#ff7a3d", lv: [1, 6], realms: ["albion"] },
+    { id: "hohlkultist", name: "Hohlkultist", arch: "kultist", color: "#3a3346", accent: "#c47bff", lv: [6, 15], realms: ["albion"] },
+    { id: "aasflatterer", name: "Aasflatterer", arch: "fledermaus", color: "#3a2f3a", accent: "#ff5a3d", lv: [6, 14], realms: ["albion", "hibernia"] },
+    { id: "netzlauerer", name: "Netzlauerer", arch: "spinne", color: "#4a3a2a", accent: "#ff3a3a", lv: [7, 15], realms: ["hibernia", "midgard"] },
+    { id: "lehmgolem", name: "Lehmgolem", arch: "golem", color: "#8a6a4a", accent: "#ffb13b", lv: [8, 16], realms: ["albion"] },
+    { id: "knochenlaeufer", name: "Knochenläufer", arch: "ghul", color: "#d9cfb8", accent: "#4fa9ff", lv: [6, 15], realms: ["albion"] },
+    { id: "faulschlund", name: "Faulschlund", arch: "schlund", color: "#4a3a4a", accent: "#c47bff", lv: [7, 16], realms: ["hibernia"] },
+    { id: "sumpftroll", name: "Sumpftroll", arch: "troll", color: "#4f6a4a", accent: "#ffcf5a", lv: [14, 25], realms: ["hibernia", "midgard"] },
+    { id: "grabritter", name: "Grabritter", arch: "todesritter", color: "#4a4f5a", accent: "#7fffb0", lv: [15, 25], realms: ["albion"] },
+    { id: "sporenschrecken", name: "Sporenschrecken", arch: "pilz", color: "#6a3f8a", accent: "#d9f27a", lv: [14, 24], realms: ["hibernia"] },
+    { id: "fahlerschemen", name: "Fahler Schemen", arch: "schemen", color: "#a8b8c8", accent: "#9fe3ff", lv: [15, 26], realms: ["albion", "midgard"] },
+    { id: "felsgolem", name: "Felsgolem", arch: "golem", color: "#6a6e76", accent: "#59d1ff", lv: [16, 26], realms: ["albion", "midgard"] },
+    { id: "dornenhirte", name: "Dornenhirte", arch: "baum", color: "#4a3a2a", accent: "#c0392b", lv: [15, 25], realms: ["hibernia"] },
+    { id: "frostwolf", name: "Frostwolf", arch: "wolf", color: "#c8dcef", accent: "#4fa9ff", lv: [24, 35], realms: ["midgard"] },
+    { id: "kristallweberin", name: "Kristallweberin", arch: "spinne", color: "#3f8a96", accent: "#e9fbff", lv: [24, 36], realms: ["midgard", "hibernia"] },
+    { id: "knochenfuerst", name: "Knochenfürst", arch: "ghul", color: "#e9e0c8", accent: "#ff3a3a", lv: [25, 36], realms: ["albion"] },
+    { id: "blutkultist", name: "Blutkultist", arch: "kultist", color: "#5a1414", accent: "#ff3a5a", lv: [24, 35], realms: ["albion"] },
+    { id: "donnerkrebs", name: "Donnerkrebs", arch: "krebs", color: "#2f4f8f", accent: "#ffe45a", lv: [26, 36], realms: ["midgard", "albion"] },
+    { id: "irrlichtschemen", name: "Irrlichtschemen", arch: "schemen", color: "#6fdfa8", accent: "#2a7a5a", lv: [25, 36], realms: ["hibernia"] },
+    { id: "schwelwurm", name: "Schwelwurm", arch: "drache", color: "#8a2f1f", accent: "#ffcf5a", lv: [34, 48], realms: ["albion"] },
+    { id: "eisengolem", name: "Eisengolem", arch: "golem", color: "#4d5660", accent: "#ff7a3d", lv: [34, 47], realms: ["albion"] },
+    { id: "schattenwolf", name: "Schattenwolf", arch: "wolf", color: "#2a2633", accent: "#c47bff", lv: [35, 48], realms: ["midgard", "hibernia", "albion"] },
+    { id: "bergtroll", name: "Bergtroll", arch: "troll", color: "#6a7a8a", accent: "#9fe3ff", lv: [34, 48], realms: ["midgard"] },
+    { id: "giftmorchel", name: "Giftmorchel", arch: "pilz", color: "#3f6a2a", accent: "#e6ff5a", lv: [34, 47], realms: ["hibernia"] },
+    { id: "moderhirte", name: "Moderhirte", arch: "baum", color: "#2f2a1f", accent: "#7fffb0", lv: [36, 48], realms: ["hibernia"] },
+    { id: "sturmdrache", name: "Sturmdrache", arch: "drache", color: "#2f3f8f", accent: "#9fe3ff", lv: [46, 999], realms: ["midgard", "albion"] },
+    { id: "leerenschemen", name: "Leerenschemen", arch: "schemen", color: "#1f1b2e", accent: "#c47bff", lv: [46, 999], realms: ["albion", "midgard", "hibernia"] },
+    { id: "obsidiangolem", name: "Obsidiangolem", arch: "golem", color: "#1f1c26", accent: "#ff5a8a", lv: [46, 999], realms: ["albion", "midgard"] },
+    { id: "leerenspinne", name: "Leerenspinne", arch: "spinne", color: "#1a1626", accent: "#c47bff", lv: [46, 999], realms: ["hibernia"] },
+    { id: "todesritter", name: "Todesritter", arch: "todesritter", color: "#1f2026", accent: "#ff3a3a", lv: [46, 999], realms: ["albion", "midgard"] },
+    { id: "urschlund", name: "Urschlund", arch: "schlund", color: "#2a1f3a", accent: "#ff5a3d", lv: [46, 999], realms: ["hibernia"] },
+    // Reichstypische Gegner: Midgard (Frost, Trolle, Wiedergaenger), Hibernia (Feenwesen, Moore, Haine)
+    { id: "eiskobold", name: "Eiskobold", arch: "goblin", color: "#8aa8c8", accent: "#9fe3ff", lv: [1, 7], realms: ["midgard"] },
+    { id: "draugling", name: "Draugling", arch: "ghul", color: "#7a8a9a", accent: "#9fe3ff", lv: [1, 7], realms: ["midgard"] },
+    { id: "feenwolf", name: "Feenwolf", arch: "wolf", color: "#4f7a5a", accent: "#9fffc8", lv: [2, 8], realms: ["hibernia"] },
+    { id: "runenhexe", name: "Runenhexe", arch: "kultist", color: "#3a4a6a", accent: "#9fd8ff", lv: [6, 15], realms: ["midgard"] },
+    { id: "reifgolem", name: "Reifgolem", arch: "golem", color: "#a8bcd0", accent: "#9fe3ff", lv: [8, 16], realms: ["midgard"] },
+    { id: "draugrfuerst", name: "Draugrfürst", arch: "ghul", color: "#5a6a7a", accent: "#9fe3ff", lv: [15, 25], realms: ["midgard"] },
+    { id: "nebeldruide", name: "Nebeldruide", arch: "kultist", color: "#2f5a3a", accent: "#9fffc8", lv: [24, 35], realms: ["hibernia"] },
+    { id: "eiswyrm", name: "Eiswyrm", arch: "drache", color: "#dfeaf4", accent: "#4fa9ff", lv: [34, 48], realms: ["midgard"] },
+    { id: "smaragdwyrm", name: "Smaragdwyrm", arch: "drache", color: "#2f8a5a", accent: "#9fffc8", lv: [46, 999], realms: ["hibernia"] },
   ];
+
+  // Nachtwesen fuer das Mondtor: nur bei Nacht, je Reich eigene Geschoepfe
+  const NIGHT_FOES = {
+    albion: [
+      { id: "nacht-weissefrau", name: "Die Weiße Frau", arch: "schemen", color: "#e6ecff", accent: "#9fd8ff" },
+      { id: "nacht-grabwaechter", name: "Grabwächter", arch: "ghul", color: "#8a8a9a", accent: "#e6ecff" },
+      { id: "nacht-mahr", name: "Nachtmahr", arch: "wolf", color: "#1f1c2a", accent: "#e6ecff" },
+      { id: "nacht-hexer", name: "Mondhexer", arch: "kultist", color: "#2a2a4a", accent: "#bfd0ff" },
+    ],
+    midgard: [
+      { id: "nacht-wiedergaenger", name: "Wiedergänger", arch: "ghul", color: "#6a7a8a", accent: "#bfe8ff" },
+      { id: "nacht-mondwolf", name: "Mondwolf", arch: "wolf", color: "#c8d4e4", accent: "#e6ecff" },
+      { id: "nacht-alb", name: "Nachtalb", arch: "goblin", color: "#3a4256", accent: "#bfe8ff" },
+      { id: "nacht-nordlicht", name: "Nordlichtschemen", arch: "schemen", color: "#5fdfb0", accent: "#b48cff" },
+    ],
+    hibernia: [
+      { id: "nacht-irrlicht", name: "Irrlicht", arch: "schemen", color: "#7fffb0", accent: "#e6ff8a" },
+      { id: "nacht-moorhexe", name: "Moorhexe", arch: "kultist", color: "#2a3a2a", accent: "#9fffc8" },
+      { id: "nacht-sternspinne", name: "Sternspinne", arch: "spinne", color: "#2a2a4a", accent: "#e6ecff" },
+      { id: "nacht-mondpilz", name: "Mondmorchel", arch: "pilz", color: "#4a4a8a", accent: "#bfd0ff" },
+    ],
+  };
 
   const DUNGEONS = [
     {
       id: "pilzgrotte", name: "Die Sporengrotte", unlock: 10, base: 10, theme: "#5f9f4a",
-      desc: "Unter der Freistatt wächst etwas. Es riecht nach Waldboden und nach Absicht.",
+      desc: "Unter deiner Heimatinsel wächst etwas. Es riecht nach Waldboden und nach Absicht.",
       bosses: [
         { name: "Sporenwächter Muff", arch: "pilz", color: "#8a6a4a", accent: "#e6ff5a" },
         { name: "Glibbmutter", arch: "schlund", color: "#4a6a3a", accent: "#d9f27a" },
@@ -1145,7 +1183,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     { t: "Zerbrechliche Fracht", x: "Eine Kiste mit der Aufschrift „Nicht öffnen, flüstert“ muss nach {o}. Unterwegs wartet {m}. Die Kiste flüstert übrigens wirklich." },
     { t: "Nachtruhe für {o}", x: "Seit Tagen heult {m} in {o} schief und sehr laut den Mond an. Die Anwohner wünschen ein Ende des Konzerts." },
     { t: "Pilze mit Leibwache", x: "{p} braucht Pilze aus {o}. Die Pilze haben allerdings einen Leibwächter: {m}." },
-    { t: "Die Steuerprüfung", x: "Das Steueramt der Freistatt bittet um Mithilfe. {m} haust seit drei Jahren in {o} und hat noch nie Steuern gezahlt." },
+    { t: "Die Steuerprüfung", x: "Das Steueramt der Insel bittet um Mithilfe. {m} haust seit drei Jahren in {o} und hat noch nie Steuern gezahlt." },
     { t: "Ein Brief nach {o}", x: "Ein Liebesbrief muss sicher nach {o}. Der letzte Bote hat gekündigt, nachdem er {m} begegnet ist." },
     { t: "Wegezoll", x: "Auf der Hängebrücke nach {o} verlangt {m} plötzlich Zoll. Niemand weiß, wer das genehmigt hat." },
     { t: "Geräusche im Keller", x: "{p} hört Geräusche im Keller. Der Keller liegt dummerweise in {o}. Und dort unten wohnt jetzt {m}." },
@@ -1218,7 +1256,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   const ACHIEVEMENTS = [
     { id: "ersterSieg", name: "Erste Schramme", desc: "Gewinne deinen ersten Kampf.", perlen: 1 },
     { id: "quest10", name: "Fleißige Hände", desc: "Schließe 10 Aufträge ab.", perlen: 2 },
-    { id: "quest50", name: "Die halbe Freistatt kennt dich", desc: "Schließe 50 Aufträge ab.", perlen: 4 },
+    { id: "quest50", name: "Die halbe Insel kennt dich", desc: "Schließe 50 Aufträge ab.", perlen: 4 },
     { id: "quest150", name: "Auftragslegende", desc: "Schließe 150 Aufträge ab.", perlen: 8 },
     { id: "horde", name: "Hordenbrecher", desc: "Gewinne einen seltenen Hordenauftrag.", perlen: 2 },
     { id: "stufe10", name: "Zweistellig", desc: "Erreiche Stufe 10.", perlen: 3 },
@@ -1236,6 +1274,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     { id: "kapitel3", name: "Chronist", desc: "Schließe drei Kapitel der Chronik ab.", perlen: 4 },
     { id: "gilde", name: "Gemeinsam stark", desc: "Tritt einer Gilde bei oder gründe eine.", perlen: 2 },
     { id: "heim", name: "Eigene vier Wände", desc: "Baue dein Heim zur Steinkate aus.", perlen: 3 },
+    { id: "mondjaeger", name: "Kind der Nacht", desc: "Gewinne 5 Nachtjagden am Mondtor.", perlen: 4 },
   ];
 
   const WELL_PRIZES = [
@@ -1250,7 +1289,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   ];
 
   const NPCS = {
-    ottilie: { name: "Hüterin Ottilie", role: "Wächterin der Freistatt" },
+    ottilie: { name: "Hüterin Ottilie", role: "Wächterin deiner Heimatinsel" },
     hulda: { name: "Hulda Humpenhold", role: "Wirtin der Schiefen Krähe" },
     brumm: { name: "Brumm Eisenbart", role: "Schmied" },
     zinnober: { name: "Madame Zinnober", role: "Händlerin für Kuriositäten" },
@@ -1258,6 +1297,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     krawall: { name: "Baronin Krawall", role: "Herrin des Rings der Reiche" },
     hufnagel: { name: "Henrietta Hufnagel", role: "Stallmeisterin" },
     seherin: { name: "Die Seherin Maeve", role: "Hüterin der Chronik" },
+    mondhaendler: { name: "Selene Silberblick", role: "Händlerin, die nur nachts kommt" },
   };
 
   const BUILDINGS = [
@@ -1273,12 +1313,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     { id: "gildenhalle", name: "Gildenhalle", short: "Gilde" },
     { id: "brunnen", name: "Wunschbrunnen", short: "Brunnen" },
     { id: "heim", name: "Dein Heim", short: "Heim" },
+    { id: "mondtor", name: "Das Mondtor", short: "Mondtor", npc: "mondhaendler", night: true },
   ];
 
   SB.data = {
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
-    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
+    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
     POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS,
   };
 })();
@@ -1583,7 +1624,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       bestiary: {},
       ach: {},
       stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 },
-      daily: { day: U.dayKey(now), wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0 },
+      daily: { day: U.dayKey(now), wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
       npcSeed: U.hash("npc:" + opts.name + now),
       npcHonor: {},
       settings: { sound: true, music: true, quality: "hoch", fastFights: false, dayCycle: "zyklus" },
@@ -1644,6 +1685,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     S.house.furn = S.house.furn || {};
     S.guild = S.guild || null;
     S.seen = S.seen || {};
+    S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
+    S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
     for (const s of D.SLOTS) if (!(s in S.equip)) S.equip[s] = null;
@@ -1809,7 +1852,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const prof = { hpMult: T.hpMult, armorCap: T.armorCap, block: T.block, evade: T.evade, unblockable: T.unblockable, dmgMult: T.dmgMult, special: T.special, critMult: 2, critBonus: 0 };
     const wAvg = m.weapon * (0.85 + 0.15 * p) + (E.baseDmg(L)[0] + E.baseDmg(L)[1]) / 2;
     return {
-      kind: "monster", id: mon.id, name: mon.name, arch: mon.arch, color: mon.color, accent: mon.accent,
+      kind: "monster", id: mon.id, name: mon.name, arch: mon.arch, color: mon.color, accent: mon.accent, realms: mon.realms || null,
       boss: !!opts.boss, final: !!opts.final, level: L, mainKey: type, attrs, prof,
       maxHp: Math.round(attrs.konstitution * prof.hpMult * (L + 1) * hpBoost),
       wMin: Math.max(1, Math.round(wAvg * 0.8)), wMax: Math.max(2, Math.round(wAvg * 1.2)),
@@ -1983,6 +2026,39 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (cur >= E.energyMax(S)) return 0;
     return (1 - (cur - Math.floor(cur))) * E.C.ENERGY_REGEN_MS;
   };
+  /* Tageszeit: 0 = Mitternacht, 0.5 = Mittag. Modi: zyklus (20 Minuten), echtzeit, tag, nacht */
+  E.C.DAY_CYCLE_MS = 20 * 60 * 1000;
+  E.dayTime = function (mode, now) {
+    now = now || E.now();
+    if (mode === "tag") return 0.5;
+    if (mode === "nacht") return 0.02;
+    if (mode === "echtzeit") {
+      const d = new Date(now);
+      return (d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600) / 24;
+    }
+    return (now / E.C.DAY_CYCLE_MS + 0.3) % 1;
+  };
+  const smooth = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  E.dayInfo = function (t) {
+    const sunH = -Math.cos(t * 2 * Math.PI);
+    const day = smooth(-0.12, 0.3, sunH);
+    const dusk = Math.max(0, 1 - Math.abs(sunH - 0.02) / 0.28);
+    return { t, sunH, day, dusk, night: 1 - day };
+  };
+  E.isNight = (mode, now) => E.dayInfo(E.dayTime(mode, now)).night >= 0.5;
+  // Millisekunden bis zum naechsten Wechsel zwischen Tag und Nacht (Infinity, wenn er nie kommt)
+  E.nightChangeIn = function (mode, now) {
+    now = now || E.now();
+    if (mode === "tag" || mode === "nacht") return Infinity;
+    const cur = E.isNight(mode, now);
+    const step = mode === "echtzeit" ? 60000 : 5000;
+    const span = mode === "echtzeit" ? 86400000 : E.C.DAY_CYCLE_MS;
+    for (let dt = step; dt <= span; dt += step) if (E.isNight(mode, now + dt) !== cur) return dt;
+    return Infinity;
+  };
   E.nextMidnight = function (now) {
     const d = new Date(now || E.now());
     d.setHours(24, 0, 0, 0);
@@ -1992,7 +2068,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     now = now || E.now();
     const day = U.dayKey(now);
     if (S.daily.day !== day) {
-      S.daily = { day, wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0 };
+      S.daily = { day, wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 };
       toast("Ein neuer Tag auf Schwebfels. Der Wunschbrunnen glitzert wieder.", "info");
     }
     for (const k of ["schmiede", "arkanum"]) if (!S.shops[k] || now - S.shops[k].ts > E.C.SHOP_REFRESH) E.refreshShop(S, k, true);
@@ -2056,8 +2132,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   const DIFF = [null, { name: "Gemütlich", power: 0.88, reward: 0.85 }, { name: "Ordentlich", power: 0.97, reward: 1.0 }, { name: "Halsbrecherisch", power: 1.06, reward: 1.35 }];
   E.DIFF = DIFF;
   E.TIERS = TIERS;
-  E.monstersFor = function (L) {
-    let list = D.MONSTERS.filter((m) => L >= m.lv[0] && L <= m.lv[1]);
+  // Gegner passend zur Stufe; mit Reich bevorzugt die Geschoepfe der eigenen Heimatinsel
+  E.monstersFor = function (L, realm) {
+    const fits = (m) => L >= m.lv[0] && L <= m.lv[1];
+    let list = D.MONSTERS.filter(fits);
+    if (realm) {
+      const own = list.filter((m) => !m.realms || m.realms.indexOf(realm) >= 0);
+      if (own.length >= 3) return own;
+    }
     if (list.length < 3) list = D.MONSTERS.slice().sort((a, b) => Math.abs((a.lv[0] + Math.min(a.lv[1], 60)) / 2 - L) - Math.abs((b.lv[0] + Math.min(b.lv[1], 60)) / 2 - L)).slice(0, 6);
     return list;
   };
@@ -2066,7 +2148,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const tier = TIERS[idx % 3 === 0 ? U.ri(r, 0, 1) : idx % 3 === 1 ? 1 : U.ri(r, 1, 2)];
     const diff = U.wpick(r, [{ d: 1, w: 38 }, { d: 2, w: 42 }, { d: 3, w: 20 }]).d;
     const rare = L >= 3 && r() < 0.08 + 0.04 * diff;
-    const pool = E.monstersFor(L);
+    const pool = E.monstersFor(L, S.realm);
     let mon = U.pick(r, pool);
     for (let k = 0; k < 6 && used.mons.indexOf(mon.id) >= 0; k++) mon = U.pick(r, pool);
     used.mons.push(mon.id);
@@ -2262,6 +2344,88 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return rew;
   };
 
+  /* ---------------- Mondtor: nur bei Nacht ---------------- */
+  E.C.NIGHT_HUNTS = 3;
+  E.NIGHT_POWER = { minion: 0.69, boss: 0.9 };
+  E.nightHuntsLeft = (S) => Math.max(0, E.C.NIGHT_HUNTS - ((S.daily && S.daily.nightHunts) || 0));
+  // Die Nachtjagd: zwei Nachtwesen der eigenen Heimatinsel nacheinander
+  E.nightHuntFoes = function (S, hero, n) {
+    const list = D.NIGHT_FOES[S.realm] || D.NIGHT_FOES.albion;
+    const r = U.rng(U.hash(S.name + S.daily.day + ":" + n));
+    const a = U.pick(r, list);
+    let b = U.pick(r, list);
+    for (let k = 0; k < 6 && b.id === a.id; k++) b = U.pick(r, list);
+    const L = S.level;
+    return [
+      E.monsterFighter(a, L, E.adaptPower(hero, L, E.NIGHT_POWER.minion), {}),
+      E.monsterFighter(b, L + 1, E.adaptPower(hero, L + 1, E.NIGHT_POWER.boss), { boss: true }),
+    ];
+  };
+  E.nightHuntPreview = function (S, now) {
+    const hero = E.heroFighter(S, now);
+    return E.nightHuntFoes(S, hero, (S.daily.nightHunts || 0) + 1);
+  };
+  E.nightHunt = function (S, night, now) {
+    now = now || E.now();
+    if (!night) return { ok: false, msg: "Das Mondtor öffnet sich erst, wenn es Nacht wird." };
+    if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
+    if (E.nightHuntsLeft(S) <= 0) return { ok: false, msg: "Für heute Nacht sind die Nachtwesen gebannt. Morgen wieder." };
+    const hero = E.heroFighter(S, now);
+    const n = (S.daily.nightHunts || 0) + 1;
+    const foes = E.nightHuntFoes(S, hero, n);
+    const chain = E.simulateChain(hero, foes, U.hash(S.name + "nacht" + S.daily.day + n));
+    return { ok: true, fight: { hero, foes, chain, n } };
+  };
+  E.resolveNightHunt = function (S, fight) {
+    const won = fight.chain.winner === 0;
+    S.daily.nightHunts = (S.daily.nightHunts || 0) + 1;
+    const rew = { won, xp: 0, gold: 0, item: null, itemSold: 0, perle: 0 };
+    const L = S.level;
+    if (won) {
+      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (1 + E.xpBonus(S)));
+      rew.gold = Math.round(E.goldBase(L) * 1.8 * (1 + E.goldBonus(S)));
+      E.gainGold(S, rew.gold);
+      const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
+      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 }), rew);
+      if (r() < 0.35) {
+        S.perlen += 1;
+        rew.perle = 1;
+      }
+      for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
+      S.stats.wins++;
+      S.stats.nightHunts = (S.stats.nightHunts || 0) + 1;
+    } else {
+      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 0.3);
+      S.stats.losses++;
+    }
+    E.gainXp(S, rew.xp);
+    E.checkAch(S);
+    return rew;
+  };
+  // Der Mondhaendler: drei besondere Stuecke je Nacht, mindestens selten, oft episch
+  E.moonShop = function (S, now) {
+    now = now || E.now();
+    const day = U.dayKey(now);
+    const cur = S.shops.mond;
+    if (!cur || cur.day !== day || cur.level !== S.level) {
+      const r = U.rng(U.hash(S.name + "mond" + day + S.level));
+      const items = [0, 1, 2].map((i) => {
+        const it = E.makeItem(r, { level: S.level + 1, cls: S.cls, slot: U.pick(r, D.SLOTS), minRarity: i === 2 ? "episch" : "selten", boost: 1.2 });
+        it.value = Math.round(it.value * 1.6);
+        return it;
+      });
+      // bereits gekaufte Plaetze bleiben am selben Tag leer
+      const sold = cur && cur.day === day ? cur.items.map((x) => x === null) : [false, false, false];
+      S.shops.mond = { day, level: S.level, ts: now, items: items.map((it, i) => (sold[i] ? null : it)) };
+    }
+    return S.shops.mond.items;
+  };
+  E.buyMoonItem = function (S, idx, night, now) {
+    if (!night) return { ok: false, msg: "Selene Silberblick verkauft nur bei Nacht." };
+    E.moonShop(S, now);
+    return E.buyItem(S, "mond", idx);
+  };
+
   /* ---------------- Wachturm ---------------- */
   E.shiftPay = (S) => Math.round(E.goldBase(S.level) * 0.8);
   E.startGuard = function (S, shifts, now) {
@@ -2435,23 +2599,76 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   /* ---------------- Arena: Ring der Reiche ---------------- */
+  /* Vier Herausforderer aus den anderen Reichen, deren Staerke zum Helden passt:
+     einer leicht, zwei ausgeglichen, einer schwer. Echte Mitspieler und Helden der Ranglisten haben Vorrang,
+     fehlt ein passender, tritt ein Wanderkaempfer gleicher Stufe an. Die Auswahl bleibt bis zum naechsten Kampf. */
+  E.ARENA_TARGETS = [{ c: 0.78, label: "Leicht" }, { c: 0.58, label: "Ausgeglichen" }, { c: 0.46, label: "Ausgeglichen" }, { c: 0.32, label: "Schwer" }];
+  E.wanderFighter = function (w) {
+    const f = E.modelHeroFighter(w.level, w.cls, w.q);
+    Object.assign(f, { name: w.name, race: w.race, realm: w.realm, gender: w.gender, look: w.look, gear: E.npcGear(w), kind: "hero" });
+    if (D.CLASSES[w.cls].arch === "krieger" && (!f.gear.nebenhand || f.gear.nebenhand.base !== "schild")) f.prof.block = 0;
+    return f;
+  };
+  E.rivalFighter = (opp) => opp.fighter || (opp.kind === "wander" ? E.wanderFighter(opp) : E.npcFighter(opp));
   E.arenaRivals = function (S, now, remote) {
     now = now || E.now();
+    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm;
     const all = E.allHeroes(S, now, remote);
     const me = all.find((h) => h.kind === "me");
-    const foes = all.filter((h) => h.kind !== "me" && h.realm !== S.realm);
-    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + Math.floor(now / E.C.ARENA_CD));
-    const near = (lo, hi) => {
-      const pool = foes.filter((h) => h.honor >= me.honor * lo && h.honor <= me.honor * hi);
-      return pool.length ? U.pick(r, pool) : null;
-    };
-    const picks = [near(1.1, 2.0), near(0.85, 1.15), near(0.4, 0.9)];
-    const fallback = foes.slice().sort((a, b) => Math.abs(a.honor - me.honor) - Math.abs(b.honor - me.honor));
-    const out = [];
-    for (const p of picks.concat(fallback)) {
-      if (p && !out.find((x) => x.id === p.id)) out.push(p);
-      if (out.length >= 3) break;
+    const byId = {};
+    all.forEach((h) => (byId[h.id] = h));
+    const cache = S.arena.rivals;
+    if (cache && cache.stamp === stamp && cache.until > now) {
+      const list = cache.list.map((e) => (e.kind === "wander" ? e : byId[e.id] ? Object.assign({}, byId[e.id], { tier: e.tier, chance: e.chance }) : null)).filter(Boolean);
+      if (list.length === cache.list.length) return list;
     }
+    const hero = E.heroFighter(S, now);
+    const L = S.level;
+    const span = Math.max(3, Math.round(L * 0.12));
+    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + L * 31);
+    const est = (f, salt) => E.estimateWin(hero, [f], 24, "ar" + salt);
+    let pool = all.filter((h) => h.kind !== "me" && h.realm !== S.realm && Math.abs(h.level - L) <= span);
+    pool.sort((a, b) => (a.kind === "real" ? -1 : 0) - (b.kind === "real" ? -1 : 0) || r() - 0.5);
+    pool = pool.slice(0, 24).map((h) => Object.assign({}, h, { chance: est(E.rivalFighter(h), h.id) }));
+    const out = [];
+    E.ARENA_TARGETS.forEach((tg, ti) => {
+      let best = null;
+      for (const h of pool) {
+        if (out.find((x) => x.id === h.id)) continue;
+        const d = Math.abs(h.chance - tg.c) - (h.kind === "real" ? 0.05 : 0);
+        if (d <= 0.13 && (!best || d < best.d)) best = { h, d };
+      }
+      if (best) {
+        out.push(Object.assign(best.h, { tier: ti }));
+        return;
+      }
+      // Wanderkaempfer: Staerke so lange anpassen, bis die Siegchance zum Ziel passt
+      const realms = Object.keys(D.REALMS).filter((x) => x !== S.realm);
+      const realm = realms[(ti + Math.floor(r() * 2)) % realms.length];
+      const races = Object.keys(D.RACES).filter((x) => D.RACES[x].realm === realm);
+      const race = U.pick(r, races);
+      const R0 = D.RACES[race];
+      const cls = E.CLASS_FOR[realm][U.pick(r, Object.keys(D.ARCHETYPES))];
+      const w = {
+        id: "w-" + U.hash(stamp + ti + now), kind: "wander", name: U.pick(r, D.NPC_FIRST) + " " + U.pick(r, D.NPC_LAST), race, realm, cls,
+        gender: r() < 0.5 ? "m" : "w", level: Math.max(1, L + (tg.c < 0.4 ? 1 : tg.c > 0.7 ? -1 : 0)), q: 1, gearSeed: Math.floor(r() * 1e9), guild: null, tier: ti,
+        look: { skin: U.pick(r, R0.skins), hair: U.pick(r, R0.hairs), hairStyle: U.ri(r, 0, 5), beard: U.ri(r, 0, 4), eyes: U.pick(r, D.EYES).c, tattoo: r() < 0.6 ? U.pick(r, D.TATTOOS).id : "keine", tattooColor: U.pick(r, D.TATTOO_COLORS).c, scar: r() < 0.3 ? U.pick(r, D.SCARS).id : "keine", horns: U.ri(r, 0, 2) },
+      };
+      let lo = 0.15;
+      let hi = 1.8;
+      for (let k = 0; k < 7; k++) {
+        w.q = (lo + hi) / 2;
+        const c = est(E.wanderFighter(w), w.id + k);
+        if (c > tg.c) lo = w.q;
+        else hi = w.q;
+      }
+      w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
+      w.chance = est(E.wanderFighter(w), w.id);
+      w.honor = Math.max(0, Math.round(me.honor * (1.3 - tg.c * 0.6)));
+      out.push(w);
+    });
+    out.sort((a, b) => b.chance - a.chance);
+    S.arena.rivals = { stamp, until: now + 30 * 60 * 1000, list: out.map((h) => (h.kind === "wander" ? h : { id: h.id, kind: h.kind, tier: h.tier, chance: h.chance })) };
     return out;
   };
   E.arenaFight = function (S, opp, now) {
@@ -2460,7 +2677,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (S.arena.next > now) return { ok: false, msg: "Baronin Krawall lässt dich noch nicht wieder in den Ring." };
     if (opp.realm === S.realm) return { ok: false, msg: "Im Ring kämpfen nur Helden verschiedener Reiche." };
     const hero = E.heroFighter(S, now);
-    const foe = opp.fighter || E.npcFighter(opp);
+    const foe = E.rivalFighter(opp);
     const chain = E.simulateChain(hero, [foe], U.hash(S.name + opp.id + now));
     return { ok: true, fight: { hero, foes: [foe], chain, opp } };
   };
@@ -2471,6 +2688,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const gain = U.clamp(Math.round(22 + (opp.honor - S.honor) / 15), 6, 60);
     const rew = { won, honor: 0, gold: 0, xp: 0 };
     S.arena.next = now + E.C.ARENA_CD;
+    S.arena.rivals = null;
     if (won) {
       S.honor += gain;
       rew.honor = gain;
@@ -2739,6 +2957,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (S.level >= 25) E.grantAch(S, "stufe25");
     if (S.level >= 40) E.grantAch(S, "stufe40");
     if (S.stats.arenaWins >= 10) E.grantAch(S, "arena10");
+    if ((S.stats.nightHunts || 0) >= 5) E.grantAch(S, "mondjaeger");
     if (Object.keys(S.bestiary).length >= 12) E.grantAch(S, "bestiarium12");
     if (now !== undefined) {
       const me = E.allHeroes(S, now, SB.remoteHeroes || null).find((h) => h.kind === "me");
@@ -3105,7 +3324,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 </script>
 <script>/* src/audio.js */
 /* Helden von Schwebfels - Klangeffekte und Musik, live mit WebAudio erzeugt (keine fremden Aufnahmen).
-   Musik je Ort: Insel bei Tag und bei Nacht, Taverne, Kampf, Tiefe (Dungeon), Heim, Chronik. */
+   Musik je Ort: Insel bei Tag und bei Nacht, Taverne, Kampf, Tiefe (Dungeon), Heim, Chronik.
+   Jedes Reich klingt anders: Albion hoefisch (Laute, Schalmei, Trommel im Dreiertakt),
+   Midgard duester nordisch (Bordun, Fidel, Kriegstrommeln, Horn, tiefer Chor),
+   Hibernia keltisch (Harfe, Flöte mit Verzierungen, Rahmentrommel im Jig). */
 (function () {
   "use strict";
   const SB = (globalThis.SB = globalThis.SB || {});
@@ -3404,6 +3626,100 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
   }
 
+  // Weitere Instrumente fuer die Reichsmusik
+  function vib(o, t, dur, rate, depth) {
+    const c = A.ctx;
+    const lfo = c.createOscillator();
+    lfo.frequency.value = rate;
+    const lg = c.createGain();
+    lg.gain.setValueAtTime(0, t);
+    lg.gain.linearRampToValueAtTime(depth, t + Math.min(0.3, dur * 0.5));
+    lfo.connect(lg);
+    lg.connect(o.detune);
+    lfo.start(t);
+    lfo.stop(t + dur + 0.05);
+  }
+  function voice(n, t, dur, vol, o) {
+    // gemeinsamer Baustein: Oszillator, Filter, Huellkurve
+    const c = A.ctx;
+    const osc = c.createOscillator();
+    osc.type = o.type || "sawtooth";
+    osc.frequency.value = hz(n);
+    if (o.vib) vib(osc, t, dur, o.vib[0], o.vib[1]);
+    const f = c.createBiquadFilter();
+    f.type = o.filter || "lowpass";
+    f.frequency.value = o.freq || 1500;
+    if (o.q) f.Q.value = o.q;
+    const g = c.createGain();
+    const at = o.attack || 0.02;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + at);
+    g.gain.setValueAtTime(vol, t + Math.max(at, dur * (o.hold || 0.7)));
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    osc.connect(f);
+    f.connect(g);
+    g.connect(musicBus);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+  const shawm = (n, t, dur, vol) => voice(n, t, dur, vol, { type: "sawtooth", filter: "bandpass", freq: hz(n) * 2.2, q: 1.4, attack: 0.04, vib: [5.5, 8] });
+  const fiddle = (n, t, dur, vol) => {
+    voice(n, t, dur, vol, { type: "sawtooth", freq: 1900, attack: 0.14, hold: 0.6, vib: [5, 14] });
+    voice(n, t, dur, vol * 0.4, { type: "sawtooth", freq: 900, attack: 0.2, hold: 0.6 });
+  };
+  const horn = (n, t, dur, vol) => voice(n, t, dur, vol, { type: "sawtooth", freq: 650, attack: 0.25, hold: 0.75, vib: [4, 5] });
+  const choir = (n, t, dur, vol) => {
+    voice(n, t, dur, vol, { type: "sawtooth", filter: "bandpass", freq: 520, q: 5, attack: 0.5, hold: 0.6 });
+    voice(n, t, dur, vol * 0.7, { type: "sawtooth", filter: "bandpass", freq: 880, q: 5, attack: 0.6, hold: 0.6 });
+  };
+  function harp(n, t, dur, vol) {
+    const c = A.ctx;
+    const f = c.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.setValueAtTime(4200, t);
+    f.frequency.exponentialRampToValueAtTime(900, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    for (const [type, mul, v] of [["triangle", 1, 1], ["sine", 2, 0.35]]) {
+      const o = c.createOscillator();
+      o.type = type;
+      o.frequency.value = hz(n) * mul;
+      const og = c.createGain();
+      og.gain.value = v;
+      o.connect(og);
+      og.connect(f);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+    f.connect(g);
+    g.connect(musicBus);
+  }
+  function whistle(n, t, dur, vol, orn) {
+    // Blechfloete: Verzierung (kurzer Vorschlag) und etwas Atem
+    if (orn) {
+      voice(n + 2, t, 0.07, vol * 0.8, { type: "sine", freq: 6000, attack: 0.01, hold: 0.5 });
+      t += 0.06;
+      dur -= 0.06;
+    }
+    voice(n, t, dur, vol, { type: "sine", freq: 6000, attack: 0.03, hold: 0.75, vib: [6, 10] });
+    noise(Math.min(0.3, dur), vol * 0.25, "bandpass", hz(n), 0, null, musicBus, t, 8);
+  }
+  function clap(t, vol) {
+    noise(0.07, vol, "bandpass", 1600, 0, null, musicBus, t, 1.2);
+    noise(0.05, vol * 0.6, "bandpass", 1300, 0, null, musicBus, t + 0.012, 1.2);
+  }
+  function snare(t, vol) {
+    noise(0.12, vol, "highpass", 1800, 0, null, musicBus, t);
+    tone(220, 0.08, "triangle", vol * 0.5, 0, 160, musicBus, t);
+  }
+  // Melodie schrittweise durch eine Tonleiter fuehren
+  function walk(song, r, span) {
+    song.pos = Math.max(0, Math.min(song.scale.length - 1, (song.pos == null ? 3 : song.pos) + Math.floor(r() * (span || 3)) - Math.floor((span || 3) / 2)));
+    return song.scale[song.pos];
+  }
+
   // Tonleitern und Akkorde als MIDI-Noten
   const SONGS = {
     tag: {
@@ -3511,7 +3827,179 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       },
     },
   };
+
+  /* ---------- Albion: hoefisch, Dur und Mixolydisch, Dreiertakt ---------- */
+  SONGS["tag:albion"] = {
+    bpm: 96, beats: 3,
+    chords: [[50, 54, 57], [48, 52, 55], [43, 47, 50], [45, 49, 52], [50, 54, 57], [48, 52, 55], [43, 47, 50], [50, 54, 57]],
+    scale: [62, 64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 8];
+      bass(ch[0] - 12, t, sp * 2.6, 0.11);
+      [0, 2, 1].forEach((k, i) => pluck(ch[k] + 12, t + i * sp, sp * 1.1, 0.055));
+      pluck(ch[2] + 24, t + sp * 1.5, sp * 0.8, 0.035);
+      drum("frame", t, 0.28);
+      drum("hat", t + sp * 2, 0.04);
+      if (b % 8 < 6) {
+        shawm(walk(this, r) + 12, t, sp * 1.4, 0.035);
+        shawm(walk(this, r) + 12, t + sp * 1.5, sp * 1.4, 0.035);
+      } else shawm(ch[0] + 24, t, sp * 2.8, 0.035);
+    },
+  };
+  SONGS["nacht:albion"] = {
+    bpm: 58, beats: 4,
+    chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 48, 52]],
+    scale: [62, 64, 65, 67, 69, 70, 72, 74],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch.map((n) => n + 12), t, sp * 4.2, 0.03, 650);
+      bass(ch[0] - 12, t, sp * 4, 0.07);
+      [0, 1, 2, 1].forEach((k, i) => pluck(ch[k] + 12, t + i * sp, sp * 2, 0.045));
+      if (r() < 0.7) flute(walk(this, r) + 12, t + sp, sp * 2.4, 0.035);
+      if (b % 4 === 3) bell(ch[2] + 24, t + sp * 3, 0.03);
+    },
+  };
+  SONGS["kampf:albion"] = {
+    bpm: 132, beats: 4,
+    chords: [[38, 45, 50], [34, 41, 46], [36, 43, 48], [33, 40, 45]],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      for (let i = 0; i < 4; i++) bass(ch[0] + (i === 2 ? 7 : 0), t + i * sp, sp * 0.8, 0.13);
+      drum("kick", t, 0.45);
+      drum("tom", t + sp * 2, 0.35);
+      snare(t + sp, 0.18);
+      snare(t + sp * 3, 0.18);
+      snare(t + sp * 3.5, 0.1);
+      // Fanfare der Ritter
+      if (b % 2 === 0) [0, 1, 2].forEach((k, i) => shawm(ch[k] + 24, t + i * sp * 0.5, sp * 0.5, 0.05));
+      else shawm(ch[2] + 24, t, sp * 2, 0.05);
+      pad(ch.map((n) => n + 24), t, sp * 3.9, 0.025, 1400);
+    },
+  };
+
+  /* ---------- Midgard: duester, Bordun, Aeolisch, schwere Trommeln ---------- */
+  SONGS["tag:midgard"] = {
+    bpm: 66, beats: 4,
+    chords: [[38, 45], [38, 45], [36, 43], [41, 48]],
+    scale: [62, 64, 65, 67, 69, 70, 72, 74],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch, t, sp * 4.2, 0.05, 420);
+      drum("boom", t, 0.22);
+      drum("tom", t + sp * 2, 0.22);
+      if (b % 2 === 1) drum("tom", t + sp * 3.5, 0.15);
+      fiddle(walk(this, r) , t, sp * 1.9, 0.04);
+      fiddle(walk(this, r), t + sp * 2, sp * 1.9, 0.04);
+      if (b % 8 === 7) {
+        horn(45, t, sp * 1.5, 0.06);
+        horn(50, t + sp * 1.5, sp * 2.5, 0.06);
+      }
+    },
+  };
+  SONGS["nacht:midgard"] = {
+    bpm: 48, beats: 4,
+    chords: [[38, 45], [36, 43], [34, 41], [33, 40]],
+    scale: [57, 60, 62, 64, 65, 67, 69],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch, t, sp * 4.3, 0.045, 300);
+      choir(ch[1] + 12, t, sp * 4, 0.035);
+      noise(sp * 4, 0.03, "bandpass", 500, 0, 1600, musicBus, t, 2);
+      if (r() < 0.6) fiddle(this.scale[Math.floor(r() * this.scale.length)] + 12, t + sp, sp * 2.6, 0.03);
+      if (b % 4 === 0) drum("boom", t, 0.2);
+    },
+  };
+  SONGS["taverne:midgard"] = {
+    bpm: 112, beats: 4,
+    chords: [[50, 57], [48, 55], [46, 53], [45, 52]],
+    scale: [62, 64, 65, 67, 69, 71, 72, 74],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch, t, sp * 4.1, 0.035, 600);
+      for (let i = 0; i < 4; i++) drum("kick", t + i * sp, 0.4);
+      clap(t + sp, 0.22);
+      clap(t + sp * 3, 0.22);
+      for (let i = 0; i < 4; i++) fiddle(walk(this, r) + 12, t + i * sp, sp * 0.95, 0.035);
+      if (b % 4 === 3) horn(ch[0], t + sp * 2, sp * 2, 0.05);
+    },
+  };
+  SONGS["kampf:midgard"] = {
+    bpm: 120, beats: 4,
+    chords: [[38, 45, 50], [36, 43, 48], [34, 41, 46], [33, 40, 45]],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      drum("boom", t, 0.3);
+      for (let i = 0; i < 8; i++) drum(i % 2 ? "tom" : "kick", t + i * sp * 0.5, i % 4 === 0 ? 0.45 : 0.25);
+      for (let i = 0; i < 4; i++) bass(ch[0], t + i * sp, sp * 0.9, 0.12);
+      horn(ch[1], t, sp * 3.8, 0.05);
+      horn(ch[2], t, sp * 3.8, 0.04);
+      if (b % 2 === 1) {
+        clap(t + sp * 3, 0.3);
+        noise(0.18, 0.12, "bandpass", 700, 0, 400, musicBus, t + sp * 3, 3);
+      }
+      if (b % 4 === 3) choir(ch[2] + 12, t, sp * 4, 0.04);
+    },
+  };
+
+  /* ---------- Hibernia: keltisch, Dorisch, Jig im Sechsachteltakt ---------- */
+  SONGS["tag:hibernia"] = {
+    bpm: 120, beats: 6,
+    chords: [[50, 54, 57], [48, 52, 55], [50, 54, 57], [45, 49, 52]],
+    scale: [62, 64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      bass(ch[0] - 12, t, sp * 2.8, 0.09);
+      bass(ch[0] - 12, t + sp * 3, sp * 2.8, 0.08);
+      [0, 1, 2, 2, 1, 0].forEach((k, i) => harp(ch[k] + 12 + (i > 2 ? 12 : 0), t + i * sp, sp * 2.2, 0.05));
+      drum("frame", t, 0.32);
+      drum("frame", t + sp * 3, 0.26);
+      drum("hat", t + sp * 2, 0.03);
+      drum("hat", t + sp * 5, 0.03);
+      for (let i = 0; i < 6; i += r() < 0.3 ? 2 : 1) whistle(walk(this, r) + 12, t + i * sp, sp * 0.95, 0.03, r() < 0.2);
+    },
+  };
+  SONGS["nacht:hibernia"] = {
+    bpm: 54, beats: 4,
+    chords: [[52, 55, 59], [50, 54, 57], [48, 52, 55], [50, 54, 57]],
+    scale: [64, 66, 67, 69, 71, 73, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      pad(ch.map((n) => n + 12), t, sp * 4.2, 0.025, 700);
+      [0, 1, 2, 1, 2, 0, 1, 2].forEach((k, i) => harp(ch[k] + 12 + (i > 3 ? 12 : 0), t + i * sp * 0.5, sp * 2.5, 0.04));
+      if (r() < 0.6) whistle(walk(this, r) + 12, t + sp * 2, sp * 1.8, 0.025, r() < 0.4);
+      for (let i = 0; i < 3; i++) if (r() < 0.4) bell(this.scale[Math.floor(r() * this.scale.length)] + 12, t + r() * sp * 4, 0.025);
+    },
+  };
+  SONGS["taverne:hibernia"] = {
+    bpm: 140, beats: 4,
+    chords: [[50, 54, 57], [48, 52, 55], [47, 50, 54], [45, 49, 52]],
+    scale: [62, 64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      bass(ch[0] - 12, t, sp * 1.8, 0.1);
+      bass(ch[2] - 12, t + sp * 2, sp * 1.8, 0.09);
+      for (let i = 0; i < 4; i++) pluck(ch[i % 3] + 12, t + i * sp + sp * 0.5, sp * 0.5, 0.035);
+      for (let i = 0; i < 8; i++) drum(i % 4 === 0 ? "frame" : "hat", t + i * sp * 0.5, i % 4 === 0 ? 0.3 : 0.035);
+      for (let i = 0; i < 8; i++) whistle(walk(this, r) + 12, t + i * sp * 0.5, sp * 0.48, 0.028, i === 0 && r() < 0.5);
+    },
+  };
+  SONGS["kampf:hibernia"] = {
+    bpm: 150, beats: 6,
+    chords: [[40, 47, 52], [38, 45, 50], [36, 43, 48], [38, 45, 50]],
+    scale: [64, 66, 67, 69, 71, 72, 74, 76],
+    bar(b, t, sp, r) {
+      const ch = this.chords[b % 4];
+      for (let i = 0; i < 6; i++) drum(i === 0 || i === 3 ? "frame" : "hat", t + i * sp, i === 0 || i === 3 ? 0.42 : 0.06);
+      drum("kick", t, 0.4);
+      bass(ch[0], t, sp * 2.8, 0.13);
+      bass(ch[0], t + sp * 3, sp * 2.8, 0.12);
+      [0, 1, 2, 0, 1, 2].forEach((k, i) => harp(ch[k] + 24, t + i * sp, sp, 0.04));
+      if (b % 2 === 0) for (let i = 0; i < 6; i++) whistle(walk(this, r) + 12, t + i * sp, sp * 0.9, 0.03, false);
+      else fiddle(ch[2] + 24, t, sp * 5.5, 0.035);
+    },
+  };
   A.SONGS = Object.keys(SONGS);
+  A._songDefs = SONGS;
 
   let sched = null;
   let cur = null;
@@ -3548,13 +4036,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     g.setValueAtTime(g.value, c.currentTime);
     g.linearRampToValueAtTime(0.0001, c.currentTime + 0.6);
     setTimeout(() => {
-      cur = A.musicOn && SONGS[context] ? context : null;
+      const key = SONGS[context] ? context : String(context).split(":")[0];
+      cur = A.musicOn && SONGS[key] ? key : null;
       barNo = 0;
       nextBar = c.currentTime + 0.1;
       if (cur) {
         g.cancelScheduledValues(c.currentTime);
         g.setValueAtTime(0.0001, c.currentTime);
-        g.linearRampToValueAtTime(cur === "kampf" ? 0.75 : 0.85, c.currentTime + 1.5);
+        g.linearRampToValueAtTime(cur.indexOf("kampf") === 0 ? 0.75 : 0.85, c.currentTime + 1.5);
       }
     }, 650);
   };
@@ -4222,140 +4711,153 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       for (const s of [-1, 1]) blob(cx + s * 30, eyeY, 30, 20, "#000", 0.85);
       blob(cx, eyeY + 40, 34, 18, "#000", 0.35);
     }
-    // Tattoos
+    // Tattoos: nur im Gesicht, kraeftige Linien mit dunklem Rand, damit sie auch klein gut lesbar sind
     const tc = o.tc || "#2f5fd0";
+    const tcC = new T.Color(tc);
+    const light = tcC.r * 0.3 + tcC.g * 0.59 + tcC.b * 0.11 > 0.55;
+    const edge = light ? "rgba(40,30,30,0.55)" : "rgba(255,255,255,0.0)";
     const paint = (fn) => {
-      for (const [ctx, col] of [[g, tc], o.tglow ? [ge, tc] : null].filter(Boolean)) {
+      // Kontur zuerst (bei hellen Farben), dann Farbe; leuchtende Farben zusaetzlich in die Leuchtkarte,
+      // dunkle Farben schwach, damit die Zeichnung bei Nacht nicht verschwindet
+      const passes = [[g, edge, 1.0, 4], [g, tc, 0.95, 0], [ge, tc, o.tglow ? 1 : 0.22, 0]];
+      for (const [ctx, colr, alpha, extra] of passes) {
+        if (colr === edge && !light) continue;
         ctx.save();
-        ctx.strokeStyle = col;
-        ctx.fillStyle = col;
+        ctx.strokeStyle = colr;
+        ctx.fillStyle = colr;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.globalAlpha = ctx === g ? 0.85 : 1;
-        fn(ctx);
+        ctx.globalAlpha = alpha;
+        fn(ctx, extra);
         ctx.restore();
       }
     };
+    const lw = (x, w, extra) => (x.lineWidth = w + (extra || 0));
     switch (o.tattoo) {
       case "runen":
-        paint((x) => {
-          x.lineWidth = 3;
-          const rune = (px, py, k) => {
+        // Runenreihe ueber der Stirn und senkrechte Runen unter beiden Augen
+        paint((x, ex) => {
+          lw(x, 6, ex);
+          const rune = (px, py, k, sz) => {
+            sz = sz || 13;
             x.beginPath();
-            x.moveTo(px, py - 9);
-            x.lineTo(px, py + 9);
+            x.moveTo(px, py - sz);
+            x.lineTo(px, py + sz);
             if (k % 3 === 0) {
-              x.moveTo(px, py - 9);
-              x.lineTo(px + 6, py - 3);
-              x.lineTo(px, py + 2);
+              x.moveTo(px, py - sz);
+              x.lineTo(px + sz * 0.7, py - sz * 0.3);
+              x.lineTo(px, py + sz * 0.2);
             } else if (k % 3 === 1) {
-              x.moveTo(px - 6, py - 6);
-              x.lineTo(px + 6, py + 2);
+              x.moveTo(px - sz * 0.6, py - sz * 0.6);
+              x.lineTo(px + sz * 0.6, py + sz * 0.2);
             } else {
-              x.moveTo(px, py - 2);
-              x.lineTo(px + 6, py - 8);
-              x.moveTo(px, py - 2);
-              x.lineTo(px - 6, py - 8);
+              x.moveTo(px, py - sz * 0.2);
+              x.lineTo(px + sz * 0.6, py - sz * 0.8);
+              x.moveTo(px, py - sz * 0.2);
+              x.lineTo(px - sz * 0.6, py - sz * 0.8);
             }
             x.stroke();
           };
-          rune(cx, eyeY - 36, 0);
-          rune(cx - 16, eyeY - 30, 1);
-          rune(cx + 16, eyeY - 30, 2);
+          rune(cx - 26, eyeY - 40, 1, 11);
+          rune(cx, eyeY - 44, 0, 13);
+          rune(cx + 26, eyeY - 40, 2, 11);
           for (const s of [-1, 1]) {
-            rune(cx + s * 44, eyeY + 18, s > 0 ? 1 : 2);
-            rune(cx + s * 52, eyeY + 38, 0);
+            rune(cx + s * 30, eyeY + 26, s > 0 ? 0 : 2, 12);
+            rune(cx + s * 50, eyeY + 14, 1, 10);
           }
         });
         break;
       case "knoten":
-        paint((x) => {
-          x.lineWidth = 3;
-          for (const s of [-1, 1]) {
-            const px = cx + s * 46;
-            const py = eyeY + 26;
+        // keltisches Knotenwerk um ein Auge und ueber die Stirn
+        paint((x, ex) => {
+          lw(x, 5, ex);
+          const knot = (px, py, r) => {
             for (let i = 0; i < 3; i++) {
-              const a = (i / 3) * PI * 2;
+              const a = (i / 3) * PI * 2 - PI / 2;
               x.beginPath();
-              x.arc(px + Math.cos(a) * 7, py + Math.sin(a) * 7, 8, 0, PI * 2);
+              x.arc(px + Math.cos(a) * r * 0.75, py + Math.sin(a) * r * 0.75, r, 0, PI * 2);
               x.stroke();
             }
-          }
+          };
+          knot(cx, eyeY - 40, 9);
           x.beginPath();
-          x.arc(cx, eyeY - 34, 8, 0, PI * 2);
+          x.arc(cx + 27, eyeY - 2, 24, 0.95 * PI, 2.45 * PI);
           x.stroke();
-          x.beginPath();
-          x.moveTo(cx - 22, eyeY - 34);
-          x.lineTo(cx + 22, eyeY - 34);
-          x.stroke();
+          knot(cx + 44, eyeY + 26, 8);
+          knot(cx - 46, eyeY + 24, 6);
         });
         break;
       case "kriegsbemalung":
-        paint((x) => {
-          x.globalAlpha *= 0.9;
+        // breiter Balken quer ueber die Augen, Streifen am Kinn
+        paint((x, ex) => {
           x.beginPath();
-          x.moveTo(cx - 70, eyeY - 12);
-          x.quadraticCurveTo(cx, eyeY - 20, cx + 70, eyeY - 12);
-          x.lineTo(cx + 66, eyeY + 12);
-          x.quadraticCurveTo(cx, eyeY + 4, cx - 66, eyeY + 12);
+          x.moveTo(cx - 74, eyeY - 16 - ex);
+          x.quadraticCurveTo(cx, eyeY - 26 - ex, cx + 74, eyeY - 16 - ex);
+          x.lineTo(cx + 70, eyeY + 14 + ex);
+          x.quadraticCurveTo(cx, eyeY + 6 + ex, cx - 70, eyeY + 14 + ex);
           x.closePath();
           x.fill();
-          x.lineWidth = 5;
+          lw(x, 8, ex);
           for (const s of [-1, 0, 1]) {
             x.beginPath();
-            x.moveTo(cx + s * 10, eyeY + 50);
-            x.lineTo(cx + s * 12, eyeY + 76);
+            x.moveTo(cx + s * 13, eyeY + 52);
+            x.lineTo(cx + s * 15, eyeY + 78);
             x.stroke();
           }
         });
         break;
       case "linien":
-        paint((x) => {
-          x.lineWidth = 4;
+        // Stammeslinien: zwei geschwungene Bahnen ueber jede Wange und ein Stirnstrich
+        paint((x, ex) => {
+          lw(x, 5, ex);
           for (const s of [-1, 1]) {
             for (let k = 0; k < 2; k++) {
               x.beginPath();
-              x.moveTo(cx + s * (24 + k * 9), eyeY - 40);
-              x.quadraticCurveTo(cx + s * (60 + k * 8), eyeY + 6, cx + s * (34 + k * 10), eyeY + 56);
+              x.moveTo(cx + s * (18 + k * 10), eyeY - 44);
+              x.quadraticCurveTo(cx + s * (56 + k * 9), eyeY + 4, cx + s * (32 + k * 10), eyeY + 56);
               x.stroke();
             }
           }
           x.beginPath();
-          x.moveTo(cx, eyeY - 50);
-          x.lineTo(cx, eyeY - 18);
+          x.moveTo(cx, eyeY - 58);
+          x.lineTo(cx, eyeY - 20);
           x.stroke();
         });
         break;
       case "mond":
-        paint((x) => {
+        // grosse Mondsichel auf der Stirn, Punktbogen unter den Augen
+        paint((x, ex) => {
           x.beginPath();
-          x.arc(cx, eyeY - 34, 14, 0.25 * PI, 1.75 * PI, false);
-          x.arc(cx + 6, eyeY - 34, 11, 1.65 * PI, 0.35 * PI, true);
+          x.arc(cx, eyeY - 40, 19 + ex / 2, 0.25 * PI, 1.75 * PI, false);
+          x.arc(cx + 8, eyeY - 40, 15 - ex / 2, 1.65 * PI, 0.35 * PI, true);
           x.closePath();
           x.fill();
           for (const s of [-1, 1]) {
-            x.beginPath();
-            x.arc(cx + s * 40, eyeY + 24, 3, 0, PI * 2);
-            x.arc(cx + s * 48, eyeY + 34, 2.5, 0, PI * 2);
-            x.fill();
+            for (let i = 0; i < 4; i++) {
+              x.beginPath();
+              x.arc(cx + s * (22 + i * 9), eyeY + 18 + i * 3, 4.5 + ex / 2, 0, PI * 2);
+              x.fill();
+            }
           }
         });
         break;
       case "dornen":
-        paint((x) => {
-          x.lineWidth = 3;
+        // Dornenranke von der Stirn ueber das linke Auge bis zur Wange
+        paint((x, ex) => {
+          lw(x, 6, ex);
           x.beginPath();
-          x.moveTo(cx - 10, eyeY - 52);
-          x.bezierCurveTo(cx - 60, eyeY - 30, cx - 20, eyeY + 20, cx - 58, eyeY + 60);
+          x.moveTo(cx + 8, eyeY - 56);
+          x.bezierCurveTo(cx - 50, eyeY - 40, cx - 10, eyeY + 10, cx - 56, eyeY + 50);
           x.stroke();
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             const t = i / 6;
-            const px = cx - 10 - 40 * Math.sin(t * PI) - t * 30;
-            const py = eyeY - 50 + t * 106;
+            const px = cx + 8 - 64 * t + Math.sin(t * PI) * -14;
+            const py = eyeY - 56 + t * 106;
             x.beginPath();
-            x.moveTo(px, py);
-            x.lineTo(px + (i % 2 ? 9 : -9), py - 5);
-            x.lineTo(px + (i % 2 ? 3 : -3), py + 3);
+            x.moveTo(px - 4, py + 2);
+            x.lineTo(px + (i % 2 ? 14 : -14), py - 7);
+            x.lineTo(px + 4, py + 4);
+            x.closePath();
             x.fill();
           }
         });
@@ -4463,7 +4965,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     t.colorSpace = T.SRGBColorSpace;
     t.anisotropy = 4;
     let em = null;
-    if (o.eyeGlow || o.tglow || o.undead) {
+    if (o.eyeGlow || o.tglow || o.undead || (o.tattoo && o.tattoo !== "keine")) {
       em = new T.CanvasTexture(e);
       em.colorSpace = T.SRGBColorSpace;
     }
@@ -4474,77 +4976,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       m.emissiveIntensity = 1;
     }
     return (FACE[key] = m);
-  }
-
-  // Arm-Tattoo: Haut mit umlaufenden Mustern (Kapsel-UV: u rundherum, v entlang)
-  const ARMT = {};
-  function armTex(skin, tattoo, tc, tglow) {
-    const key = skin + "|" + tattoo + "|" + tc + "|" + (tglow ? 1 : 0);
-    if (ARMT[key]) return ARMT[key];
-    const W = 256;
-    const H = 128;
-    const c = canvas(W, H);
-    const g = c.getContext("2d");
-    const e = canvas(W, H);
-    const ge = e.getContext("2d");
-    ge.fillStyle = "#000";
-    ge.fillRect(0, 0, W, H);
-    const base = new T.Color(skin);
-    const gr = g.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, "#" + base.clone().multiplyScalar(1.05).getHexString());
-    gr.addColorStop(1, "#" + base.clone().multiplyScalar(0.8).getHexString());
-    g.fillStyle = gr;
-    g.fillRect(0, 0, W, H);
-    if (tattoo && tattoo !== "keine") {
-      for (const x of tglow ? [g, ge] : [g]) {
-        x.save();
-        x.strokeStyle = tc;
-        x.fillStyle = tc;
-        x.lineWidth = 4;
-        x.globalAlpha = x === g ? 0.85 : 1;
-        // zwei Baender mit Muster, das sich um den Arm zieht
-        for (const by of [38, 70]) {
-          x.beginPath();
-          x.moveTo(0, by - 9);
-          x.lineTo(W, by - 9);
-          x.moveTo(0, by + 9);
-          x.lineTo(W, by + 9);
-          x.stroke();
-          for (let i = 0; i < 8; i++) {
-            const px = i * 32 + 16;
-            x.beginPath();
-            if (tattoo === "runen") {
-              x.moveTo(px, by - 6);
-              x.lineTo(px, by + 6);
-              x.lineTo(px + 6, by);
-            } else if (tattoo === "knoten") {
-              x.arc(px, by, 5, 0, PI * 2);
-            } else if (tattoo === "dornen") {
-              x.moveTo(px - 8, by + 6);
-              x.lineTo(px, by - 6);
-              x.lineTo(px + 8, by + 6);
-            } else if (tattoo === "mond") {
-              x.arc(px, by, 5, 0.3 * PI, 1.7 * PI);
-            } else {
-              x.moveTo(px - 10, by);
-              x.quadraticCurveTo(px, by - 8, px + 10, by);
-            }
-            x.stroke();
-          }
-        }
-        x.restore();
-      }
-    }
-    const t = new T.CanvasTexture(c);
-    t.colorSpace = T.SRGBColorSpace;
-    const m = new T.MeshPhongMaterial({ map: t, specular: new T.Color("#2a2622"), shininess: 14 });
-    if (tglow && tattoo && tattoo !== "keine") {
-      const em = new T.CanvasTexture(e);
-      em.colorSpace = T.SRGBColorSpace;
-      m.emissive = new T.Color("#ffffff");
-      m.emissiveMap = em;
-    }
-    return (ARMT[key] = m);
   }
 
   // Wappen fuer Schilde und Waffenroecke
@@ -5189,7 +5620,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
     /* Arme: Schulter, Ellbogen, Hand */
     const bareArms = mat === "leder" && !(gear.helm && false);
-    const armSkin = bareArms ? armTex(look.skin, look.tattoo, tcol.c, !!tcol.glow) : null;
+    const armSkin = bareArms ? skinM : null;
     const sleeveM = arch === "krieger" ? pmat("cloth", pantsC) : arch === "magier" ? pmat("cloth", armorC || realmCloth) : pmat("leather", shirtC);
     const handM = gear.handschuhe ? (arch === "krieger" ? pmat("metal", shade(gear.handschuhe.tint || armorC || RM.metal, 1)) : pmat("leather", gear.handschuhe.tint || "#4a3424")) : skinM;
     const upL = 0.3 * h;
@@ -5290,6 +5721,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     model.dual = !!dual;
     model.ranged = !!(wpn && SB.data.BASES[wpn.base] && SB.data.BASES[wpn.base].ranged);
     model.weaponBase = wpn ? wpn.base : null;
+    model.hipH = hipY;
     model.height = (hipY + shY + 0.45) * scale;
     model.headY = (hipY + shY + 0.21) * scale;
     model.projColor = arch === "magier" ? (realm === "albion" ? "#ffd27a" : realm === "midgard" ? "#9fd8ff" : "#7fffb0") : arch === "jaeger" ? "#e9d8a6" : "#ffd25a";
@@ -5696,6 +6128,42 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           shR = [-sw * 0.5 + s.shR[0] * 0.5, s.shR[1]];
         }
         y = -0.03 + Math.abs(Math.cos(t * 9)) * 0.04;
+        break;
+      }
+      case "sit":
+      case "drink": {
+        // Sitzen auf einer Bank; beim Trinken hebt die rechte Hand den Krug zum Mund
+        const seat = (m.hipH || 0.95) - 0.5;
+        y = -seat + br * 0.01;
+        hipL = -1.45;
+        hipR = -1.45;
+        knL = 1.45;
+        knR = 1.45;
+        lean = 0.05 + Math.sin(t * 0.7) * 0.04;
+        shL = [-0.5, 0.15];
+        elL = -0.9;
+        if (name === "drink") {
+          const c = (t + (m.drinkPh || 0)) % 7;
+          const k = c < 1.8 ? bell(c / 1.8) : 0;
+          shR = [-0.6 - 1.3 * k, -0.25 + 0.15 * k];
+          elR = -1.0 - 1.0 * k;
+          headX = -0.35 * k;
+          lean = 0.05 - 0.15 * k;
+        } else {
+          shR = [-0.5, -0.15];
+          elR = -0.9;
+        }
+        break;
+      }
+      case "hammer": {
+        // Schmied: ruhiges Schlagen auf den Amboss
+        const c = (t * 1.1) % 1;
+        const up = c < 0.6 ? ease(c / 0.6) : 1 - ease((c - 0.6) / 0.4);
+        shR = [-0.6 - 1.9 * up, -0.2];
+        elR = -1.2 + 0.7 * up;
+        shL = [-0.8, 0.3];
+        elL = -1.2;
+        lean = 0.25 - 0.1 * up;
         break;
       }
       case "defeat": {
@@ -6550,6 +7018,55 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   // Alte Bauplaene der ersten Version auf die neuen abbilden
   const ALIAS = { schleim: "schlund", kobold: "goblin", skelett: "ghul", flatterer: "fledermaus", geist: "schemen", krabbe: "krebs", ritter: "todesritter" };
 
+  // Geschoepfe passen zu ihrer Heimatinsel: Raureif und Eiszapfen in Midgard, Moos und Leuchtpilze in Hibernia
+  function realmDecor(root, realm, seed, P) {
+    const body = root.children[0] || root;
+    // Nur feste Koerperteile zaehlen (keine Leuchtsprites), und die Oberkante nahe der Koerpermitte
+    root.updateMatrixWorld(true);
+    const pts = [];
+    const v = new T.Vector3();
+    body.traverse((o) => {
+      if (!o.isMesh || o.material.transparent || !o.geometry.attributes.position) return;
+      const pos = o.geometry.attributes.position;
+      const step = Math.max(1, Math.floor(pos.count / 60));
+      for (let i = 0; i < pos.count; i += step) pts.push(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).clone());
+    });
+    if (!pts.length) return;
+    const bb = new T.Box3().setFromPoints(pts);
+    const r = R.rng(R.hash ? R.hash(seed) : 7);
+    const w = Math.min(1.6, bb.max.x - bb.min.x);
+    const d = Math.min(1.6, bb.max.z - bb.min.z);
+    const cx = (bb.max.x + bb.min.x) / 2;
+    const cz = (bb.max.z + bb.min.z) / 2;
+    let top = bb.min.y;
+    for (const p of pts) if (Math.abs(p.x - cx) < w * 0.22 && Math.abs(p.z - cz) < Math.max(0.25, d * 0.3) && p.y > top) top = p.y;
+    const g = grp();
+    if (realm === "midgard") {
+      const ice = M.emis("#cfeaff", 0.45);
+      for (let i = 0; i < 6; i++) {
+        const sz = 0.05 + r() * 0.06;
+        g.add(mesh(G.octa(sz), ice, { p: [cx + (r() - 0.5) * w * 0.3, top - 0.02 - r() * 0.06, cz + (r() - 0.5) * d * 0.25], s: [0.6, 2.2, 0.6], r: [(r() - 0.5) * 0.8, r(), (r() - 0.5) * 0.8] }));
+      }
+      for (let i = 0; i < 5; i++) g.add(mesh(G.sph(0.05 + r() * 0.04, 6, 5), M.pmat("plain", "#eef6ff"), { p: [cx + (r() - 0.5) * w * 0.3, top - 0.04, cz + (r() - 0.5) * d * 0.25], s: [1.4, 0.5, 1.2] }));
+      g.add(R.haloSprite("#bfe8ff", Math.max(1.2, w * 1.2), 0.1, [cx, top * 0.6, cz]));
+    } else {
+      const moss = M.pmat("plain", "#3f8a3a", { flat: true });
+      for (let i = 0; i < 6; i++) g.add(mesh(G.ico(0.07 + r() * 0.06, 0), moss, { p: [cx + (r() - 0.5) * w * 0.3, top - 0.03, cz + (r() - 0.5) * d * 0.25], s: [1.3, 0.45, 1.3] }));
+      const shroomC = ["#9fffc8", "#ff9fe0", "#ffe08a"][Math.floor(r() * 3)];
+      for (let i = 0; i < 3; i++) {
+        const x = cx + (r() - 0.5) * w * 0.25;
+        const z = cz + (r() - 0.5) * d * 0.2;
+        g.add(mesh(G.cyl(0.012, 0.016, 0.08, 5), M.pmat("plain", "#e8e0cc"), { p: [x, top - 0.02, z] }));
+        g.add(mesh(G.cap(0.045, Math.PI * 0.5), M.emis(shroomC, 0.9), { p: [x, top + 0.02, z], s: [1, 0.6, 1] }));
+      }
+      g.add(R.haloSprite(shroomC, Math.max(0.8, w * 0.8), 0.25, [cx, top, cz]));
+    }
+    // Schwebende Wesen tragen den Schmuck an ihrem schwebenden Koerper
+    const target = (P && P.hover) || body;
+    target.updateMatrixWorld(true);
+    g.applyMatrix4(new T.Matrix4().copy(target.matrixWorld).invert());
+    target.add(g);
+  }
   R.buildMonster = function (m) {
     if (!T) init();
     const root = grp();
@@ -6557,6 +7074,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const arch = B[m.arch] ? m.arch : ALIAS[m.arch] || "ghul";
     const mm = Object.assign({ color: "#6a6a6a", accent: "#ff5a3d" }, m, { arch });
     B[arch](mm, root, P);
+    if (m.realm === "midgard" || m.realm === "hibernia") realmDecor(root, m.realm, arch + mm.color, P);
     if (m.boss) {
       const s = m.final ? 1.4 : 1.2;
       root.scale.setScalar(s);
@@ -6707,7 +7225,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
 </script>
 <script>/* src/r3d-scenes.js */
-/* Helden von Schwebfels - 3D-Schauplaetze: Freistatt-Insel im Nebelmeer, Heldenansicht, Heim, Kampfbuehne, Portraits.
+/* Helden von Schwebfels - 3D-Schauplaetze: Heimatinsel des Reiches im Nebelmeer (Formen je Reich in r3d-realms.js), Heldenansicht, Heim, Kampfbuehne, Portraits.
    Mystische Stimmung: gedaempfte Farben, Nebel, Gluehwuermchen, Polarlicht bei Nacht, automatischer Tag-Nacht-Wechsel. */
 (function () {
   "use strict";
@@ -6762,49 +7280,29 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return t * t * (3 - 2 * t);
   };
 
-  /* ---------- Tageszeit ---------- */
-  const CYCLE_MS = 20 * 60 * 1000;
-  // 0 = Mitternacht, 0.5 = Mittag
-  R.dayTime = function (mode, now) {
-    now = now || Date.now();
-    if (mode === "tag") return 0.5;
-    if (mode === "nacht") return 0.02;
-    if (mode === "echtzeit") {
-      const d = new Date(now);
-      return (d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600) / 24;
-    }
-    return (now / CYCLE_MS + 0.3) % 1;
-  };
-  R.dayInfo = function (t) {
-    const sunH = -Math.cos(t * 2 * PI);
-    const day = smooth(-0.12, 0.3, sunH);
-    const dusk = Math.max(0, 1 - Math.abs(sunH - 0.02) / 0.28);
-    return { t, sunH, day, dusk, night: 1 - day };
-  };
+  /* ---------- Tageszeit (Rechnung liegt im Spielkern, damit Nachtinhalte auch ohne 3D funktionieren) ---------- */
+  R.dayTime = (mode, now) => SB.engine.dayTime(mode, now);
+  R.dayInfo = (t) => SB.engine.dayInfo(t);
   R.dayLabel = function (t) {
     const i = R.dayInfo(t);
     if (i.dusk > 0.45) return t < 0.5 ? "Morgengrauen" : "Abenddämmerung";
     return i.day > 0.5 ? "Tag" : "Nacht";
   };
-  // Mystische Farbpalette je Tageszeit
-  function palette(info) {
-    const dayTop = "#36557f";
-    const dayBot = "#8fa2ad";
-    const duskTop = "#2b2c5a";
-    const duskBot = "#c27556";
-    const nightTop = "#04060f";
-    const nightBot = "#141f38";
-    const top = lerpC(nightTop, dayTop, info.day).lerp(col(duskTop), info.dusk * 0.6);
-    const bot = lerpC(nightBot, dayBot, info.day).lerp(col(duskBot), info.dusk * 0.75);
-    const fog = bot.clone().lerp(col(info.day > 0.5 ? "#6e8290" : "#18223a"), 0.35);
+  // Mystische Farbpalette je Tageszeit; jedes Reich bringt seinen eigenen Himmel mit
+  const DEF_SKY = { dayTop: "#36557f", dayBot: "#8fa2ad", duskTop: "#2b2c5a", duskBot: "#c27556", nightTop: "#04060f", nightBot: "#141f38", fogDay: "#6e8290", fogNight: "#18223a", sunDay: "#ffe9c8", hemiGround: "#4a3e30" };
+  function palette(info, sky) {
+    sky = sky || DEF_SKY;
+    const top = lerpC(sky.nightTop, sky.dayTop, info.day).lerp(col(sky.duskTop), info.dusk * 0.6);
+    const bot = lerpC(sky.nightBot, sky.dayBot, info.day).lerp(col(sky.duskBot), info.dusk * 0.75);
+    const fog = bot.clone().lerp(col(info.day > 0.5 ? sky.fogDay : sky.fogNight), 0.35);
     return {
       top,
       bot,
       fog,
-      sun: lerpC("#8fa6ff", "#ffe9c8", info.day).lerp(col("#ff9a62"), info.dusk * 0.7),
+      sun: lerpC("#8fa6ff", sky.sunDay, info.day).lerp(col("#ff9a62"), info.dusk * 0.7),
       sunI: 1.3 + 1.2 * info.day,
       hemiSky: lerpC("#6a7ac8", "#d8e2ee", info.day),
-      hemiGround: lerpC("#2a2438", "#4a3e30", info.day),
+      hemiGround: lerpC("#2a2438", sky.hemiGround, info.day),
       hemiI: 1.0 + 0.3 * info.day,
     };
   }
@@ -7249,7 +7747,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       prismGeo.rotateX(-PI / 2);
     }
     const sy = h / 1.5;
-    return mesh(prismGeo, mat, { p: [0, 0.5 * sy, 0], s: [w, sy, d / 1.732] });
+    const m = mesh(prismGeo, mat, { p: [0, 0.5 * sy, 0], s: [w, sy, d / 1.732] });
+    m.userData.roof = "gable";
+    return m;
+  }
+  function roofCone(m) {
+    m.userData.roof = "cone";
+    return m;
   }
   function fire(night, size) {
     const g = grp();
@@ -7267,7 +7771,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return g;
   }
 
-  /* ---------- Gebaeude der Freistatt ---------- */
+  /* ---------- Grundformen der Gebaeude (Albion; andere Reiche in r3d-realms.js) ---------- */
   const B = {};
   const mats = () => ({
     plaster: pm("plain", "#a89c84"),
@@ -7373,7 +7877,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     b.add(mesh(G.cyl(1.1, 1.35, 4.6, 10), pm("stone", "#5e5868", { flat: true }), { p: [0, 2.3, 0], r: [0, 0, 0.04] }));
     b.add(mesh(G.cyl(1.25, 1.1, 0.6, 10), pm("stone", "#4a4552", { flat: true }), { p: [0.1, 4.8, 0] }));
     const roofM = pm("stone", "#3a2f5a", { flat: true });
-    b.add(mesh(G.cone(1.7, 2.2, 10), roofM, { p: [0.15, 6.2, 0] }));
+    b.add(roofCone(mesh(G.cone(1.7, 2.2, 10), roofM, { p: [0.15, 6.2, 0] })));
     b.add(mesh(G.cone(0.6, 1.2, 8), roofM, { p: [0.45, 7.6, -0.1], r: [-0.3, 0, 0.45] }));
     for (let i = 0; i < 4; i++) {
       const a = -0.8 + i * 0.55;
@@ -7441,7 +7945,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const a = (i / 8) * PI * 2;
       b.add(mesh(G.box(0.12, 0.8, 0.12), m.beam, { p: [Math.cos(a) * 1.3, 6.3, Math.sin(a) * 1.3] }));
     }
-    b.add(mesh(G.cone(1.7, 1.4, 8), m.slate, { p: [0, 7.4, 0] }));
+    b.add(roofCone(mesh(G.cone(1.7, 1.4, 8), m.slate, { p: [0, 7.4, 0] })));
     b.add(mesh(G.cyl(0.5, 0.35, 0.3, 8), m.iron, { p: [0, 6.05, 0] }));
     const f = fire(N, 1.6);
     f.position.set(0, 6.2, 0);
@@ -7632,7 +8136,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     b.add(R.haloSprite("#6fc0ff", 2.2, 0.45, [0, 0.9, 0]));
     b.userData.water = water;
     for (const x of [-0.85, 0.85]) b.add(mesh(G.cyl(0.08, 0.09, 1.9, 6), pm("wood", "#3a2a1e"), { p: [x, 1.4, 0] }));
-    b.add(mesh(G.cone(1.4, 0.9, 4), pm("stone", "#2f3644", { flat: true }), { p: [0, 2.7, 0], r: [0, PI / 4, 0] }));
+    b.add(roofCone(mesh(G.cone(1.4, 0.9, 4), pm("stone", "#2f3644", { flat: true }), { p: [0, 2.7, 0], r: [0, PI / 4, 0] })));
     b.add(mesh(G.cyl(0.04, 0.04, 1.7, 6), pm("wood", "#3a2a1e"), { p: [0, 2.15, 0], r: [0, 0, PI / 2] }));
     b.add(mesh(G.cyl(0.18, 0.15, 0.25, 10), pm("wood", "#5a4130"), { p: [0.3, 1.6, 0] }));
     for (let i = 0; i < 6; i++) {
@@ -7702,6 +8206,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   B.heim = function (rng, N, ctx) {
     return homeExterior(ctx.homeTier || 0, N, ctx.realm || "albion");
   };
+  // Bausteine fuer r3d-realms.js
+  R._sc = { gableRoof, fire, lantern, standingStone, gnarledTree, pine, deadTree, shrooms, crystals, rock, island, heightAt, tiled, dot, griffin: () => griffin(), B, nightMats };
 
   function skyWhale(rng) {
     const w = grp();
@@ -7749,17 +8255,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     schmiede: [-9.8, -1.6],
     tiefen: [-10.8, 3.8],
   };
-  const LABEL_H = { brunnen: 3.6, taverne: 4.5, heim: 3.8, stall: 3.8, leuchtturm: 9.0, arena: 4.6, gildenhalle: 5.0, ruhmeshalle: 4.3, arkanum: 9.6, steinkreis: 3.4, schmiede: 4.8, tiefen: 4.8 };
+  const LABEL_H = { mondtor: 5.4, brunnen: 3.6, taverne: 4.5, heim: 3.8, stall: 3.8, leuchtturm: 9.0, arena: 4.6, gildenhalle: 5.0, ruhmeshalle: 4.3, arkanum: 9.6, steinkreis: 3.4, schmiede: 4.8, tiefen: 4.8 };
 
   R.createHub = function (el, opts) {
     init();
     opts = opts || {};
+    const E = SB.engine;
     const quality = opts.quality || "hoch";
     const hi = quality === "hoch";
+    const D = SB.data;
     const renderer = makeRenderer(el, { shadows: hi, maxDpr: hi ? 1.75 : 1.25 });
     const scene = new T.Scene();
     const camera = new T.PerspectiveCamera(40, 1, 0.5, 700);
-    const rng = R.rng(42);
     let dayMode = opts.dayCycle || "zyklus";
     const sky = skyDome();
     scene.add(sky);
@@ -7783,7 +8290,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     scene.add(sun);
     scene.add(sun.target);
-    const stars = starField(rng, 900);
+    const skyRng = R.rng(42);
+    const stars = starField(skyRng, 900);
     scene.add(stars);
     const moon = moonSprite();
     scene.add(moon);
@@ -7798,21 +8306,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     sea2.material.opacity = 0.35;
     sea2.userData.tex.repeat.set(4, 4);
     scene.add(sea2);
-    const N = nightMats();
-
-    const world = grp();
-    scene.add(world);
-    const paths = Object.values(LAYOUT).map(([x, z]) => [0.5, 0.8, x * 0.92, z * 0.92]);
-    const isl = island(14, 12, rng, { paths, plaza: [0.5, 0.8, 3.0], grass: "#3d5a3e", grass2: "#55603c", dirt: "#5e5040", rock: "#5e5a54", roots: 22 });
-    world.add(isl);
-    // Pflastersteine auf dem Platz
-    const cob = pm("stone", "#6a645c", { flat: true });
-    for (let i = 0; i < 26; i++) {
-      const a = rng() * PI * 2;
-      const r = Math.sqrt(rng()) * 2.8;
-      world.add(mesh(G.cyl(0.25 + rng() * 0.15, 0.3, 0.06, 6), cob, { p: [0.5 + Math.cos(a) * r, 0.03, 0.8 + Math.sin(a) * r], r: [0, rng(), 0], shadow: false }));
+    const whale = skyWhale(skyRng);
+    scene.add(whale);
+    const ravens = [];
+    for (let i = 0; i < 5; i++) {
+      const b = raven();
+      b.scale.setScalar(0.7);
+      ravens.push({ b, ph: skyRng() * 6, r: 16 + skyRng() * 10, h: 17 + skyRng() * 5, sp: 0.1 + skyRng() * 0.1 });
+      scene.add(b);
     }
-    // Wasserfaelle
+    // Wasserfaelle (Textur geteilt)
     const fallTex = (() => {
       const c = document.createElement("canvas");
       c.width = 32;
@@ -7826,28 +8329,35 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       t.wrapS = t.wrapT = T.RepeatWrapping;
       return t;
     })();
-    const falls = [];
-    for (const a of [2.4, 4.0]) {
-      const fm = new T.MeshBasicMaterial({ map: fallTex, color: col("#bfe0ff"), transparent: true, opacity: 0.55, depthWrite: false, side: T.DoubleSide });
-      const f = new T.Mesh(new T.PlaneGeometry(1.4, 16), fm);
-      f.position.set(Math.cos(a) * 14.3, -8, Math.sin(a) * 14.3);
-      f.rotation.y = -a + PI / 2;
-      world.add(f);
-      falls.push(fm);
-      const mm = R.haloSprite("#cfe8ff", 5, 0.25, [Math.cos(a) * 14.3, -15, Math.sin(a) * 14.3]);
-      world.add(mm);
-    }
 
-    // Gebaeude
-    const buildings = {};
-    const pickables = [];
-    const anim = { smoke: [], flags: [], beam: null, portal: null, runes: null, float: null, orbit: null, water: null, swing: null, orb: null, stones: null, griffin: null, homeFlag: null, sparks: [] };
+    /* ---- Heimatinsel des Reiches: wird bei einem Reichswechsel neu gebaut ---- */
+    let realm = D.REALMS[opts.realm] ? opts.realm : "albion";
     let homeTier = opts.homeTier || 0;
-    let realm = opts.realm || "albion";
+    let TH = R.realmTheme(realm);
+    let N = null;
+    let world = null;
+    let isl = null;
+    let buildings = {};
+    const pickables = [];
+    let anim = null;
+    let islets = [];
+    let villagers = [];
+    let life = [];
+    let flyList = [];
+    let wisps = null;
+    let weather = null;
+    let gate = null;
+    let paths = [];
+    let rng = null;
+    const placeAt = (obj, x, z) => {
+      obj.position.set(x, heightAt(isl, x, z) - 0.05, z);
+      world.add(obj);
+    };
     function placeBuilding(id) {
       const [x, z] = LAYOUT[id];
       if (buildings[id]) world.remove(buildings[id]);
-      const bg = B[id](rng, N, { homeTier, realm });
+      const bg = R.realmBuilding(realm, id)(rng, N, { homeTier, realm });
+      R.realmFinish(realm, bg);
       bg.position.set(x, 0, z);
       bg.rotation.y = Math.atan2(0.5 - x, 10 - z);
       bg.userData.bid = id;
@@ -7879,10 +8389,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (u.griffin) anim.griffin = u.griffin;
       if (u.flag) anim.homeFlag = u.flag;
       if (u.guildBanners) anim.guildBanners = u.guildBanners;
-      if (u.sparks) anim.sparks.push({ b: bg, p: u.sparks });
+      if (u.sparks) {
+        anim.sparks = anim.sparks.filter((s) => s.id !== id);
+        anim.sparks.push({ id, b: bg, p: u.sparks });
+      }
       return bg;
     }
-    for (const id in LAYOUT) placeBuilding(id);
     function rebuildPickables() {
       for (const p of pickables) scene.remove(p);
       pickables.length = 0;
@@ -7891,128 +8403,455 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const bb = new T.Box3().setFromObject(bg);
         const size = bb.getSize(new T.Vector3());
         const center = bb.getCenter(new T.Vector3());
-        const hit = new T.Mesh(new T.BoxGeometry(Math.min(size.x, 7) + 0.4, size.y + 0.4, Math.min(size.z, 7) + 0.4), new T.MeshBasicMaterial({ visible: false }));
+        const hit = new T.Mesh(new T.BoxGeometry(Math.min(size.x, 7) + 0.4, Math.min(size.y, 9) + 0.4, Math.min(size.z, 7) + 0.4), new T.MeshBasicMaterial({ visible: false }));
         hit.position.copy(center);
         hit.userData.bid = id;
         scene.add(hit);
         pickables.push(hit);
       }
     }
-    rebuildPickables();
-
-    // Vegetation, Steine, Laternen
-    const blocked = Object.values(LAYOUT).map(([x, z]) => [x, z, 3.2]).concat([[0.5, 0.8, 3.4]]);
-    const free = (x, z, r) => !blocked.some(([bx, bz, br]) => Math.hypot(bx - x, bz - z) < br + r) && !paths.some((p) => {
-      const vx = p[2] - p[0];
-      const vz = p[3] - p[1];
-      const t = Math.max(0, Math.min(1, ((x - p[0]) * vx + (z - p[1]) * vz) / (vx * vx + vz * vz)));
-      return Math.hypot(x - p[0] - vx * t, z - p[1] - vz * t) < 1.1 + r;
-    });
-    const placeAt = (obj, x, z) => {
-      obj.position.set(x, heightAt(isl, x, z) - 0.05, z);
-      world.add(obj);
-    };
-    let placed = 0;
-    for (let tries = 0; tries < 700 && placed < 38; tries++) {
-      const a = rng() * PI * 2;
-      const r = 3.5 + rng() * 9.8;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (!free(x, z, 0.8)) continue;
-      if (z > 6 && Math.abs(x) < 6) continue;
-      const kind = rng();
-      const tr = kind < 0.45 ? gnarledTree(rng) : kind < 0.85 ? pine(rng) : deadTree(rng);
-      tr.rotation.y = rng() * PI * 2;
-      placeAt(tr, x, z);
-      blocked.push([x, z, 1.0]);
-      placed++;
+    // Bewohner: Leute des eigenen Reiches in Alltagskleidung
+    function citizen(rr, rk, o) {
+      o = o || {};
+      const races = Object.keys(D.RACES).filter((r) => D.RACES[r].realm === rk);
+      const race = o.race || races[Math.floor(rr() * races.length)];
+      const R0 = D.RACES[race];
+      const clsList = Object.keys(D.CLASSES).filter((c) => D.CLASSES[c].realm === rk);
+      const cls = o.cls || clsList[Math.floor(rr() * clsList.length)];
+      const look = {
+        skin: R0.skins[Math.floor(rr() * 4)], hair: R0.hairs[Math.floor(rr() * 5)], hairStyle: Math.floor(rr() * 6), beard: Math.floor(rr() * 5),
+        tattoo: rr() < 0.35 ? D.TATTOOS[1 + Math.floor(rr() * 6)].id : "keine", tattooColor: D.TATTOO_COLORS[Math.floor(rr() * 7)].c, eyes: D.EYES[Math.floor(rr() * 4)].c,
+      };
+      const v = R.buildHero({ race, cls, realm: rk, gender: o.gender || (rr() < 0.5 ? "m" : "w"), look, gear: o.gear || {} });
+      v.obj.scale.multiplyScalar(o.scale || 0.72);
+      return v;
     }
-    for (let i = 0; i < 40; i++) {
-      const a = rng() * PI * 2;
-      const r = 3.6 + rng() * 9.8;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (!free(x, z, 0.3)) continue;
-      const k = i % 4;
-      const o = k === 0 ? shrooms(rng) : k === 1 ? crystals(rng, ["#8fd8ff", "#b48cff", "#7fffb0"][i % 3]) : rock(rng);
-      placeAt(o, x, z);
+    const mugMat = () => pm("wood", "#7a5232");
+    function mug() {
+      const g = grp();
+      g.add(mesh(G.cyl(0.075, 0.065, 0.16, 10), mugMat()));
+      g.add(mesh(G.cyl(0.07, 0.07, 0.03, 10), pm("plain", "#f2ead8"), { p: [0, 0.08, 0] }));
+      g.add(mesh(G.torus(0.045, 0.012, PI, 4, 8), mugMat(), { p: [0.08, 0, 0], r: [0, 0, -PI / 2] }));
+      return g;
     }
-    // kleine Steinkreise und Runensteine verstreut
-    for (let i = 0; i < 5; i++) {
-      const a = rng() * PI * 2;
-      const r = 6 + rng() * 6;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (!free(x, z, 0.5)) continue;
-      const s = standingStone(rng, 1.2 + rng(), ["#9fd8ff", "#7fffb0", "#e8c35a"][i % 3]);
-      s.scale.setScalar(0.7);
-      s.rotation.y = rng() * PI;
-      placeAt(s, x, z);
+    function frameOf(bg, lx, lz) {
+      // Weltposition und Drehung eines Punktes vor einem Gebaeude
+      const c = Math.cos(bg.rotation.y);
+      const s = Math.sin(bg.rotation.y);
+      return [bg.position.x + lx * c + lz * s, bg.position.z - lx * s + lz * c];
     }
-    for (const id of ["taverne", "arena", "heim", "stall", "arkanum", "ruhmeshalle", "gildenhalle", "steinkreis"]) {
-      const [x, z] = LAYOUT[id];
-      const lx = x * 0.55 + 0.9;
-      const lz = z * 0.55 + 0.5;
-      const l = lantern(N);
-      l.rotation.y = rng() * PI * 2;
-      placeAt(l, lx, lz);
-    }
-    // Schwebende Felsen mit Ruinen
-    const islets = [];
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * PI * 2 + 0.4;
-      const d = 24 + i * 3;
-      const isg = grp([Math.cos(a) * d, -4 + (i % 3) * 3, Math.sin(a) * d]);
-      const small = island(2.4 + rng() * 1.4, 4 + rng() * 3, rng, { grass: "#3a5038", grass2: "#4a5a38", rock: "#5a5650", roots: 5, hills: 0.4 });
-      isg.add(small);
-      if (i % 2) isg.add(gnarledTree(rng));
-      else {
-        for (let k = 0; k < 3; k++) {
-          const s = standingStone(rng, 1.4 + rng(), k === 1 ? "#9fd8ff" : null);
-          s.position.set((k - 1) * 0.9, 0, (rng() - 0.5) * 0.5);
-          s.scale.setScalar(0.7);
-          isg.add(s);
+    function buildLife() {
+      const rr = R.rng(99 + realm.length);
+      const others = Object.keys(D.REALMS).filter((r) => r !== realm);
+      // Biergarten vor der Taverne: Tische, Baenke, Leute mit Krug
+      const tav = buildings.taverne;
+      const [px, pz] = frameOf(tav, 1.3, 2.7);
+      const patio = grp([tav.position.x, heightAt(isl, px, pz) - 0.03, tav.position.z], [0, tav.rotation.y, 0]);
+      world.add(patio);
+      const wood = pm("wood", "#5a4130");
+      let seat = 0;
+      for (const [tx, tz] of [[0.4, 2.6], [2.2, 2.5]]) {
+        const tb = grp([tx, 0, tz]);
+        tb.add(mesh(G.box(1.4, 0.07, 0.62), wood, { p: [0, 0.72, 0] }));
+        for (const [lx, lz] of [[-0.6, -0.24], [0.6, -0.24], [-0.6, 0.24], [0.6, 0.24]]) tb.add(mesh(G.box(0.07, 0.7, 0.07), wood, { p: [lx, 0.35, lz] }));
+        for (const s of [-1, 1]) {
+          tb.add(mesh(G.box(1.4, 0.06, 0.28), wood, { p: [0, 0.42, s * 0.62] }));
+          for (const lx of [-0.6, 0.6]) tb.add(mesh(G.box(0.06, 0.4, 0.06), wood, { p: [lx, 0.2, s * 0.62] }));
+        }
+        const m1 = mug();
+        m1.position.set(0.3, 0.84, 0.05);
+        tb.add(m1);
+        patio.add(tb);
+        for (const s of [-1, 1]) {
+          if (seat >= 4) continue;
+          const v = citizen(rr, rr() < 0.85 ? realm : others[0], { gear: rr() < 0.4 ? { umhang: { base: "umhang", tint: D.REALMS[realm].color } } : {} });
+          v.obj.position.set(tx + (seat % 2 ? 0.35 : -0.3), 0, tz + s * 0.66);
+          v.obj.rotation.y = s > 0 ? PI : 0;
+          v.hold = "drink";
+          v.drinkPh = rr() * 7;
+          const mm = mug();
+          mm.position.set(0, -0.06, 0.07);
+          mm.rotation.x = -0.4;
+          v.parts.handR.add(mm);
+          patio.add(v.obj);
+          life.push({ update: (dt) => v.update(dt) });
+          seat++;
         }
       }
-      islets.push({ g: isg, ph: rng() * 6, y: isg.position.y });
-      scene.add(isg);
-    }
-    const whale = skyWhale(rng);
-    scene.add(whale);
-    const ravens = [];
-    for (let i = 0; i < 5; i++) {
-      const b = raven();
-      b.scale.setScalar(0.7);
-      ravens.push({ b, ph: rng() * 6, r: 16 + rng() * 10, h: 17 + rng() * 5, sp: 0.1 + rng() * 0.1 });
-      scene.add(b);
-    }
-    const flies = fireflies(rng, hi ? 140 : 70, 13, 0.4, 3.0, "#d9ff8a");
-    world.add(flies);
-    const wisps = mistWisps(rng, hi ? 16 : 8, 13, 0.3);
-    world.add(wisps);
+      // Ein Spielmann am Tisch, der aufsteht und jubelt
+      const bard = citizen(rr, realm, { gear: { umhang: { base: "umhang", tint: "#6a2a5a" } } });
+      bard.obj.position.set(1.3, 0, 3.7);
+      bard.obj.rotation.y = PI;
+      patio.add(bard.obj);
+      let bardT = 3;
+      life.push({
+        update: (dt) => {
+          bardT -= dt;
+          if (bardT <= 0) {
+            bard.play("victory", 1.4);
+            bardT = 5 + rr() * 6;
+          }
+          bard.update(dt);
+        },
+      });
+      blocked.push([px, pz, 2.6]);
 
-    // Held und Bewohner der Freistatt
-    let heroModel = null;
-    const villagers = [];
-    const vr = R.rng(7);
-    const vSpots = [[-3.2, 3.0, 0.8, "albion"], [5.2, 1.4, -1.2, "midgard"], [-5.4, -3.2, 0.4, "hibernia"], [-6.2, -4.4, 2.6, "seherin"]];
-    for (const [x, z, ry, rk] of vSpots) {
-      let v;
-      if (rk === "seherin") {
-        v = R.buildHero({ race: "sidhe", cls: "dornenrufer", realm: "hibernia", gender: "w", look: { skin: "#d6cfe6", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "mond", tattooColor: "#4fffb0" }, gear: { ruestung: { base: "robe", tint: "#3a3a5a", style: 1 }, helm: { base: "hut", tint: "#2a2a44", style: 0 }, waffe: { base: "stab", rarity: "episch", style: 1 } } });
-      } else {
-        const races = Object.keys(SB.data.RACES).filter((r) => SB.data.RACES[r].realm === rk);
-        const race = races[Math.floor(vr() * races.length)];
-        const R0 = SB.data.RACES[race];
-        const clsList = Object.keys(SB.data.CLASSES).filter((c) => SB.data.CLASSES[c].realm === rk);
-        v = R.buildHero({ race, cls: clsList[Math.floor(vr() * clsList.length)], realm: rk, gender: vr() < 0.5 ? "m" : "w", look: { skin: R0.skins[Math.floor(vr() * 4)], hair: R0.hairs[Math.floor(vr() * 5)], hairStyle: Math.floor(vr() * 6), beard: Math.floor(vr() * 5) }, gear: { umhang: { base: "umhang", tint: SB.data.REALMS[rk].color } } });
+      // Zwei Kaempfer im Ring der Reiche, Zuschauer am Rand
+      const ar = buildings.arena;
+      const ring = grp([ar.position.x, heightAt(isl, ar.position.x, ar.position.z) + 0.08, ar.position.z], [0, ar.rotation.y, 0]);
+      world.add(ring);
+      const duo = grp();
+      ring.add(duo);
+      const fA = citizen(rr, realm, { gear: { waffe: { base: "schwert", rarity: "selten", style: 1 }, nebenhand: { base: "schild", style: 0 }, ruestung: { base: "platte", style: 1 }, helm: { base: "helm", style: 0 } }, cls: E.CLASS_FOR[realm].krieger, scale: 0.78 });
+      const or = others[Math.floor(rr() * 2)];
+      const fB = citizen(rr, or, { gear: { waffe: { base: "axt", rarity: "episch", style: 2 }, ruestung: { base: "leder", style: 2 }, umhang: { base: "umhang", tint: D.REALMS[or].color } }, cls: E.CLASS_FOR[or].schurke, scale: 0.78 });
+      fA.obj.position.set(-0.8, 0, 0);
+      fA.obj.rotation.y = PI / 2;
+      fB.obj.position.set(0.8, 0, 0);
+      fB.obj.rotation.y = -PI / 2;
+      duo.add(fA.obj, fB.obj);
+      const sparkM = new T.SpriteMaterial({ map: dot(), color: col("#ffd9a0"), transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: 0 });
+      const spark = new T.Sprite(sparkM);
+      spark.position.set(0, 1.05, 0);
+      spark.scale.setScalar(0.9);
+      duo.add(spark);
+      let duelT = 1;
+      let turn = 0;
+      let flashT = 0;
+      let rounds = 0;
+      life.push({
+        update: (dt) => {
+          duo.rotation.y += dt * 0.12;
+          duelT -= dt;
+          if (duelT <= 0) {
+            const a = turn ? fB : fA;
+            const d = turn ? fA : fB;
+            rounds++;
+            const special = rounds % 6 === 0;
+            a.play(special ? "special" : "attack", special ? 0.9 : 0.55);
+            const reaction = rr();
+            setTimeout(() => {
+              d.play(reaction < 0.35 ? "block" : reaction < 0.6 ? "evade" : "hit", 0.45);
+              flashT = 0.25;
+            }, special ? 420 : 280);
+            turn = 1 - turn;
+            duelT = special ? 1.6 : 1.0 + rr() * 0.5;
+          }
+          if (flashT > 0) flashT -= dt;
+          sparkM.opacity = Math.max(0, flashT * 3.2);
+          fA.update(dt);
+          fB.update(dt);
+        },
+      });
+      const fans = [];
+      for (let i = 0; i < (hi ? 4 : 2); i++) {
+        const a = PI / 2 + (i - 1.5) * 0.32;
+        const v = citizen(rr, i === 3 ? or : realm, { gear: rr() < 0.5 ? { umhang: { base: "umhang", tint: D.REALMS[i === 3 ? or : realm].color } } : {} });
+        v.obj.position.set(Math.cos(a) * 4.2, 0, Math.sin(a) * 4.2);
+        v.obj.rotation.y = -a - PI / 2;
+        ring.add(v.obj);
+        fans.push({ v, t: rr() * 5 });
       }
-      v.obj.position.set(x, heightAt(isl, x, z), z);
-      v.obj.rotation.y = ry;
-      v.obj.scale.multiplyScalar(0.72);
-      world.add(v.obj);
-      villagers.push(v);
+      life.push({
+        update: (dt) => {
+          for (const f of fans) {
+            f.t -= dt;
+            if (f.t <= 0) {
+              f.v.play("victory", 1.2);
+              f.t = 3 + rr() * 6;
+            }
+            f.v.update(dt);
+          }
+        },
+      });
+      // Schmied am Amboss
+      const sm = buildings.schmiede;
+      const an = sm.userData.anvil || [0.7, 1.9];
+      const smithG = grp([sm.position.x, heightAt(isl, sm.position.x, sm.position.z), sm.position.z], [0, sm.rotation.y, 0]);
+      world.add(smithG);
+      const smith = citizen(rr, realm, { gear: { waffe: { base: "hammer", rarity: "gewoehnlich", style: 0 }, ruestung: { base: "leder", tint: "#4a3424", style: 0 } }, cls: E.CLASS_FOR[realm].krieger, gender: "m" });
+      smith.obj.position.set(an[0] - 0.62, 0, an[1] + 0.05);
+      smith.obj.rotation.y = PI / 2;
+      smith.hold = "hammer";
+      smithG.add(smith.obj);
+      life.push({ update: (dt) => smith.update(dt) });
+      // Passanten auf den Wegen
+      for (const [to, ph] of (hi ? [["steinkreis", 0], ["stall", 3], ["gildenhalle", 6]] : [["stall", 3]])) {
+        const v = citizen(rr, rr() < 0.8 ? realm : others[1], { gear: rr() < 0.5 ? { umhang: { base: "umhang" } } : {} });
+        const tp = LAYOUT[to];
+        const a0 = [0.5 + tp[0] * 0.12, 0.8 + tp[1] * 0.12];
+        const a1 = [tp[0] * 0.72, tp[1] * 0.72];
+        world.add(v.obj);
+        const st = { u: (ph / 10) % 1, dir: 1, wait: 0 };
+        const len = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]);
+        life.push({
+          update: (dt) => {
+            if (st.wait > 0) {
+              st.wait -= dt;
+              v.hold = null;
+              if (st.wait <= 0) st.dir *= -1;
+            } else {
+              v.hold = "walk";
+              st.u += (dt * 0.75 * st.dir) / len;
+              if (st.u >= 1 || st.u <= 0) {
+                st.u = Math.max(0, Math.min(1, st.u));
+                st.wait = 1.5 + rr() * 2.5;
+              }
+            }
+            const x = a0[0] + (a1[0] - a0[0]) * st.u;
+            const z = a0[1] + (a1[1] - a0[1]) * st.u;
+            v.obj.position.set(x, heightAt(isl, x, z) - 0.03, z);
+            v.obj.rotation.y = Math.atan2((a1[0] - a0[0]) * st.dir, (a1[1] - a0[1]) * st.dir);
+            v.update(dt);
+          },
+        });
+      }
     }
+    let blocked = [];
+    // Mondtor: kleine Felsinsel hinten links, nur bei Nacht offen
+    const MOON = [-16.8, 0.8, -12.6];
+    function buildGate() {
+      const g = grp(MOON);
+      g.rotation.y = Math.atan2(0.5 - MOON[0], 10 - MOON[2]);
+      const small = island(3.4, 5, rng, { grass: TH.ground.grass, grass2: TH.ground.grass2, dirt: TH.ground.dirt, rock: TH.ground.rock, roots: 6, hills: 0.3, vineGlow: "#cfe0ff" });
+      g.add(small);
+      const st = pm("stone", "#5c5c6c", { flat: true });
+      for (const s of [-1, 1]) {
+        g.add(mesh(G.box(0.55, 3.3, 0.55), st, { p: [s * 1.25, 1.65, 0] }));
+        g.add(mesh(G.box(0.75, 0.3, 0.75), st, { p: [s * 1.25, 0.15, 0] }));
+      }
+      g.add(mesh(G.torus(1.25, 0.28, PI, 6, 18), st, { p: [0, 3.3, 0] }));
+      const runeM = new T.MeshLambertMaterial({ color: col("#3a3a4a"), emissive: col("#cfe0ff"), emissiveIntensity: 0.1 });
+      for (const s of [-1, 1]) for (let i = 0; i < 3; i++) g.add(mesh(G.box(0.1, 0.32, 0.02), runeM, { p: [s * 1.25, 0.9 + i * 0.75, 0.29], r: [0, 0, i % 2 ? 0.4 : -0.3] }));
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const cx = c.getContext("2d");
+      const gr = cx.createRadialGradient(64, 64, 4, 64, 64, 64);
+      gr.addColorStop(0, "#ffffff");
+      gr.addColorStop(0.35, "#cfe0ff");
+      gr.addColorStop(0.8, "#3a4a8a");
+      gr.addColorStop(1, "#0a0c1a");
+      cx.fillStyle = gr;
+      cx.fillRect(0, 0, 128, 128);
+      cx.fillStyle = "rgba(10,12,26,0.85)";
+      cx.beginPath();
+      cx.arc(76, 52, 26, 0, PI * 2);
+      cx.fill();
+      cx.fillStyle = "#f2f6ff";
+      cx.beginPath();
+      cx.arc(60, 56, 24, 0, PI * 2);
+      cx.fill();
+      cx.fillStyle = "#3a4a8a";
+      cx.beginPath();
+      cx.arc(70, 50, 22, 0, PI * 2);
+      cx.fill();
+      const tex = new T.CanvasTexture(c);
+      tex.colorSpace = T.SRGBColorSpace;
+      const portalM = new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide });
+      const portal = new T.Mesh(new T.CircleGeometry(1.0, 32), portalM);
+      portal.position.set(0, 1.95, 0);
+      portal.scale.set(0.98, 1.45, 1);
+      g.add(portal);
+      const halo = R.haloSprite("#cfe0ff", 5, 0.0, [0, 2.0, 0.3]);
+      g.add(halo);
+      // Haendlerin Selene, nur bei Nacht
+      const selene = R.buildHero({ race: "sidhe", cls: "lichtweber", realm: "hibernia", gender: "w", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { ruestung: { base: "robe", tint: "#2a3260", style: 1 }, helm: { base: "kappe", tint: "#1e2448", style: 0 }, umhang: { base: "umhang", tint: "#1e2448" } } });
+      selene.obj.scale.multiplyScalar(0.75);
+      selene.obj.position.set(2.1, 0, 0.9);
+      selene.obj.rotation.y = -0.5;
+      const lantern2 = grp([0, 0, 0]);
+      lantern2.add(mesh(G.sph(0.09, 8, 6), emis("#cfe0ff", 1.4)));
+      lantern2.add(R.haloSprite("#cfe0ff", 0.9, 0.7));
+      lantern2.position.set(0, -0.12, 0.08);
+      selene.parts.handL.add(lantern2);
+      g.add(selene.obj);
+      // Lichtbruecke aus schwebenden Steinen
+      const bridge = grp();
+      const stepM = new T.MeshLambertMaterial({ color: col("#6a6a7a"), emissive: col("#cfe0ff"), emissiveIntensity: 0, transparent: true, opacity: 0 });
+      const from = new T.Vector3(-9.6, 0, -9.0);
+      const to = new T.Vector3(MOON[0] + 2.6, MOON[1], MOON[2] + 2.4);
+      const steps = [];
+      for (let i = 0; i < 7; i++) {
+        const u = (i + 0.5) / 7;
+        const p = from.clone().lerp(to, u);
+        p.y += Math.sin(u * PI) * 0.8;
+        const s = mesh(G.cyl(0.42, 0.3, 0.14, 8), stepM, { p: [p.x, p.y, p.z] });
+        s.userData.y0 = p.y;
+        bridge.add(s);
+        steps.push(s);
+      }
+      world.add(bridge);
+      g.userData.update = (t, dt, night) => {
+        const on = smooth(0.35, 0.65, night);
+        portalM.opacity = on * 0.95;
+        portal.rotation.z += dt * 0.3;
+        halo.material.opacity = on * 0.55;
+        runeM.emissiveIntensity = 0.1 + on * 1.4;
+        stepM.opacity = on;
+        stepM.emissiveIntensity = on * 0.9;
+        bridge.visible = on > 0.02;
+        steps.forEach((s, i) => (s.position.y = s.userData.y0 + Math.sin(t * 1.3 + i) * 0.08));
+        selene.obj.visible = on > 0.5;
+        if (selene.obj.visible) selene.update(dt);
+      };
+      g.userData.bid = "mondtor";
+      world.add(g);
+      return g;
+    }
+    function buildWorld() {
+      TH = R.realmTheme(realm);
+      N = nightMats();
+      rng = R.rng(42 + realm.length * 7);
+      anim = { smoke: [], flags: [], beam: null, portal: null, runes: null, float: null, orbit: null, water: null, swing: null, orb: null, stones: null, griffin: null, homeFlag: null, sparks: [], sparkList: [] };
+      islets = [];
+      villagers = [];
+      life = [];
+      flyList = [];
+      buildings = {};
+      world = grp();
+      scene.add(world);
+      paths = Object.values(LAYOUT).map(([x, z]) => [0.5, 0.8, x * 0.92, z * 0.92]);
+      const gd = TH.ground;
+      isl = island(14, 12, rng, { paths, plaza: [0.5, 0.8, 3.0], grass: gd.grass, grass2: gd.grass2, dirt: gd.dirt, rock: gd.rock, roots: TH.roots + 8, vineGlow: gd.vineGlow });
+      world.add(isl);
+      const cob = pm("stone", gd.cob, { flat: true });
+      for (let i = 0; i < 26; i++) {
+        const a = rng() * PI * 2;
+        const r = Math.sqrt(rng()) * 2.8;
+        world.add(mesh(G.cyl(0.25 + rng() * 0.15, 0.3, 0.06, 6), cob, { p: [0.5 + Math.cos(a) * r, 0.03, 0.8 + Math.sin(a) * r], r: [0, rng(), 0], shadow: false }));
+      }
+      for (const a of [2.4, 4.0]) {
+        const frozen = realm === "midgard";
+        const fm = new T.MeshBasicMaterial({ map: fallTex, color: col(frozen ? "#e8f4ff" : "#bfe0ff"), transparent: true, opacity: frozen ? 0.7 : 0.55, depthWrite: false, side: T.DoubleSide });
+        const f = new T.Mesh(new T.PlaneGeometry(1.4, 16), fm);
+        f.position.set(Math.cos(a) * 14.3, -8, Math.sin(a) * 14.3);
+        f.rotation.y = -a + PI / 2;
+        world.add(f);
+        world.add(R.haloSprite("#cfe8ff", 5, 0.25, [Math.cos(a) * 14.3, -15, Math.sin(a) * 14.3]));
+      }
+      for (const id in LAYOUT) placeBuilding(id);
+      gate = buildGate();
+      buildings.mondtor = gate;
+      rebuildPickables();
+      blocked = Object.values(LAYOUT).map(([x, z]) => [x, z, 3.2]).concat([[0.5, 0.8, 3.4], [2.6, 3.4, 1.2]]);
+      buildLife();
+      const free = (x, z, r) => !blocked.some(([bx, bz, br]) => Math.hypot(bx - x, bz - z) < br + r) && !paths.some((p) => {
+        const vx = p[2] - p[0];
+        const vz = p[3] - p[1];
+        const t = Math.max(0, Math.min(1, ((x - p[0]) * vx + (z - p[1]) * vz) / (vx * vx + vz * vz)));
+        return Math.hypot(x - p[0] - vx * t, z - p[1] - vz * t) < 1.1 + r;
+      });
+      let placed = 0;
+      for (let tries = 0; tries < 700 && placed < 36; tries++) {
+        const a = rng() * PI * 2;
+        const r = 3.5 + rng() * 9.8;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (!free(x, z, 0.8)) continue;
+        if (z > 6 && Math.abs(x) < 6) continue;
+        const tr = R.realmTree(realm, rng);
+        tr.rotation.y = rng() * PI * 2;
+        placeAt(tr, x, z);
+        blocked.push([x, z, 1.0]);
+        placed++;
+      }
+      const decoN = realm === "hibernia" ? 60 : 44;
+      for (let i = 0; i < decoN; i++) {
+        const a = rng() * PI * 2;
+        const r = 3.6 + rng() * 9.8;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (!free(x, z, 0.3)) continue;
+        const o = R.realmDeco(realm, rng, i);
+        o.rotation.y = rng() * PI * 2;
+        placeAt(o, x, z);
+      }
+      for (let i = 0; i < 5; i++) {
+        const a = rng() * PI * 2;
+        const r = 6 + rng() * 6;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (!free(x, z, 0.5)) continue;
+        const s = standingStone(rng, 1.2 + rng(), ["#9fd8ff", "#7fffb0", "#e8c35a"][i % 3]);
+        s.scale.setScalar(0.7);
+        s.rotation.y = rng() * PI;
+        placeAt(s, x, z);
+      }
+      for (const id of ["taverne", "arena", "heim", "stall", "arkanum", "ruhmeshalle", "gildenhalle", "steinkreis"]) {
+        const [x, z] = LAYOUT[id];
+        const l = lantern(N);
+        l.rotation.y = rng() * PI * 2;
+        placeAt(l, x * 0.55 + 0.9, z * 0.55 + 0.5);
+      }
+      // Kleine schwebende Felsen ringsum
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * PI * 2 + 0.4;
+        const d = 24 + i * 3;
+        const isg = grp([Math.cos(a) * d, -4 + (i % 3) * 3, Math.sin(a) * d]);
+        isg.add(island(2.4 + rng() * 1.4, 4 + rng() * 3, rng, { grass: gd.grass, grass2: gd.grass2, rock: gd.rock, roots: 5, hills: 0.4, vineGlow: gd.vineGlow }));
+        if (i % 2) isg.add(R.realmTree(realm, rng));
+        else
+          for (let k = 0; k < 3; k++) {
+            const s = standingStone(rng, 1.4 + rng(), k === 1 ? gd.vineGlow : null);
+            s.position.set((k - 1) * 0.9, 0, (rng() - 0.5) * 0.5);
+            s.scale.setScalar(0.7);
+            isg.add(s);
+          }
+        islets.push({ g: isg, ph: rng() * 6, y: isg.position.y });
+        world.add(isg);
+      }
+      // Wahrzeichen des Reiches hinter der Insel, die anderen Reiche fern im Dunst
+      const lm = R.realmLandmark(realm, N, rng);
+      lm.position.set(4, -7, -46);
+      world.add(lm);
+      anim.flags.push(...lm.userData.flags);
+      islets.push({ g: lm, ph: 1.3, y: lm.position.y, amp: 0.25 });
+      const far = hi ? Object.keys(D.REALMS).filter((r) => r !== realm) : [];
+      far.forEach((r2, i) => {
+        const g = R.realmLandmark(r2, N, rng, { radius: 9 });
+        const x = i ? 52 : -54;
+        g.position.set(x, -2 + i * 3, -66 - i * 6);
+        g.scale.setScalar(0.5);
+        g.rotation.y = Math.atan2(-x, 36);
+        world.add(g);
+        islets.push({ g, ph: 2 + i, y: g.position.y, amp: 0.6 });
+      });
+      // Gluehwuermchen und Feenlichter, Nebelschwaden, Wetter
+      const fc = TH.flies;
+      fc.forEach((c, i) => {
+        const f = fireflies(rng, Math.round((hi ? 140 : 70) / fc.length) + (realm === "hibernia" ? 20 : 0), 13, 0.4, 3.0, c);
+        world.add(f);
+        flyList.push(f);
+      });
+      wisps = mistWisps(rng, hi ? 16 : 8, 13, 0.3);
+      world.add(wisps);
+      weather = R.realmWeather(TH.weather, rng, hi);
+      world.add(weather);
+      // Bewohner
+      const vr = R.rng(7 + realm.length);
+      const spots = [[5.2, 1.4, -1.2], [-1.8, -3.4, 0.4], [3.0, -4.6, 2.2]];
+      for (const [x, z, ry] of spots) {
+        const v = citizen(vr, realm, { gear: { umhang: { base: "umhang", tint: D.REALMS[realm].color } } });
+        v.obj.position.set(x, heightAt(isl, x, z), z);
+        v.obj.rotation.y = ry;
+        world.add(v.obj);
+        villagers.push(v);
+      }
+      const seer = R.buildHero({ race: "sidhe", cls: "dornenrufer", realm: "hibernia", gender: "w", look: { skin: "#d6cfe6", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "mond", tattooColor: "#4fffb0" }, gear: { ruestung: { base: "robe", tint: "#3a3a5a", style: 1 }, helm: { base: "hut", tint: "#2a2a44", style: 0 }, waffe: { base: "stab", rarity: "episch", style: 1 } } });
+      seer.obj.position.set(-6.2, heightAt(isl, -6.2, -4.4), -4.4);
+      seer.obj.rotation.y = 2.6;
+      seer.obj.scale.multiplyScalar(0.72);
+      world.add(seer.obj);
+      villagers.push(seer);
+    }
+    function rebuildWorld() {
+      if (world) scene.remove(world);
+      buildWorld();
+      if (heroModel) world.add(heroModel.obj);
+      applyDaytime(R.dayTime(dayMode));
+    }
+    let heroModel = null;
+    buildWorld();
 
     // Kamera
     const cam = { az: 0.05, pol: 1.04, rad: 40, target: new T.Vector3(0, 0.2, 0) };
@@ -8141,7 +8980,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const under = col("#0a0d18");
     function applyDaytime(t) {
       info = R.dayInfo(t);
-      const P = palette(info);
+      const P = palette(info, TH.sky);
       const a = t * 2 * PI;
       sunDir.set(Math.sin(a) * 0.55, -Math.cos(a), 0.45).normalize();
       const lightDir = info.sunH > -0.05 ? sunDir : sunDir.clone().negate();
@@ -8164,6 +9003,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       sea.material.color.copy(P.bot).multiplyScalar(0.9);
       sea2.material.color.copy(P.fog);
       renderer.toneMappingExposure = 1.05 + 0.25 * info.night;
+      if (labels.mondtor) {
+        labels.mondtor.classList.toggle("asleep", info.night < 0.5);
+        labels.mondtor.classList.toggle("moonlit", info.night >= 0.5);
+      }
     }
     applyDaytime(R.dayTime(dayMode));
 
@@ -8268,7 +9111,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             anim.sparkList.splice(i, 1);
           }
         }
-      for (const is of islets) is.g.position.y = is.y + Math.sin(t * 0.4 + is.ph) * 0.5;
+      for (const is of islets) is.g.position.y = is.y + Math.sin(t * 0.4 + is.ph) * (is.amp || 0.5);
       const wa = t * 0.025;
       whale.position.set(Math.cos(wa) * 48, 10 + Math.sin(t * 0.3) * 2, Math.sin(wa) * 48);
       whale.rotation.y = -wa + PI;
@@ -8282,10 +9125,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       sea.userData.tex.offset.x += dt * 0.004;
       sea2.userData.tex.offset.y += dt * 0.006;
       fallTex.offset.y += dt * 0.8;
-      flies.userData.update(t, 0.15 + 0.85 * info.night);
+      for (const f of flyList) f.userData.update(t, 0.15 + 0.85 * info.night);
       wisps.userData.update(dt, scene.fog.color, 0.08 + 0.1 * info.day + 0.06 * info.dusk);
-      aur.userData.update(t, smooth(0.5, 0.95, info.night) * 0.8);
+      if (weather) weather.userData.update(dt, t, info);
+      aur.userData.update(t, smooth(0.5, 0.95, info.night) * (0.3 + 0.7 * TH.aurora));
+      if (gate) gate.userData.update(t, dt, info.night);
+      for (const l of life) l.update(dt);
       for (const id in buildings) {
+        if (id === "mondtor") continue;
         const b = buildings[id];
         const target = id === hover ? 1.05 : 1;
         const s = b.scale.x + (target - b.scale.x) * Math.min(1, dt * 10);
@@ -8302,20 +9149,24 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       setHero(desc) {
         if (heroModel) world.remove(heroModel.obj);
         heroModel = R.buildHero(desc);
-        heroModel.obj.position.set(2.6, 0, 3.4);
+        heroModel.obj.position.set(2.6, heightAt(isl, 2.6, 3.4), 3.4);
         heroModel.obj.rotation.y = 0.15;
         heroModel.obj.scale.multiplyScalar(0.82);
         world.add(heroModel.obj);
-        if (desc.realm && desc.realm !== realm) {
+        if (desc.realm && desc.realm !== realm && D.REALMS[desc.realm]) {
           realm = desc.realm;
-          placeBuilding("heim");
-          rebuildPickables();
+          rebuildWorld();
         }
       },
+      realm: () => realm,
       setHome(tier, realmId) {
         if (tier === homeTier && (!realmId || realmId === realm)) return;
         homeTier = tier;
-        if (realmId) realm = realmId;
+        if (realmId && realmId !== realm && D.REALMS[realmId]) {
+          realm = realmId;
+          rebuildWorld();
+          return;
+        }
         placeBuilding("heim");
         rebuildPickables();
       },
@@ -8844,7 +9695,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     scene.add(front);
     const N = nightMats();
     const info = R.dayInfo(setting === "dungeon" ? 0.02 : opts.dayTime != null ? opts.dayTime : S.t);
-    const P = palette(info);
+    // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
+    const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
+    const P = palette(info, TH ? TH.sky : null);
     if (setting === "dungeon") {
       const tint = col(opts.tint || "#8f7cff");
       sky.userData.recolor(col("#05040a"), tint.clone().multiplyScalar(0.18), col("#020205"));
@@ -8874,7 +9727,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       sea.material.color.copy(P.bot);
       scene.add(sea);
     }
-    const stage = island(8, 7, rng, { grass: S.grass, grass2: S.grass2, dirt: S.dirt, rock: S.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : "#7fffc8" });
+    const GD = TH ? TH.ground : S;
+    const stage = island(8, 7, rng, { grass: GD.grass, grass2: GD.grass2, dirt: GD.dirt, rock: GD.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : TH ? TH.ground.vineGlow : "#7fffc8" });
     scene.add(stage);
     const flickers = [];
     const extras = [];
@@ -8938,15 +9792,20 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
     } else {
       for (let i = 0; i < 7; i++) {
-        const tr = i % 3 === 0 ? pine(rng) : gnarledTree(rng);
+        const tr = TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
         tr.position.set(-7 + i * 2.3 + rng(), 0, -4 - rng() * 2);
         scene.add(tr);
       }
       for (let i = 0; i < 6; i++) {
-        const s = i % 2 ? shrooms(rng) : rock(rng);
+        const s = TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
         s.position.set(-6 + rng() * 12, 0.05, -1.5 - rng() * 2.5);
         scene.add(s);
       }
+    }
+    const weather = TH ? R.realmWeather(TH.weather, rng, false) : null;
+    if (weather) {
+      weather.scale.setScalar(0.6);
+      scene.add(weather);
     }
     const flies = fireflies(rng, 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a");
     scene.add(flies);
@@ -9041,6 +9900,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         if (o.userData.flick) o.scale.y = 1 + Math.sin(t * 13 + o.userData.flick) * 0.15;
       });
       flies.userData.update(t, setting === "dungeon" ? 0.9 : 0.3 + 0.6 * info.night);
+      if (weather) weather.userData.update(dt, t, info);
       wisps.userData.update(dt, scene.fog.color, 0.12);
       aur.userData.update(t, setting === "dungeon" ? 0 : smooth(0.5, 0.95, info.night) * 0.7);
       camera.position.copy(camBase);
@@ -9452,6 +10312,998 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 })();
 
 </script>
+<script>/* src/r3d-realms.js */
+/* Helden von Schwebfels - Heimatinseln der drei Reiche: Landschaft, Gebaeude, Wetter und Wahrzeichen.
+   Albion (Kreidenfels): Kreideklippen, Eichen, Fachwerk und Burgen, goldene Pollen in der Luft.
+   Midgard (Hrimholm): Schnee, Langhaeuser mit Drachenkoepfen, Runensteine, Schneefall und starkes Nordlicht.
+   Hibernia (Glenfeyn): sattes Gruen, Rundhaeuser mit Moosdach, bunte Feenlichter, Bluetenblaetter und ein Weltenbaum.
+   Wird von r3d-scenes.js beim Bau der Insel und der Kampfbuehne benutzt. */
+(function () {
+  "use strict";
+  const SB = (globalThis.SB = globalThis.SB || {});
+  const R = (SB.R3D = SB.R3D || {});
+  const PI = Math.PI;
+  let T, mesh, grp, G, pm, emis, glow, basic, X;
+  function init() {
+    T = R.T();
+    mesh = R.mesh;
+    grp = R.grp;
+    G = R.geo;
+    pm = R.mat.pmat;
+    emis = R.mat.emis;
+    glow = R.mat.glow;
+    basic = R.mat.basic;
+    X = R._sc;
+  }
+  const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
+
+  /* ---------- Stimmung je Reich ---------- */
+  const THEMES = {
+    albion: {
+      id: "albion",
+      sky: { dayTop: "#3f6a9f", dayBot: "#b9c6c4", duskTop: "#3a2c5a", duskBot: "#d8885a", nightTop: "#05080f", nightBot: "#18223c", fogDay: "#8c9ea6", fogNight: "#182036", sunDay: "#ffe9c8", hemiGround: "#4a3e30" },
+      ground: { grass: "#4a6c3c", grass2: "#6e8446", dirt: "#8a7a5c", rock: "#cfc8b8", vineGlow: "#ffe39a", cob: "#8a847a" },
+      flies: ["#ffe9a0"], weather: "pollen", aurora: 0.25, roots: 14,
+    },
+    midgard: {
+      id: "midgard",
+      sky: { dayTop: "#46597a", dayBot: "#b4c2d0", duskTop: "#24284a", duskBot: "#9a7c96", nightTop: "#01030a", nightBot: "#0c182e", fogDay: "#a6b4c2", fogNight: "#0e1a2e", sunDay: "#e8f0ff", hemiGround: "#5a6070" },
+      ground: { grass: "#e2e8ee", grass2: "#c2cedb", dirt: "#7c7672", rock: "#4c5462", vineGlow: "#9fe3ff", cob: "#6a6e76" },
+      flies: ["#bfe8ff"], weather: "snow", aurora: 1.0, roots: 10,
+    },
+    hibernia: {
+      id: "hibernia",
+      sky: { dayTop: "#2e7898", dayBot: "#b4dcc6", duskTop: "#3a2a6a", duskBot: "#e08ab0", nightTop: "#050918", nightBot: "#1c1a46", fogDay: "#86bca8", fogNight: "#1c1a48", sunDay: "#fff3c8", hemiGround: "#3a4a2a" },
+      ground: { grass: "#3c8a44", grass2: "#7ab84a", dirt: "#6e5a3a", rock: "#566856", vineGlow: "#9fffc8", cob: "#6a7462" },
+      flies: ["#9fffc8", "#ff9fe0", "#ffe08a", "#9fd8ff"], weather: "petals", aurora: 0.35, roots: 26,
+    },
+  };
+  R.realmTheme = (realm) => THEMES[realm] || THEMES.albion;
+
+  /* ---------- Baeume und Kleinkram ---------- */
+  function poplar(rng) {
+    const t = grp();
+    t.add(mesh(G.cyl(0.08, 0.13, 1.2, 6), pm("bark", "#4a3a2e"), { p: [0, 0.6, 0] }));
+    const m = pm("plain", pick(rng, ["#3c6432", "#466e36", "#355a2e"]), { flat: true });
+    for (let i = 0; i < 4; i++) t.add(mesh(G.ico(0.55 - i * 0.08, 1), m, { p: [0, 1.4 + i * 0.6, 0], s: [1, 1.5, 1] }));
+    t.scale.setScalar(0.9 + rng() * 0.5);
+    return t;
+  }
+  function snowPine(rng) {
+    const t = grp();
+    t.add(mesh(G.cyl(0.1, 0.16, 1.0, 6), pm("bark", "#3a2e24"), { p: [0, 0.5, 0] }));
+    const m = pm("plain", pick(rng, ["#1d3230", "#22372f", "#26392f"]), { flat: true });
+    const snow = pm("plain", "#eef3f8", { flat: true });
+    for (let i = 0; i < 4; i++) {
+      const r0 = 1.0 - i * 0.2;
+      t.add(mesh(G.cone(r0, 1.2, 7), m, { p: [0, 1.1 + i * 0.6, 0], r: [0, i, 0] }));
+      t.add(mesh(G.cone(r0 * 0.62, 0.55, 7), snow, { p: [0, 1.47 + i * 0.6, 0], r: [0, i, 0] }));
+    }
+    t.scale.setScalar(0.9 + rng() * 0.7);
+    return t;
+  }
+  function birch(rng) {
+    const t = grp();
+    const bark = pm("bark", "#d8d4cc");
+    t.add(mesh(G.tube("birch", [[0, 0, 0], [0.08, 1.0, 0], [-0.06, 2.0, 0.05], [0.1, 2.7, 0]], 0.09, 10, 6), bark));
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * PI * 2 + rng();
+      t.add(mesh(G.tube("bbr", [[0, 0, 0], [0.35, 0.3, 0], [0.6, 0.65, 0.1]], 0.035, 6, 4), bark, { p: [0, 1.3 + i * 0.35, 0], r: [0, a, 0] }));
+    }
+    t.add(mesh(G.ico(0.2, 0), pm("plain", "#eef3f8", { flat: true }), { p: [0.1, 2.75, 0], s: [1.2, 0.4, 1.2] }));
+    return t;
+  }
+  function feyTree(rng) {
+    const leaf = pick(rng, ["#3f9a4a", "#5ab04a", "#c86ab0", "#e8a0d0", "#e8b040", "#4fa88a"]);
+    const t = X.gnarledTree(rng, { leaf, bark: "#4a3628" });
+    if (rng() < 0.6) {
+      const c = pick(rng, ["#ffe08a", "#9fffc8", "#ff9fe0"]);
+      for (let i = 0; i < 4; i++) t.add(mesh(G.sph(0.07, 6, 6), emis(c, 1.1), { p: [(rng() - 0.5) * 1.6, 2.4 + rng() * 0.9, (rng() - 0.5) * 1.6] }));
+    }
+    return t;
+  }
+  function giantShroom(rng) {
+    const g = grp();
+    const h = 0.9 + rng() * 0.9;
+    g.add(mesh(G.cyl(0.1, 0.16, h, 8), pm("plain", "#e8e0cc"), { p: [0, h / 2, 0] }));
+    const c = pick(rng, ["#c84a6a", "#6a4ac8", "#e8a040", "#4ac8b0"]);
+    g.add(mesh(G.cap(0.55, PI * 0.5), pm("plain", c), { p: [0, h, 0], s: [1, 0.55, 1] }));
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * PI * 2;
+      g.add(mesh(G.sph(0.06, 6, 6), emis("#fff6d8", 0.8), { p: [Math.cos(a) * 0.32, h + 0.18, Math.sin(a) * 0.32] }));
+    }
+    g.add(R.haloSprite(c, 1.6, 0.25, [0, h, 0]));
+    return g;
+  }
+  function flowerPatch(rng, colors) {
+    const g = grp();
+    const stem = pm("plain", "#3f6a32");
+    for (let i = 0; i < 9; i++) {
+      const x = (rng() - 0.5) * 0.9;
+      const z = (rng() - 0.5) * 0.9;
+      const h = 0.12 + rng() * 0.15;
+      g.add(mesh(G.cyl(0.012, 0.012, h, 4), stem, { p: [x, h / 2, z], shadow: false }));
+      g.add(mesh(G.sph(0.05, 6, 5), pm("plain", pick(rng, colors)), { p: [x, h, z], s: [1, 0.6, 1], shadow: false }));
+    }
+    return g;
+  }
+  function fern(rng) {
+    const g = grp();
+    const m = pm("plain", pick(rng, ["#2f7a3a", "#3f8a3a", "#4a9a4a"]), { ds: true });
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * PI * 2;
+      g.add(mesh(G.box(0.08, 0.02, 0.6), m, { p: [Math.cos(a) * 0.25, 0.2, Math.sin(a) * 0.25], r: [0.6, -a + PI / 2, 0] }));
+    }
+    return g;
+  }
+  function haybale() {
+    return mesh(G.cyl(0.35, 0.35, 0.55, 12), pm("fur", "#c9a85a"), { p: [0, 0.35, 0], r: [PI / 2, 0, 0.3] });
+  }
+  function barrel() {
+    const g = grp();
+    g.add(mesh(G.cyl(0.26, 0.26, 0.6, 10), pm("wood", "#6a4a30"), { p: [0, 0.3, 0] }));
+    for (const y of [0.1, 0.5]) g.add(mesh(G.torus(0.265, 0.02, PI * 2, 4, 14), pm("metal", "#3a3a40"), { p: [0, y, 0], r: [PI / 2, 0, 0] }));
+    return g;
+  }
+  function snowRock(rng) {
+    const g = grp();
+    const r0 = X.rock(rng, "#5a6270");
+    g.add(r0);
+    g.add(mesh(G.dodeca(0.3), pm("plain", "#eef3f8", { flat: true }), { p: [0, 0.18, 0], s: [1.1, 0.35, 1.1] }));
+    return g;
+  }
+  function woodpile() {
+    const g = grp();
+    const m = pm("bark", "#5a4232");
+    for (let row = 0; row < 3; row++) for (let i = 0; i < 4 - row; i++) g.add(mesh(G.cyl(0.1, 0.1, 0.9, 7), m, { p: [-0.3 + i * 0.21 + row * 0.1, 0.1 + row * 0.18, 0], r: [PI / 2, 0, 0] }));
+    g.add(mesh(G.box(0.95, 0.06, 0.95), pm("plain", "#eef3f8"), { p: [0, 0.62, 0], s: [0.9, 1, 1] }));
+    return g;
+  }
+  function runeStone(rng, c) {
+    const s = X.standingStone(rng, 1.4 + rng() * 0.8, c || "#9fd8ff");
+    s.add(mesh(G.dodeca(0.36), pm("plain", "#eef3f8", { flat: true }), { p: [0, 1.6, 0], s: [1, 0.35, 0.7] }));
+    return s;
+  }
+
+  // Baeume und Deko je Reich fuer die Insel
+  R.realmTree = function (realm, rng) {
+    if (!T) init();
+    const k = rng();
+    if (realm === "midgard") return k < 0.78 ? snowPine(rng) : birch(rng);
+    if (realm === "hibernia") return k < 0.72 ? feyTree(rng) : k < 0.9 ? giantShroom(rng) : X.pine(rng);
+    return k < 0.6 ? X.gnarledTree(rng, { leaf: pick(rng, ["#3c6a32", "#4a7a38", "#557a34", "#466a30"]) }) : k < 0.85 ? poplar(rng) : X.pine(rng);
+  };
+  R.realmDeco = function (realm, rng, i) {
+    if (!T) init();
+    const k = i % 5;
+    if (realm === "midgard") return [snowRock(rng), X.crystals(rng, "#bfe8ff"), woodpile(), runeStone(rng), snowRock(rng)][k];
+    if (realm === "hibernia") return [X.shrooms(rng), flowerPatch(rng, ["#ff7ad0", "#ffe05a", "#ffffff", "#9f7aff", "#ff9a5a"]), fern(rng), X.crystals(rng, pick(rng, ["#9fffc8", "#ff9fe0"])), flowerPatch(rng, ["#ff5a7a", "#ffd0f0", "#9fd8ff"])][k];
+    return [flowerPatch(rng, ["#d9443a", "#f2d04a", "#f2f2f2", "#8a5ad9"]), X.rock(rng, "#c9c2b4"), haybale(), barrel(), flowerPatch(rng, ["#f2d04a", "#f2f2f2"])][k];
+  };
+
+  /* ---------- Wetter: Schnee, Bluetenblaetter, Pollen ---------- */
+  R.realmWeather = function (kind, rng, hi) {
+    if (!T) init();
+    const n = kind === "snow" ? (hi ? 1100 : 500) : kind === "petals" ? (hi ? 260 : 130) : hi ? 180 : 90;
+    const geo = new T.BufferGeometry();
+    const p = new Float32Array(n * 3);
+    const c = new Float32Array(n * 3);
+    const base = [];
+    const pal = kind === "snow" ? ["#ffffff", "#e8f2ff"] : kind === "petals" ? ["#ffb6e0", "#ffffff", "#ff8ac8", "#ffe0f0", "#c8f0a0"] : ["#ffe9a0", "#fff4c8"];
+    for (let i = 0; i < n; i++) {
+      const a = rng() * PI * 2;
+      const r = Math.sqrt(rng()) * 19;
+      base.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, y: rng() * 18 - 2, ph: rng() * 10, sp: 0.6 + rng() * 0.8 });
+      const cc = new T.Color(pick(rng, pal));
+      c[i * 3] = cc.r;
+      c[i * 3 + 1] = cc.g;
+      c[i * 3 + 2] = cc.b;
+    }
+    geo.setAttribute("position", new T.BufferAttribute(p, 3));
+    geo.setAttribute("color", new T.BufferAttribute(c, 3));
+    const mat = new T.PointsMaterial({ size: kind === "snow" ? 0.16 : kind === "petals" ? 0.2 : 0.12, map: X.dot(), vertexColors: true, transparent: true, depthWrite: false, opacity: 0.9, blending: kind === "pollen" ? T.AdditiveBlending : T.NormalBlending });
+    const pts = new T.Points(geo, mat);
+    pts.frustumCulled = false;
+    const fall = kind === "snow" ? 1.1 : kind === "petals" ? 0.35 : -0.05;
+    pts.userData.update = (dt, t, info) => {
+      mat.opacity = kind === "pollen" ? 0.25 + 0.55 * info.day : kind === "petals" ? 0.85 : 0.75 + 0.2 * info.day;
+      for (let i = 0; i < n; i++) {
+        const b = base[i];
+        b.y -= dt * fall * b.sp;
+        if (kind === "pollen") b.y += Math.sin(t * 0.7 + b.ph) * dt * 0.15;
+        if (b.y < -3) b.y = 16;
+        if (b.y > 16) b.y = -2;
+        const sway = kind === "snow" ? 0.4 : kind === "petals" ? 1.2 : 0.6;
+        p[i * 3] = b.x + Math.sin(t * 0.6 + b.ph) * sway + (kind === "petals" ? Math.sin(t * 0.15) * 2 : 0);
+        p[i * 3 + 1] = b.y;
+        p[i * 3 + 2] = b.z + Math.cos(t * 0.5 + b.ph * 1.3) * sway;
+      }
+      geo.attributes.position.needsUpdate = true;
+    };
+    return pts;
+  };
+
+  /* ---------- Schnee auf Daechern (Midgard) ---------- */
+  R.snowify = function (b) {
+    if (!T) init();
+    const snow = pm("plain", "#eef3f8");
+    const list = [];
+    b.traverse((o) => {
+      if (o.isMesh && o.userData.roof) list.push(o);
+    });
+    for (const o of list) {
+      const s = new T.Mesh(o.geometry, snow);
+      s.position.copy(o.position);
+      s.rotation.copy(o.rotation);
+      s.scale.copy(o.scale);
+      if (o.userData.roof === "gable") {
+        s.scale.x *= 0.97;
+        s.position.y += 0.08;
+      } else {
+        const hgt = (o.geometry.parameters && o.geometry.parameters.height) || 1;
+        s.scale.set(o.scale.x * 0.5, o.scale.y * 0.45, o.scale.z * 0.5);
+        s.position.y += hgt * o.scale.y * 0.275 + 0.03;
+      }
+      s.castShadow = true;
+      o.parent.add(s);
+    }
+    return b;
+  };
+
+  /* ---------- Bauformen ---------- */
+  // Midgard: Langhaus mit Grassodendach, gekreuzten Giebelbrettern und Drachenkoepfen, Schilde an der Wand
+  function longhouse(N, w, d, h, o) {
+    o = o || {};
+    const b = grp();
+    const wood = pm("wood", o.wood || "#3e2c1e");
+    const dark = pm("wood", "#2a1e14");
+    const RM = SB.data.REALMS.midgard;
+    b.add(mesh(G.box(w + 0.2, 0.35, d + 0.2), pm("stone", "#4e5260", { flat: true }), { p: [0, 0.17, 0] }));
+    b.add(mesh(G.box(w, h, d), wood, { p: [0, 0.35 + h / 2, 0] }));
+    for (let i = 1; i < 5; i++) for (const z of [d / 2 + 0.01, -d / 2 - 0.01]) b.add(mesh(G.box(w, 0.035, 0.03), dark, { p: [0, 0.35 + (i * h) / 5, z], shadow: false }));
+    for (const x of [-w / 2, w / 2]) for (const z of [-d / 2, d / 2]) b.add(mesh(G.cyl(0.13, 0.16, h + 0.3, 8), dark, { p: [x, 0.35 + h / 2, z] }));
+    const rh = o.roofH || h * 1.35;
+    const roof = X.gableRoof(w + 0.6, d + 1.0, rh, pm("fur", o.roofC || "#4a3e2c"));
+    roof.position.y = 0.35 + h;
+    b.add(roof);
+    const base = 0.35 + h;
+    const top = base + rh;
+    for (const s of [-1, 1]) {
+      const gx = s * ((w + 0.6) / 2 + 0.02);
+      for (const k of [-1, 1]) {
+        const pts = [[0, base - 0.05, k * ((d + 1.0) / 2)], [0, top, 0], [0, top + 0.45, -k * 0.38], [0, top + 0.75, -k * 0.12]];
+        b.add(mesh(G.tube("lhb" + d.toFixed(2) + h.toFixed(2) + rh.toFixed(2) + k, pts, 0.055, 14, 5), dark, { p: [gx, 0, 0] }));
+        const head = grp([gx, top + 0.75, -k * 0.12], [0, 0, 0]);
+        head.add(mesh(G.cone(0.08, 0.28, 5), dark, { p: [s * 0.12, 0.02, 0], r: [0, 0, -s * PI / 2] }));
+        head.add(mesh(G.sph(0.025, 6, 6), emis("#ff7a3d", 1), { p: [s * 0.12, 0.06, 0.05] }));
+        b.add(head);
+      }
+    }
+    // Tuer mit geschnitztem Rahmen
+    b.add(mesh(G.box(0.85, 1.35, 0.08), dark, { p: [0, 0.35 + 0.68, d / 2 + 0.03] }));
+    for (const x of [-0.5, 0.5]) b.add(mesh(G.box(0.12, 1.55, 0.12), pm("wood", "#5a3e26"), { p: [x, 0.35 + 0.78, d / 2 + 0.05] }));
+    b.add(mesh(G.torus(0.16, 0.03, PI * 2, 4, 12), pm("wood", "#5a3e26"), { p: [0, 0.35 + 1.62, d / 2 + 0.06] }));
+    // Rundschilde
+    const shieldCols = [RM.color, "#d9d2c5", "#8a2a2a", "#2a2a30"];
+    const n = Math.max(2, Math.floor((w - 1.2) / 0.75));
+    for (let i = 0; i < n; i++) {
+      const x = -w / 2 + 0.45 + (i * (w - 0.9)) / Math.max(1, n - 1);
+      if (Math.abs(x) < 0.7) continue;
+      const sg = grp([x, 0.35 + h * 0.62, d / 2 + 0.06]);
+      sg.add(mesh(G.cyl(0.26, 0.26, 0.05, 16), pm("wood", shieldCols[i % 4]), { r: [PI / 2, 0, 0] }));
+      sg.add(mesh(G.sph(0.07, 8, 6), pm("metal", "#8a8f98"), { p: [0, 0, 0.04], s: [1, 1, 0.6] }));
+      sg.add(mesh(G.torus(0.26, 0.018, PI * 2, 4, 18), pm("metal", "#5a5f68"), {}));
+      b.add(sg);
+    }
+    for (const x of [-w * 0.32, w * 0.32]) b.add(mesh(G.box(0.3, 0.22, 0.06), N.win, { p: [x, 0.35 + h * 0.9, -d / 2 - 0.04] }));
+    b.userData.smoke = [w * 0.25, top + 0.1, 0];
+    return b;
+  }
+  // Hibernia: Rundhaus mit Lehmwand, Reetkegel voller Moos und Blumen, Feenlaterne an der Tuer
+  function roundhouse(N, r, h, o) {
+    o = o || {};
+    const b = grp();
+    b.add(mesh(G.cyl(r, r * 1.04, h, 18), pm("plain", o.wall || "#d6c49a"), { p: [0, h / 2, 0] }));
+    b.add(mesh(G.cyl(r * 1.012, r * 1.02, 0.14, 18, true), pm("plain", o.band || "#3f8a5a", { ds: true }), { p: [0, h * 0.72, 0] }));
+    // Spiralmuster auf dem Band
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * PI * 2;
+      b.add(mesh(G.torus(0.05, 0.012, PI * 1.6, 3, 10), pm("plain", "#e8d8a8"), { p: [Math.cos(a) * r * 1.025, h * 0.72, Math.sin(a) * r * 1.025], r: [0, -a + PI / 2, 0], shadow: false }));
+    }
+    const rh = h * 1.5;
+    const roof = mesh(G.cone(r * 1.45, rh, 18), pm("fur", o.roofC || "#b0904e"), { p: [0, h + rh / 2 - 0.05, 0] });
+    roof.userData.roof = "cone";
+    b.add(roof);
+    const moss = pm("plain", "#3f9a3a", { flat: true });
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * PI * 2 + 0.3;
+      const f = 0.15 + (i % 3) * 0.22;
+      const rr = r * 1.45 * (1 - f);
+      b.add(mesh(G.ico(0.28, 0), moss, { p: [Math.cos(a) * rr * 0.92, h + f * rh, Math.sin(a) * rr * 0.92], s: [1.2, 0.35, 1.2], r: [0, a, 0.4] }));
+    }
+    const fc = ["#ff7ad0", "#ffe05a", "#ffffff", "#9f7aff"];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * PI * 2;
+      const f = 0.08 + (i % 4) * 0.12;
+      const rr = r * 1.45 * (1 - f);
+      b.add(mesh(G.sph(0.06, 6, 5), pm("plain", fc[i % 4]), { p: [Math.cos(a) * rr * 0.98, h + f * rh + 0.05, Math.sin(a) * rr * 0.98], shadow: false }));
+    }
+    b.add(mesh(G.cone(0.14, 0.4, 6), pm("wood", "#4a3628"), { p: [0, h + rh + 0.05, 0] }));
+    const orb = mesh(G.sph(0.11, 10, 8), emis(o.orb || "#9fffc8", 1.2), { p: [0, h + rh + 0.38, 0] });
+    b.add(orb);
+    b.add(R.haloSprite(o.orb || "#9fffc8", 1.2, 0.5, [0, h + rh + 0.38, 0]));
+    // Rundbogentuer
+    const dz = r * 1.02;
+    b.add(mesh(G.box(0.75, 1.0, 0.1), pm("wood", "#3a281a"), { p: [0, 0.5, dz] }));
+    b.add(mesh(G.cyl(0.375, 0.375, 0.1, 12, false), pm("wood", "#3a281a"), { p: [0, 1.0, dz], r: [PI / 2, 0, 0], s: [1, 1, 1] }));
+    b.add(mesh(G.torus(0.42, 0.05, PI, 4, 12), pm("stone", "#7a7a6a"), { p: [0, 1.0, dz + 0.04] }));
+    for (const s of [-1, 1]) b.add(mesh(G.box(0.1, 1.0, 0.1), pm("stone", "#7a7a6a"), { p: [s * 0.42, 0.5, dz + 0.04] }));
+    // runde Fenster
+    for (const a of [0.7, -0.7]) b.add(mesh(G.cyl(0.17, 0.17, 0.06, 12), N.win, { p: [Math.sin(a) * r * 1.01, h * 0.48, Math.cos(a) * r * 1.01], r: [PI / 2, 0, -a] }));
+    // Feenlaterne
+    const lan = grp([0.62, 1.45, dz + 0.18]);
+    lan.add(mesh(G.sph(0.08, 8, 6), emis("#9fffc8", 1.4)));
+    const hl = R.haloSprite("#9fffc8", 0.9, 0.6);
+    lan.add(hl);
+    N.halos.push(hl);
+    b.add(lan);
+    // Ranke mit Blaettern an der Wand
+    const vine = pm("plain", "#3f7a32");
+    const vp = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = -1.6 + i * 0.12;
+      vp.push([Math.cos(a) * r * 1.03, 0.1 + i * h * 0.11, Math.sin(a) * r * 1.03]);
+    }
+    b.add(mesh(G.tube("vine" + r.toFixed(2) + h.toFixed(2), vp, 0.025, 20, 4), vine));
+    for (let i = 1; i < 8; i++) b.add(mesh(G.sph(0.06, 6, 4), vine, { p: [vp[i][0] * 1.01, vp[i][1], vp[i][2] * 1.01], s: [1, 0.5, 1.4], shadow: false }));
+    b.userData.smoke = [0, h + rh + 0.2, 0];
+    b.userData.apexOrb = orb;
+    return b;
+  }
+  // Albion: runder Wehrturm mit Zinnen und rotem Kegeldach
+  function tower(r, h, roofC) {
+    const b = grp();
+    const st = pm("stone", "#9a948a", { flat: true });
+    b.add(mesh(G.cyl(r, r * 1.08, h, 12), st, { p: [0, h / 2, 0] }));
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * PI * 2;
+      b.add(mesh(G.box(0.3 * r, 0.32, 0.3 * r), st, { p: [Math.cos(a) * r * 1.02, h + 0.16, Math.sin(a) * r * 1.02], r: [0, -a, 0] }));
+    }
+    const roof = mesh(G.cone(r * 1.2, r * 1.9, 12), pm("stone", roofC || "#8a2a24", { flat: true }), { p: [0, h + 0.35 + r * 0.95, 0] });
+    roof.userData.roof = "cone";
+    b.add(roof);
+    return b;
+  }
+  function crenelWall(len, h) {
+    const b = grp();
+    const st = pm("stone", "#9a948a", { flat: true });
+    b.add(mesh(G.box(len, h, 0.7), st, { p: [0, h / 2, 0] }));
+    const n = Math.max(2, Math.floor(len / 0.6));
+    for (let i = 0; i < n; i++) b.add(mesh(G.box(0.32, 0.3, 0.72), st, { p: [-len / 2 + 0.3 + (i * (len - 0.6)) / (n - 1), h + 0.15, 0] }));
+    return b;
+  }
+  function anvilSet(b, x, z) {
+    const anvil = grp([x, 0, z]);
+    anvil.add(mesh(G.box(0.3, 0.4, 0.3), pm("metal", "#3a3a42"), { p: [0, 0.2, 0] }));
+    anvil.add(mesh(G.box(0.75, 0.2, 0.32), pm("metal", "#4a4f58"), { p: [0, 0.5, 0] }));
+    anvil.add(mesh(G.cone(0.1, 0.32, 4), pm("metal", "#4a4f58"), { p: [0.5, 0.5, 0], r: [0, 0, -PI / 2] }));
+    b.add(anvil);
+    b.userData.sparks = [x, 0.6, z];
+    b.userData.anvil = [x, z];
+  }
+  function forgePit(b, N, x, z) {
+    const st = pm("stone", "#4a4a52", { flat: true });
+    b.add(mesh(G.box(1.1, 0.6, 0.9), st, { p: [x, 0.3, z] }));
+    b.add(mesh(G.box(0.9, 0.08, 0.7), emis("#ff6a1a", 1.4), { p: [x, 0.62, z] }));
+    const hl = R.haloSprite("#ff7a2a", 2.2, 0.8, [x, 0.9, z]);
+    b.add(hl);
+    const f = X.fire(N, 0.6);
+    f.position.set(x, 0.62, z);
+    b.add(f);
+  }
+  function weaponRack(b, x, z, realm) {
+    const rack = grp([x, 0, z]);
+    rack.add(mesh(G.box(1.0, 0.08, 0.1), pm("wood", "#5a4130"), { p: [0, 1.1, 0] }));
+    for (const s of [-0.5, 0.5]) rack.add(mesh(G.box(0.08, 1.15, 0.08), pm("wood", "#33261c"), { p: [s, 0.57, 0] }));
+    [["axt", 0], ["schwert", 1], ["hammer", 2]].forEach(([base, i]) => {
+      const w = R.buildWeapon({ base, rarity: "gewoehnlich", style: i % 3 }, realm);
+      w.position.set(-0.35 + i * 0.35, 0.05, 0.05);
+      w.scale.setScalar(0.8);
+      rack.add(w);
+    });
+    b.add(rack);
+  }
+  function realmFlags(b, list, radius) {
+    const flags = [];
+    const realms = ["albion", "midgard", "hibernia"];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * PI * 2 + 0.5;
+      const p = grp([Math.cos(a) * radius, 0, Math.sin(a) * radius]);
+      p.add(mesh(G.cyl(0.06, 0.07, 4.0, 6), pm("metal", "#3a3a42"), { p: [0, 2.0, 0] }));
+      const RM = SB.data.REALMS[realms[i]];
+      const banner = new T.Mesh(G.geo("banner", () => new T.PlaneGeometry(0.9, 1.6, 1, 6)), R.crestMat(realms[i], RM.color, RM.trim));
+      banner.position.set(0.5, 3.0, 0);
+      p.add(banner);
+      flags.push(banner);
+      p.rotation.y = -a;
+      b.add(p);
+    }
+    list.push(...flags);
+  }
+  function brazier(b, N, x, z, s) {
+    const br = grp([x, 0, z]);
+    br.add(mesh(G.cyl(0.08, 0.1, 1.2, 6), pm("metal", "#3a3a42"), { p: [0, 0.6, 0] }));
+    br.add(mesh(G.cyl(0.35, 0.18, 0.3, 8), pm("metal", "#3a3a42"), { p: [0, 1.3, 0] }));
+    const f = X.fire(N, s || 1);
+    f.position.y = 1.4;
+    br.add(f);
+    b.add(br);
+  }
+  function guildBannerPoles(b, xs, z, tall) {
+    const banners = [];
+    for (const x of xs) {
+      const p = grp([x, 0, z]);
+      p.add(mesh(G.cyl(0.05, 0.06, tall || 3.2, 6), pm("metal", "#3a3a42"), { p: [0, (tall || 3.2) / 2, 0] }));
+      const bn = mesh(G.box(0.7, 1.2, 0.03), pm("cloth", x < 0 ? "#6a2a2a" : "#2a3a6a", { ds: true }), { p: [0.38, (tall || 3.2) - 0.7, 0] });
+      p.add(bn);
+      banners.push(bn);
+      b.add(p);
+    }
+    b.userData.flags = banners;
+    b.userData.guildBanners = banners;
+  }
+
+  /* ---------- Gebaeude je Reich (ueberschreiben die Albion-Grundformen) ---------- */
+  const RB = { albion: {}, midgard: {}, hibernia: {} };
+
+  // Albion: steinerne Gildenhalle mit Wehrturm; Arena mit Turnierzelten
+  RB.albion.gildenhalle = function (rng, N) {
+    const b = grp();
+    const st = pm("stone", "#8a847a", { flat: true });
+    b.add(mesh(G.box(4.0, 2.2, 2.6), st, { p: [0, 1.1, 0] }));
+    for (const x of [-1.9, -0.95, 0, 0.95, 1.9]) b.add(mesh(G.box(0.18, 2.2, 0.18), pm("wood", "#33261c"), { p: [x, 1.1, 1.32] }));
+    const roof = X.gableRoof(4.4, 3.2, 1.6, pm("stone", "#2f3a4a", { flat: true }));
+    roof.position.y = 2.2;
+    b.add(roof);
+    const tw = tower(0.75, 4.4, "#8a2a24");
+    tw.position.set(-2.2, 0, -0.4);
+    b.add(tw);
+    b.add(mesh(G.box(1.0, 1.5, 0.1), pm("wood", "#2a1e16"), { p: [0, 0.75, 1.32] }));
+    for (const x of [-1.4, 1.4]) b.add(mesh(G.box(0.5, 0.6, 0.08), N.win, { p: [x, 1.4, 1.32] }));
+    const realms = ["albion", "midgard", "hibernia"];
+    for (let i = 0; i < 3; i++) {
+      const sh = R.buildOffhand({ base: "schild", style: 0 }, realms[i]);
+      sh.position.set(-1.2 + i * 1.2, 2.55, 1.6);
+      sh.scale.setScalar(0.5);
+      b.add(sh);
+    }
+    guildBannerPoles(b, [-2.4, 2.4], 1.6);
+    b.add(X.lantern(N).translateX(1.6).translateZ(1.5));
+    return b;
+  };
+  RB.albion.arena = function (rng, N, ctx) {
+    const b = X.B.arena(rng, N, ctx);
+    const RM = SB.data.REALMS.albion;
+    for (const [a, c] of [[2.4, RM.color], [3.9, "#2f4f8f"]]) {
+      const tent = grp([Math.cos(a) * 5.0, 0, Math.sin(a) * 5.0]);
+      tent.add(mesh(G.cyl(0.8, 0.8, 1.1, 10, true), pm("cloth", "#e8e0d0", { ds: true }), { p: [0, 0.55, 0] }));
+      for (let i = 0; i < 5; i++) tent.add(mesh(G.box(0.28, 1.1, 0.02), pm("cloth", c), { p: [Math.cos((i / 5) * PI * 2) * 0.81, 0.55, Math.sin((i / 5) * PI * 2) * 0.81], r: [0, -(i / 5) * PI * 2 + PI / 2, 0] }));
+      tent.add(mesh(G.cone(1.0, 0.9, 10), pm("cloth", c), { p: [0, 1.55, 0] }));
+      tent.add(mesh(G.cyl(0.02, 0.02, 0.6, 4), pm("wood", "#3a2a1e"), { p: [0, 2.2, 0] }));
+      tent.add(mesh(G.box(0.3, 0.18, 0.01), pm("cloth", "#e8c35a", { ds: true }), { p: [0.15, 2.4, 0] }));
+      b.add(tent);
+    }
+    return b;
+  };
+
+  // Midgard
+  RB.midgard.taverne = function (rng, N) {
+    const b = longhouse(N, 4.6, 3.0, 1.6, { roofC: "#4a3e2c" });
+    // Schild mit Trinkhorn
+    const sign = grp([2.3, 2.3, 1.75]);
+    sign.add(mesh(G.box(1.0, 0.07, 0.07), pm("metal", "#3a3a42"), { p: [-0.35, 0.3, 0] }));
+    const board = grp();
+    board.add(mesh(G.box(0.6, 0.5, 0.06), pm("wood", "#5a4130")));
+    board.add(mesh(G.tube("horn", [[-0.18, -0.12, 0.05], [0, -0.05, 0.05], [0.15, 0.12, 0.05]], 0.035, 8, 5), pm("bone", "#e8dcc0")));
+    sign.add(board);
+    b.add(sign);
+    b.userData.swing = board;
+    for (let i = 0; i < 3; i++) {
+      const br = barrel();
+      br.position.set(-2.8, 0, 0.8 - i * 0.65);
+      b.add(br);
+    }
+    b.add(woodpile().translateX(2.8).translateZ(-0.6));
+    brazier(b, N, 1.4, 2.1, 0.8);
+    return b;
+  };
+  RB.midgard.schmiede = function (rng, N) {
+    const b = longhouse(N, 2.8, 2.2, 1.3, { roofC: "#3a3228" });
+    b.position.z = 0;
+    forgePit(b, N, -0.8, 1.9);
+    anvilSet(b, 0.7, 1.9);
+    weaponRack(b, 1.9, 1.3, "midgard");
+    b.userData.smoke = [-0.8, 1.8, 1.9];
+    return b;
+  };
+  RB.midgard.stall = function (rng, N) {
+    const b = longhouse(N, 3.4, 2.2, 1.2, { roofC: "#4a4030" });
+    for (let i = 0; i < 5; i++) b.add(mesh(G.cyl(0.06, 0.07, 0.8, 6), pm("wood", "#33261c"), { p: [-1.6 + i * 0.5, 0.4, 2.2] }));
+    b.add(mesh(G.box(2.3, 0.06, 0.06), pm("wood", "#5a4130"), { p: [-0.6, 0.6, 2.2] }));
+    const gr = X.griffin();
+    gr.position.set(1.3, 0, 1.9);
+    gr.rotation.y = -0.6;
+    gr.scale.setScalar(0.9);
+    b.add(gr);
+    b.userData.griffin = gr;
+    return b;
+  };
+  RB.midgard.leuchtturm = function (rng, N) {
+    const b = grp();
+    const log = pm("wood", "#3a2a1e");
+    for (const [x, z] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) b.add(mesh(G.cyl(0.12, 0.16, 5.6, 7), log, { p: [x * 0.9, 2.8, z * 0.9], r: [z * 0.05, 0, -x * 0.05] }));
+    for (const y of [1.4, 3.0]) for (const s of [-1, 1]) {
+      b.add(mesh(G.box(1.6, 0.08, 0.08), log, { p: [0, y, s * 0.75], r: [0, 0, s * 0.6] }));
+      b.add(mesh(G.box(0.08, 0.08, 1.6), log, { p: [s * 0.75, y + 0.4, 0], r: [s * 0.6, 0, 0] }));
+    }
+    b.add(mesh(G.box(2.2, 0.18, 2.2), log, { p: [0, 5.6, 0] }));
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * PI * 2;
+      b.add(mesh(G.cyl(0.05, 0.05, 0.7, 5), log, { p: [Math.cos(a) * 1.05, 6.0, Math.sin(a) * 1.05] }));
+    }
+    const roof = mesh(G.cone(1.6, 1.4, 4), pm("fur", "#4a3e2c"), { p: [0, 7.2, 0], r: [0, PI / 4, 0] });
+    roof.userData.roof = "cone";
+    b.add(roof);
+    for (const [x, z] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) b.add(mesh(G.cyl(0.05, 0.05, 0.9, 5), log, { p: [x, 6.35, z] }));
+    brazier(b, N, 0, 0, 1.3);
+    b.children[b.children.length - 1].position.set(0, 5.0, 0);
+    // Kriegshorn
+    b.add(mesh(G.tube("whorn", [[0, 0, 0], [0.3, 0.1, 0], [0.55, 0.35, 0]], 0.06, 8, 6), pm("bone", "#e8dcc0"), { p: [0.9, 6.0, 0.9] }));
+    b.add(mesh(G.box(0.7, 1.2, 0.1), pm("wood", "#2a1e14"), { p: [0, 0.6, 0.95] }));
+    return b;
+  };
+  RB.midgard.arkanum = function (rng, N) {
+    const b = grp();
+    const st = pm("stone", "#3e4452", { flat: true });
+    for (let i = 0; i < 5; i++) b.add(mesh(G.cyl(1.25 - i * 0.12, 1.32 - i * 0.12, 1.15, 8), st, { p: [0, 0.58 + i * 1.1, 0], r: [0, i * 0.3, 0.02 * (i % 2 ? 1 : -1)] }));
+    const rm = emis("#9fd8ff", 1.2);
+    for (let i = 0; i < 5; i++) {
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * PI * 2 + i * 0.6;
+        const rr = 1.3 - i * 0.12;
+        b.add(mesh(G.box(0.1, 0.32, 0.03), rm, { p: [Math.cos(a) * rr, 0.6 + i * 1.1, Math.sin(a) * rr], r: [0, -a + PI / 2, (k % 2 ? 0.4 : -0.3)], shadow: false }));
+      }
+    }
+    const roof = mesh(G.cone(1.1, 1.6, 8), pm("stone", "#2a2e3a", { flat: true }), { p: [0, 6.3, 0] });
+    roof.userData.roof = "cone";
+    b.add(roof);
+    b.add(mesh(G.box(0.8, 1.3, 0.1), pm("wood", "#2a1e14"), { p: [0, 0.65, 1.3] }));
+    const crystal = mesh(G.octa(0.38), emis("#9fe3ff", 1.1), { p: [0, 8.6, 0], s: [1, 1.6, 1] });
+    b.add(crystal);
+    b.add(R.haloSprite("#9fe3ff", 2.4, 0.7, [0, 8.6, 0]));
+    const ring = grp([0, 3.0, 0]);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * PI * 2;
+      const rs = grp([Math.cos(a) * 1.9, Math.sin(i) * 0.4, Math.sin(a) * 1.9]);
+      rs.add(mesh(G.box(0.26, 0.4, 0.12), st));
+      rs.add(mesh(G.box(0.08, 0.22, 0.02), rm, { p: [0, 0, 0.07] }));
+      ring.add(rs);
+    }
+    b.add(ring);
+    b.userData.float = crystal;
+    b.userData.orbit = ring;
+    return b;
+  };
+  RB.midgard.arena = function (rng, N) {
+    const b = grp();
+    const log = pm("wood", "#3e2c1e");
+    const RM = SB.data.REALMS;
+    for (let i = 0; i < 44; i++) {
+      const a = (i / 44) * PI * 2;
+      if (Math.abs(((a - PI / 2 + PI * 3) % (PI * 2)) - PI) < 0.28) continue;
+      const hgt = 1.7 + (i % 3) * 0.12;
+      b.add(mesh(G.cyl(0.17, 0.19, hgt, 6), log, { p: [Math.cos(a) * 3.4, hgt / 2, Math.sin(a) * 3.4] }));
+      b.add(mesh(G.cone(0.17, 0.35, 6), log, { p: [Math.cos(a) * 3.4, hgt + 0.17, Math.sin(a) * 3.4] }));
+      if (i % 4 === 0) {
+        const sg = grp([Math.cos(a) * 3.15, 1.0, Math.sin(a) * 3.15], [0, -a - PI / 2, 0]);
+        sg.add(mesh(G.cyl(0.24, 0.24, 0.05, 14), pm("wood", [RM.midgard.color, "#d9d2c5", "#8a2a2a"][(i / 4) % 3]), { r: [PI / 2, 0, 0] }));
+        sg.add(mesh(G.sph(0.06, 8, 6), pm("metal", "#8a8f98"), { p: [0, 0, 0.04] }));
+        b.add(sg);
+      }
+    }
+    b.add(mesh(G.cyl(3.2, 3.2, 0.08, 24), pm("plain", "#8a8078"), { p: [0, 0.04, 0] }));
+    const flags = [];
+    realmFlags(b, flags, 3.8);
+    b.userData.flags = flags;
+    brazier(b, N, Math.cos(1.2) * 2.6, Math.sin(1.2) * 2.6, 1);
+    brazier(b, N, Math.cos(1.2 + PI) * 2.6, Math.sin(1.2 + PI) * 2.6, 1);
+    return b;
+  };
+
+  // Hibernia
+  RB.hibernia.taverne = function (rng, N) {
+    const b = roundhouse(N, 2.0, 1.6, { band: "#3f8a5a" });
+    const side = roundhouse(N, 1.2, 1.2, { band: "#8a3f6a", orb: "#ff9fe0" });
+    side.position.set(-2.2, 0, -0.6);
+    b.add(side);
+    const sign = grp([1.7, 2.1, 1.6]);
+    sign.add(mesh(G.box(0.9, 0.06, 0.06), pm("wood", "#4a3628"), { p: [-0.3, 0.3, 0] }));
+    const board = grp();
+    board.add(mesh(G.box(0.55, 0.45, 0.05), pm("wood", "#6a4a30")));
+    board.add(mesh(R.SH ? G.ext("leaf", R.SH.leaf, 0.01, 0.004) : G.sph(0.1, 6, 6), pm("plain", "#4fa84a"), { p: [0, 0, 0.04], s: 0.4 }));
+    sign.add(board);
+    b.add(sign);
+    b.userData.swing = board;
+    for (let i = 0; i < 2; i++) {
+      const br = barrel();
+      br.position.set(2.3, 0, -0.4 - i * 0.65);
+      b.add(br);
+    }
+    const fp = flowerPatch(rng, ["#ff7ad0", "#ffe05a", "#ffffff"]);
+    fp.position.set(-1.0, 0, 2.2);
+    b.add(fp);
+    return b;
+  };
+  RB.hibernia.schmiede = function (rng, N) {
+    const b = roundhouse(N, 1.5, 1.3, { band: "#8a6a3a", orb: "#ffb050" });
+    b.position.z = 0;
+    forgePit(b, N, -0.9, 1.9);
+    anvilSet(b, 0.7, 2.0);
+    weaponRack(b, 1.8, 1.0, "hibernia");
+    b.userData.smoke = [-0.9, 1.8, 1.9];
+    return b;
+  };
+  RB.hibernia.stall = function (rng, N) {
+    const b = roundhouse(N, 1.6, 1.2, { band: "#6a5a2a" });
+    const wat = pm("wood", "#6a5038");
+    for (let i = 0; i < 14; i++) {
+      const a = PI * 0.15 + (i / 13) * PI * 0.7;
+      b.add(mesh(G.cyl(0.04, 0.05, 0.7, 5), wat, { p: [Math.cos(a) * 2.6, 0.35, Math.sin(a) * 2.6] }));
+    }
+    b.add(mesh(G.torus(2.6, 0.04, PI * 0.7, 4, 24), wat, { p: [0, 0.5, 0], r: [PI / 2, 0, -PI * 0.15 - PI * 0.7] }));
+    const gr = X.griffin();
+    gr.position.set(1.0, 0, 1.9);
+    gr.rotation.y = -0.6;
+    gr.scale.setScalar(0.9);
+    b.add(gr);
+    b.userData.griffin = gr;
+    return b;
+  };
+  RB.hibernia.leuchtturm = function (rng, N) {
+    const b = grp();
+    const bark = pm("bark", "#4a3628");
+    b.add(mesh(G.tube("feytrunk", [[0, 0, 0], [0.25, 1.6, 0.1], [-0.2, 3.4, -0.1], [0.1, 5.4, 0]], 0.55, 18, 9), bark));
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * PI * 2;
+      b.add(mesh(G.tube("feyroot", [[0, 0.6, 0], [0.6, 0.2, 0], [1.1, -0.05, 0.1]], 0.16, 8, 6), bark, { r: [0, a, 0] }));
+    }
+    b.add(mesh(G.cyl(1.4, 1.5, 0.16, 12), pm("wood", "#6a4a30"), { p: [0.1, 5.5, 0] }));
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * PI * 2;
+      b.add(mesh(G.cyl(0.03, 0.03, 0.55, 4), pm("wood", "#4a3628"), { p: [0.1 + Math.cos(a) * 1.35, 5.85, Math.sin(a) * 1.35] }));
+    }
+    const leaves = ["#3f9a4a", "#5ab04a", "#c86ab0", "#4fa88a"];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * PI * 2;
+      b.add(mesh(G.ico(0.6 + (i % 3) * 0.12, 1), pm("plain", leaves[i % 4], { flat: true }), { p: [Math.cos(a) * 1.0, 7.1 + (i % 2) * 0.4, Math.sin(a) * 1.0], s: [1, 0.7, 1] }));
+    }
+    const orb = mesh(G.sph(0.32, 14, 10), emis("#9fffc8", 1.3), { p: [0.1, 6.2, 0] });
+    b.add(orb);
+    const hl = R.haloSprite("#9fffc8", 3.2, 0.7, [0.1, 6.2, 0]);
+    b.add(hl);
+    N.halos.push(hl);
+    const beam = new T.Mesh(new T.ConeGeometry(1.6, 11, 16, 1, true), new T.MeshBasicMaterial({ color: new T.Color("#9fffc8"), transparent: true, opacity: 0.1, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+    beam.rotation.z = PI / 2;
+    beam.position.set(5.5, 0, 0);
+    const pivot = grp([0.1, 6.2, 0]);
+    pivot.add(beam);
+    b.add(pivot);
+    b.userData.beam = pivot;
+    // Wendelstufen aus Pilzen
+    for (let i = 0; i < 8; i++) {
+      const a = i * 0.8;
+      b.add(mesh(G.cap(0.32, PI * 0.5), pm("plain", "#e8a040"), { p: [Math.cos(a) * 0.62, 0.6 + i * 0.6, Math.sin(a) * 0.62], s: [1, 0.3, 1] }));
+    }
+    return b;
+  };
+  RB.hibernia.arkanum = function (rng, N, ctx) {
+    const b = X.B.arkanum(rng, N, ctx);
+    const vine = pm("plain", "#3f8a3a");
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = i * 0.55;
+      const rr = 1.38 - (i / 24) * 0.25;
+      pts.push([Math.cos(a) * rr, 0.2 + i * 0.2, Math.sin(a) * rr]);
+    }
+    b.add(mesh(G.tube("arkvine", pts, 0.05, 60, 5), vine));
+    const fc = ["#ff7ad0", "#ffe05a", "#9fffc8"];
+    for (let i = 2; i < 24; i += 2) b.add(mesh(G.sph(0.09, 6, 5), i % 3 ? vine : pm("plain", fc[i % 3]), { p: [pts[i][0] * 1.05, pts[i][1], pts[i][2] * 1.05], s: [1, 0.6, 1.3] }));
+    return b;
+  };
+  RB.hibernia.arena = function (rng, N) {
+    const b = grp();
+    b.add(mesh(G.cyl(3.2, 3.2, 0.08, 24), pm("plain", "#5a8a44"), { p: [0, 0.04, 0] }));
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * PI * 2;
+      if (Math.abs(((a - PI / 2 + PI * 3) % (PI * 2)) - PI) < 0.3) continue;
+      const s = X.standingStone(rng, 1.8 + rng() * 0.8, i % 2 ? "#9fffc8" : null);
+      s.position.set(Math.cos(a) * 3.4, 0, Math.sin(a) * 3.4);
+      s.rotation.y = -a + PI / 2;
+      b.add(s);
+      b.add(mesh(G.ico(0.3, 0), pm("plain", "#4f8a3a", { flat: true }), { p: [Math.cos(a) * 3.4, 0.15, Math.sin(a) * 3.4], s: [1.6, 0.4, 1.2] }));
+    }
+    // Wurzelbogen ueber dem Eingang
+    b.add(mesh(G.tube("rootarch", [[-1.0, 0, 3.3], [-0.9, 1.6, 3.4], [0, 2.6, 3.5], [0.9, 1.6, 3.4], [1.0, 0, 3.3]], 0.14, 24, 6), pm("bark", "#4a3628")));
+    for (let i = 0; i < 5; i++) b.add(mesh(G.sph(0.08, 6, 5), pm("plain", ["#ff7ad0", "#ffe05a", "#ffffff"][i % 3]), { p: [-0.8 + i * 0.4, 1.7 + Math.sin((i / 4) * PI) * 0.85, 3.5] }));
+    const flags = [];
+    realmFlags(b, flags, 3.9);
+    b.userData.flags = flags;
+    for (let i = 0; i < 4; i++) {
+      const sh = X.shrooms(rng, "#9fffc8");
+      const a = 0.8 + i * 1.5;
+      sh.position.set(Math.cos(a) * 2.9, 0, Math.sin(a) * 2.9);
+      b.add(sh);
+    }
+    brazier(b, N, Math.cos(1.2) * 2.6, Math.sin(1.2) * 2.6, 1);
+    brazier(b, N, Math.cos(1.2 + PI) * 2.6, Math.sin(1.2 + PI) * 2.6, 1);
+    return b;
+  };
+  RB.hibernia.gildenhalle = function (rng, N) {
+    const b = roundhouse(N, 2.3, 1.9, { band: "#2f6a8a", orb: "#9fd8ff" });
+    guildBannerPoles(b, [-2.7, 2.7], 1.4);
+    const realms = ["albion", "midgard", "hibernia"];
+    for (let i = 0; i < 3; i++) {
+      const sh = R.buildOffhand({ base: "schild", style: 0 }, realms[i]);
+      const a = -0.6 + i * 0.6;
+      sh.position.set(Math.sin(a) * 2.38, 1.35, Math.cos(a) * 2.38);
+      sh.rotation.y = a;
+      sh.scale.setScalar(0.45);
+      b.add(sh);
+    }
+    return b;
+  };
+  RB.hibernia.brunnen = function (rng, N, ctx) {
+    const b = X.B.brunnen(rng, N, ctx);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * PI * 2 + 0.4;
+      const f = flowerPatch(rng, ["#ff7ad0", "#ffe05a", "#ffffff", "#9f7aff"]);
+      f.position.set(Math.cos(a) * 1.5, 0, Math.sin(a) * 1.5);
+      f.scale.setScalar(0.7);
+      b.add(f);
+    }
+    return b;
+  };
+
+  // Heim je Reich und Ausbaustufe
+  function realmFlag(b, realm, x, z) {
+    const RM = SB.data.REALMS[realm];
+    const pole = grp([x, 0, z]);
+    pole.add(mesh(G.cyl(0.04, 0.05, 2.8, 6), pm("metal", "#3a3a42"), { p: [0, 1.4, 0] }));
+    const flag = new T.Mesh(G.geo("homeflag", () => new T.PlaneGeometry(0.8, 0.55, 4, 1)), R.crestMat(realm, RM.color, RM.trim));
+    flag.position.set(0.42, 2.5, 0);
+    pole.add(flag);
+    b.add(pole);
+    b.userData.flag = flag;
+  }
+  RB.midgard.heim = function (rng, N, ctx) {
+    const tier = ctx.homeTier || 0;
+    let b;
+    if (tier <= 0) {
+      b = grp();
+      b.add(mesh(G.cone(1.3, 2.0, 7), pm("fur", "#8a7a66", { ds: true }), { p: [0, 1.0, 0] }));
+      for (let i = 0; i < 5; i++) b.add(mesh(G.cyl(0.03, 0.03, 2.4, 4), pm("wood", "#3a2a1e"), { p: [Math.cos(i) * 0.2, 1.3, Math.sin(i) * 0.2], r: [Math.sin(i * 2) * 0.25, 0, Math.cos(i * 2) * 0.25] }));
+      b.add(mesh(G.box(0.55, 0.85, 0.05), basic("#1a1410"), { p: [0, 0.42, 0.95], r: [-0.5, 0, 0] }));
+      const f = X.fire(N, 0.8);
+      f.position.set(1.4, 0, 1.2);
+      b.add(f);
+      b.add(woodpile().translateX(-1.4).translateZ(0.6));
+    } else if (tier === 1) b = longhouse(N, 2.4, 1.8, 1.0, { roofC: "#4a4030" });
+    else if (tier === 2) b = longhouse(N, 3.6, 2.2, 1.3, { roofC: "#4a3e2c" });
+    else {
+      b = longhouse(N, 4.2, 2.6, 1.6, { roofC: "#3a3228" });
+      const tw = RB.midgard.leuchtturm(rng, N);
+      tw.scale.setScalar(0.55);
+      tw.position.set(-2.8, 0, -0.6);
+      b.add(tw);
+    }
+    realmFlag(b, ctx.realm || "midgard", -1.9, 1.3);
+    return b;
+  };
+  RB.hibernia.heim = function (rng, N, ctx) {
+    const tier = ctx.homeTier || 0;
+    let b;
+    if (tier <= 0) {
+      b = grp();
+      b.add(mesh(G.cone(1.3, 1.7, 8), pm("plain", "#4f8a3a", { ds: true, flat: true }), { p: [0, 0.85, 0] }));
+      for (let i = 0; i < 8; i++) b.add(mesh(G.ico(0.25, 0), pm("plain", ["#5ab04a", "#3f9a4a"][i % 2], { flat: true }), { p: [Math.cos(i) * 0.9, 0.3 + (i % 3) * 0.3, Math.sin(i) * 0.9], s: [1, 0.5, 1] }));
+      b.add(mesh(G.box(0.55, 0.8, 0.05), basic("#1a1410"), { p: [0, 0.4, 0.9], r: [-0.5, 0, 0] }));
+      const f = X.fire(N, 0.7);
+      f.position.set(1.3, 0, 1.2);
+      b.add(f);
+    } else if (tier === 1) b = roundhouse(N, 1.2, 1.1, { band: "#6a5a2a" });
+    else if (tier === 2) {
+      b = roundhouse(N, 1.6, 1.3, { band: "#3f8a5a" });
+      const fp = flowerPatch(rng, ["#ff7ad0", "#ffe05a", "#ffffff", "#9f7aff"]);
+      fp.position.set(1.8, 0, 1.0);
+      b.add(fp);
+    } else {
+      // Baumhaus: Rundhaus auf einer Plattform im Stamm
+      b = grp();
+      b.add(mesh(G.tube("hometrunk", [[0, 0, 0], [0.2, 1.2, 0.1], [0, 2.4, 0]], 0.6, 12, 9), pm("bark", "#4a3628")));
+      b.add(mesh(G.cyl(1.9, 1.9, 0.16, 14), pm("wood", "#6a4a30"), { p: [0, 2.4, 0] }));
+      const rh = roundhouse(N, 1.4, 1.2, { band: "#8a3f6a", orb: "#ff9fe0" });
+      rh.position.y = 2.48;
+      b.add(rh);
+      b.add(mesh(G.tube("ladder", [[0.6, 0, 1.6], [0.6, 2.4, 1.5]], 0.04, 2, 4), pm("wood", "#5a4130")));
+      b.add(mesh(G.tube("ladder2", [[1.0, 0, 1.6], [1.0, 2.4, 1.5]], 0.04, 2, 4), pm("wood", "#5a4130")));
+      for (let i = 0; i < 6; i++) b.add(mesh(G.box(0.45, 0.04, 0.05), pm("wood", "#5a4130"), { p: [0.8, 0.35 + i * 0.38, 1.58] }));
+      b.userData.smoke = [0, 6.2, 0];
+    }
+    realmFlag(b, ctx.realm || "hibernia", -1.8, 1.3);
+    return b;
+  };
+  RB.hibernia.ruhmeshalle = function (rng, N, ctx) {
+    const b = X.B.ruhmeshalle(rng, N, ctx);
+    const vine = pm("plain", "#3f8a3a");
+    for (const x of [-1.35, 1.35]) b.add(mesh(G.tube("hallvine" + x, [[0, 0, 0], [0.15, 0.8, 0.1], [-0.1, 1.6, 0.15], [0.1, 2.4, 0.1]], 0.04, 14, 4), vine, { p: [x, 0.6, 1.2] }));
+    return b;
+  };
+
+  R.realmBuilding = function (realm, id) {
+    if (!T) init();
+    const set = RB[realm] || {};
+    return set[id] || X.B[id];
+  };
+  // Nach dem Bau: Midgard bekommt Schnee auf alle Daecher
+  R.realmFinish = function (realm, b) {
+    if (realm === "midgard") R.snowify(b);
+    return b;
+  };
+
+  /* ---------- Wahrzeichen auf eigener Felsinsel ---------- */
+  function castle(N) {
+    const b = grp();
+    const st = pm("stone", "#9a948a", { flat: true });
+    // Ringmauer mit vier Ecktuermen
+    const wr = 5.2;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * PI * 2 + PI / 4;
+      const tw = tower(1.0, 5.2, "#8a2a24");
+      tw.position.set(Math.cos(a) * wr, 0, Math.sin(a) * wr);
+      b.add(tw);
+      const a2 = a + PI / 4;
+      const wall = crenelWall(wr * 1.25, 3.4);
+      wall.position.set(Math.cos(a2) * wr * 0.72, 0, Math.sin(a2) * wr * 0.72);
+      wall.rotation.y = -a2 + PI / 2;
+      b.add(wall);
+    }
+    // Torhaus vorne
+    const gate = grp([0, 0, wr * 0.72]);
+    gate.add(mesh(G.box(2.6, 4.2, 1.4), st, { p: [0, 2.1, 0] }));
+    gate.add(mesh(G.box(1.2, 2.0, 0.1), basic("#141016"), { p: [0, 1.0, 0.72] }));
+    for (let i = 0; i < 5; i++) gate.add(mesh(G.box(0.06, 1.9, 0.06), pm("metal", "#3a3a42"), { p: [-0.48 + i * 0.24, 1.0, 0.76] }));
+    for (const x of [-1.0, 1.0]) gate.add(mesh(G.box(0.4, 0.4, 1.4), st, { p: [x, 4.4, 0] }));
+    b.add(gate);
+    // Bergfried mit hohem Turm
+    const keep = grp([0, 0, -0.8]);
+    keep.add(mesh(G.box(4.4, 7.0, 4.0), st, { p: [0, 3.5, 0] }));
+    for (const [x, z] of [[-2.2, -2.0], [2.2, -2.0], [-2.2, 2.0], [2.2, 2.0]]) {
+      const tt = tower(0.55, 8.2, "#2f3a4a");
+      tt.position.set(x, 0, z);
+      keep.add(tt);
+    }
+    const big = tower(1.3, 11.5, "#8a2a24");
+    big.position.set(0.6, 0, -0.4);
+    keep.add(big);
+    for (let i = 0; i < 4; i++) for (const y of [2.4, 4.4]) keep.add(mesh(G.box(0.36, 0.7, 0.08), N.win, { p: [-1.5 + i, y, 2.02] }));
+    for (const y of [6, 8.4, 10.2]) keep.add(mesh(G.box(0.3, 0.6, 0.08), N.win, { p: [0.6, y, 0.92] }));
+    const RM = SB.data.REALMS.albion;
+    const banners = [];
+    for (const x of [-1.4, 1.4]) {
+      const bn = new T.Mesh(G.geo("castlebanner", () => new T.PlaneGeometry(0.9, 2.4, 1, 6)), R.crestMat("albion", RM.color, RM.trim));
+      bn.position.set(x, 5.2, 2.05);
+      keep.add(bn);
+      banners.push(bn);
+    }
+    const flag = new T.Mesh(G.geo("castleflag", () => new T.PlaneGeometry(1.4, 0.9, 4, 1)), R.crestMat("albion", RM.color, RM.trim));
+    flag.position.set(1.3, 15.2, -0.4);
+    keep.add(mesh(G.cyl(0.05, 0.05, 2.2, 5), pm("metal", "#3a3a42"), { p: [0.6, 14.4, -0.4] }));
+    keep.add(flag);
+    b.add(keep);
+    b.userData.flags = [flag];
+    return b;
+  }
+  function frostPeak(N, rng) {
+    const b = grp();
+    const rockM = pm("stone", "#4c5462", { flat: true });
+    const snow = pm("plain", "#eef3f8", { flat: true });
+    for (const [x, z, r, h] of [[-2.5, -2.5, 5.2, 15], [3.5, -3.5, 4.0, 11], [-5.5, 0.5, 3.2, 8.5]]) {
+      b.add(mesh(G.cone(r, h, 7), rockM, { p: [x, h / 2, z], r: [0, rng() * PI, 0] }));
+      b.add(mesh(G.cone(r * 0.5, h * 0.5, 7), snow, { p: [x, h * 0.75 + 0.05, z], r: [0, rng() * PI, 0], s: [1.04, 1, 1.04] }));
+    }
+    // Gefrorener Wasserfall
+    const ice = new T.MeshLambertMaterial({ color: new T.Color("#cfe8ff"), emissive: new T.Color("#4f8fbf"), emissiveIntensity: 0.4, transparent: true, opacity: 0.85 });
+    b.add(mesh(G.box(1.4, 8, 0.4), ice, { p: [1.0, 4, -0.2], r: [0.15, 0, 0] }));
+    // Grosse Halle am Fuss des Berges
+    const hall = longhouse(N, 6.0, 3.4, 2.0, { roofC: "#3a3228" });
+    hall.position.set(0.5, 0, 3.2);
+    R.snowify(hall);
+    b.add(hall);
+    // Riesiger Runenstein und die Steinstatue eines Ahnen
+    const rs = grp([-3.8, 0, 3.4]);
+    rs.add(mesh(G.box(1.3, 5.8, 0.8), pm("stone", "#5a6270", { flat: true }), { p: [0, 2.9, 0], r: [0.04, 0.3, 0.03] }));
+    const rm = emis("#9fd8ff", 1.2);
+    for (let i = 0; i < 6; i++) rs.add(mesh(G.box(0.12, 0.45, 0.03), rm, { p: [-0.2 + (i % 2) * 0.4, 1.0 + i * 0.75, 0.42], r: [0, 0.3, i % 2 ? 0.35 : -0.35] }));
+    rs.add(R.haloSprite("#9fd8ff", 3.6, 0.35, [0, 3, 0.6]));
+    b.add(rs);
+    const st = R.buildHero({ race: "nordmann", cls: "sturmhuene", realm: "midgard", gender: "m", look: { hairStyle: 1, beard: 3 }, gear: { waffe: { base: "axt", rarity: "gewoehnlich" }, helm: { base: "helm", style: 1 }, umhang: { base: "umhang" } } });
+    st.update(0.01);
+    const stoneM = pm("stone", "#8a92a0");
+    st.obj.traverse((o) => {
+      if (o.isMesh) o.material = stoneM;
+      if (o.isSprite) o.visible = false;
+    });
+    st.obj.scale.multiplyScalar(2.6);
+    st.obj.position.set(4.4, 0.5, 2.6);
+    st.obj.rotation.y = -0.4;
+    b.add(st.obj);
+    b.add(mesh(G.box(1.8, 0.5, 1.4), pm("stone", "#5a6270", { flat: true }), { p: [4.4, 0.25, 2.6] }));
+    return b;
+  }
+  function worldTree(N, rng) {
+    const b = grp();
+    const bark = pm("bark", "#4a3628");
+    b.add(mesh(G.tube("wtrunk", [[0, -0.5, 0], [0.8, 3, 0.3], [-0.6, 7, -0.2], [0.4, 11, 0.2], [0, 14, 0]], 1.3, 30, 12), bark));
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * PI * 2;
+      b.add(mesh(G.tube("wroot" + i, [[0, 1.4, 0], [Math.cos(a) * 2.0, 0.4, Math.sin(a) * 2.0], [Math.cos(a) * 3.6, -0.1, Math.sin(a) * 3.6]], 0.4, 10, 7), bark));
+      b.add(mesh(G.tube("wbranch" + i, [[0, 0, 0], [Math.cos(a) * 2.5, 1.6, Math.sin(a) * 2.5], [Math.cos(a) * 5, 2.0 + (i % 2), Math.sin(a) * 5]], 0.32, 10, 6), bark, { p: [0, 10.5 + (i % 3) * 1.2, 0] }));
+    }
+    const cols = ["#3f9a4a", "#2f8a6a", "#5ab04a", "#4fa88a", "#c86ab0"];
+    const glows = [];
+    for (let i = 0; i < 22; i++) {
+      const a = rng() * PI * 2;
+      const rr = 2 + rng() * 4.5;
+      const y = 12.5 + rng() * 4.5 - rr * 0.25;
+      b.add(mesh(G.ico(1.6 + rng() * 1.2, 1), pm("plain", cols[i % cols.length], { flat: true }), { p: [Math.cos(a) * rr, y, Math.sin(a) * rr], s: [1, 0.7, 1] }));
+      if (i % 2 === 0) {
+        const c = ["#9fffc8", "#ffe08a", "#ff9fe0"][i % 3];
+        b.add(mesh(G.sph(0.18, 8, 6), emis(c, 1.4), { p: [Math.cos(a) * (rr + 1.4), y - 0.9, Math.sin(a) * (rr + 1.4)] }));
+        const h = R.haloSprite(c, 1.6, 0.6, [Math.cos(a) * (rr + 1.4), y - 0.9, Math.sin(a) * (rr + 1.4)]);
+        b.add(h);
+        N.halos.push(h);
+        glows.push(h);
+      }
+    }
+    // Steintisch der Druiden
+    const dol = grp([4.2, 0, 3.0]);
+    for (const x of [-0.6, 0.6]) dol.add(mesh(G.box(0.5, 1.6, 0.6), pm("stone", "#6a7a6a", { flat: true }), { p: [x, 0.8, 0] }));
+    dol.add(mesh(G.box(2.0, 0.35, 1.1), pm("stone", "#6a7a6a", { flat: true }), { p: [0, 1.75, 0], r: [0, 0, 0.05] }));
+    b.add(dol);
+    return b;
+  }
+  // Wahrzeichen eines Reiches samt eigener Felsinsel
+  R.realmLandmark = function (realm, N, rng, o) {
+    if (!T) init();
+    o = o || {};
+    const th = R.realmTheme(realm);
+    const g = grp();
+    const isl = X.island(o.radius || 9, o.depth || 9, rng, { grass: th.ground.grass, grass2: th.ground.grass2, dirt: th.ground.dirt, rock: th.ground.rock, roots: realm === "hibernia" ? 22 : 8, hills: 0.4, vineGlow: th.ground.vineGlow });
+    g.add(isl);
+    const lm = realm === "midgard" ? frostPeak(N, rng) : realm === "hibernia" ? worldTree(N, rng) : castle(N);
+    g.add(lm);
+    g.userData.flags = lm.userData.flags || [];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * PI * 2 + 0.3;
+      const tr = R.realmTree(realm, rng);
+      tr.position.set(Math.cos(a) * 7.2, 0, Math.sin(a) * 7.2);
+      g.add(tr);
+    }
+    return g;
+  };
+})();
+
+</script>
 <script>/* src/ui-core.js */
 /* Helden von Schwebfels - Oberflaechen-Kern: Menueleiste, Kopfleiste, Panels, Vergleich, Tooltips, Hinweise, Zeitgeber, Musik. */
 (function () {
@@ -9486,13 +11338,23 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     hufnagel: { race: "moorling", realm: "hibernia", gender: "w", cls: "mondschuetze", look: { skin: "#a9b98f", hair: "#4f6a3c", hairStyle: 1, eyes: "#4f7a3a", tattoo: "dornen", tattooColor: "#2f5fd0" }, gear: { ruestung: { base: "wams", tint: "#5a3d2a" } } },
     ottilie: { race: "albier", realm: "albion", gender: "w", cls: "schildritter", look: { skin: "#c99470", hair: "#2b1d16", hairStyle: 5, eyes: "#3f6fa8", tattoo: "runen", tattooColor: "#e8e2d6", scar: "wange" }, gear: { ruestung: { base: "harnisch", tint: "#9aa4ad", style: 1 }, umhang: { base: "umhang", tint: "#b8322e" } } },
     seherin: { race: "sidhe", realm: "hibernia", gender: "w", cls: "dornenrufer", look: { skin: "#e6dccc", hair: "#f2f2f2", hairStyle: 2, eyes: "#7fffb0", tattoo: "linien", tattooColor: "#4fffb0" }, gear: { helm: { base: "hut", tint: "#2a2a44", style: 0 }, ruestung: { base: "robe", tint: "#3a3a5a", style: 1 } } },
+    mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
+  UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
   UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
+  UI.foeRealm = function (m) {
+    const S = UI.S;
+    const rs = m && m.realms;
+    if (rs && rs.length) return S && rs.indexOf(S.realm) >= 0 ? S.realm : rs[0];
+    if (m && m.id && /^(nacht-|story-)/.test(m.id)) return S ? S.realm : null;
+    return null;
+  };
   UI.fighterDesc = function (f) {
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final };
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return { kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear };
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
     const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';
@@ -9771,6 +11633,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     ["gildenhalle", "gilde", "Gilde"],
     ["heim", "heim", "Heim"],
     ["brunnen", "brunnen", "Brunnen"],
+    ["mondtor", "mond", "Mondtor"],
   ];
   UI.MENU = MENU;
   let lastPortraitKey = "";
@@ -9834,6 +11697,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const C = D.CLASSES[S.cls];
     if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it))) b.held = "+";
     if (!S.guild) b.gildenhalle = "?";
+    if (UI.isNight() && E.nightHuntsLeft(S) > 0 && !E.busy(S, now)) b.mondtor = "☾";
     return b;
   };
   UI.renderDock = function () {
@@ -9841,7 +11705,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (!dock) return;
     const b = UI.badges();
     dock.innerHTML =
-      '<div class="side-logo">Schwebfels<small>Die Freistatt der drei Reiche</small></div>' +
+      '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
       MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
@@ -9894,17 +11758,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   /* ---------- Musik je Ort ---------- */
-  const PANEL_MUSIC = { taverne: "taverne", heim: "heim", steinkreis: "chronik", tiefen: "tiefe", gildenhalle: "taverne" };
+  const PANEL_MUSIC = { taverne: "taverne", heim: "heim", steinkreis: "chronik", tiefen: "tiefe", gildenhalle: "taverne", mondtor: "nacht" };
   UI.updateMusic = function () {
     const S = UI.S;
     if (!S) return;
     let ctx;
     if (UI.inBattle) ctx = "kampf";
     else if (UI.panelId && PANEL_MUSIC[UI.panelId]) ctx = PANEL_MUSIC[UI.panelId];
-    else {
-      const info = SB.R3D.dayInfo(SB.R3D.dayTime(S.settings.dayCycle || "zyklus"));
-      ctx = info.night > 0.55 ? "nacht" : "tag";
-    }
+    else ctx = UI.isNight() ? "nacht" : "tag";
+    // Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders
+    if (ctx === "tag" || ctx === "nacht" || ctx === "taverne" || ctx === "kampf") ctx += ":" + S.realm;
     SB.audio.music(ctx);
   };
 
@@ -10027,13 +11890,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
   /* ---------- Hinweise von Hueterin Ottilie ---------- */
   const TUT = [
-    { when: () => true, text: (S) => "Willkommen in der Freistatt, " + S.name + ". Ich bin Ottilie und hüte den Frieden auf Schwebfels. In der Taverne „Zur Schiefen Krähe“ warten deine ersten Aufträge.", btn: "Zur Taverne", act: () => UI.openPanel("taverne"), panel: "taverne" },
+    { when: () => true, text: (S) => "Willkommen auf " + D.REALMS[S.realm].isle + ", " + S.name + ". Ich bin Ottilie und hüte deine Heimatinsel. In der Taverne „Zur Schiefen Krähe“ warten deine ersten Aufträge.", btn: "Zur Taverne", act: () => UI.openPanel("taverne"), panel: "taverne" },
     { when: () => UI.panelId === "taverne" && !UI.S.quest.active, text: () => "Jeder Auftrag kostet Tatendrang, der sich mit der Zeit auffüllt. Achte auf die Siegchance. Seltene Hordenaufträge schicken dir mehrere Gegner nacheinander.", btn: "Verstanden" },
     { when: () => UI.S.stats.quests >= 1 && !UI.S.quest.active, text: () => "Gut gemacht! Gold steckst du am besten in deine Attribute. Im Charakterbogen siehst du auch genau, wie viel Erfahrung dir bis zur nächsten Stufe fehlt.", btn: "Zum Charakter", act: () => UI.openPanel("held"), panel: "held" },
     { when: () => UI.S.stats.quests >= 3, text: () => "In der Schmiede und bei Madame Zinnober gibt es bessere Ausrüstung. Fährst du mit der Maus über einen Gegenstand, siehst du sofort, wie sich deine Werte verändern würden.", btn: "Verstanden" },
     { when: () => UI.S.level >= 3, text: () => "Im Steinkreis erzählt die Seherin die Chronik deines Reiches und deiner Klasse. Jedes Kapitel bringt seltene Beute.", btn: "Zum Steinkreis", act: () => UI.openPanel("steinkreis"), panel: "steinkreis" },
     { when: () => UI.S.level >= 5, text: () => "Im Ring der Reiche kämpfst du gegen Helden aus den anderen Reichen. Ehre bringt dich in der Rangliste nach oben, für dich und für dein Reich.", btn: "Leinen los" },
     { when: () => UI.S.level >= 10, text: () => "Stufe 10! Das Tor zur Tiefe hat sich geöffnet. Dort warten Bosse mit seltener und epischer Beute.", btn: "Ab in die Tiefe", act: () => UI.openPanel("tiefen"), panel: "tiefen" },
+    { when: () => UI.S.level >= 2 && UI.isNight(), text: () => "Es ist Nacht. Hinter dem Steinkreis leuchtet jetzt das Mondtor: Dort warten Nachtjagden und die Händlerin Selene, aber nur bis zum Morgengrauen.", btn: "Zum Mondtor", act: () => UI.openPanel("mondtor"), panel: "mondtor" },
   ];
   UI.checkHint = function () {
     const S = UI.S;
@@ -10093,7 +11957,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const aReady = S.arena.next <= now;
     const dReady = S.dungeons.next <= now;
     const sReady = S.story.next <= now;
-    const st = [qDone, gDone, aReady, dReady, sReady, Math.floor(E.energy(S, now)), S.daily.day].join("|");
+    const night = UI.isNight();
+    const st = [qDone, gDone, aReady, dReady, sReady, Math.floor(E.energy(S, now)), S.daily.day, night].join("|");
     if (st !== lastState) {
       const prev = lastState.split("|");
       if (lastState) {
@@ -10102,12 +11967,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           SB.audio.play("quest");
         }
         if (gDone && prev[1] === "false") UI.toast("Deine Wache ist vorbei. Funzel hat deinen Lohn bereit.", "good", "leuchtturm");
+        if (String(night) !== prev[7]) {
+          if (night) UI.toast("Die Nacht bricht herein. Das Mondtor hat sich geöffnet.", "good", "mond");
+          else UI.toast("Der Morgen graut. Das Mondtor schließt sich bis zur nächsten Nacht.", "", "sonne");
+          UI.updateMusic();
+          UI.checkHint();
+        }
       }
       lastState = st;
       UI.renderTop();
       UI.renderDock();
       UI.renderActivity();
-      if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day)) UI.renderPanel();
+      if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day || prev[7] !== String(night))) UI.renderPanel();
     } else {
       UI.renderTop();
       const box = $("#activity");
@@ -10186,9 +12057,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     hulda: ["Setz dich, Held. Die Aufträge hängen am Brett, der Met steht hinter mir.", "In der Krähe ist jedes Reich willkommen. Prügeleien bitte draußen, die Stühle sind neu.", "Manche Aufträge sind selten. Dann kommen die Biester gleich in Horden. Nimm einen zweiten Krug mit."],
     brumm: ["Hrmpf. Fass nichts an, was noch glüht.", "Gute Klinge, guter Preis. Billige Klinge, kurzes Leben.", "Ich schmiede seit dreihundert Jahren. Die ersten zweihundert waren Übung."],
     zinnober: ["Ah, ein Kunde! Oder ein Dieb? Bei dir bin ich mir noch nicht sicher.", "Alles hier ist magisch. Außer dem Staub. Wobei, der vielleicht auch.", "Dieser Ring gehörte einer Feenkönigin. Sagt zumindest der Ring."],
-    krawall: ["Willkommen im Ring der Reiche! Hier kämpft Albion gegen Midgard gegen Hibernia, und alle gegen den Sand in den Stiefeln.", "Jeder Sieg bringt Ehre, dir und deinem Reich. Jede Niederlage bringt Geschichten.", "Hier drin gibt es keinen Frieden der Freistatt. Nur Regeln. Ein paar."],
+    krawall: ["Willkommen im Ring der Reiche! Hier kämpft Albion gegen Midgard gegen Hibernia, und alle gegen den Sand in den Stiefeln.", "Jeder Sieg bringt Ehre, dir und deinem Reich. Jede Niederlage bringt Geschichten.", "Ich suche dir Gegner, die zu dir passen. Einer leicht, zwei ebenbürtig, einer zum Zähneausbeißen."],
     funzel: ["Das Feuer muss brennen. Immer. Ich mach das seit vierzig Jahren und habe nie geblinzelt.", "Wache halten ist einfach: Du schaust in den Nebel, der Nebel schaut zurück.", "Zahle pro Schicht. Pünktlich. Meistens."],
     hufnagel: ["Pass auf, wo du hintrittst. Der Greif ist sauber, die Hirsche nicht.", "Mit einem Reittier bist du schneller am Auftrag und schneller wieder in der Taverne.", "Der Greif beißt nur Leute, die er nicht mag. Er mag niemanden."],
+    mondhaendler: ["Willkommen, Nachtwandler. Was ich verkaufe, glänzt nur im Mondlicht. Am Tag bin ich nie hier gewesen.", "Die Nachtwesen kommen, wenn die anderen schlafen. Wer sie bannt, findet Beute, die kein Schmied kennt.", "Drei Jagden pro Nacht, mehr erlaubt der Mond nicht. Er ist da sehr eigen."],
     seherin: ["Die Steine erinnern sich an alles. Sie warten nur darauf, dass jemand zuhört.", "Jedes Reich hat seine Geschichte. Und jeder Held schreibt ein Stück davon.", "Unter den Splittern regt sich etwas. Die Chronik ist noch nicht zu Ende geschrieben."],
   };
   const line = (npc) => {
@@ -10346,7 +12218,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     UI.refresh();
   };
   A.buy = (el) => {
-    const res = E.buyItem(S(), el.dataset.shop, +el.dataset.i);
+    const res = el.dataset.shop === "mond" ? E.buyMoonItem(S(), +el.dataset.i, UI.isNight()) : E.buyItem(S(), el.dataset.shop, +el.dataset.i);
     if (!done(res)) return;
     SB.audio.play(el.dataset.shop === "schmiede" ? "anvil" : "buy");
     UI.closeDialog();
@@ -10588,13 +12460,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       else if (s.arena.next > now) h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
       const rivals = E.arenaRivals(s, now, remote);
       const hero = E.heroFighter(s, now);
-      h += '<div class="section-title">Herausforderer aus den anderen Reichen</div><div class="cards">';
+      h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div><div class="cards">';
       rivals.forEach((r) => {
-        const f = r.fighter || E.npcFighter(r);
+        const f = E.rivalFighter(r);
         const c = estimate(hero, [f], "arena" + r.id + r.level);
+        const tier = c >= 0.68 ? ["leicht", "Leicht"] : c >= 0.42 ? ["fair", "Ebenbürtig"] : ["schwer", "Schwer"];
+        const where = r.kind === "wander" ? "Wanderkämpfer" : "Platz " + r.rank;
         h +=
-          '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</h4>" +
-          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · Platz " + r.rank + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
+          '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + ' <span class="tier t-' + tier[0] + '">' + tier[1] + "</span></h4>" +
+          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · " + where + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
           '<button class="btn" data-act="arenaFight" data-id="' + esc(r.id) + '"' + (busy || s.arena.next > now ? " disabled" : "") + ">Herausfordern</button></div>";
       });
       h += '</div><div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn ghost small" data-act="open" data-id="ruhmeshalle">Alle Ranglisten</button></div>';
@@ -10608,14 +12482,74 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   A.arenaFight = async (el) => {
     const s = S();
     const now = E.now();
-    const opp = E.allHeroes(s, now, SB.remoteHeroes || null).find((h) => h.id === el.dataset.id);
-    if (!opp) return;
+    const opp = E.arenaRivals(s, now, SB.remoteHeroes || null).find((h) => h.id === el.dataset.id);
+    if (!opp) {
+      UI.toast("Dieser Herausforderer ist weitergezogen.", "", "arena");
+      UI.refresh();
+      return;
+    }
     const res = E.arenaFight(s, opp, now);
     if (!done(res)) return;
     const rew = E.resolveArena(s, res.fight, now);
     UI.saveNow();
     SB.audio.play("horn");
     await UI.runBattle(res.fight, { setting: "arena", title: "Ring der Reiche", rewards: rew });
+    UI.refresh();
+  };
+
+  /* ================= Mondtor: nur bei Nacht ================= */
+  P.mondtor = {
+    render() {
+      const s = S();
+      const now = E.now();
+      const mode = s.settings.dayCycle || "zyklus";
+      const night = UI.isNight();
+      let h = say("mondhaendler");
+      if (!night) {
+        const wait = E.nightChangeIn(mode, now);
+        h += '<div class="wellbox"><div class="wl-title">' + I.ui("mond") + " Das Mondtor ist geschlossen</div>";
+        if (wait === Infinity) h += '<div class="muted">In den Einstellungen ist „immer Tag“ gewählt. Stelle den Tag-Nacht-Wechsel auf „Zyklus“ oder „echte Uhrzeit“, damit die Nacht kommen kann.</div><button class="btn small ghost" data-act="open" data-id="einstellungen">Zu den Einstellungen</button>';
+        else h += '<div class="muted">Es öffnet sich, sobald es Nacht wird. Noch:</div><div class="wl-big num" data-until="' + (now + wait) + '"></div>';
+        h += "</div>";
+        h += '<div class="section-title">Was dich nachts erwartet</div><ul class="muted" style="margin:0;padding-left:20px"><li>Nachtjagd: zwei Nachtwesen deiner Heimatinsel nacheinander, ' + E.C.NIGHT_HUNTS + " Jagden pro Tag, kostet keinen Tatendrang.</li><li>Sichere Beute: immer mindestens ein seltener Gegenstand.</li><li>Selene Silberblick verkauft drei besondere Stücke, eines davon episch.</li></ul>";
+        return h;
+      }
+      const tab = UI.tabs.mondtor || "jagd";
+      h += '<div class="tabs">' + [["jagd", "Nachtjagd"], ["laden", "Mondhändlerin"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="mondtor" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      const wait = E.nightChangeIn(mode, now);
+      if (wait !== Infinity) h += '<div class="muted small" style="margin-bottom:8px">' + I.ui("mond") + ' Das Tor bleibt noch <b class="num" data-until="' + (now + wait) + '"></b> offen.</div>';
+      if (tab === "laden") {
+        const items = E.moonShop(s, now);
+        h += '<div class="section-title">Ware im Mondlicht</div><div class="grid6 shop">';
+        items.forEach((it, i) => {
+          h += it ? UI.slotHtml(it, "shop:mond:" + i, { upgrade: true, price: '<span class="num">' + U.fmtShort(it.value) + "</span> " + I.ui("gold") }) : '<div class="slot empty"><span class="slot-name">verkauft</span></div>';
+        });
+        h += '</div><div class="muted small" style="margin-top:8px">Neue Ware gibt es jeden Tag. Selene verkauft nur, solange es Nacht ist.</div>';
+        return h;
+      }
+      const left = E.nightHuntsLeft(s);
+      const busy = E.busy(s, now);
+      const hero = E.heroFighter(s, now);
+      const foes = E.nightHuntPreview(s, now);
+      const c = estimate(hero, foes, "nacht" + s.daily.day + s.daily.nightHunts);
+      h +=
+        '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
+        '<div class="wavepics">' + foes.map((f, k) => '<span class="wp' + (k ? " boss" : "") + '" title="' + esc(f.name) + '">' + UI.portrait(UI.monDesc(f, !!k), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div>" +
+        '<div class="foot">' + chanceTxt(c) + '<span class="muted small">Noch ' + left + " von " + E.C.NIGHT_HUNTS + ' Jagden heute</span><span class="spacer"></span>' +
+        (busy ? '<span class="muted">Du bist gerade beschäftigt.</span>' : '<button class="btn" data-act="nightHunt"' + (left <= 0 ? " disabled" : "") + ">Zur Jagd</button>") +
+        "</div></div></div>";
+      h += '<div class="muted small">Belohnung bei Sieg: viel Erfahrung und Gold, ein Gegenstand mindestens „selten“, manchmal eine Wolkenperle.</div>';
+      return h;
+    },
+  };
+  A.nightHunt = async () => {
+    const s = S();
+    const res = E.nightHunt(s, UI.isNight());
+    if (!done(res)) return;
+    const rew = E.resolveNightHunt(s, res.fight);
+    UI.saveNow();
+    SB.audio.play("horn");
+    await UI.runBattle(res.fight, { setting: "story", dayTime: 0.02, title: "Nachtjagd", rewards: rew });
     UI.refresh();
   };
 
@@ -11048,6 +12982,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       let h = '<div class="section-title">Darstellung</div><div class="row">' + [["hoch", "3D mit Schatten"], ["niedrig", "3D schlicht"], ["aus", "Ohne 3D"]].map(([id, n]) => '<button class="tab' + (q === id ? " on" : "") + '" data-act="quality" data-q="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<p class="muted small">Die Änderung wird nach dem Neuladen der Seite wirksam.</p>';
       h += '<div class="section-title">Tag und Nacht</div><div class="row">' + [["zyklus", "Automatisch (20 Minuten)"], ["echtzeit", "Echte Uhrzeit"], ["tag", "Immer Tag"], ["nacht", "Immer Nacht"]].map(([id, n]) => '<button class="tab' + (dc === id ? " on" : "") + '" data-act="dayCycle" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
+      h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
@@ -11202,7 +13137,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           battle = SB.R3D.createBattle(stage, {
             setting: opts.setting,
             tint: opts.tint,
-            dayTime: SB.R3D.dayTime(S.settings.dayCycle || "zyklus"),
+            dayTime: opts.dayTime != null ? opts.dayTime : SB.R3D.dayTime(S.settings.dayCycle || "zyklus"),
+            realm: S.realm,
             left: UI.fighterDesc(hero),
             right: UI.fighterDesc(foes[0]),
             hp: max.slice(),

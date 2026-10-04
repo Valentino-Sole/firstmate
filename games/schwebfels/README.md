@@ -1,6 +1,6 @@
 # Helden von Schwebfels
 
-Browser-Rollenspiel in der Freistatt Schwebfels zwischen drei verfeindeten Reichen (Albion, Midgard, Hibernia): zwölf Klassen mit eigener Geschichte, Aufträge und Hordenaufträge in der Taverne, automatische Kämpfe in 3D, Ausrüstung mit Vergleich, Tätowierungen, Chronik, Ring der Reiche, Ranglisten für Helden, Gilden und Reiche, Gilden, Heim mit Einrichtung, Wachturm, sechs Dungeons, Reittiere, Wunschbrunnen, Tag-Nacht-Wechsel und Musik.
+Browser-Rollenspiel in der schwebenden Inselwelt Schwebfels zwischen drei verfeindeten Reichen (Albion, Midgard, Hibernia), jedes mit eigener Heimatinsel, eigener Musik und eigenen Monstern: zwölf Klassen mit eigener Geschichte, Aufträge und Hordenaufträge in der Taverne, automatische Kämpfe in 3D, Ausrüstung mit Vergleich, Gesichtstätowierungen, Chronik, Ring der Reiche mit passend starken Gegnern, Ranglisten für Helden, Gilden und Reiche, Gilden, Heim mit Einrichtung, Wachturm, sechs Dungeons, Reittiere, Wunschbrunnen, Tag-Nacht-Wechsel und das Mondtor, das sich nur nachts öffnet.
 Aufbau und Abgrenzung zum Vorbild Shakes & Fidget stehen in [DESIGN.md](DESIGN.md).
 
 ## Spielen
@@ -35,15 +35,16 @@ Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` a
 
 | Datei | Inhalt |
 |---|---|
-| `src/data.js` | Reiche, Völker, Klassen und ihre Geschichten, Gegenstände, Monster, Dungeons, Auftragstexte, Heim, Abzeichen |
-| `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf, Mehrfachkämpfe, Aufträge, Chronik, Arena, Ranglisten, Gilden, Heim, Dungeons, Läden, Zeit, Übernahme alter Spielstände |
+| `src/data.js` | Reiche und Heimatinseln, Völker, Klassen und ihre Geschichten, Gegenstände, Monster je Reich, Nachtwesen, Dungeons, Auftragstexte, Heim, Abzeichen |
+| `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf, Mehrfachkämpfe, Aufträge, Chronik, Arena mit Stärkeabgleich, Ranglisten, Gilden, Heim, Dungeons, Läden, Tag und Nacht, Mondtor, Übernahme alter Spielstände |
 | `src/icons.js` | Eigene Vektor-Symbole für Gegenstände, Reiche und Oberfläche |
 | `src/r3d-models.js` | 3D-Helden: gemalte Texturen, Gesichter mit Tattoos und Narben, Reichsrüstungen, Prunkwaffen, Animationen |
-| `src/r3d-monsters.js` | 15 Monstergattungen mit eigenen Animationen |
-| `src/r3d-scenes.js` | 3D-Schauplätze: Freistatt-Insel mit Tag-Nacht-Wechsel, Heldenansicht, Heim, Kampfbühnen, Portraits |
+| `src/r3d-monsters.js` | 15 Monstergattungen mit eigenen Animationen, Frost und Moos je nach Heimat |
+| `src/r3d-scenes.js` | 3D-Schauplätze: Heimatinsel mit Tag-Nacht-Wechsel, Bewohnern und Mondtor, Heldenansicht, Heim, Kampfbühnen, Portraits |
+| `src/r3d-realms.js` | Die drei Heimatinseln: Landschaft, Gebäude, Wetter und Wahrzeichen je Reich |
 | `src/ui-*.js` | Oberfläche: Menüleiste, Orte, Kampfablauf, Heldenerschaffung |
 | `src/store.js` | Speichern im Browser, Spielstand-Code, optional claude.ai-Konto, Helden- und Gildenprofile |
-| `src/audio.js` | Musik je Ort und Klangeffekte per WebAudio |
+| `src/audio.js` | Musik je Ort und Reich sowie Klangeffekte per WebAudio |
 | `src/main.js` | Start, Reichswahl für alte Spielstände, Spielstand-Wechsel |
 
 Alle Figuren, Texte, Symbole, Musikstücke, Klänge und 3D-Modelle sind eigens für dieses Spiel entstanden. Die 3D-Darstellung nutzt [three.js](https://threejs.org) (MIT-Lizenz).

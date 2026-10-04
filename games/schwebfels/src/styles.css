@@ -82,6 +82,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .hub-label.hover, .hub-label:hover { background: linear-gradient(#5a4a22, #2e2614); border-color: var(--gold); }
 .hl-badge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--blood); color: #fff; font: 700 11px var(--font-body); display: inline-grid; place-items: center; }
 .hub-label.ready { animation: bob 1.6s ease-in-out infinite; }
+.hub-label.asleep { opacity: 0.55; filter: grayscale(0.7); }
+.hub-label.moonlit { border-color: #cfe0ff; color: #e6ecff; box-shadow: 0 0 10px rgba(207, 224, 255, 0.45); }
 @keyframes bob { 50% { margin-top: -4px; } }
 
 /* Kopfleiste */
@@ -240,6 +242,10 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .chance.good { color: var(--jade); }
 .chance.ok { color: var(--gold-hi); }
 .chance.bad { color: #ff7a59; }
+.tier { display: inline-block; font: 800 10.5px var(--font-body); padding: 1px 6px; border-radius: 3px; vertical-align: 1px; font-style: normal; }
+.tier.t-leicht { background: #1f3a2c; color: var(--jade); }
+.tier.t-fair { background: #3a3218; color: var(--gold-hi); }
+.tier.t-schwer { background: #3a1c18; color: #ff7a59; }
 .mini-item { width: 36px; height: 36px; border-radius: 4px; background: radial-gradient(#3a3040, #160f1a); display: inline-grid; place-items: center; cursor: pointer; border: 2px solid var(--r-gewoehnlich); vertical-align: middle; padding: 1px; }
 .mini-item svg { width: 30px; height: 30px; }
 .tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 3px; background: var(--jade); color: var(--ink); font-weight: 800; vertical-align: 1px; font-family: var(--font-body); font-style: normal; }
