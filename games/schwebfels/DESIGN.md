@@ -2,6 +2,7 @@
 
 Ein eigenständiges Browser-Rollenspiel, das die **Struktur** von Shakes & Fidget (Playa Games) aufgreift, aber eigene Welt, eigene Figuren, eigene Texte, eigene Formeln und eine eigene 3D-Optik hat.
 Es wurden keine Grafiken, Namen oder Texte des Vorbilds übernommen.
+Version 2 ergänzt eine Welt mit drei verfeindeten Reichen, deren Grundidee (drei Reiche mit eigenen Klassen, die gegeneinander kämpfen) an Dark Age of Camelot erinnert; Namen der Reiche stammen aus alter Sage (Albion, Midgard, Hibernia), alle Klassen, Völker, Figuren und Geschichten sind eigene Schöpfungen.
 
 ## 1. Wie Shakes & Fidget aufgebaut ist
 
@@ -9,60 +10,64 @@ Recherchegrundlage: der Wikipedia-Artikel zu Shakes & Fidget, die offizielle App
 Kernaussagen, die dort übereinstimmend beschrieben sind:
 
 - Satirisches Fantasy-Browser-RPG aus Hamburg, entstanden aus dem gleichnamigen Webcomic.
-- **Taverne**: Aufträge kosten „Abenteuerlust“, ein Kontingent, das sich täglich auffüllt und mit Bier (Premiumwährung) nachgefüllt werden kann. Aufträge bringen Gold, Erfahrung und gelegentlich Gegenstände.
-- **Charakter**: fünf Attribute (Stärke, Geschick, Intelligenz, Konstitution, Glück), die mit Gold gesteigert werden; Ausrüstungsslots am Charakterbild.
-- **Arena**: Kämpfe gegen andere Spieler um Ehre und einen Platz in der **Ruhmeshalle**.
-- **Dungeons** ab Stufe 10, jeweils eine Reihe von Gegnern mit wertvoller Beute.
-- **Stadtwache** als Gold-Arbeit, **Reittiere** für kürzere Reisezeiten, ein **Glücksrad** mit täglichen Preisen.
-- Zwei Währungen: Gold und Pilze (Premium, auch für Echtgeld).
-- Automatisch ablaufende, rundenbasierte Kämpfe; Klassen mit festen Eigenschaften (Block, Ausweichen, Zauber).
+- **Taverne**: Aufträge kosten „Abenteuerlust“, ein Kontingent, das sich täglich auffüllt und mit Bier (Premiumwährung) nachgefüllt werden kann.
+- **Charakter**: fünf Attribute, die mit Gold gesteigert werden; Ausrüstungsslots links und rechts vom Charakterbild; Menü als senkrechte Leiste am linken Rand.
+- **Arena** und **Ruhmeshalle**, **Gilden** mit eigener Rangliste, **Dungeons** ab Stufe 10, **Stadtwache**, **Reittiere**, ein **Glücksrad** mit täglichem Freidreh.
+- Automatisch ablaufende Kämpfe; Klassen mit festen Eigenschaften.
 
-## 2. Was Schwebfels übernimmt und was es anders macht
+## 2. Welt von Version 2
+
+Vor tausend Jahren zerbrach der Weltstein. Drei Splitter tragen die Reiche durch das Nebelmeer, dazwischen schwebt **Schwebfels**, die Freistatt, in der jeder Krieg ruhen muss.
+
+| Reich | Motto | Völker | Klassen (Krieger, Schurke, Jäger, Magier) |
+|---|---|---|---|
+| **Albion** (Kreideklippen, Ritterorden) | „Durch Eid und Eisen“ | Albier, Kreidezwerg | Schildritter, Meuchler, Langbogner, Lichtweber |
+| **Midgard** (Frostlande, Runensteine) | „Kälte formt Helden“ | Nordmann, Trollblut | Sturmhüne, Nebelschleicher, Wolfsjäger, Runenwirker |
+| **Hibernia** (Nebelwälder, Feenhügel) | „Der Hain vergisst nicht“ | Sidhe, Moorling | Hainwächter, Schattentänzer, Mondschütze, Dornenrufer |
+
+- Die vier **Grundarten** sind in allen Reichen ähnlich (Krieger blocken, Schurken schlagen zuerst und kritisch, Jäger weichen aus, Magier zaubern unaufhaltsam). Jede der zwölf Klassen hat aber einen **eigenen Spezialangriff** (Betäuben, Gift, Heilung, Pfeilhagel, Schattentanz, Rüstung durchdringen usw.) und eine **eigene Geschichte**.
+- Gegenstände gelten für die Grundart, nicht für das Reich: ein Midgarder Krieger kann eine Albioner Axt führen.
+
+## 3. Was Schwebfels übernimmt und was es anders macht
 
 | Vorbild | Schwebfels | Eigene Note |
 |---|---|---|
-| Satirische Fantasy-Stadt, 2D-Comicgrafik | **Schwebfels**, eine Stadt auf einer Wolkeninsel; komplett prozedurale **Low-Poly-3D-Welt** mit Cartoon-Schattierung und Umrisslinien | Die Insel ist das Hauptmenü: drehbar, zoombar, Gebäude anklickbar, Tageszeit nach Uhrzeit |
-| Taverne, Abenteuerlust (täglich) | Taverne „Zur Schiefen Möwe“, **Tatendrang** | Regeneriert laufend (1 Punkt pro 36 s), jeder Auftrag zeigt **Schwierigkeit** und eine berechnete **Siegchance**; Gegner wachsen mit dem Helden, aber nur halb so schnell |
-| Bier gegen Pilze | Wolkenbräu gegen **Wolkenperlen** | Perlen gibt es nur im Spiel (Stufenaufstieg, Abzeichen, Brunnen, Bosse), kein Echtgeld |
-| Krieger, Kundschafter, Magier | **Klingenwache**, **Windläufer**, **Runenwirker** | Jede Klasse hat einen Spezialangriff bei jeder vierten Aktion (Schildbrecher betäubt, Pfeilhagel trifft dreifach, Sternenbruch ignoriert Rüstung); Schilde fangen auch Zauber ab, aber seltener |
-| Menschen, Elfen, Zwerge usw. | Fünf eigene Völker: Wolkling, Steinbart, Moosling, Hornvolk, Nebelalb | Volk verändert Körperbau und Startwerte |
-| Stadtwache | **Leuchtturmwache** | Schichten zu 5 Minuten, bis zu 8 am Stück |
-| Arena und Ruhmeshalle | **Wolkenarena**, **Ruhmeshalle** | 140 mitwachsende Inselhelden; in claude.ai erscheinen zusätzlich **echte Mitspieler** als Gegner |
-| Dungeons | **Das Tor zur Tiefe** | 6 Dungeons mit je 8 eigenen Bossen, Endbosse mit Krone, garantierte seltene Beute |
-| Waffenschmied, Zauberladen | **Brumms Amboss**, **Zinnobers Kuriositäten** | Grüner Pfeil markiert Verbesserungen, Vergleich mit angelegter Ausrüstung, Tränke mit Laufzeit |
-| Reittiere | **Greifenstall** | Dauerhaft gekauft, bis zu 45 % kürzere Reisezeit |
-| Glücksrad | **Wunschbrunnen** | Münzwurf mit 3D-Animation, ein freier Wurf pro Tag |
-| Album | **Bestiarium** | Jedes entdeckte Wesen gibt dauerhaft +0,5 % Erfahrung und Gold |
-| Erfolge | **Abzeichen** | 16 Abzeichen mit Perlen-Belohnung |
-| Pergament-Oberfläche | „Luftschiffer-Instrumententafel“ | Messingrahmen, Bullaugen-Portraits, Tatendrang als Manometer |
+| 2D-Comicgrafik | prozedurale **3D-Welt** mit handgemalt wirkenden Texturen | Freistatt-Insel im Nebelmeer mit Steinkreis, Wasserfällen ins Nichts, Glühwürmchen, Himmelswal; **automatischer Tag-Nacht-Wechsel** (20 Minuten, echte Uhrzeit, immer Tag oder immer Nacht) mit Mond, Sternen und Polarlicht |
+| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen |
+| Bier gegen Pilze | Nebelmet gegen **Wolkenperlen** | Perlen gibt es nur im Spiel, kein Echtgeld; Perlen werden nie ungefragt ausgegeben |
+| Charakterbild mit Slots | **Charakterbogen** im gleichen Aufbau | Große Erfahrungsleiste mit „noch X EP bis Stufe Y“, in der Kopfleiste immer sichtbar; **Vergleichstabelle** beim Anlegen (Wert für Wert und die eigenen Werte danach) |
+| Aussehen | Haut, Haare, Bart, Augen (auch glühend), **Tätowierungen** in sieben Mustern und Farben (teils leuchtend), Narben, Hörner | Jederzeit kostenlos änderbar |
+| Geschichte | **Chronik** im Steinkreis | Je Reich fünf Kapitel, je Klasse drei; Kapitel mit mehreren Gegnern, seltene und epische Belohnungen |
+| Arena und Ruhmeshalle | **Ring der Reiche**, **Halle der Helden** | Gegner nur aus den anderen Reichen; Ranglisten global, je Reich, für Gilden und als **Reichskrieg** (Summe der Ehre je Reich) |
+| Gilden | **Gildenhalle** | Gilden des eigenen Reiches beitreten oder gründen; in claude.ai sehen echte Mitspieler die Gilde |
+| Stadtwache | **Wachturm** | Schichten zu 5 Minuten |
+| Dungeons | **Das Tor zur Tiefe** | 6 Dungeons mit je 8 Bossen |
+| Glücksrad | **Wunschbrunnen** | Freier Wurf mit sichtbarem **Zeitgeber bis Mitternacht**, Perlenwurf nur als eigener Knopf |
+| (kein Gegenstück) | **Heim** | Vier Ausbaustufen (Zeltlager bis Turmfeste) und sieben Einrichtungen mit dauerhaften Boni, als begehbare 3D-Ansicht |
+| Album, Erfolge | **Bestiarium**, **Abzeichen** | 20 Abzeichen mit Perlen-Belohnung |
 
-## 3. Kampf
+## 4. Kampf
 
-Kämpfe laufen automatisch und abwechselnd ab, höchstens 90 Aktionen.
+Kämpfe laufen automatisch und abwechselnd ab, höchstens 90 Aktionen; ab der 30. Aktion steigt der Schaden („Raserei“), damit kein Kampf festfährt.
 
-- **Schaden** = Waffenwurf (Waffe plus stufenabhängiger Grundschaden) × (1 + Hauptwert / 10) × Klassenfaktor × (1 − Schadensminderung).
-- Im Duell zwischen Helden schwächt das gleiche Attribut des Verteidigers den Angriff (halber Wert wird abgezogen, mindestens die Hälfte bleibt). Gegen Monster gilt das nicht.
-- **Schadensminderung** = Klassenobergrenze × Rüstung / (Rüstung + 2,8 × Angreiferstufe + 30). Obergrenzen: Klingenwache 45 %, Windläufer 30 %, Runenwirker 15 %.
-- **Kritischer Treffer** (doppelter Schaden): 3 % + 50 % × Glück / (Glück + 8 × Gegnerstufe + 20), höchstens 45 %.
-- **Lebenspunkte** = Konstitution × Klassenfaktor × (Stufe + 1).
+- **Schaden** = Waffenwurf × (1 + Hauptwert / 10) × Klassenfaktor × (1 − Schadensminderung).
+- **Schadensminderung** = Klassenobergrenze × Rüstung / (Rüstung + 2,8 × Angreiferstufe + 30).
+- **Kritischer Treffer**: 3 % + 50 % × Glück / (Glück + 8 × Gegnerstufe + 20) plus Klassenbonus, höchstens 60 %; Schurken treffen härter kritisch.
+- **Spezialangriff** bei jeder vierten Aktion, je Klasse verschieden.
+- **Mehrere Gegner** (Horden, Chronik): der Held kämpft nacheinander gegen alle, zwischen zwei Gegnern kehren 12 % der Lebenspunkte zurück.
 - Ein Kampf ist durch einen festen Zufallswert bestimmt: Neuladen ändert den Ausgang nicht.
 
-## 4. Balance
+## 5. Balance
 
-Die Werte sind mit zwei Simulationen eingestellt:
+- `tests/balance.mjs`: Klassen-Duelle im Mittel zwischen etwa 44 und 58 %; Aufträge und Dungeon-Bosse für alle zwölf Klassen.
+- `tests/progression.mjs`: simulierter Spieler; alle Grundarten erreichen Stufe 30 nach rund 12 bis 15 Spielstunden reinem Tatendrang, ohne Abwärtsspirale.
+- Hordenaufträge: gemütlich fast immer, ordentlich rund 90 %, halsbrecherisch bewusst schwer (25 bis 50 %) bei 1,5-facher Belohnung.
+- Chronik-Kapitel: auf der Kapitelstufe mit durchschnittlicher Ausrüstung meist 60 bis 100 %.
 
-- `tests/balance.mjs`: Modellhelden gegen Monster, Bosse und andere Klassen. Klassen-Duelle liegen zwischen etwa 38 und 65 %.
-- `tests/progression.mjs`: ein simulierter Spieler, der Aufträge wählt, einkauft und Attribute steigert. Alle drei Klassen erreichen Stufe 30 nach rund 160 Aufträgen (etwa 15 Spielstunden reiner Tatendrang), ohne Abwärtsspirale.
+## 6. Technik
 
-Wichtige Erkenntnisse aus der Simulation:
-
-1. Ein festes Monsterniveau ist instabil: Wer verliert, bekommt kein Gold, wird schwächer und verliert öfter. Deshalb gibt es bei Niederlagen ein Trostpflaster (25 % Erfahrung und Gold) und Auftragsgegner, die halb mit der tatsächlichen Stärke des Helden wachsen.
-2. Die Waffe dominiert den Schaden. Damit eine veraltete Waffe nicht alles blockiert, wächst ein Teil des Schadens mit der Stufe.
-3. Die Klingenwache braucht ihren Schild zum Blocken, deshalb beginnt sie mit einem.
-
-## 5. Technik
-
-- Reines HTML, CSS und JavaScript ohne Build-Werkzeuge außer `build.mjs`, das alles zu einer Datei bündelt.
-- 3D mit three.js 0.160 (vom CDN). Ohne WebGL schaltet das Spiel auf eine 2D-Ansicht mit Gebäudeliste und Kampfprotokoll um.
-- Speichern im Browser (localStorage), zusätzlich als Spielstand-Code. Als claude.ai-Artifact zusätzlich privat im Konto und mit einem öffentlichen Heldenprofil für die Arena.
-- Klangeffekte werden live mit WebAudio erzeugt.
+- Reines HTML, CSS und JavaScript; `build.mjs` bündelt alles zu einer Datei.
+- 3D mit three.js 0.160 (vom CDN). Figuren, Monster, Gebäude, Waffen und alle Texturen entstehen zur Laufzeit im Code (Canvas-Malerei, Formen, Röhren, Drehkörper). Ohne WebGL schaltet das Spiel auf eine 2D-Ansicht um.
+- Musik und Klänge werden live mit WebAudio erzeugt: eigene Stücke für Insel bei Tag und Nacht, Taverne, Kampf, Dungeon, Heim und Chronik.
+- Speichern im Browser (localStorage) und als Spielstand-Code; in claude.ai zusätzlich privat im Konto, mit öffentlichem Heldenprofil für Arena und Ranglisten und öffentlichen Gildenprofilen.
+- Spielstände aus Version 1 werden übernommen; beim ersten Start wählt der Held sein Reich, Stufe, Gold, Ausrüstung und Erfolge bleiben.

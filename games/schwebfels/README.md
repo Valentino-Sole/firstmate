@@ -1,6 +1,6 @@
 # Helden von Schwebfels
 
-Browser-Rollenspiel auf einer schwebenden Wolkeninsel: Aufträge in der Taverne, automatische Kämpfe in 3D, Ausrüstung, Attribute, Arena, Leuchtturmwache, sechs Dungeons, Reittiere, Wunschbrunnen und Ruhmeshalle.
+Browser-Rollenspiel in der Freistatt Schwebfels zwischen drei verfeindeten Reichen (Albion, Midgard, Hibernia): zwölf Klassen mit eigener Geschichte, Aufträge und Hordenaufträge in der Taverne, automatische Kämpfe in 3D, Ausrüstung mit Vergleich, Tätowierungen, Chronik, Ring der Reiche, Ranglisten für Helden, Gilden und Reiche, Gilden, Heim mit Einrichtung, Wachturm, sechs Dungeons, Reittiere, Wunschbrunnen, Tag-Nacht-Wechsel und Musik.
 Aufbau und Abgrenzung zum Vorbild Shakes & Fidget stehen in [DESIGN.md](DESIGN.md).
 
 ## Spielen
@@ -35,14 +35,15 @@ Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` a
 
 | Datei | Inhalt |
 |---|---|
-| `src/data.js` | Völker, Klassen, Gegenstände, Monster, Dungeons, Auftragstexte, Abzeichen |
-| `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf, Aufträge, Arena, Dungeons, Läden, Zeit |
-| `src/icons.js` | Eigene Vektor-Symbole für Gegenstände und Oberfläche |
-| `src/r3d-models.js` | 3D-Figuren: Helden mit sichtbarer Ausrüstung, 12 Monstergattungen, Animationen |
-| `src/r3d-scenes.js` | 3D-Schauplätze: Insel, Heldenansicht, Kampfbühnen, Portraits |
-| `src/ui-*.js` | Oberfläche: Leisten, Gebäude, Kampfablauf, Charaktererstellung |
-| `src/store.js` | Speichern im Browser, Spielstand-Code, optional claude.ai-Konto und Arena-Profile |
-| `src/audio.js` | Klangeffekte per WebAudio |
-| `src/main.js` | Start und Spielstand-Wechsel |
+| `src/data.js` | Reiche, Völker, Klassen und ihre Geschichten, Gegenstände, Monster, Dungeons, Auftragstexte, Heim, Abzeichen |
+| `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf, Mehrfachkämpfe, Aufträge, Chronik, Arena, Ranglisten, Gilden, Heim, Dungeons, Läden, Zeit, Übernahme alter Spielstände |
+| `src/icons.js` | Eigene Vektor-Symbole für Gegenstände, Reiche und Oberfläche |
+| `src/r3d-models.js` | 3D-Helden: gemalte Texturen, Gesichter mit Tattoos und Narben, Reichsrüstungen, Prunkwaffen, Animationen |
+| `src/r3d-monsters.js` | 15 Monstergattungen mit eigenen Animationen |
+| `src/r3d-scenes.js` | 3D-Schauplätze: Freistatt-Insel mit Tag-Nacht-Wechsel, Heldenansicht, Heim, Kampfbühnen, Portraits |
+| `src/ui-*.js` | Oberfläche: Menüleiste, Orte, Kampfablauf, Heldenerschaffung |
+| `src/store.js` | Speichern im Browser, Spielstand-Code, optional claude.ai-Konto, Helden- und Gildenprofile |
+| `src/audio.js` | Musik je Ort und Klangeffekte per WebAudio |
+| `src/main.js` | Start, Reichswahl für alte Spielstände, Spielstand-Wechsel |
 
-Alle Figuren, Texte, Symbole und 3D-Modelle sind eigens für dieses Spiel entstanden. Die 3D-Darstellung nutzt [three.js](https://threejs.org) (MIT-Lizenz).
+Alle Figuren, Texte, Symbole, Musikstücke, Klänge und 3D-Modelle sind eigens für dieses Spiel entstanden. Die 3D-Darstellung nutzt [three.js](https://threejs.org) (MIT-Lizenz).
