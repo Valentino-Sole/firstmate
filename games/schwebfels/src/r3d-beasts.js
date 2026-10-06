@@ -15,7 +15,13 @@
   const pack = () => (SB.assets && SB.assets.data && SB.assets.data.beasts) || {};
   // Kampfprofil (arch) -> Erscheinungsfamilie
   const FAMILY = { schlund: "schlund" };
-  BE.familyOf = (arch, visual) => (visual && pack()[visual] ? visual : FAMILY[arch] && pack()[FAMILY[arch]] ? FAMILY[arch] : null);
+  // erzeugte Bestien (assets/gen.pack) nennen ihre Monsterarten selbst (meta.archs) und gehen vor
+  function genFamily(arch) {
+    const P = pack();
+    for (const k in P) if (P[k].tex && P[k].meta.archs && P[k].meta.archs.indexOf(arch) >= 0) return k;
+    return null;
+  }
+  BE.familyOf = (arch, visual) => (visual && pack()[visual] ? visual : genFamily(arch) || (FAMILY[arch] && pack()[FAMILY[arch]] ? FAMILY[arch] : null));
   BE.has = (arch, visual) => !!BE.familyOf(arch, visual);
 
   /* ---------- Materialien ---------- */
@@ -55,6 +61,15 @@
     };
     m.customProgramCacheKey = () => "sbbeast";
     return (MC[key] = m);
+  }
+
+  // erzeugte Bestie mit eigener Textur: leicht in der Farbe des Gegners getoent, damit Varianten unterscheidbar bleiben
+  function texMat(fam, B, m) {
+    const key = "tex|" + fam + "|" + (m.color || "");
+    if (MC[key]) return MC[key];
+    const tint = new T.Color("#ffffff").lerp(new T.Color(m.color || "#ffffff"), 0.45);
+    const mat = new T.MeshStandardMaterial({ color: tint, map: SB.assets.texture("beast." + fam, B.tex, { srgb: true }), roughness: 0.8, metalness: 0 });
+    return (MC[key] = mat);
   }
 
   /* ---------- Geometrie (einmal je Familie und Merkmalsauswahl) ---------- */
@@ -125,7 +140,7 @@
     const C = colors(m, fam);
     const hide = (m.hideFeatures || []).slice();
     const geo = beastGeo(fam, hide);
-    const mats = geo.userData.mats.map((cls) => beastMat(cls, C));
+    const mats = B.tex ? geo.userData.mats.map(() => texMat(fam, B, m)) : geo.userData.mats.map((cls) => beastMat(cls, C));
     const bones = meta.bones.map((b) => {
       const bone = new T.Bone();
       bone.name = b[0];

@@ -41,6 +41,7 @@ function packWriter() {
   return {
     f32: (a) => ({ $: ["f32", add(Buffer.from(new Float32Array(a).buffer)), a.length] }),
     u8: (a) => ({ $: ["u8", add(Buffer.from(Uint8Array.from(a))), a.length] }),
+    i8: (a) => ({ $: ["i8", add(Buffer.from(Int8Array.from(a).buffer)), a.length] }),
     u16: (a) => ({ $: ["u16", add(Buffer.from(new Uint16Array(a).buffer)), a.length] }),
     q16: (a, scale) => {
       const m = a.reduce((x, v) => Math.max(x, Math.abs(v)), 0);
@@ -270,7 +271,42 @@ function buildPack(file, gameBones) {
       occ: { Spine01: P.u8(Array.from(bits)) },
     },
   };
-  P.write(file, { v: 1, gen, clips, pieces });
+  // Bestie wie aus beasts/from_glb.py: Rumpf und vier Beine als Kaesten, Rollen des Bestiensystems, eigene Textur
+  const bb = [
+    ["hips", -1, [0, 0.7, -0.4], [0, 0.7, 0], "spine"],
+    ["spine", 0, [0, 0.7, 0], [0, 0.7, 0.4], "spine"],
+    ["chest", 1, [0, 0.7, 0.4], [0, 0.8, 0.6], "spine"],
+    ["head", 2, [0, 0.8, 0.6], [0, 0.85, 0.9], "head"],
+  ];
+  for (const [k, x, z, par] of [["FL", 0.15, 0.4, 2], ["FR", -0.15, 0.4, 2], ["BL", 0.15, -0.4, 0], ["BR", -0.15, -0.4, 0]]) {
+    const i0 = bb.length;
+    bb.push(["leg" + k + "1", par, [x, 0.65, z], [x, 0.4, z], "leg." + k], ["leg" + k + "2", i0, [x, 0.4, z], [x, 0.12, z], "leg." + k], ["leg" + k + "3", i0 + 1, [x, 0.12, z], [x, 0.02, z + 0.06], "leg." + k]);
+  }
+  const bp = [];
+  const bi = [];
+  const bsi = [];
+  bb.forEach((b, j) => {
+    const base = bp.length / 3;
+    const r = b[4] === "spine" || b[4] === "head" ? 0.14 : 0.04;
+    for (const e of [b[2], b[3]]) for (const [p, q] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) bp.push(e[0] + p * r, e[1] + q * r, e[2]);
+    for (let v = 0; v < 8; v++) bsi.push(j, 0, 0, 0);
+    for (const f of [[0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]]) bi.push(base + f[0], base + f[1], base + f[2]);
+  });
+  const nv2 = bp.length / 3;
+  const beasts = {
+    pruefwolf: {
+      pos: P.q16(bp, 1 / 12000),
+      nrm: P.i8(new Array(nv2).fill([0, 127, 0]).flat()),
+      uv: P.q16(new Array(nv2 * 2).fill(0.5)),
+      idx: P.u16(bi),
+      col: P.u8(new Array(nv2).fill([255, 0, 0, 255]).flat()),
+      skinI: P.u8(bsi),
+      skinW: P.u8(new Array(nv2).fill([255, 0, 0, 0]).flat()),
+      tex: P.img(png(4, 4, [140, 130, 120]), "image/png"),
+      meta: { family: "pruefwolf", archs: ["wolf"], height: 0.95, headY: 0.85, length: 1.3, groups: [[0, 0, bi.length]], mats: ["skin"], matNames: ["skin"], features: {}, bones: bb, textured: true },
+    },
+  };
+  P.write(file, { v: 1, gen, clips, pieces, beasts });
 }
 
 /* ---------- Bauen und im Browser pruefen ---------- */
@@ -350,6 +386,15 @@ const res = await page.evaluate(async () => {
   } else fails.push("kein Netz fuer das Ruestungsteil");
   ok(SB.icons.item({ base: "harnisch", rarity: "selten", style: 0 }).includes("<image"), "Gegenstandsbild kommt nicht aus dem Ruestungsteil");
   ok(!SB.icons.item({ base: "schwert", rarity: "selten", style: 0 }).includes("<image"), "Gegenstand ohne Ruestungsteil muss das Symbol behalten");
+  // erzeugte Bestie stellt die Monsterart "wolf" dar, gebaute Bestien bleiben
+  ok(R.beasts.familyOf("wolf") === "pruefwolf", "erzeugte Bestie wird fuer Woelfe nicht gewaehlt");
+  ok(R.beasts.familyOf("schlund") === "schlund", "gebaute Bestie fuer Schlund verloren");
+  const wolf = R.buildFighter({ kind: "monster", arch: "wolf", color: "#7a7470", accent: "#ffcf5a" });
+  ok(wolf.parts.beast && wolf.parts.fam === "pruefwolf", "Wolf nicht aus der erzeugten Bestie gebaut");
+  const legBefore = wolf.parts.B.legFL1.quaternion.clone();
+  wolf.play("walk", 1);
+  for (let i = 0; i < 20; i++) wolf.update(1 / 60);
+  ok(!wolf.parts.B.legFL1.quaternion.equals(legBefore), "Bestie bewegt die Beine beim Gehen nicht");
   const left = R.buildHero({ race: "nordmann", gender: "w", cls: "sturmhuene" });
   ok(!left.parts.clips, "Voelker ohne erzeugte Figur muessen die alten Figuren behalten");
   for (let i = 0; i < 20; i++) m.update(1 / 60);

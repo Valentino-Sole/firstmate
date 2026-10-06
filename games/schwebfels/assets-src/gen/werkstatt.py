@@ -8,6 +8,9 @@ Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schlu
   python werkstatt.py teil harnisch_eisen tafel10.png --slot brust --forms harnisch --ref nordmann_f --budget 30
       Bild zu 3D fuer ein Ruestungsteil, danach auf die Referenzfigur anpassen (--paar fuer einen einzelnen
       Handschuh oder Stiefel, --rot 0,0,90 zum Drehen)
+  python werkstatt.py bestie wolf tafel19.png --archs wolf --hoehe 1.15 --budget 30
+      Bild zu 3D fuer ein Tier, danach Vierbeiner-Skelett und Gewichte (beasts/from_glb.py); bewegt wird es im Spiel
+      wie die anderen Bestien, die Monsterarten aus --archs zeigen dann dieses Tier
   python werkstatt.py paket
       Figurenpaket bauen und eine Spielvorschau (vorschau/schwebfels.html) mit allen Figuren und Teilen erzeugen
   python werkstatt.py kosten
@@ -86,6 +89,16 @@ def cmd_teil(a):
     run(*args)
 
 
+def cmd_bestie(a):
+    extra = ["--trocken"] if a.trocken else []
+    api("teil", a.name, a.bild, "--polys", "9000", *(["--budget", a.budget] if a.budget else []), *extra)
+    if a.trocken:
+        return
+    os.makedirs(os.path.join(BUILD, "bestien"), exist_ok=True)
+    run(PY, os.path.join(HERE, "..", "beasts", "from_glb.py"), os.path.join(BUILD, "bestien", a.name + ".npz"), os.path.join(ROOT, a.name, "model.glb"),
+        "--family", a.name, "--archs", a.archs, "--height", a.hoehe, "--turn", a.turn)
+
+
 def cmd_paket(a):
     pack = os.path.join(BUILD, "gen.pack")
     run(PY, os.path.join(HERE, "gen_pack.py"), BUILD, pack)
@@ -115,6 +128,14 @@ def main():
     p.add_argument("--paar", action="store_true")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
+    p = sub.add_parser("bestie")
+    p.add_argument("name")
+    p.add_argument("bild")
+    p.add_argument("--archs", required=True)
+    p.add_argument("--hoehe", default="1.15")
+    p.add_argument("--turn", default="0")
+    p.add_argument("--budget", type=int)
+    p.add_argument("--trocken", action="store_true")
     sub.add_parser("paket")
     sub.add_parser("kosten")
     a = ap.parse_args()
@@ -122,6 +143,8 @@ def main():
         cmd_figur(a)
     elif a.cmd == "teil":
         cmd_teil(a)
+    elif a.cmd == "bestie":
+        cmd_bestie(a)
     elif a.cmd == "paket":
         cmd_paket(a)
     else:

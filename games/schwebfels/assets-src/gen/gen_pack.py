@@ -66,9 +66,27 @@ def piece(z):
             "occ": {n: P.arr(np.packbits(occ[i].astype(np.uint8).ravel(), bitorder="little"), "u8") for i, n in enumerate(meta["occ"])}}
 
 
+def beast(z):
+    """Bestie aus beasts/from_glb.py: gleiches Format wie die Bestien in schwebfels.pack, dazu die Textur."""
+    meta = json.loads(str(z["meta"]))
+    n = z["nrm"] / np.maximum(1e-9, np.linalg.norm(z["nrm"], axis=1, keepdims=True))
+    return {"pos": P.q16(z["pos"], 1 / 12000), "nrm": P.arr(np.clip(np.round(n * 127), -127, 127).astype(np.int8), "i8"), "uv": P.q16(z["uv"]),
+            "idx": P.index(z["idx"]), "col": P.arr(z["col"], "u8"), "skinI": P.arr(z["skinI"], "u8"), "skinW": P.arr(z["skinW"], "u8"),
+            "tex": tex(z["tex"]), "meta": meta}
+
+
 gen = {}
 clips = {}
 pieces = {}
+beasts = {}
+BD = os.path.join(SRC, "bestien")
+if os.path.isdir(BD):
+    for f in sorted(os.listdir(BD)):
+        if f.endswith(".npz"):
+            z = np.load(os.path.join(BD, f))
+            b = beast(z)
+            beasts[b["meta"]["family"]] = b
+            print("Bestie", b["meta"]["family"], "fuer", ", ".join(b["meta"].get("archs", [])) or "keine Monsterart", len(z["pos"]), "Ecken")
 TD = os.path.join(SRC, "teile")
 if os.path.isdir(TD):
     for f in sorted(os.listdir(TD)):
@@ -96,5 +114,5 @@ for f in sorted(os.listdir(SRC)):
             e["pieces"][n]["tex"] = tex(z[pre + "_tex"])
     gen[f[:-4]] = e
     print("Figur", f[:-4], len(z["body_pos"]), "Ecken,", len(names), "Teile")
-n = P.write(OUT, {"v": 1, "gen": gen, "clips": clips, "pieces": pieces})
-print(OUT, round(n / 1024), "KB,", len(clips), "gemeinsame Bewegungen,", len(pieces), "Ruestungsteile")
+n = P.write(OUT, {"v": 1, "gen": gen, "clips": clips, "pieces": pieces, "beasts": beasts})
+print(OUT, round(n / 1024), "KB,", len(clips), "gemeinsame Bewegungen,", len(pieces), "Ruestungsteile,", len(beasts), "Bestien")

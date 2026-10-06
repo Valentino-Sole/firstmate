@@ -56,6 +56,7 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/fit_piece.py` | Rüstungsteil (einzeln erzeugte GLB) an einen Referenzkörper anpassen und knochenbezogen speichern; im Spiel legt es sich über Querschnittsprofile an jeden Körper mit gleichem Skelett an, die Haut darunter wird ausgeblendet |
 | `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |
 | `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
+| `beasts/from_glb.py` | Tier aus einer GLB (z. B. Meshy Bild zu 3D) mit Vierbeiner-Skelett und Rollen für das Bestiensystem des Spiels |
 | `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
 | `gen/packbones.py` | Knochenliste und Körperhöhen aus `assets/schwebfels.pack` lesen |
 
@@ -69,6 +70,7 @@ python werkstatt.py figur nordmann_f tafel02.png --race nordmann --gender f --bu
 python werkstatt.py figur kreidezwerg_m tafel01.png --race kreidezwerg --gender m --budget 40
 python werkstatt.py teil harnisch_eisen brust.png --slot brust --forms harnisch --ref nordmann_f --budget 30
 python werkstatt.py teil handschuh_leder handschuh.png --slot handschuhe --ref nordmann_f --paar --budget 30
+python werkstatt.py bestie wolf tafel19.png --archs wolf --hoehe 1.15 --budget 30
 python werkstatt.py paket                       # Vorschau: assets-src/gen/meshy/vorschau/schwebfels.html
 ```
 
@@ -104,7 +106,11 @@ Wichtige Regeln der Strecke:
   Stiefel wird mit `--paar` gespiegelt; `--rot 0,0,90` dreht das Teil vorher). `gen_pack.py` nimmt alles aus dem
   Unterordner `teile` auf. Im Spiel trägt eine Figur das Teil, dessen Form oder Grundart zum angelegten Gegenstand passt
   (`forms`); ein Teil ohne Formliste passt zu jedem Gegenstand des Platzes. Ein Helm als Teil ersetzt den gebauten Helm.
-- Rigging per API nur für Zweibeiner. Bestien laufen weiter über `beasts/` und `src/r3d-beasts.js`.
+- Bestien: Meshy riggt per API nur Zweibeiner und hat keine Tierbewegungen. `beasts/from_glb.py` gibt einem
+  stehenden Tier aus einer GLB (Blick +Z) ein Vierbeiner-Skelett mit den Rollen des Bestiensystems (Wirbelsäule,
+  Kopf, Schwanz, vier Beine mit je drei Gliedern, Gewichte per Bone Heat). Im Spiel bewegt es sich wie die anderen
+  Bestien (`src/r3d-beasts.js`), behält seine Textur und wird je Gegner leicht in dessen Farbe getönt. `--archs wolf`
+  legt fest, welche Monsterarten es darstellt; `gen_pack.py` nimmt alles aus dem Unterordner `bestien` auf.
 - `gen.pack` gehört erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat.
 
 Prüfen ohne Credits: Testmodelle aus dem three.js-Repository (`examples/models/gltf/Soldier.glb`, `Xbot.glb`,

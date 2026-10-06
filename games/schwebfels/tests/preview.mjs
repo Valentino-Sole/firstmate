@@ -2,6 +2,7 @@
 // Aufruf: node build.mjs && node tests/preview.mjs <bild.png> '<json-beschreibung>' [held|kampf] [breite] [hoehe] [pose] [zeit]
 //   json: {"hero": {...Beschreibung wie R.buildHero...}, "foe": {...}} oder direkt eine Heldenbeschreibung
 //   CDN_CACHE=<map.json>  three.js und Schriften aus lokalen Dateien (wie tests/e2e.mjs)
+//   PAGE=<datei>          andere Spieldatei pruefen (Standard: dist/schwebfels.html)
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
@@ -33,7 +34,7 @@ page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("console", (m) => {
   if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text());
 });
-await page.goto("file://" + path.join(dir, "..", "dist", "schwebfels.html"));
+await page.goto("file://" + (process.env.PAGE ? path.resolve(process.env.PAGE) : path.join(dir, "..", "dist", "schwebfels.html")));
 await page.waitForFunction(() => globalThis.SB && SB.assets && (SB.assets.data || SB.assets.error), null, { timeout: 30000 });
 await page.evaluate(() => SB.assets.ready.then(() => SB.R3D.ready()));
 const info = await page.evaluate(
@@ -96,7 +97,7 @@ const info = await page.evaluate(
       const mon = D.MONSTERS.find((x) => x.id === (desc.monster || "moorschlund"));
       const foe = E.monsterFighter(mon, desc.level || 6, 1);
       const sim = E.simulate(hero, foe, 7);
-      const b = R.createBattle(el, { setting: desc.setting || "quest", realm: desc.hero.realm, left: { kind: "hero", race: hero.race, cls: hero.cls, realm: desc.hero.realm, gender: hero.gender, look: hero.look, gear: hero.gear, gen: desc.hero.gen, genGear: desc.hero.genGear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: "hibernia" }, hp: [hero.maxHp, foe.maxHp], dayTime: 0.35 });
+      const b = R.createBattle(el, { setting: desc.setting || "quest", realm: desc.hero.realm, left: { kind: "hero", race: hero.race, cls: hero.cls, realm: desc.hero.realm, gender: hero.gender, look: hero.look, gear: hero.gear, gen: desc.hero.gen, genGear: desc.hero.genGear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: desc.hero.realm || "hibernia" }, hp: [hero.maxHp, foe.maxHp], dayTime: 0.35 });
       globalThis.__b = b;
       globalThis.__ev = sim.events || sim.log || [];
       (async () => {

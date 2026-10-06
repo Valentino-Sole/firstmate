@@ -100,6 +100,8 @@
         data.gen = g.gen || {};
         data.clips = g.clips || {};
         data.rigPieces = g.pieces || {};
+        // erzeugte Bestien (beasts/from_glb.py) neben die gebauten; gleiche Familie ersetzt die gebaute
+        data.beasts = Object.assign({}, data.beasts || {}, g.beasts || {});
         globalThis.SB_GENPACK = null;
         // Texturen der Figuren mit eigenem Skelett und ihrer Ruestungsteile vorab laden (Portraits gleich farbig)
         const waits = [];
@@ -110,6 +112,10 @@
         }
         for (const k in data.rigPieces) {
           const t = A.texture("rigpiece." + k, data.rigPieces[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in g.beasts || {}) {
+          const t = A.texture("beast." + k, g.beasts[k].tex, { srgb: true });
           if (t) waits.push(t.userData.ready);
         }
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
