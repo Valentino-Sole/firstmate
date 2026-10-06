@@ -12,7 +12,7 @@ import bpy  # noqa: F401
 from mathutils.bvhtree import BVHTree
 import humanbase as HB
 
-MATS = ["cloth", "cloth2", "trim", "leather", "leather2", "metal", "silver", "gold", "fur", "gem", "wood", "bone", "stone", "cloth3", "chain", "scale", "glow", "skin", "felt", "glass"]
+MATS = ["cloth", "cloth2", "trim", "leather", "leather2", "metal", "silver", "gold", "fur", "gem", "wood", "bone", "stone", "cloth3", "chain", "scale", "glow", "skin", "felt", "glass", "veil"]
 MI = {m: i for i, m in enumerate(MATS)}
 FULL_TREE = BVHTree.FromPolygons([tuple(p) for p in HB.base[:HB.NB]], [tuple(int(i) for i in t) for t in HB.FULL_TRI])
 
@@ -222,7 +222,7 @@ def convex_leg(P, y0, y1, margin=0.006, sel=None):
     return out
 
 
-def leg_loft(piece, side, y0, y1, margin=0.012, flare=0.012, nang=28, nrows=12, mat="leather2", mat_in="leather2", thick=0.006, top_row=None, top_w=0.02):
+def leg_loft(piece, side, y0, y1, margin=0.012, flare=0.012, nang=22, nrows=8, mat="leather2", mat_in="leather2", thick=0.006, top_row=None, top_w=0.02):
     """Stiefelschaft als Roehre um ein Bein: je Hoehe die konvexe Huelle des Beins plus Abstand."""
     from scipy.spatial import ConvexHull
     base = HB.base[: HB.NB]

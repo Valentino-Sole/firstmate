@@ -494,10 +494,11 @@
 
     // Haare und Bart
     const hs = look.hairStyle | 0;
-    if (hs !== 4) attachBound(parts, "hair." + hs, hairMat(look.hair));
+    if (hs !== 4) parts.hairMesh = attachBound(parts, "hair." + hs, hairMat(look.hair));
     if (look.beard) attachBound(parts, "beard." + (look.beard | 0), hairMat(look.hair));
-    // Kleidung und Ausruestung
+    // Kleidung und Ausruestung; geschlossene Kopfteile verdecken das Haupthaar (der Bart bleibt)
     if (R.gear && R.gear.dressHero) parts.gearMeshes = R.gear.dressHero(parts, gear, { arch, culture: desc.realm || C.realm, look });
+    if (parts.hidesHair && parts.hairMesh) parts.hairMesh.visible = false;
 
     const model = R.makeModel(root, parts, "hero");
     model.cls = clsId;

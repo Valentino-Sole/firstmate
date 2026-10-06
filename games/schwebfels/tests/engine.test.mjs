@@ -525,3 +525,79 @@ test("Fremde Heldenprofile: nur gueltige Talente der eigenen Klasse", () => {
   assert.equal(h.talents["c.cap"], 0, "ungueltiger Wert");
   assert.ok(h.fighter.tal);
 });
+
+/* ---------- Version 5: feste Erscheinung der Gegenstaende ---------- */
+test("Beute und Werte unveraendert: gleiche Zufallsfolge wie vor der Grafikumstellung", () => {
+  const SB = load();
+  const E = SB.engine;
+  const U = SB.util;
+  const r = U.rng(4242);
+  const out = [];
+  for (let i = 0; i < 40; i++) {
+    const it = E.makeItem(r, { level: 5 + i, cls: ["schildritter", "meuchler", "langbogner", "runenwirker"][i % 4], boost: 0.4 });
+    out.push([it.base, it.slot, it.rarity, it.variant, it.name, JSON.stringify(it.stats), it.armor || 0, it.min || 0, it.tint, it.value].join("|"));
+  }
+  out.push(String(r()));
+  // Wert mit der Spiellogik von Version 4 ermittelt
+  assert.equal(U.hash(out.join("\n")), 3277808739);
+  const npc = [];
+  for (let i = 0; i < 30; i++) {
+    const g = E.npcGear({ gearSeed: 1000 + i * 77, cls: Object.keys(SB.data.CLASSES)[i % 12], realm: "midgard" });
+    for (const s of ["waffe", "ruestung", "helm", "umhang", "handschuhe", "stiefel", "nebenhand"]) {
+      const x = g[s];
+      npc.push(x ? [x.base, x.tint, x.rarity, x.style].join(",") : "-");
+    }
+  }
+  assert.equal(U.hash(npc.join("|")), 426049426);
+});
+
+test("jeder Gegenstand hat eine feste Erscheinung, die Speichern und Laden ueberlebt", () => {
+  const { E, D, S } = fresh("runenwirker");
+  for (const s of D.SLOTS) {
+    const it = S.equip[s];
+    if (!it) continue;
+    assert.ok(it.vis && it.vis.f && it.vis.c === "midgard", s + " ohne Erscheinung");
+    assert.equal(it.vis.f.split(".")[0], it.base);
+  }
+  const r = SB_rng(E, 9);
+  for (let i = 0; i < 30; i++) {
+    const it = E.makeItem(r, { level: 10, cls: "runenwirker" });
+    const names = D.BASES[it.base].byArch ? D.BASES[it.base].byArch.magier : D.BASES[it.base].names;
+    assert.equal(it.vis.f, E.formKey(it.base, it.variant, "magier"));
+    assert.ok(names[it.variant] && it.name.indexOf(names[it.variant]) >= 0, "Form passt zum Namen: " + it.name);
+    S.inv.push(it);
+  }
+  const before = JSON.stringify(S.inv.map((x) => x.vis));
+  const S2 = E.migrate(JSON.parse(JSON.stringify(S)));
+  assert.equal(JSON.stringify(S2.inv.map((x) => x.vis)), before, "Erscheinung bleibt nach dem Laden gleich");
+  const gv = E.gearVisual(S.equip);
+  assert.equal(JSON.stringify(Object.keys(gv).sort()), JSON.stringify(D.SLOTS.slice().sort()), "alle zehn Plaetze werden dargestellt");
+});
+
+test("alte Gegenstaende ohne Erscheinung bekommen Form und Kultur beim Laden", () => {
+  const { E, S } = fresh("sturmhuene");
+  const old = { id: "alt1", base: "handschuhe", slot: "handschuhe", arch: null, level: 3, rarity: "selten", stats: { kraft: 3 }, variant: 0, style: 0, name: "Meisterliche Stachelhandschuhe des Baeren", tint: "#9aa4ad", value: 10, armor: 2 };
+  S.inv.push(old);
+  delete S.equip.waffe.vis;
+  const S2 = E.migrate(JSON.parse(JSON.stringify(S)));
+  const it = S2.inv.find((x) => x.id === "alt1");
+  assert.equal(it.vis.f, "handschuhe.krieger.1", "Grundart und Form aus dem Namen");
+  assert.equal(it.vis.c, "midgard");
+  assert.ok(S2.equip.waffe.vis && S2.equip.waffe.vis.f.startsWith(S2.equip.waffe.base + "."));
+});
+
+test("Computerhelden tragen Schmuck und feste Formen, ohne die Zufallsfolge zu aendern", () => {
+  const SB = load();
+  const E = SB.engine;
+  const g1 = E.npcGear({ gearSeed: 555, cls: "lichtweber", realm: "albion" });
+  const g2 = E.npcGear({ gearSeed: 555, cls: "lichtweber", realm: "albion" });
+  assert.equal(JSON.stringify(g1), JSON.stringify(g2));
+  for (const s in g1) if (g1[s]) assert.ok(g1[s].vis && g1[s].vis.c === "albion" && g1[s].vis.f.startsWith(g1[s].base + "."));
+});
+
+function SB_rng(E, seed) {
+  return E.__rng ? E.__rng(seed) : loadUtilRng(seed);
+}
+function loadUtilRng(seed) {
+  return load().util.rng(seed);
+}

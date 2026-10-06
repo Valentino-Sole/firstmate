@@ -83,7 +83,7 @@ FEET = w("foot", "toe")
 HANDS = w("hand", "thumb1", "thumb2", "fing1", "fing2")
 
 
-def skirt(piece, y_top, y_bot, flare=0.06, clear=0.012, panels=None, nang=64, nrows=18, mat="cloth", mat_in="cloth2", thick=0.004,
+def skirt(piece, y_top, y_bot, flare=0.06, clear=0.012, panels=None, nang=44, nrows=13, mat="cloth", mat_in="cloth2", thick=0.004,
           hem_row=None, side_rows=None, hem_w=0.03, cut_fn=None, z_shift=0.0, wave=0.0, shoulders=False):
     """Rock als Loft um Huefte und Beine. panels: Liste (theta0, theta1) im Bogenmass (0 = vorne).
     Gewichte: oben Huefte, nach unten zunehmend die Oberschenkel (je Seite)."""
@@ -299,7 +299,7 @@ def boots(key, top=0.42, plate=False, straps=0, sandal=False, mat="leather2", cu
     sel = (FEET > 0.3) | ((LEGS > 0.4) & (Y < ANKLE_Y + 0.06))
     if sandal:
         sel = sel & ~((Y > 0.035) & (Y < ANKLE_Y - 0.0) & (Z > 0.05))
-    GL.shell(p, sel, 0.012, thick=0.006, smooth=40, concave=260, mat=mat, mat_in="leather2", inflate=lambda P0, vs: 0.004, sole=True)
+    GL.shell(p, sel, 0.012, thick=0.006, smooth=40, concave=260, mat=mat, mat_in="leather2", inflate=lambda P0, vs: 0.004, sole=True, dec=0.2)
     for sd in (1, -1):
         GL.sole(p, sd, thick=0.022 if not sandal else 0.016)
         if not sandal:
@@ -307,7 +307,9 @@ def boots(key, top=0.42, plate=False, straps=0, sandal=False, mat="leather2", cu
     for k in range(straps):
         yy = ANKLE_Y + (y_top - ANKLE_Y) * (0.25 + 0.6 * k / max(1, straps - 1))
         st = reg(Piece(key + ".strap%d" % k, "bound", layer=5))
-        GL.shell(st, (LEGS > 0.4) & (np.abs(Y - yy) < 0.018), 0.016, thick=0.003, smooth=6, mat="leather", mat_in="leather")
+        # Riemen als schmale Roehre um den Schaft (das Grundnetz ist am Schienbein zu grob fuer Baender)
+        for sd in (1, -1):
+            GL.leg_loft(st, sd, yy - 0.011, yy + 0.011, margin=0.026 + 0.012 * (yy - ANKLE_Y) / max(0.01, y_top - ANKLE_Y), flare=0.0, nrows=3, mat="leather", mat_in="leather", thick=0.004)
     if plate:
         pl = reg(Piece(key + ".plate", "bound", layer=5))
         sel = (w("shin") > 0.5) & (Z > 0.0) & (Y < y_top - 0.02) & (Y > ANKLE_Y + 0.02)
@@ -323,7 +325,7 @@ def gloves(key, cuff=0.45, plate=False, mat="leather", cuff_row=None, fingerless
     sel = (HANDS > 0.35) | ((ARM_T > 1.0 - cuff * 0.5) & (ARMS > 0.3))
     if fingerless:
         sel &= ~(w("fing2", "thumb2") > 0.4)
-    GL.shell(p, sel, 0.004, thick=0.0025, smooth=4, mat=mat, mat_in="leather2",
+    GL.shell(p, sel, 0.004, thick=0.0025, smooth=4, mat=mat, mat_in="leather2", dec=0.24,
              inflate=lambda P0, vs: 0.012 * np.clip((ARM_T[vs] - (1.0 - cuff * 0.5)) / 0.12, 0, 1) * (ARM_T[vs] < 0.98),
              trims=[(0.016, cuff_row, "trim")] if cuff_row is not None else None)
     if plate:
@@ -371,6 +373,206 @@ def amulet_cord(key, mat="leather"):
     return p
 
 
+
+# ===================== Bausteine fuer Ruestungen =====================
+def neck_cut(depth=0.055, width=0.05, v=False):
+    """Halsausschnitt: rund (Standard) oder als V vorne."""
+    if v:
+        return (Y > NECK_Y - 0.025) | ((Z > 0.02) & (np.abs(X) < 0.01 + (Y - (NECK_Y - depth - 0.05)) * 0.6) & (Y > NECK_Y - depth - 0.05))
+    return (Y > NECK_Y - 0.03) | ((Z > 0.03) & (Y > NECK_Y - depth) & (np.abs(X) < width))
+
+
+def tunic(key, mat="cloth", mat_in="cloth2", sleeve=0.9, bottom=None, offset=0.01, layer=2, trim=None, vneck=False, sleeveless=False, bell=0.0, chest=0.006):
+    """Oberteil (Hemd, Wams, Gambeson) bis zur Huefte, Aermel bis 'sleeve' (0 Schulter, 1 Handgelenk)."""
+    p = reg(Piece(key, "bound", layer=layer))
+    bottom = HIP_Y - 0.03 if bottom is None else bottom
+    sel = ((TORSO + ARMS) > 0.5) & (Y > bottom) & (ARM_T < sleeve)
+    if sleeveless:
+        sel &= ~((ARMS > 0.45) & (ARM_T > 0.1))
+    cuff = (lambda P0, vs: bell * np.clip((ARM_T[vs] - (sleeve - 0.3)) / 0.3, 0, 1) ** 1.6) if bell else (lambda P0, vs: 0.0)
+    GL.shell(p, sel & ~neck_cut(v=vneck), offset, thick=0.004, smooth=30, concave=40, mat=mat, mat_in=mat_in,
+             trims=[(0.016, trim, "trim")] if trim is not None else None,
+             inflate=lambda P0, vs: cuff(P0, vs) + chest * np.clip(1 - np.abs(P0[:, 1] - CHEST_Y) / 0.15, 0, 1) * (P0[:, 2] > 0))
+    return p
+
+
+def cuirass(key, layer=4, offset=0.022, bottom=None, top=None, trim=2, mat="metal", front_only=False):
+    """Brustpanzer: Brust und Bauch (und Ruecken) als glatte, gewoelbte Platte ohne Aermel."""
+    p = reg(Piece(key, "bound", layer=layer))
+    bottom = HIP_Y + 0.01 if bottom is None else bottom
+    top = NECK_Y - 0.035 if top is None else top
+    sel = (TORSO > 0.55) & (Y > bottom) & (Y < top) & (ARMS < 0.35) & ~((Z > 0.03) & (Y > NECK_Y - 0.075) & (np.abs(X) < 0.06))
+    if front_only:
+        sel &= Z > -0.01
+    GL.shell(p, sel, offset, thick=0.007, smooth=70, concave=90, mat=mat, mat_in="metal", trims=[(0.016, trim, "trim")],
+             inflate=lambda P0, vs: 0.012 * np.clip(1 - np.abs(P0[:, 1] - CHEST_Y) / 0.13, 0, 1) * (P0[:, 2] > 0) + 0.008 * np.clip(P0[:, 2] / 0.1, 0, 1))
+    return p
+
+
+def pauldrons(key, lames=2, size=1.0, layer=6, mat="metal", trim=2, offset=0.03):
+    """Schulterstuecke: uebereinander liegende Kappen um das Schultergelenk, die unteren groesser."""
+    p = reg(Piece(key, "bound", layer=layer))
+    for s in ("L", "R"):
+        sh = J["upperarm." + s]
+        side = (X > 0) if s == "L" else (X < 0)
+        d = np.linalg.norm(base - sh, axis=1)
+        reach = (ARMS + w("clavicle") + w("chest") * 0.4) > 0.25
+        for k in range(lames):
+            r0 = (0.085 + 0.03 * k) * size
+            ylim = sh[1] - (0.02 + 0.035 * k) * size
+            sel = side & reach & (d < r0) & (Y > ylim) & (np.abs(X) > 0.07)
+            GL.shell(p, sel, offset + 0.009 * (lames - 1 - k), thick=0.006, smooth=40, concave=60, mat=mat, mat_in="metal", trims=[(0.012, trim, "trim")],
+                     inflate=lambda P0, vs, sh=sh: 0.012 * np.clip((P0[:, 1] - (sh[1] - 0.06)) / 0.08, 0, 1))
+    return p
+
+
+def bracer(key, t0=0.58, t1=0.94, offset=0.012, mat="leather2", trim=None, layer=5):
+    p = reg(Piece(key, "bound", layer=layer))
+    sel = (ARMS > 0.4) & (ARM_T > t0) & (ARM_T < t1)
+    GL.shell(p, sel, offset, thick=0.005, smooth=20, concave=30, mat=mat, mat_in="leather2", trims=[(0.012, trim, "trim")] if trim is not None else None,
+             inflate=lambda P0, vs: 0.006 * np.clip((ARM_T[vs] - t0) / (t1 - t0), 0, 1))
+    return p
+
+
+def leg_plates(key, mat="metal", trim=2, layer=3):
+    """Beinschutz: Oberschenkelplatte vorne und Kniekachel."""
+    p = reg(Piece(key, "bound", layer=layer))
+    sel = (LEGS > 0.5) & (LEG_T > 0.1) & (LEG_T < 0.43) & (Z > -0.015)
+    GL.shell(p, sel, 0.016, thick=0.006, smooth=40, concave=60, mat=mat, mat_in="metal", trims=[(0.012, trim, "trim")])
+    sel = (LEGS > 0.4) & (LEG_T > 0.43) & (LEG_T < 0.56) & (Z > -0.005)
+    GL.shell(p, sel, 0.022, thick=0.006, smooth=30, concave=40, mat=mat, mat_in="metal", trims=[(0.01, trim, "trim")],
+             inflate=lambda P0, vs: 0.01 * np.clip(1 - np.abs(LEG_T[vs] - 0.5) / 0.07, 0, 1))
+    return p
+
+
+def strap(key, a, b, width=0.018, offset=0.02, mat="leather", layer=5, trim=None):
+    """Riemen quer ueber den Oberkoerper von Punkt a (oben, x/y) nach b (unten), vorne und hinten."""
+    p = reg(Piece(key, "bound", layer=layer))
+    a = np.array(a, float)
+    b = np.array(b, float)
+    d = (b - a) / np.linalg.norm(b - a)
+    n = np.array([-d[1], d[0]])
+    q = np.stack([X, Y], 1)
+    dist = np.abs((q - a) @ n)
+    along = (q - a) @ d
+    sel = (TORSO > 0.4) & (dist < width) & (along > -0.05) & (along < np.linalg.norm(b - a) + 0.02) & (ARMS < 0.5)
+    GL.shell(p, sel, offset, thick=0.004, smooth=8, mat=mat, mat_in="leather2", trims=[(0.006, trim, "trim")] if trim is not None else None)
+    return p
+
+
+def belt(key, y, h=0.022, offset=0.026, mat="leather", layer=7):
+    """Guertel als schmales Band um die Huefte (frei haengend, passt sich jedem Koerper an)."""
+    p = reg(Piece(key, "radial", layer=layer, anchor="hips"))
+    skirt(p, y + h, y - h, flare=0.0, clear=offset, nrows=4, mat=mat, mat_in="leather2", thick=0.005)
+    return p
+
+
+def scarf(key, mat="cloth3", layer=6, puff=0.016):
+    """Halstuch um Hals und obere Brust, locker aufgebauscht."""
+    p = reg(Piece(key, "bound", layer=layer))
+    sel = (w("neck", "chest", "clavicle") > 0.3) & (Y > NECK_Y - 0.1) & (Y < NECK_Y + 0.035) & (w("head") < 0.5)
+    GL.shell(p, sel, 0.02, thick=0.005, smooth=24, concave=30, mat=mat, mat_in="cloth2",
+             inflate=lambda P0, vs: puff * np.clip(1 - np.abs(P0[:, 1] - (NECK_Y - 0.04)) / 0.06, 0, 1))
+    p.meta["soft"] = 0
+    return p
+
+
+def panels_skirt(key, y_top, y_bot, panels, mat, mat_in="cloth2", layer=3, clear=0.02, flare=0.04, hem_row=None, side_rows=None, hem_w=0.03, cut=None, wave=0.0):
+    sk = reg(Piece(key, "radial", layer=layer, anchor="hips"))
+    skirt(sk, y_top, y_bot, flare=flare, clear=clear, panels=panels, mat=mat, mat_in=mat_in, hem_row=hem_row, side_rows=side_rows, hem_w=hem_w, cut_fn=cut, wave=wave)
+    return sk
+
+
+FRONT_BACK = lambda wd: [(-wd, wd), (math.pi - wd, math.pi), (-math.pi, -math.pi + wd)]
+SPLIT4 = [(-0.6, 0.6), (0.66, 1.6), (1.66, math.pi), (-math.pi, -1.66), (-1.6, -0.66)]
+FRONT_SPLIT = [(0.08, 1.5), (1.56, math.pi), (-math.pi, -1.56), (-1.5, -0.08)]
+RAGGED = lambda depth: (lambda y, a, t: y - depth * (np.sin(a * 17) * 0.5 + 0.5) * t ** 3)
+LEAFCUT = lambda depth: (lambda y, a, t: y - depth * np.abs(np.sin(a * 11)) * t ** 4)
+
+
+# ===================== Krieger: Harnische =====================
+def warrior():
+    tunic("harnisch.gambeson", mat="cloth", sleeve=0.92, offset=0.012, layer=2, trim=0, chest=0.01)
+    cuirass("harnisch.brust", trim=2)
+    p = cuirass("harnisch.schuppe", mat="scale", trim=1, offset=0.02)
+    pauldrons("harnisch.schulter", lames=2, size=1.0)
+    pauldrons("harnisch.schulter.gross", lames=3, size=1.25, offset=0.034)
+    bracer("harnisch.arm", mat="metal", offset=0.014, trim=2)
+    leg_plates("harnisch.bein")
+    belt("harnisch.guertel", HIP_Y + 0.03, h=0.022, offset=0.034, layer=7)
+    panels_skirt("harnisch.wappenrock", HIP_Y + 0.01, KNEE_Y - 0.06, FRONT_BACK(0.42), "cloth3", layer=4, clear=0.045, flare=0.03, hem_row=2, side_rows=2, hem_w=0.03)
+    panels_skirt("harnisch.wappenrock.lang", HIP_Y + 0.01, ANKLE_Y + 0.1, FRONT_BACK(0.45), "cloth3", layer=4, clear=0.045, flare=0.05, hem_row=4, side_rows=4, hem_w=0.035)
+    panels_skirt("harnisch.kette", HIP_Y + 0.02, HIP_Y - 0.3, [(-math.pi, math.pi)], "chain", "chain", layer=3, clear=0.02, flare=0.03)
+    panels_skirt("harnisch.beintaschen", HIP_Y + 0.02, HIP_Y - 0.17, [(-1.05, -0.37), (-0.33, 0.33), (0.37, 1.05)], "metal", "metal", layer=5, clear=0.05, flare=0.025, hem_row=2, hem_w=0.014)
+
+
+# ===================== Schurke: Schattenwams, Nachtgewand, Diebesleder =====================
+def rogue():
+    tunic("schurke.wams", mat="leather2", mat_in="leather2", sleeve=0.48, offset=0.009, layer=2, trim=1, chest=0.004)
+    tunic("schurke.hemd", mat="cloth3", sleeve=0.9, offset=0.007, layer=1, chest=0.003)
+    strap("schurke.riemen.a", (0.12, NECK_Y - 0.03), (-0.13, HIP_Y + 0.08), width=0.016, offset=0.02)
+    strap("schurke.riemen.b", (-0.12, NECK_Y - 0.03), (0.13, HIP_Y + 0.08), width=0.016, offset=0.022)
+    scarf("schurke.tuch")
+    bracer("schurke.arm", mat="leather2", trim=1)
+    belt("schurke.guertel", HIP_Y + 0.03, h=0.016, offset=0.03)
+    belt("schurke.guertel2", HIP_Y + 0.085, h=0.011, offset=0.024)
+    panels_skirt("schurke.schoss", HIP_Y + 0.03, HIP_Y - 0.28, SPLIT4, "leather2", "leather2", layer=3, clear=0.022, flare=0.035, hem_row=1, side_rows=1, hem_w=0.016)
+    panels_skirt("schurke.mantel", HIP_Y + 0.03, KNEE_Y - 0.12, FRONT_SPLIT, "cloth3", layer=3, clear=0.025, flare=0.06, hem_row=1, side_rows=1, hem_w=0.02, cut=RAGGED(0.05))
+    cape("schurke.umhang", length=0.8, mat="cloth3", trim_row=1, hem_cut=RAGGED(0.12), wave=0.008)
+
+
+# ===================== Jaeger: Jaegerwams, Schuppenleder, Fellwams =====================
+def hunter():
+    tunic("jaeger.hemd", mat="cloth", sleeve=0.92, offset=0.009, layer=2, trim=0, chest=0.006)
+    tunic("jaeger.weste", mat="leather", mat_in="leather2", offset=0.02, layer=3, trim=1, sleeveless=True, chest=0.006)
+    tunic("jaeger.schuppe", mat="scale", mat_in="leather2", offset=0.02, layer=3, trim=1, sleeveless=True, chest=0.006)
+    strap("jaeger.riemen", (-0.11, NECK_Y - 0.02), (0.14, HIP_Y + 0.06), width=0.02, offset=0.032)
+    bracer("jaeger.arm", mat="leather2", trim=1)
+    belt("jaeger.guertel", HIP_Y + 0.04, h=0.024, offset=0.038)
+    panels_skirt("jaeger.schoss", HIP_Y + 0.02, KNEE_Y - 0.02, FRONT_SPLIT, "cloth", layer=3, clear=0.03, flare=0.05, hem_row=1, side_rows=1, hem_w=0.022)
+    cape("jaeger.mantel", length=0.3, back_only=False, mat="cloth3", trim_row=1, fur=True)
+    cape("jaeger.umhang", length=0.82, mat="cloth3", trim_row=2, hem_cut=RAGGED(0.06), wave=0.006)
+
+
+# ===================== Magier: weitere Gewaender =====================
+def robes():
+    # Robe: schlichtes Gewand, voller Rock ohne Schlitze, Kordelguertel
+    tunic("robe.einfach.top", mat="cloth", sleeve=0.95, offset=0.012, layer=3, trim=0, bell=0.03, chest=0.006)
+    panels_skirt("robe.einfach.skirt", HIP_Y + 0.02, ANKLE_Y + 0.02, [(-math.pi, math.pi)], "cloth", layer=3, clear=0.016, flare=0.06, hem_row=0, hem_w=0.03)
+    belt("robe.einfach.belt", HIP_Y + 0.06, h=0.008, offset=0.03, mat="leather", layer=5)
+    # Sternengewand: weite Glockenaermel, Stehkragen, Rock mit Mittelbahn
+    tunic("robe.stern.top", mat="cloth", sleeve=0.97, offset=0.012, layer=3, trim=3, bell=0.09, chest=0.008, vneck=True)
+    p = reg(Piece("robe.stern.collar", "bound", layer=6))
+    sel = (w("neck", "chest", "clavicle") > 0.35) & (Y > NECK_Y - 0.05) & (Y < NECK_Y + 0.05) & (Z < 0.03) & (w("head") < 0.5)
+    GL.shell(p, sel, 0.03, thick=0.005, smooth=20, concave=20, mat="cloth3", mat_in="cloth2", trims=[(0.014, 3, "trim")],
+             inflate=lambda P0, vs: 0.03 * np.clip((P0[:, 1] - (NECK_Y - 0.04)) / 0.09, 0, 1))
+    p.meta["soft"] = 0
+    panels_skirt("robe.stern.skirt", HIP_Y + 0.02, ANKLE_Y + 0.01, [(-math.pi, math.pi)], "cloth", layer=3, clear=0.016, flare=0.08, hem_row=3, hem_w=0.04)
+    panels_skirt("robe.stern.tabard", HIP_Y, ANKLE_Y + 0.1, [(-0.26, 0.26)], "cloth3", layer=4, clear=0.034, flare=0.02, hem_row=3, side_rows=3, hem_w=0.03)
+    # Druidenmantel: Rock mit Blattsaum und kurzer Mantel mit Kapuze
+    tunic("robe.druide.top", mat="cloth", sleeve=0.93, offset=0.012, layer=3, trim=1, chest=0.006)
+    panels_skirt("robe.druide.skirt", HIP_Y + 0.02, ANKLE_Y + 0.04, [(-math.pi, math.pi)], "cloth", layer=3, clear=0.016, flare=0.06, hem_row=1, hem_w=0.03, cut=LEAFCUT(0.08))
+    cape("robe.druide.mantel", length=0.5, back_only=False, mat="cloth3", trim_row=1, hood=True, hem_cut=LEAFCUT(0.06))
+
+
+# ===================== Umhaenge, Stiefel, Handschuhe je Grundart =====================
+def extras():
+    cape("umhang.einfach", length=0.72, mat="cloth", trim_row=0, hood=True)
+    cape("umhang.nebel", length=0.92, mat="veil", trim_row=3, hem_cut=RAGGED(0.2), wave=0.01)
+    boots("stiefel.eisen", top=0.5, plate=True, mat="leather2", cuff_row=2)
+    boots("stiefel.schleicher", top=0.78, straps=4, mat="leather2")
+    boots("stiefel.filz", top=0.5, mat="felt", fur_cuff=False, cuff_row=1)
+    boots("stiefel.wander", top=0.6, straps=2, mat="leather", cuff_row=1)
+    boots("stiefel.fell", top=0.62, mat="leather2", fur_cuff=True)
+    boots("stiefel.sandale", top=0.3, sandal=True, straps=2, mat="leather")
+    boots("stiefel.schuh", top=0.22, mat="leather", cuff_row=3)
+    gloves("handschuhe.dieb", cuff=0.3, mat="leather2", fingerless=True)
+    gloves("handschuhe.schuetze", cuff=0.5, mat="leather", fingerless=True, cuff_row=1)
+    gloves("handschuhe.stulpe", cuff=0.75, mat="leather", cuff_row=1)
+    gloves("handschuhe.runen", cuff=0.4, mat="leather2", cuff_row=3)
+    gloves("handschuhe.seide", cuff=0.3, mat="cloth")
+
+
 def want(prefix):
     return not ONLY or any(prefix.startswith(o) or o.startswith(prefix) for o in ONLY)
 
@@ -398,6 +600,16 @@ def build_all():
         hood("kopf.kapuze", trim_row=1)
     if want("schmuck.band"):
         amulet_cord("schmuck.band")
+    if want("harnisch."):
+        warrior()
+    if want("schurke."):
+        rogue()
+    if want("jaeger."):
+        hunter()
+    if want("robe.einfach") or want("robe.stern") or want("robe.druide"):
+        robes()
+    if want("umhang.einfach") or want("umhang.nebel") or want("stiefel.") or want("handschuhe."):
+        extras()
 
 
 build_all()

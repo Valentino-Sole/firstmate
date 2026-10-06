@@ -189,6 +189,39 @@
     const list = D.RARITY_ORDER.map((id, i) => ({ id, w: i < min ? 0 : D.RARITIES[id].weight * Math.pow(1 + boost, i) }));
     return U.wpick(r, list).id;
   };
+  /* Erscheinung eines Gegenstands (Version 5): benannte Grundform, Gestaltungskultur und Ornamentvariante.
+     Wird ohne Zufallszug aus der Kennung abgeleitet und gespeichert: Beute, Werte und Zufallsfolge bleiben
+     unveraendert, und der Gegenstand sieht in Laden, Rucksack, Vorschau, Kampf und nach dem Laden gleich aus. */
+  E.VIS_VERSION = 1;
+  E.formKey = function (base, variant, arch) {
+    const B = D.BASES[base];
+    if (!B) return null;
+    return B.byArch ? base + "." + (B.byArch[arch] ? arch : "krieger") + "." + (variant | 0) : base + "." + (variant | 0);
+  };
+  E.makeVis = (it, culture, arch) => ({ f: E.formKey(it.base, it.variant, arch), c: D.REALMS[culture] ? culture : "albion", o: U.hash("o:" + it.id) % 3, v: E.VIS_VERSION });
+  // Gegenstaende ohne Erscheinung (aeltere Spielstaende): Grundart von Handschuhen und Stiefeln steckt im Namen
+  E.ensureVis = function (it, realm) {
+    if (!it || typeof it !== "object" || !it.base || !D.BASES[it.base]) return it;
+    if (it.vis && it.vis.f && it.vis.v === E.VIS_VERSION) return it;
+    const B = D.BASES[it.base];
+    let arch = it.arch;
+    if (it.variant == null) it.variant = it.style || 0;
+    if (B.byArch) {
+      arch = null;
+      for (const a in B.byArch) {
+        const i = B.byArch[a].findIndex((n) => it.name && it.name.indexOf(n) >= 0);
+        if (i >= 0) {
+          arch = a;
+          it.variant = i;
+          break;
+        }
+      }
+      arch = arch || "krieger";
+    }
+    it.vis = E.makeVis(it, (it.vis && it.vis.c) || realm, arch);
+    return it;
+  };
+  E.visArch = (vis) => (vis && vis.f && vis.f.split(".").length === 3 ? vis.f.split(".")[1] : null);
   E.makeItem = function (r, opts) {
     const L = Math.max(1, Math.round(opts.level || 1));
     const arch = opts.arch || (opts.cls && D.CLASSES[opts.cls] ? D.CLASSES[opts.cls].arch : "krieger");
@@ -230,6 +263,8 @@
     if (D.RARITY_ORDER.indexOf(rarity) >= 2) name += " " + U.pick(r, D.SUFFIX[used[0]]);
     if (rarity === "legendaer") name = U.pick(r, D.LEGEND_NAMES) + ", " + adjWords.join(" ") + " " + noun;
     item.name = name;
+    // Erscheinung: Kultur aus dem Reich der Klasse (Laden, Auftrag und Beute gehoeren zur Heimatinsel)
+    item.vis = E.makeVis(item, opts.realm || (opts.cls && D.CLASSES[opts.cls] ? D.CLASSES[opts.cls].realm : null), arch);
     let palette;
     if (["amulett", "ring", "talisman"].indexOf(slot) >= 0) palette = TINTS.schmuck;
     else if (slot === "waffe" && ["bogen", "stab", "speer", "runenstab"].indexOf(base) >= 0) palette = TINTS.holz;
@@ -305,10 +340,10 @@
       seen: {},
     };
     for (const s of D.SLOTS) S.equip[s] = null;
-    S.equip.waffe = E.makeItem(r, { level: 1, slot: "waffe", arch: C.arch, rarity: "gewoehnlich", base: C.weapons[0] });
-    S.equip.ruestung = E.makeItem(r, { level: 1, slot: "ruestung", arch: C.arch, rarity: "gewoehnlich" });
-    S.equip.stiefel = E.makeItem(r, { level: 1, slot: "stiefel", arch: C.arch, rarity: "gewoehnlich" });
-    if (C.arch === "krieger") S.equip.nebenhand = E.makeItem(r, { level: 1, slot: "nebenhand", arch: C.arch, rarity: "gewoehnlich" });
+    S.equip.waffe = E.makeItem(r, { level: 1, slot: "waffe", arch: C.arch, realm: C.realm, rarity: "gewoehnlich", base: C.weapons[0] });
+    S.equip.ruestung = E.makeItem(r, { level: 1, slot: "ruestung", arch: C.arch, realm: C.realm, rarity: "gewoehnlich" });
+    S.equip.stiefel = E.makeItem(r, { level: 1, slot: "stiefel", arch: C.arch, realm: C.realm, rarity: "gewoehnlich" });
+    if (C.arch === "krieger") S.equip.nebenhand = E.makeItem(r, { level: 1, slot: "nebenhand", arch: C.arch, realm: C.realm, rarity: "gewoehnlich" });
     E.refreshOffers(S);
     E.refreshShop(S, "schmiede", true);
     E.refreshShop(S, "arkanum", true);
@@ -364,9 +399,26 @@
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
     for (const s of D.SLOTS) if (!(s in S.equip)) S.equip[s] = null;
+    // Version 5: jeder Gegenstand bekommt einmalig seine feste Erscheinung
+    E.walkItems(S, (it) => E.ensureVis(it, S.realm));
     if (!S.quest.offers || !S.quest.offers.length || !S.quest.offers[0].waves) E.refreshOffers(S);
     if (S.quest.active && !S.quest.active.offer.waves) S.quest.active.offer.waves = [{ monster: S.quest.active.offer.monster, mlevel: S.quest.active.offer.mlevel, power: DIFF[S.quest.active.offer.diff || 2].power }];
     return S;
+  };
+  // alle Gegenstaende eines Spielstands (Ausruestung, Rucksack, Laeden, Auftragsbelohnungen)
+  E.walkItems = function (S, fn) {
+    const seen = new Set();
+    const visit = (o, depth) => {
+      if (!o || typeof o !== "object" || seen.has(o) || depth > 6) return;
+      seen.add(o);
+      if (o.base && o.slot && o.rarity && o.stats) {
+        fn(o);
+        return;
+      }
+      if (Array.isArray(o)) for (const x of o) visit(x, depth + 1);
+      else for (const k in o) visit(o[k], depth + 1);
+    };
+    visit({ equip: S.equip, inv: S.inv, shops: S.shops, quest: S.quest, night: S.night, moon: S.moon }, 0);
   };
   /* Nach der Uebernahme darf das Reich einmal gewechselt werden; die Grundart bleibt. */
   E.chooseRealm = function (S, realm) {
@@ -584,11 +636,12 @@
     return ranks;
   };
 
+  // Darstellung aller zehn Plaetze (auch Amulett, Ring und Talisman) mit fester Erscheinung
   E.gearVisual = function (equip) {
     const g = {};
-    for (const s of ["helm", "ruestung", "umhang", "handschuhe", "stiefel", "waffe", "nebenhand"]) {
+    for (const s of D.SLOTS) {
       const it = equip[s];
-      g[s] = it ? { base: it.base, tint: it.tint, rarity: it.rarity, style: it.style || 0 } : null;
+      g[s] = it ? { base: it.base, tint: it.tint, rarity: it.rarity, style: it.style || 0, variant: it.variant || 0, vis: it.vis ? { f: it.vis.f, c: it.vis.c, o: it.vis.o, v: it.vis.v } : null } : null;
     }
     return g;
   };
@@ -1436,6 +1489,27 @@
       stiefel: { base: "stiefel", tint: U.pick(r, tintsFor), rarity: rar(), style: 0 },
       nebenhand: r() < 0.85 ? { base: A.offhand, tint: U.pick(r, ["#8d6b4a", "#7f8a96", "#5fd0d6", "#6b4a2f"]), rarity: rar(), style: U.ri(r, 0, 2) } : null,
     };
+  };
+  // Version 5: Grundform und Kultur der Computerhelden ohne zusaetzlichen Zufallszug (aus dem Ausruestungssamen)
+  const npcGearRolled = E.npcGear;
+  E.npcGear = function (npc) {
+    const g = npcGearRolled(npc);
+    const C = D.CLASSES[npc.cls];
+    const h = (k) => U.hash(npc.gearSeed + ":" + k);
+    const culture = npc.realm || C.realm;
+    const rar = (g.ruestung && g.ruestung.rarity) || "gewoehnlich";
+    if (h("amulett") % 10 < 6) g.amulett = { base: "amulett", tint: "#c9a441", rarity: rar };
+    if (h("ring") % 10 < 5) g.ring = { base: "ring", tint: "#c9ccd2", rarity: rar };
+    if (h("talisman") % 10 < 4) g.talisman = { base: "talisman", tint: "#8d6b4a", rarity: rar };
+    for (const s in g) {
+      const it = g[s];
+      if (!it) continue;
+      const B = D.BASES[it.base];
+      const names = B.byArch ? B.byArch[C.arch] : B.names;
+      it.variant = h("v" + s) % names.length;
+      it.vis = { f: E.formKey(it.base, it.variant, C.arch), c: culture, o: h("o" + s) % 3, v: E.VIS_VERSION };
+    }
+    return g;
   };
   E.npcFighter = function (npc) {
     const f = E.modelHeroFighter(npc.level, npc.cls, npc.q);

@@ -14,9 +14,9 @@
 
   /* ---------- Farben ---------- */
   const CULT = {
-    albion: { cloth: "#e8dcc4", dark: "#7a1f1f", metal: "#aab2bc", accent: "#c9a14a", glow: "#ffd27a", leather: "#6b4a30", fur: "#a08a6e" },
-    midgard: { cloth: "#2a3566", dark: "#1c2240", metal: "#7c848e", accent: "#c8ced6", glow: "#8fe3ff", leather: "#5a3c26", fur: "#5e5e62" },
-    hibernia: { cloth: "#3f5a2e", dark: "#2a3a20", metal: "#9a8a60", accent: "#b08040", glow: "#9fe0c0", leather: "#5a4030", fur: "#7a6248" },
+    albion: { cloth: "#e8dcc4", dark: "#7a1f1f", metal: "#aab2bc", accent: "#c9a14a", glow: "#ffd27a", leather: "#6b4a30", fur: "#a08a6e", blued: "#3a4672", wrap: "#2a2f4a", gem: "#5c86ff" },
+    midgard: { cloth: "#2a3566", dark: "#1c2240", metal: "#7c848e", accent: "#c8ced6", glow: "#8fe3ff", leather: "#5a3c26", fur: "#5e5e62", blued: "#34445f", wrap: "#232a3e", gem: "#46b6ff" },
+    hibernia: { cloth: "#3f5a2e", dark: "#2a3a20", metal: "#9a8a60", accent: "#b08040", glow: "#9fe0c0", leather: "#5a4030", fur: "#7a6248", blued: "#2e4c44", wrap: "#22382f", gem: "#3fd18e" },
   };
   G.CULT = CULT;
   const RAR_GLOW = { gewoehnlich: 0, ungewoehnlich: 0, selten: 0.9, episch: 1.3, legendaer: 1.8 };
@@ -45,11 +45,23 @@
       silver: new T.Color("#c8ccd2"),
       gold: new T.Color("#c9a14a"),
       fur: new T.Color(C.fur),
-      gem: new T.Color(C.glow),
+      gem: new T.Color(C.gem),
       wood: new T.Color("#6b4a2f"),
       bone: new T.Color("#d8ceb8"),
       stone: new T.Color("#8a8a86"),
       felt: shade(tint, 0.8),
+      veil: new T.Color(tint).lerp(new T.Color("#dfe6ee"), 0.5),
+      // Waffenmaterialien: heller Klingenstahl, gebläuter Stahl der Kultur, Bronze, Elfenbein,
+      // Weissgold (legendaer), Griffwicklung je Seltenheit, Sehne und Giftleuchten
+      steel: new T.Color("#c3c9d0"),
+      blued: new T.Color(C.blued),
+      bronze: new T.Color("#a8783e"),
+      ivory: new T.Color("#e4dccb"),
+      pale: new T.Color("#f3eedf"),
+      wrap: new T.Color(ri >= 4 ? "#7a2a24" : ri >= 2 ? C.wrap : C.leather),
+      string: new T.Color("#d9d0bc"),
+      venom: new T.Color("#8dff6a"),
+      rune: new T.Color(C.glow),
     };
     if (extra) for (const k in extra) if (k !== "cloth3") pal[k] = new T.Color(extra[k]);
     return pal;
@@ -72,6 +84,13 @@
     chain: { tile: "chain", rough: 0.4, metal: 0.9, n: 1.2 },
     scale: { tile: "scale", rough: 0.45, metal: 0.8, n: 1.2 },
     felt: { tile: "felt", rough: 0.95, metal: 0, n: 0.5 },
+    steel: { tile: "brushed", rough: 0.24, metal: 1, n: 0.25 },
+    blued: { tile: "metal", rough: 0.34, metal: 0.85, n: 0.4 },
+    bronze: { tile: "brushed", rough: 0.32, metal: 1, n: 0.3 },
+    ivory: { tile: "bone", rough: 0.42, metal: 0, n: 0.35 },
+    pale: { tile: "brushed", rough: 0.22, metal: 0.95, n: 0.2 },
+    wrap: { tile: "leather", rough: 0.7, metal: 0, n: 1 },
+    string: { tile: "cloth", rough: 0.8, metal: 0, n: 0.2 },
   };
   function tile(name, kind) {
     const M = SB.assets.data.mat;
@@ -82,17 +101,22 @@
   function material(cls, pal, culture) {
     T = R.T();
     const col = pal[cls] || pal.cloth;
-    const key = cls + "|" + (col.getHexString ? col.getHexString() : col) + "|" + culture + "|" + pal.band.getHexString() + pal.pat.getHexString() + pal.glow.getHexString();
+    const key = cls + "|" + (col.getHexString ? col.getHexString() : col) + "|" + culture + "|" + pal.band.getHexString() + pal.pat.getHexString() + pal.glow.getHexString() + "|" + (pal.row || 0);
     if (MC[key]) return MC[key];
     let m;
     if (cls === "trim") m = trimMat(pal, culture);
-    else if (cls === "gem" || cls === "glow") {
-      m = new T.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.6), emissive: col, emissiveIntensity: cls === "glow" ? 1.6 : 1.1, roughness: 0.15, metalness: 0.1 });
+    else if (cls === "gem" || cls === "glow" || cls === "venom" || cls === "rune") {
+      // Steine satt und facettiert mit leichtem Eigenleuchten, Runen und Gift hell leuchtend
+      const strong = cls !== "gem";
+      m = new T.MeshStandardMaterial({ color: col.clone().multiplyScalar(strong ? 0.6 : 0.5), emissive: col.clone().multiplyScalar(strong ? 1 : 0.42), emissiveIntensity: cls === "glow" ? 1.6 : strong ? 1.2 : 1, roughness: 0.08, metalness: strong ? 0.1 : 0.35 });
       if (cls === "glow") {
         m.transparent = true;
         m.opacity = 0.75;
         m.depthWrite = false;
       }
+    } else if (cls === "veil") {
+      // Nebelschleier: durchscheinender Stoff mit leichtem Eigenlicht
+      m = new T.MeshStandardMaterial({ color: col, map: tile("cloth", "alb"), roughness: 0.9, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, emissive: pal.glow.clone().multiplyScalar(0.25) });
     } else if (cls === "glass") {
       m = new T.MeshStandardMaterial({ color: col, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.45 });
     } else {
@@ -111,12 +135,12 @@
     const M = SB.assets.data.mat;
     const tex = M ? SB.assets.texture("trim." + culture, M.trims[culture] || M.trims.midgard, { srgb: false, repeat: true }) : null;
     const m = new T.MeshStandardMaterial({ color: 0xffffff, map: tex, roughness: 0.8, metalness: 0 });
-    const U = { uBand: { value: pal.band.clone() }, uPat: { value: pal.pat.clone() }, uPatMetal: { value: pal.patMetal }, uGlow: { value: pal.glow.clone() } };
+    const U = { uBand: { value: pal.band.clone() }, uPat: { value: pal.pat.clone() }, uPatMetal: { value: pal.patMetal }, uGlow: { value: pal.glow.clone() }, uRow: { value: pal.row != null ? pal.row : 0 } };
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nuniform vec3 uBand, uPat, uGlow; uniform float uPatMetal;")
-        .replace("#include <map_fragment>", "vec3 tm = texture2D(map, vMapUv).rgb;\ndiffuseColor.rgb = mix(uBand, uPat, tm.r);")
+        .replace("#include <common>", "#include <common>\nuniform vec3 uBand, uPat, uGlow; uniform float uPatMetal, uRow;")
+        .replace("#include <map_fragment>", "vec2 tuv = vec2(vMapUv.x, (4.0 - uRow + fract(vMapUv.y * 5.0)) / 5.0);\nvec3 tm = texture2D(map, tuv).rgb;\ndiffuseColor.rgb = mix(uBand, uPat, tm.r);")
         .replace("#include <metalnessmap_fragment>", "float metalnessFactor = mix(metalness, uPatMetal, tm.r);")
         .replace("#include <roughnessmap_fragment>", "float roughnessFactor = mix(roughness, 0.32, tm.r);")
         .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += uGlow * tm.b;");
@@ -341,115 +365,285 @@
     };
   }
 
-  const MATNAMES = () => ["cloth", "cloth2", "trim", "leather", "leather2", "metal", "silver", "gold", "fur", "gem", "wood", "bone", "stone", "cloth3", "chain", "scale", "glow", "skin", "felt", "glass"];
+  const MATNAMES = () => ["cloth", "cloth2", "trim", "leather", "leather2", "metal", "silver", "gold", "fur", "gem", "wood", "bone", "stone", "cloth3", "chain", "scale", "glow", "skin", "felt", "glass", "veil"];
 
-  /* Vorlaeufige Zuordnung Ausruestung -> Teile (wird durch die Rezepte aus dem Katalog ersetzt) */
+  /* ---------- Rezepte: Grundform und Seltenheit -> Teile ----------
+     Kleidung (Schalen, Roecke, Umhaenge, Stiefel, Handschuhe, Kapuzen) liegt fertig im Modellpaket;
+     je Grundform ein Grundaufbau, Zusaetze je Seltenheit (Kragen, Bahnen, Mantel, Platten). Fehlt ein
+     Teil, faellt die Darstellung auf die Grundkleidung zurueck. */
+  const RIx = { gewoehnlich: 0, ungewoehnlich: 1, selten: 2, episch: 3, legendaer: 4 };
+  G.RI = RIx;
+  const CLOTH = (G.CLOTH = G.CLOTH || {});
+  const pick = (...keys) => keys.filter((k) => k && G.has(k));
+  // Magier: Robe, Runenrobe, Sternengewand, Druidenmantel
+  CLOTH["robe.0"] = (r) => pick("robe.einfach.top", "robe.einfach.skirt", "robe.einfach.belt", r >= 2 && "robe.runen.tabard");
+  CLOTH["robe.1"] = (r) => pick("robe.runen.top", "robe.runen.skirt", r >= 1 && "robe.runen.tabard", "robe.runen.belt");
+  CLOTH["robe.2"] = (r) => pick("robe.stern.top", "robe.stern.skirt", r >= 1 && "robe.stern.collar", r >= 2 && "robe.stern.tabard", "robe.runen.belt");
+  CLOTH["robe.3"] = (r) => pick("robe.druide.top", "robe.druide.skirt", "robe.druide.mantel", r >= 1 && "robe.druide.mantel.hood", "robe.einfach.belt");
+  // Krieger: Brustharnisch, Plattenpanzer, Schuppenpanzer, Kriegsharnisch
+  const shoulder = (r, big) => (big || r >= 3 ? "harnisch.schulter.gross" : "harnisch.schulter");
+  const tabard = (r) => (r >= 4 ? "harnisch.wappenrock.lang" : "harnisch.wappenrock");
+  CLOTH["harnisch.0"] = (r) => pick("harnisch.gambeson", "harnisch.brust", shoulder(r), tabard(r), "harnisch.guertel", r >= 1 && "harnisch.arm", r >= 2 && "harnisch.kette", r >= 3 && "harnisch.bein");
+  CLOTH["harnisch.1"] = (r) => pick("harnisch.gambeson", "harnisch.brust", shoulder(r, true), "harnisch.arm", "harnisch.bein", "harnisch.beintaschen", "harnisch.guertel", r >= 2 && "harnisch.kette", r >= 4 && "harnisch.wappenrock.lang");
+  CLOTH["harnisch.2"] = (r) => pick("harnisch.gambeson", "harnisch.schuppe", shoulder(r), "harnisch.kette", "harnisch.guertel", r >= 1 && "harnisch.arm", r >= 3 && tabard(r));
+  CLOTH["harnisch.3"] = (r) => pick("harnisch.gambeson", "harnisch.brust", shoulder(r, true), "harnisch.arm", "harnisch.kette", tabard(r), "harnisch.bein", "harnisch.guertel", r >= 2 && "harnisch.beintaschen");
+  // Schurke: Schattenwams, Nachtgewand, Diebesleder
+  CLOTH["schattenwams.0"] = (r) => pick("schurke.hemd", "schurke.wams", "schurke.schoss", "schurke.guertel", "schurke.riemen.a", r >= 1 && "schurke.tuch", r >= 1 && "schurke.arm", r >= 2 && "schurke.guertel2", r >= 2 && "schurke.riemen.b", r >= 3 && "schurke.umhang");
+  CLOTH["schattenwams.1"] = (r) => pick("schurke.hemd", "schurke.wams", "schurke.mantel", "schurke.guertel", "schurke.tuch", r >= 1 && "schurke.arm", r >= 2 && "schurke.riemen.a", r >= 3 && "schurke.umhang");
+  CLOTH["schattenwams.2"] = (r) => pick("schurke.hemd", "schurke.wams", "schurke.schoss", "schurke.guertel", "schurke.guertel2", "schurke.riemen.a", "schurke.riemen.b", "schurke.arm", r >= 2 && "schurke.tuch", r >= 3 && "schurke.umhang");
+  // Jaeger: Jaegerwams, Schuppenleder, Fellwams
+  CLOTH["wams.0"] = (r) => pick("jaeger.hemd", "jaeger.weste", "jaeger.schoss", "jaeger.guertel", "jaeger.riemen", r >= 1 && "jaeger.arm", r >= 2 && "jaeger.mantel", r >= 2 && "jaeger.mantel.fur", r >= 3 && "jaeger.umhang");
+  CLOTH["wams.1"] = (r) => pick("jaeger.hemd", "jaeger.schuppe", "jaeger.schoss", "jaeger.guertel", "jaeger.riemen", "jaeger.arm", r >= 2 && "jaeger.mantel", r >= 3 && "jaeger.umhang");
+  CLOTH["wams.2"] = (r) => pick("jaeger.hemd", "jaeger.weste", "jaeger.schoss", "jaeger.guertel", "jaeger.mantel", "jaeger.mantel.fur", r >= 1 && "jaeger.arm", r >= 3 && "jaeger.umhang");
+  // Umhaenge: Umhang, Wolfsfellmantel, Reisemantel, Nebelschleier
+  CLOTH["umhang.0"] = (r) => pick("umhang.einfach", r >= 2 && "umhang.einfach.hood");
+  CLOTH["umhang.1"] = (r) => pick("umhang.fell", "umhang.fell.fur", r >= 1 && "umhang.fell.hood");
+  CLOTH["umhang.2"] = () => pick("umhang.reise");
+  CLOTH["umhang.3"] = () => pick("umhang.nebel");
+  // Stiefel und Handschuhe je Grundart (Namen aus den Spieldaten)
+  const straps = (k, n) => Array.from({ length: n }, (_, i) => k + ".strap" + i);
+  CLOTH["stiefel.krieger.0"] = () => pick("stiefel.eisen", "stiefel.eisen.plate");
+  CLOTH["stiefel.krieger.1"] = (r) => pick("stiefel.platte", r >= 1 && "stiefel.platte.plate");
+  CLOTH["stiefel.schurke.0"] = (r) => pick("stiefel.schleicher", ...straps("stiefel.schleicher", 2 + Math.min(2, r)));
+  CLOTH["stiefel.schurke.1"] = () => pick("stiefel.filz");
+  CLOTH["stiefel.jaeger.0"] = (r) => pick("stiefel.wander", ...straps("stiefel.wander", r >= 1 ? 2 : 1));
+  CLOTH["stiefel.jaeger.1"] = () => pick("stiefel.fell", "stiefel.fell.fur");
+  CLOTH["stiefel.magier.0"] = () => pick("stiefel.sandale", ...straps("stiefel.sandale", 2));
+  CLOTH["stiefel.magier.1"] = () => pick("stiefel.schuh");
+  CLOTH["handschuhe.krieger.0"] = (r) => pick("handschuhe.platte", "handschuhe.platte.plate");
+  CLOTH["handschuhe.krieger.1"] = () => pick("handschuhe.platte", "handschuhe.platte.plate");
+  CLOTH["handschuhe.schurke.0"] = () => pick("handschuhe.dieb");
+  CLOTH["handschuhe.schurke.1"] = () => pick("handschuhe.dieb");
+  CLOTH["handschuhe.jaeger.0"] = () => pick("handschuhe.schuetze");
+  CLOTH["handschuhe.jaeger.1"] = () => pick("handschuhe.stulpe");
+  CLOTH["handschuhe.magier.0"] = () => pick("handschuhe.runen");
+  CLOTH["handschuhe.magier.1"] = () => pick("handschuhe.seide");
+  // aeltere Spielstaende ohne Grundart in der Erscheinung
+  for (const k of ["stiefel", "handschuhe"]) CLOTH[k + ".*"] = (r, V) => (CLOTH[k + ".krieger." + (V.variant % 2)] || (() => []))(r, V);
+  // Kopf
+  CLOTH["hut.0"] = () => pick("kopf.kapuze");
+  CLOTH["hut.1"] = (r) => pick(r <= 1 && "kopf.band");
+  CLOTH["hut.2"] = () => pick("kopf.kapuze");
+  CLOTH["maske.0"] = () => pick("kopf.kapuze");
+  CLOTH["maske.1"] = () => pick("kopf.kapuze");
+  CLOTH["kappe.0"] = () => pick("kopf.kapuze");
+  CLOTH["amulett.*"] = () => pick("schmuck.band");
+
+  // Erscheinung eines getragenen Gegenstands: Grundform, Variante, Grundart, Kultur
+  function visOf(it, fallbackCulture) {
+    const v = it.vis || {};
+    const parts = (v.f || "").split(".");
+    const variant = parts.length ? parseInt(parts[parts.length - 1], 10) : NaN;
+    return {
+      base: it.base,
+      variant: isFinite(variant) ? variant : it.variant != null ? it.variant : it.style || 0,
+      arch: parts.length === 3 ? parts[1] : null,
+      culture: CULT[v.c] ? v.c : fallbackCulture,
+      orn: v.o || 0,
+      ri: RIx[it.rarity] || 0,
+      form: v.f || it.base + "." + (it.variant != null ? it.variant : it.style || 0),
+    };
+  }
+  G.visOf = visOf;
+  function clothFor(it, V) {
+    const fn = CLOTH[V.form] || CLOTH[V.base + "." + V.variant] || CLOTH[V.base + ".*"];
+    return fn ? fn(V.ri, V) : [];
+  }
+
   G.dressHero = function (parts, gear, ctx) {
     T = R.T();
-    const culture = ctx.culture || "midgard";
+    const hc = ctx.culture || "midgard";
     const list = [];
-    const basePal = G.palette({ tint: "#c9b892", rarity: "gewoehnlich" }, culture, { cloth3: "#3f342c" });
-    const r = gear.ruestung;
-    if (r && r.base === "robe" && G.has("robe.runen.top")) {
-      const pal = G.palette(r, culture);
-      for (const k of ["robe.runen.top", "robe.runen.skirt", "robe.runen.tabard", "robe.runen.belt"]) list.push({ key: k, pal, culture });
-    } else {
-      for (const k of ["base.shirt", "base.shirtskirt", "base.belt"]) list.push({ key: k, pal: basePal, culture });
-    }
-    list.push({ key: "base.pants", pal: basePal, culture });
-    if (!gear.stiefel) list.push({ key: "base.shoes", pal: basePal, culture });
+    const basePal = G.palette({ tint: "#c9b892", rarity: "gewoehnlich" }, hc, { cloth3: "#3f342c" });
     const add = (it, keys) => {
-      const pal = G.palette(it, culture);
-      for (const k of keys) if (G.has(k)) list.push({ key: k, pal, culture });
+      const V = visOf(it, hc);
+      const pal = G.palette(it, V.culture);
+      pal.row = V.ri;
+      for (const k of keys) list.push({ key: k, pal, culture: V.culture });
     };
-    const vis = (it) => (it.variant != null ? it.variant : it.style || 0);
-    const u = gear.umhang;
-    if (u) add(u, vis(u) === 1 ? ["umhang.fell", "umhang.fell.fur", "umhang.fell.hood"] : ["umhang.reise"]);
-    const st = gear.stiefel;
-    if (st) add(st, vis(st) === 1 ? ["stiefel.platte", "stiefel.platte.plate"] : ["stiefel.leder", "stiefel.leder.strap0"]);
-    const hs = gear.handschuhe;
-    if (hs) add(hs, vis(hs) === 0 ? ["handschuhe.platte", "handschuhe.platte.plate"] : ["handschuhe.leder"]);
-    const he = gear.helm;
-    if (he) add(he, vis(he) === 1 ? ["kopf.band"] : ["kopf.kapuze"]);
-    if (gear.amulett) add(gear.amulett, ["schmuck.band"]);
+    // Ruestungssaetze bringen ab Episch einen eigenen Umhang mit; ein getragener Umhang ersetzt ihn
+    const body = (gear.ruestung ? clothFor(gear.ruestung, visOf(gear.ruestung, hc)) : []).filter((k) => !(gear.umhang && /\.umhang$/.test(k)));
+    if (body.length) add(gear.ruestung, body);
+    else for (const k of ["base.shirt", "base.shirtskirt", "base.belt"]) list.push({ key: k, pal: basePal, culture: hc });
+    if (!body.some((k) => /\.legs/.test(k))) list.push({ key: "base.pants", pal: basePal, culture: hc });
+    for (const slot of ["umhang", "stiefel", "handschuhe", "helm", "amulett"]) {
+      const it = gear[slot];
+      if (!it) continue;
+      const keys = clothFor(it, visOf(it, hc));
+      if (keys.length) add(it, keys);
+    }
+    if (!gear.stiefel || !list.some((e) => e.key.indexOf("stiefel.") === 0)) list.push({ key: "base.shoes", pal: basePal, culture: hc });
     // Pruefansicht: nur bestimmte Teile zeigen (tests/preview.mjs, "only")
-    const only = (G.debugOnly || null);
+    const only = G.debugOnly || null;
     const meshes = G.attach(parts, only ? list.filter((e) => only.some((o) => e.key.indexOf(o) >= 0)) : list);
     if (only && G.debugHideBody) parts.mesh.visible = false;
-    G.attachRigid(parts, gear, culture);
+    parts.hidesHair = list.some((e) => pk()[e.key] && pk()[e.key].meta.hidesHair);
+    G.attachRigid(parts, gear, hc);
     return meshes;
   };
 
-  /* Feste Teile an Haltepunkten: Waffe in der rechten Hand, Fokus ueber der linken, Schmuck, Kopfschmuck */
+  /* ---------- Feste Teile an Haltepunkten ---------- */
   const V3 = (a) => new T.Vector3(a[0], a[1], a[2]);
   function placeOnBone(parts, obj, bone, worldP) {
     const j = R.human.jointOf(parts.rig, bone);
     obj.position.copy(V3(worldP).sub(j));
+    // Feinlage aus der Bauregel: zusaetzliche Drehung und Verschiebung im eigenen Rahmen
+    const u = obj.userData;
+    if (u.mountOffset) obj.position.add(V3(u.mountOffset).applyQuaternion(obj.quaternion).multiplyScalar(obj.scale.y));
+    if (u.mountRot) obj.quaternion.multiply(new T.Quaternion().setFromEuler(new T.Euler(u.mountRot[0], u.mountRot[1], u.mountRot[2])));
     parts.B[bone].add(obj);
   }
-  G.attachRigid = function (parts, gear, culture) {
+  // Griff: Schaft entlang der Griffachse (kleiner Finger zum Zeigefinger), Schneiden in Fingerrichtung
+  function gripFrame(sock, mirror) {
+    const Y = V3(sock.axis).normalize();
+    const X = V3(sock.along);
+    X.addScaledVector(Y, -X.dot(Y)).normalize();
+    if (mirror) X.negate();
+    const Z = new T.Vector3().crossVectors(X, Y).normalize();
+    return new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X, Y, Z));
+  }
+  const DUAL = { dolch: 1, sichel: 1, kurzschwert: 1 };
+  const HEAD_RIGID = { helm: 1, krone: 1, maske: 1, kappe: 1, hut: 1 };
+  // Kopf: am Grundkopf gebaute Teile auf den Kopf des Volkes setzen
+  function onHead(parts, g) {
+    const f = G.fitOf(parts.pk).head;
+    const j0 = V3(f.o0);
+    g.children.forEach((m) => {
+      if (!m.geometry.userData.headMoved) {
+        m.geometry = m.geometry.clone();
+        m.geometry.translate(-j0.x, -j0.y, -j0.z);
+        m.geometry.userData.headMoved = true;
+      }
+    });
+    g.scale.set(f.s[0], f.s[1], f.s[2]);
+    parts.B.head.add(g);
+  }
+  G.attachRigid = function (parts, gear, hc) {
     const IT = R.items;
     if (!IT) return;
     const S = parts.prof.sockets;
-    const vis = (it) => (it.variant != null ? it.variant : it.style || 0);
+    const build = (it, base, variant) => {
+      const V = visOf(it, hc);
+      const b = base || V.base;
+      if (!IT.forms[b]) return null;
+      const pal = G.palette(it, V.culture);
+      return IT.build(b, variant != null ? variant : V.variant, it.rarity, V.culture, pal, V);
+    };
+    const hs = Math.max(0.85, Math.min(1.3, S.gripR.size / 0.19));
     const w = gear.waffe;
-    if (w && IT.forms[w.base]) {
-      const g = IT.build(w.base, vis(w), w.rarity, culture, G.palette(w, culture));
-      // Schaft entlang der Griffachse (vom kleinen Finger zum Zeigefinger)
-      g.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), V3(S.gripR.axis).normalize());
-      const hs = S.gripR.size / 0.19;
-      g.scale.setScalar(Math.max(0.85, Math.min(1.25, hs)) * 1.0);
-      placeOnBone(parts, g, "hand.R", S.gripR.p);
-      parts.weapon = g;
-      parts.gripR = 1;
+    if (w) {
+      const V = visOf(w, hc);
+      if (V.base === "bogen") {
+        const g = build(w);
+        if (g) {
+          g.quaternion.copy(gripFrame(S.gripL, false));
+          g.scale.setScalar(hs);
+          placeOnBone(parts, g, "hand.L", S.gripL.p);
+          parts.weapon = g;
+          parts.gripL = 1;
+        }
+      } else {
+        const g = build(w);
+        if (g) {
+          g.quaternion.copy(gripFrame(S.gripR, false));
+          g.scale.setScalar(hs);
+          placeOnBone(parts, g, "hand.R", S.gripR.p);
+          parts.weapon = g;
+          parts.gripR = 1;
+          if (DUAL[V.base]) {
+            const g2 = build(w);
+            g2.quaternion.copy(gripFrame(S.gripL, true));
+            g2.scale.set(-hs, hs, hs);
+            placeOnBone(parts, g2, "hand.L", S.gripL.p);
+            parts.weapon2 = g2;
+            parts.gripL = 1;
+          }
+        }
+      }
     }
     const o = gear.nebenhand;
-    if (o && IT.forms[o.base]) {
-      const g = IT.build(o.base, vis(o), o.rarity, culture, G.palette(o, culture));
-      if (o.base === "fokus") {
-        // schwebt ueber der offenen linken Hand
-        const p = S.gripL.p.slice();
-        placeOnBone(parts, g, "hand.L", p);
-        g.userData.hover = g.position.clone();
-        g.position.y += 0.12;
-        parts.focus = g;
-      } else placeOnBone(parts, g, "hand.L", S.gripL.p);
-      parts.offhand = g;
+    if (o) {
+      const V = visOf(o, hc);
+      const g = build(o);
+      if (g) {
+        if (V.base === "fokus") {
+          placeOnBone(parts, g, "hand.L", S.gripL.p);
+          g.userData.hover = g.position.clone();
+          g.position.y += 0.12;
+          parts.focus = g;
+        } else if (V.base === "schild") {
+          // vor der linken Faust: die Flaeche zeigt in Unterarmrichtung und nach aussen (nach dem Beugen
+          // des Ellbogens also nach vorn links), die Laengsachse steht senkrecht auf Unterarm und Seite
+          const a = S.armL;
+          const fa = V3(a.along).normalize();
+          const lat = new T.Vector3(1, 0, 0.3).normalize();
+          lat.addScaledVector(fa, -lat.dot(fa)).normalize();
+          const out = fa.clone().multiplyScalar(0.62).addScaledVector(lat, 0.78).normalize();
+          const up = new T.Vector3().crossVectors(fa, lat).normalize();
+          const X = new T.Vector3().crossVectors(up, out).normalize();
+          g.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(X, up, out));
+          const p = V3(S.gripL.p).addScaledVector(out, 0.075);
+          placeOnBone(parts, g, "forearm.L", [p.x, p.y, p.z]);
+        } else if (V.base === "koecher") {
+          // schraeg auf dem Ruecken, Oeffnung ueber der rechten Schulter
+          const p = S.back.p.slice();
+          p[2] -= 0.05;
+          g.rotation.set(0.15, 0, -0.55);
+          placeOnBone(parts, g, "chest", p);
+        } else if (V.base === "wurfmesser") {
+          // Halterung vorne rechts am Guertel
+          const p = S.belt.right.slice();
+          p[0] -= 0.01;
+          p[2] += 0.06;
+          g.rotation.set(0, -1.1, 0);
+          placeOnBone(parts, g, "hips", p);
+        } else placeOnBone(parts, g, "hand.L", S.gripL.p);
+        parts.offhand = g;
+      }
     }
     const a = gear.amulett;
-    if (a && IT.forms.amulett) {
-      const g = IT.build("amulett", vis(a), a.rarity, culture, G.palette(a, culture));
-      const p = S.chest.p.slice();
-      p[2] += 0.012;
-      placeOnBone(parts, g, "chest", p);
-      parts.amulet = g;
+    if (a) {
+      const g = build(a, "amulett");
+      if (g) {
+        const p = S.chest.p.slice();
+        p[2] += 0.012;
+        placeOnBone(parts, g, "chest", p);
+        parts.amulet = g;
+      }
     }
     const rg = gear.ring;
-    if (rg && IT.forms.ring) {
-      const g = IT.build("ring", vis(rg), rg.rarity, culture, G.palette(rg, culture));
-      g.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), V3(S.gripR.along).normalize());
-      placeOnBone(parts, g, "fing1.R", S.ringR.p);
-      parts.ring = g;
+    if (rg) {
+      const g = build(rg, "ring");
+      if (g) {
+        g.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), V3(S.gripR.along).normalize());
+        placeOnBone(parts, g, "fing1.R", S.ringR.p);
+        parts.ring = g;
+      }
     }
     const ta = gear.talisman;
-    if (ta && IT.forms.talisman) {
-      const g = IT.build("talisman", vis(ta), ta.rarity, culture, G.palette(ta, culture));
-      const p = S.belt.left.slice();
-      p[0] += 0.02;
-      g.rotation.y = Math.PI / 2;
-      placeOnBone(parts, g, "hips", p);
-      parts.talisman = g;
+    if (ta) {
+      const g = build(ta, "talisman");
+      if (g) {
+        const p = S.belt.left.slice();
+        p[0] += 0.02;
+        g.rotation.y = Math.PI / 2;
+        placeOnBone(parts, g, "hips", p);
+        parts.talisman = g;
+      }
     }
     const h = gear.helm;
-    if (h && h.base === "hut" && vis(h) === 1) {
-      const g = IT.build("krone", 0, h.rarity, culture, G.palette(h, culture));
-      // am Grundkopf gebaut: auf Kopf des Volkes skalieren
-      const f = G.fitOf(parts.pk).head;
-      const j0 = V3(f.o0);
-      g.children.forEach((m) => m.geometry.translate(-j0.x, -j0.y, -j0.z));
-      g.scale.set(f.s[0], f.s[1], f.s[2]);
-      parts.B.head.add(g);
-      parts.crown = g;
+    if (h) {
+      const V = visOf(h, hc);
+      // Runenkrone als fester Reif; uebrige Kopfteile, sofern eine feste Bauregel besteht
+      const key = V.base === "hut" && V.variant === 1 ? "krone" : IT.forms[V.base + "." + V.variant] ? V.base + "." + V.variant : IT.forms[V.base] && V.base !== "hut" ? V.base : null;
+      if (key) {
+        const g = build(h, key, V.variant);
+        if (g) {
+          onHead(parts, g);
+          parts.helmet = g;
+          if (g.userData.hidesHair) parts.hidesHair = true;
+        }
+      }
     }
   };
 

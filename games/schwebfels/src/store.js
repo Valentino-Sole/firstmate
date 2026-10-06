@@ -124,10 +124,15 @@
     if (name.length < 2) return null;
     const look = h.look || {};
     const gear = {};
-    for (const s of ["helm", "ruestung", "umhang", "handschuhe", "stiefel", "waffe", "nebenhand"]) {
+    for (const s of D.SLOTS) {
       const g = h.gear && h.gear[s];
-      if (g && D.BASES[g.base] && (!g.tint || HEX.test(g.tint)) && (!g.rarity || D.RARITIES[g.rarity])) gear[s] = { base: g.base, tint: g.tint || "#9aa4ad", rarity: g.rarity || "gewoehnlich", style: num(g.style, 0, 2) | 0 };
-      else gear[s] = null;
+      if (g && D.BASES[g.base] && D.BASES[g.base].slot === s && (!g.tint || HEX.test(g.tint)) && (!g.rarity || D.RARITIES[g.rarity])) {
+        gear[s] = { base: g.base, tint: g.tint || "#9aa4ad", rarity: g.rarity || "gewoehnlich", style: num(g.style, 0, 2) | 0, variant: num(g.variant, 0, 5) | 0, vis: null };
+        // Erscheinung nur mit bekannter Grundform und Kultur uebernehmen
+        const v = g.vis;
+        if (v && typeof v.f === "string" && /^[a-z]+(\.[a-z]+)?\.[0-5]$/.test(v.f) && v.f.split(".")[0] === g.base && D.REALMS[v.c])
+          gear[s].vis = { f: v.f, c: v.c, o: num(v.o, 0, 2) | 0, v: num(v.v, 1, 99) | 0 };
+      } else gear[s] = null;
     }
     const attrs = {};
     for (const a of D.ATTRS) attrs[a] = Math.round(num(h.attrs && h.attrs[a], 1, 1e6));
