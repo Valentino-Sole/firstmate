@@ -103,7 +103,22 @@
   };
 
   /* ---------- Toasts ---------- */
+  // Meldungen waehrend eines Kampfes warten bis zum Ergebnis, damit nichts den Ausgang verraet
+  const heldNotices = [];
+  UI.notice = (fn) =>
+    queueMicrotask(() => {
+      if (UI.inBattle) heldNotices.push(fn);
+      else fn();
+    });
+  UI.flushNotices = function () {
+    const list = heldNotices.splice(0);
+    list.forEach((fn, i) => setTimeout(fn, 250 + i * 450));
+  };
   UI.toast = function (text, kind, icon) {
+    if (UI.inBattle) {
+      heldNotices.push(() => UI.toast(text, kind, icon));
+      return;
+    }
     const box = $("#toasts");
     if (!box) return;
     const t = document.createElement("div");
@@ -118,15 +133,20 @@
     }, 3800);
   };
   SB.bus.on("toast", (p) => UI.toast(p.text, p.kind === "info" ? "" : p.kind));
-  SB.bus.on("levelup", (p) => {
-    UI.toast("Stufe " + p.level + " erreicht! Eine Wolkenperle als Belohnung.", "gold", "xp");
-    SB.audio.play("levelup");
-    if (UI.hub) UI.hub.cheer();
-  });
-  SB.bus.on("achievement", (a) => {
-    UI.toast("Abzeichen „" + a.name + "“: +" + a.perlen + (a.perlen === 1 ? " Wolkenperle" : " Wolkenperlen"), "gold", "abzeichen");
-    SB.audio.play("chime");
-  });
+  SB.bus.on("levelup", (p) =>
+    UI.notice(() => {
+      const tp = E.talentPointsFor(p.level) > E.talentPointsFor(p.level - 1);
+      UI.toast("Stufe " + p.level + " erreicht! Eine Wolkenperle als Belohnung." + (tp ? " Dazu ein neuer Talentpunkt." : ""), "gold", "xp");
+      SB.audio.play("levelup");
+      if (UI.hub) UI.hub.cheer();
+    })
+  );
+  SB.bus.on("achievement", (a) =>
+    UI.notice(() => {
+      UI.toast("Abzeichen „" + a.name + "“: +" + a.perlen + (a.perlen === 1 ? " Wolkenperle" : " Wolkenperlen"), "gold", "abzeichen");
+      SB.audio.play("chime");
+    })
+  );
   SB.bus.on("remote", () => {
     if (UI.panelId === "arena" || UI.panelId === "ruhmeshalle" || UI.panelId === "gildenhalle") UI.renderPanel();
   });
@@ -388,7 +408,7 @@
       }
     }
     const C = D.CLASSES[S.cls];
-    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it))) b.held = "+";
+    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it)) || E.talentFree(S) > 0) b.held = "+";
     if (!S.guild) b.gildenhalle = "?";
     if (UI.isNight() && E.nightHuntsLeft(S) > 0 && !E.busy(S, now)) b.mondtor = "☾";
     return b;
@@ -590,6 +610,10 @@
     { when: () => UI.S.level >= 3, text: () => "Im Steinkreis erzählt die Seherin die Chronik deines Reiches und deiner Klasse. Jedes Kapitel bringt seltene Beute.", btn: "Zum Steinkreis", act: () => UI.openPanel("steinkreis"), panel: "steinkreis" },
     { when: () => UI.S.level >= 5, text: () => "Im Ring der Reiche kämpfst du gegen Helden aus den anderen Reichen. Ehre bringt dich in der Rangliste nach oben, für dich und für dein Reich.", btn: "Leinen los" },
     { when: () => UI.S.level >= 10, text: () => "Stufe 10! Das Tor zur Tiefe hat sich geöffnet. Dort warten Bosse mit seltener und epischer Beute.", btn: "Ab in die Tiefe", act: () => UI.openPanel("tiefen"), panel: "tiefen" },
+    { when: () => UI.S.level >= 2 && E.talentFree(UI.S) > 0, text: () => "Du hast einen Talentpunkt! Im Charakterbogen unter „Talente“ wählst du besondere Fähigkeiten deiner Klasse. Sie wirken in jedem Kampf.", btn: "Zu den Talenten", act: () => {
+      UI.tabs.held = "talente";
+      UI.openPanel("held");
+    }, panel: "held" },
     { when: () => UI.S.level >= 2 && UI.isNight(), text: () => "Es ist Nacht. Hinter dem Steinkreis leuchtet jetzt das Mondtor: Dort warten Nachtjagden und die Händlerin Selene, aber nur bis zum Morgengrauen.", btn: "Zum Mondtor", act: () => UI.openPanel("mondtor"), panel: "mondtor" },
   ];
   UI.checkHint = function () {

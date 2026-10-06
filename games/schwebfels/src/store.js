@@ -86,6 +86,7 @@
       wMax: f.wMax,
       armor: f.armor,
       shield: !!(S.equip.nebenhand && S.equip.nebenhand.base === "schild"),
+      talents: S.talents || {},
       updatedAt: Date.now(),
     };
     const json = JSON.stringify(Object.assign({}, pub, { updatedAt: 0 }));
@@ -155,7 +156,12 @@
       level,
       honor: Math.round(num(h.honor, 0, 1e7)),
       gear,
+      talents: {},
     };
+    // Talente nur, wenn sie zum Baum der Klasse passen; die Punktzahl begrenzt die Stufe im Kampf
+    const tree = SB.engine.talentTree(h.cls);
+    if (h.talents && typeof h.talents === "object")
+      for (const k of Object.keys(h.talents).slice(0, 40)) if (tree.byId[k]) hero.talents[k] = num(h.talents[k], 0, tree.byId[k].max) | 0;
     hero.fighter = SB.engine.remoteFighter(hero, { attrs, wMin, wMax: Math.max(wMin + 1, Math.round(num(h.wMax, 2, 1e6))), armor: Math.round(num(h.armor, 0, 1e7)), shield: !!h.shield });
     return hero;
   };

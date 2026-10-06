@@ -11,7 +11,7 @@
     geschick: { name: "Geschick", short: "GES", desc: "Hauptwert von Schurken und Jägern. Erhöht ihren Schaden und schwächt Geschick-Angriffe gegen dich." },
     verstand: { name: "Verstand", short: "VER", desc: "Hauptwert der Magier. Erhöht ihren Zauberschaden und schwächt Zauber gegen dich." },
     konstitution: { name: "Konstitution", short: "KON", desc: "Bestimmt deine Lebenspunkte." },
-    glueck: { name: "Glück", short: "GLÜ", desc: "Erhöht die Chance auf kritische Treffer." },
+    glueck: { name: "Glück", short: "GLÜ", desc: "Erhöht die Chance auf kritische Treffer und verbessert die Beute." },
   };
 
   const LORE =
@@ -345,6 +345,82 @@
     amulett: { slot: "amulett", arch: null, g: "n", names: ["Amulett", "Medaillon", "Runenanhänger", "Totem"] },
     ring: { slot: "ring", arch: null, g: "m", names: ["Ring", "Siegelring", "Runenring", "Knochenring"] },
     talisman: { slot: "talisman", arch: null, g: "m", names: ["Talisman", "Glücksbringer", "Runenstein", "Götzenbild"] },
+  };
+
+  /* Talentbaeume: je Klasse drei Zweige (Angriff, Verteidigung, Klassenpfad), angelehnt an die Spezialisierungen
+     und Reichsfaehigkeiten von Dark Age of Camelot. Werte gelten je Rang. Stufe 1 bis 4 eines Zweiges
+     werden mit 0, 3, 6 und 8 ausgegebenen Punkten in diesem Zweig frei. */
+  const TALENT_TIER_REQ = [0, 0, 3, 6, 8];
+  const TALENT_EFFECTS = {
+    dmg: (v) => "+" + pct(v) + " Schaden",
+    hp: (v) => "+" + pct(v) + " Lebenspunkte",
+    armor: (v) => "+" + pct(v) + " Rüstung",
+    crit: (v) => "+" + pct(v) + " Chance auf kritische Treffer",
+    critMult: (v) => "kritische Treffer +" + pct(v) + " stärker",
+    block: (v) => "+" + pct(v) + " Blockchance (mit Schild)",
+    evade: (v) => "+" + pct(v) + " Ausweichchance",
+    spDmg: (v) => "Spezialangriff +" + pct(v) + " Schaden",
+    spCrit: (v) => "Spezialangriff +" + pct(v) + " Kritchance",
+    spCritMult: (v) => "kritische Spezialangriffe +" + pct(v) + " stärker",
+    spPierce: (v) => "Spezialangriff durchdringt " + pct(v) + " der Rüstung",
+    execute: (v) => "+" + pct(v) + " Schaden gegen Gegner unter 35 % Lebenspunkten",
+    double: (v) => pct(v) + " Chance auf einen zweiten Schlag (60 %)",
+    pierce: (v) => "durchdringt " + pct(v) + " der gegnerischen Rüstung",
+    riposte: (v) => pct(v) + " Chance auf einen Gegenschlag nach Block oder Ausweichen",
+    ward: (v) => "Kampfbeginn mit einer Barriere aus " + pct(v) + " deiner Lebenspunkte",
+    secondWind: (v) => "einmal je Kampf unter 30 % Lebenspunkten: heilt " + pct(v),
+    purge: (v) => "wehrt " + v + (v === 1 ? " Betäubung oder Vergiftung" : " Betäubungen oder Vergiftungen") + " ab",
+    magicRes: (v) => "-" + pct(v) + " Schaden durch Zauber",
+    toughness: (v) => "-" + pct(v) + " erlittener Schaden",
+    lifesteal: (v) => pct(v) + " des verursachten Schadens heilt dich",
+    healPow: (v) => "Heilung des Spezialangriffs +" + pct(v),
+    poisonPow: (v) => "Gift +" + pct(v) + " stärker",
+    stunChance: (v) => "+" + pct(v) + " Chance zu betäuben",
+    afterStun: (v) => "+" + pct(v) + " Schaden gegen gerade betäubte Gegner",
+    rageBonus: (v) => "Blutrausch unter halben Lebenspunkten +" + pct(v) + " stärker",
+    opener: (v) => "schlägt immer zuerst zu, erster Angriff +" + pct(v) + " Schaden",
+    assassinate: () => "der erste Treffer ist immer kritisch",
+    spHits: (v) => "Spezialangriff mit " + v + " zusätzlichen Treffern (je 50 %)",
+    spEvery: () => "Spezialangriff schon bei jeder dritten statt vierten Aktion",
+    vanish: () => "unter 40 % Lebenspunkten einmal je Kampf: den nächsten zwei Angriffen ausweichen",
+    firstStrike: () => "",
+  };
+  function pct(v) {
+    return Math.round(v * 1000) / 10 + " %";
+  }
+  // Grundformen je Grundart: [Schluessel, Name, Stufe, Raenge, Wirkung je Rang, Beschreibung]
+  const TALENT_ARCH = {
+    krieger: {
+      o: [["dmg", "Waffenmeister", 1, 3, { dmg: 0.04 }], ["crit", "Schwachstellen", 2, 3, { crit: 0.02 }], ["exe", "Gnadenstoß", 2, 2, { execute: 0.1 }], ["dbl", "Doppelschlag", 3, 2, { double: 0.11 }], ["cap", "Sturmangriff", 4, 1, { opener: 1.2, firstStrike: 1 }, "Aktive Fähigkeit: Du stürmst los und triffst mit voller Wucht."]],
+      d: [["hp", "Zähigkeit", 1, 3, { hp: 0.04 }], ["blk", "Schildmeister", 2, 3, { block: 0.03 }], ["tgh", "Eiserner Wille", 2, 2, { toughness: 0.03 }], ["rip", "Parade", 3, 2, { riposte: 0.08 }], ["cap", "Schmerz ignorieren", 4, 1, { secondWind: 0.22 }, "Aktive Fähigkeit: Kurz vor dem Fall beißt du die Zähne zusammen und kommst wieder zu Kräften."]],
+    },
+    schurke: {
+      o: [["crit", "Tödliche Präzision", 1, 3, { crit: 0.03 }], ["cm", "Grausame Klinge", 2, 3, { critMult: 0.2 }], ["prc", "Rüstungsritzer", 2, 2, { pierce: 0.12 }], ["exe", "Gnadenstoß", 3, 2, { execute: 0.12 }], ["cap", "Meucheln", 4, 1, { assassinate: 1 }, "Aktive Fähigkeit: Aus dem Verborgenen sitzt der erste Stich immer."]],
+      d: [["eva", "Flinke Füße", 1, 3, { evade: 0.02 }], ["hp", "Zähigkeit", 2, 3, { hp: 0.04 }], ["pur", "Reinigung", 2, 2, { purge: 1 }], ["rip", "Konter", 3, 2, { riposte: 0.09 }], ["cap", "Verschwinden", 4, 1, { vanish: 1 }, "Aktive Fähigkeit: In höchster Not tauchst du in die Schatten ab."]],
+    },
+    jaeger: {
+      o: [["dmg", "Scharfes Auge", 1, 3, { dmg: 0.03 }], ["prc", "Durchschlag", 2, 3, { pierce: 0.1 }], ["crit", "Blattschuss", 2, 2, { crit: 0.02 }], ["dbl", "Schnellschuss", 3, 2, { double: 0.07 }], ["cap", "Pfeilsalve", 4, 1, { spHits: 2 }, "Aktive Fähigkeit: Ein Regen aus Pfeilen begleitet deinen Spezialangriff."]],
+      d: [["hp", "Zähigkeit", 1, 3, { hp: 0.04 }], ["eva", "Ausweichen", 2, 3, { evade: 0.02 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["ls", "Jagdinstinkt", 3, 2, { lifesteal: 0.04 }], ["cap", "Zweiter Atem", 4, 1, { secondWind: 0.2 }, "Aktive Fähigkeit: Wenn es eng wird, findest du neue Kraft."]],
+    },
+    magier: {
+      o: [["dmg", "Zerstörung", 1, 3, { dmg: 0.04 }], ["crit", "Fokussierte Macht", 2, 3, { crit: 0.02 }], ["cm", "Entfesselung", 2, 2, { critMult: 0.2 }], ["exe", "Vernichtung", 3, 2, { execute: 0.1 }], ["cap", "Wilde Macht", 4, 1, { critMult: 0.5, crit: 0.04 }, "Aktive Fähigkeit: Rohe Magie macht kritische Zauber verheerend."]],
+      d: [["hp", "Lebenskraft", 1, 3, { hp: 0.05 }], ["ward", "Barriere", 2, 3, { ward: 0.03 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["tgh", "Standhaftigkeit", 3, 2, { toughness: 0.04 }], ["cap", "Bannkreis", 4, 1, { ward: 0.08, purge: 1 }, "Aktive Fähigkeit: Ein Kreis aus Runen schützt dich zu Kampfbeginn."]],
+    },
+  };
+  // Klassenpfad: Name des Zweiges und die Besonderheit, die zur Spezialfaehigkeit passt
+  const TALENT_CLASS = {
+    schildritter: { names: ["Schwertkunst", "Schildwall", "Eid des Ritters"], sig: ["Nachsetzen", { afterStun: 0.3 }] },
+    meuchler: { names: ["Klingenkunst", "Schattenpfad", "Kehlschnitt"], sig: ["Blutige Ernte", { spCritMult: 0.2 }] },
+    langbogner: { names: ["Bogenkunst", "Waldläufer", "Pfeilhagel"], sig: ["Breitkopfspitzen", { spPierce: 0.3, spDmg: 0.05 }] },
+    lichtweber: { names: ["Lichtmagie", "Bannkunst", "Sonnenlanze"], sig: ["Heilendes Licht", { healPow: 0.3 }] },
+    sturmhuene: { names: ["Axtkunst", "Trollhaut", "Blutrausch"], sig: ["Wilder Zorn", { rageBonus: 0.12 }] },
+    nebelschleicher: { names: ["Klingenkunst", "Nebelpfad", "Giftklinge"], sig: ["Tödliches Gift", { poisonPow: 0.3 }] },
+    wolfsjaeger: { names: ["Jagdkunst", "Wildnis", "Frostpfeil"], sig: ["Klirrender Frost", { stunChance: 0.25, spDmg: 0.05 }] },
+    runenwirker: { names: ["Runenmagie", "Runenschild", "Runensturm"], sig: ["Runenkraft", { spDmg: 0.06 }] },
+    hainwaechter: { names: ["Klingentanz", "Rindenhaut", "Lebenssaft"], sig: ["Saft des Hains", { healPow: 0.3 }] },
+    schattentaenzer: { names: ["Klingenkunst", "Schattentanz", "Tanz der Schatten"], sig: ["Tanz der Klingen", { riposte: 0.1 }] },
+    mondschuetze: { names: ["Bogenkunst", "Feenpfad", "Mondpfeil"], sig: ["Silberspitze", { spCritMult: 0.2 }] },
+    dornenrufer: { names: ["Dornmagie", "Hainschutz", "Wurzelgriff"], sig: ["Dornenumklammerung", { afterStun: 0.3 }] },
   };
 
   const RARITIES = {
@@ -699,6 +775,6 @@
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
     MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
-    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS,
+    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS,
   };
 })();

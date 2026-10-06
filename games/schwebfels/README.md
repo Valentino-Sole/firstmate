@@ -1,6 +1,6 @@
 # Helden von Schwebfels
 
-Browser-Rollenspiel in der schwebenden Inselwelt Schwebfels zwischen drei verfeindeten Reichen (Albion, Midgard, Hibernia), jedes mit eigener Heimatinsel, eigener Musik und eigenen Monstern: zwölf Klassen mit eigener Geschichte, Aufträge und Hordenaufträge in der Taverne, automatische Kämpfe in 3D, Ausrüstung mit Vergleich, Gesichtstätowierungen, Chronik, Ring der Reiche mit passend starken Gegnern, Ranglisten für Helden, Gilden und Reiche, Gilden, Heim mit Einrichtung, Wachturm, sechs Dungeons, Reittiere, Wunschbrunnen, Tag-Nacht-Wechsel und das Mondtor, das sich nur nachts öffnet.
+Browser-Rollenspiel in der schwebenden Inselwelt Schwebfels zwischen drei verfeindeten Reichen (Albion, Midgard, Hibernia), jedes mit eigener Heimatinsel, eigener Musik und eigenen Monstern: zwölf Klassen mit eigener Geschichte, Aufträge und Hordenaufträge in der Taverne, automatische Kämpfe in 3D, Ausrüstung mit Vergleich, Gesichtstätowierungen, Talentbäume für jede Klasse, Chronik, Ring der Reiche mit passend starken Gegnern, Ranglisten für Helden, Gilden und Reiche, Gilden, Heim mit Einrichtung, Wachturm, sechs Dungeons, Reittiere, Wunschbrunnen, Tag-Nacht-Wechsel und das Mondtor, das sich nur nachts öffnet.
 Aufbau und Abgrenzung zum Vorbild Shakes & Fidget stehen in [DESIGN.md](DESIGN.md).
 
 ## Spielen
@@ -24,6 +24,7 @@ node --test tests/engine.test.mjs
 # Balance-Simulationen
 node tests/balance.mjs
 node tests/progression.mjs all 30
+node tests/talents.mjs
 
 # Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium)
 node build.mjs && node tests/e2e.mjs screens
@@ -35,8 +36,8 @@ Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` a
 
 | Datei | Inhalt |
 |---|---|
-| `src/data.js` | Reiche und Heimatinseln, Völker, Klassen und ihre Geschichten, Gegenstände, Monster je Reich, Nachtwesen, Dungeons, Auftragstexte, Heim, Abzeichen |
-| `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf, Mehrfachkämpfe, Aufträge, Chronik, Arena mit Stärkeabgleich, Ranglisten, Gilden, Heim, Dungeons, Läden, Tag und Nacht, Mondtor, Übernahme alter Spielstände |
+| `src/data.js` | Reiche und Heimatinseln, Völker, Klassen und ihre Geschichten, Talentbäume, Gegenstände, Monster je Reich, Nachtwesen, Dungeons, Auftragstexte, Heim, Abzeichen |
+| `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf mit Talentwirkungen, Talentbäume, Mehrfachkämpfe, Aufträge, Chronik, Arena mit Stärkeabgleich, Ranglisten, Gilden, Heim, Dungeons, Läden, Tag und Nacht, Mondtor, Übernahme alter Spielstände |
 | `src/icons.js` | Eigene Vektor-Symbole für Gegenstände, Reiche und Oberfläche |
 | `src/r3d-models.js` | 3D-Helden: gemalte Texturen, Gesichter mit Tattoos und Narben, Reichsrüstungen, Prunkwaffen, Animationen |
 | `src/r3d-monsters.js` | 15 Monstergattungen mit eigenen Animationen, Frost und Moos je nach Heimat |

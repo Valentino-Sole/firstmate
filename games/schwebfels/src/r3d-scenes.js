@@ -2662,6 +2662,11 @@
         f.m.update(dt * speed);
         f.shadow.position.x = f.m.obj.position.x;
         if (f.aura) f.aura.position.copy(f.m.obj.position);
+        if (f.bubble) {
+          f.bubble.position.x = f.m.obj.position.x;
+          f.bubble.position.z = f.m.obj.position.z;
+          f.bubble.visible = f.m.obj.visible;
+        }
         if (f.poisonFx) {
           f.poisonFx.position.set(f.m.obj.position.x, (f.m.headY || 1.8) + 0.2, f.m.obj.position.z);
           f.poisonFx.rotation.y += dt * 2;
@@ -2888,8 +2893,87 @@
     const report = (side, ev, idx) => {
       if (opts.onImpact) opts.onImpact(side, hp[side], ev, idx);
     };
+    // Talente im Kampf: Schutzkugel, Beschriftungen fuer Treffer mit Talentwirkung
+    const TAL_COLOR = { ward: "#9fd8ff", secondWind: "#7fffb0", vanish: "#b48cff", purge: "#fff6c8" };
+    const TAG_TEXT = { double: "Doppelschlag!", opener: "Sturmangriff!", assassinate: "Meucheln!", execute: "Gnadenstoß!", afterStun: "Nachsetzen!" };
+    function setBubble(f, on) {
+      if (f.bubble) scene.remove(f.bubble);
+      f.bubble = null;
+      if (!on) return;
+      const hgt = (f.m.headY || 1.8) + 0.4;
+      const g = grp([f.m.obj.position.x, hgt / 2, f.m.obj.position.z]);
+      const sm = new T.MeshBasicMaterial({ color: col("#9fd8ff"), transparent: true, opacity: 0.18, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide });
+      g.add(new T.Mesh(G.sph(1, 24, 16), sm));
+      g.add(mesh(G.torus(0.98, 0.02, PI * 2, 4, 48), glow("#cfeaff", 0.7), { r: [PI / 2, 0, 0] }));
+      g.scale.set(0.95, hgt / 2, 0.95);
+      g.userData.mat = sm;
+      scene.add(g);
+      f.bubble = g;
+    }
+    function bubbleHit(f, left) {
+      if (!f.bubble) return;
+      const m = f.bubble.userData.mat;
+      tween(0.3, (u) => (m.opacity = 0.18 + 0.4 * Math.sin(u * PI)));
+      if (left <= 0) {
+        const b = f.bubble;
+        f.bubble = null;
+        burst(b.position.clone(), "#cfeaff", 18, 2.2);
+        tween(0.3, (u) => {
+          b.scale.multiplyScalar(1.04);
+          m.opacity = 0.3 * (1 - u);
+          if (u >= 1) scene.remove(b);
+        });
+      }
+    }
+    function lightColumn(f, color) {
+      const c = new T.Mesh(G.cyl(0.7, 0.7, 4, 16, true), new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+      c.position.set(f.m.obj.position.x, 2, f.m.obj.position.z);
+      scene.add(c);
+      return tween(0.9, (u) => {
+        c.material.opacity = 0.2 * Math.sin(u * PI);
+        c.scale.set(1 - u * 0.4, 1, 1 - u * 0.4);
+        if (u >= 1) scene.remove(c);
+      });
+    }
+    async function playTalent(ev) {
+      const A = F[ev.a];
+      const color = TAL_COLOR[ev.id] || "#ffd27a";
+      banner(ev.name, A.side);
+      ring(A, color, true);
+      rising(A, color, 14);
+      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
+      if (ev.id === "ward") {
+        A.wardLeft = ev.ward;
+        setBubble(A, true);
+        floatText(A, "Barriere " + SB.util.fmt(ev.ward), "talent");
+      } else if (ev.id === "secondWind") {
+        lightColumn(A, color);
+        hp[ev.a] = ev.hp[ev.a];
+        floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
+        report(ev.a, ev, -1);
+      } else if (ev.id === "vanish") {
+        burst(A.m.obj.position.clone().setY(1), color, 22, 1.8, 0.4);
+        A.m.obj.visible = false;
+        await wait(0.35);
+        A.m.obj.visible = true;
+        A.m.play("evade", 0.4);
+        floatText(A, "Verschwunden!", "evade");
+      } else if (ev.id === "purge") {
+        lightColumn(A, color);
+        clearStars(A);
+        floatText(A, "Gereinigt!", "talent");
+      }
+      await wait(0.75);
+    }
+
     async function impact(ev, A, Bf, hit, idx) {
       const def = 1 - ev.a;
+      if (hit.tags) for (const t of hit.tags) if (TAG_TEXT[t]) floatText(t === "double" || t === "opener" || t === "assassinate" ? A : Bf, t === "execute" && A.m.arch === "magier" ? "Vernichtung!" : TAG_TEXT[t], "talent");
+      if (hit.absorbed) {
+        Bf.wardLeft = (Bf.wardLeft || 0) - hit.absorbed;
+        floatText(Bf, "Absorbiert " + SB.util.fmt(hit.absorbed), "block");
+        bubbleHit(Bf, Bf.wardLeft);
+      }
       if (hit.res === "evade") {
         const dx = Bf.side * 0.7;
         Bf.m.play("evade", 0.4);
@@ -2921,6 +3005,18 @@
     async function play(ev) {
       const A = F[ev.a];
       const Bf = F[1 - ev.a];
+      if (ev.kind === "talent") {
+        await playTalent(ev);
+        if (ev.hp) {
+          hp[0] = ev.hp[0];
+          hp[1] = ev.hp[1];
+        }
+        return;
+      }
+      if (ev.kind === "counter") {
+        floatText(A, ev.name + "!", "talent");
+        ring(A, "#ffe27a", false);
+      }
       if (ev.kind === "dot") {
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : Math.max(0, hp[ev.a] - ev.dmg);
         A.m.play("hit", 0.35);
@@ -3007,6 +3103,12 @@
         if (opts.sfx) opts.sfx("heal");
         report(ev.a, ev, -1);
       }
+      if (ev.lifesteal) {
+        hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.lifesteal;
+        rising(A, "#ff7a8a", 8);
+        floatText(A, "+" + SB.util.fmt(ev.lifesteal), "heal");
+        report(ev.a, ev, -1);
+      }
       if (ev.poison) {
         floatText(Bf, "Vergiftet!", "poison");
         setPoison(Bf, true);
@@ -3033,6 +3135,9 @@
       async nextFoe(desc, foeHp, heroHp) {
         const old = F[1];
         clearStars(old);
+        setBubble(old, false);
+        setBubble(F[0], false);
+        F[0].wardLeft = 0;
         setAura(old, null);
         setPoison(old, false);
         setPoison(F[0], false);

@@ -360,8 +360,10 @@ const D_REALM = (SB, race) => SB.data.RACES[race].realm;
 
 test("Arena: vier Herausforderer, Staerke passend gestaffelt, Auswahl bleibt bis zum Kampf", () => {
   for (const cls of ["schildritter", "runenwirker", "schattentaenzer"]) {
-    const { E, S, now, advance } = fresh(cls);
+    const { E, D, S, now, advance, SB } = fresh(cls);
     S.level = 12;
+    const rr = SB.util.rng(cls);
+    for (const sl of D.SLOTS) S.equip[sl] = E.makeItem(rr, { level: 12, cls, slot: sl, rarity: "selten" });
     const r1 = E.arenaRivals(S, now());
     assert.equal(r1.length, 4);
     assert.ok(r1.every((r) => r.realm !== S.realm));
@@ -440,4 +442,86 @@ test("Auftraege zeigen Gegner der eigenen Heimatinsel", () => {
     E.refreshOffers(S);
     for (const o of S.quest.offers) for (const w of o.waves) assert.ok(E.monById(w.monster).realms.indexOf(realm) >= 0);
   }
+});
+
+test("Talente: Punkte je Stufe, Stufen im Zweig, Zuruecksetzen kostet Perlen", () => {
+  const { E, S } = fresh("schildritter");
+  assert.equal(E.talentPoints(S), 0);
+  assert.equal(E.learnTalent(S, "o.dmg").ok, false, "Stufe 1 hat keine Punkte");
+  S.level = 20;
+  assert.equal(E.talentPoints(S), 10);
+  const tree = E.talentTree(S.cls);
+  assert.equal(tree.branches.length, 3);
+  assert.equal(E.learnTalent(S, "o.crit").ok, false, "Stufe 2 braucht 3 Punkte im Zweig");
+  for (let i = 0; i < 3; i++) assert.equal(E.learnTalent(S, "o.dmg").ok, true);
+  assert.equal(E.learnTalent(S, "o.dmg").ok, false, "Rang 3 ist das Maximum");
+  assert.equal(E.learnTalent(S, "o.crit").ok, true);
+  assert.equal(E.learnTalent(S, "x.unbekannt").ok, false);
+  assert.equal(E.talentFree(S), 6);
+  S.perlen = 2;
+  assert.equal(E.resetTalents(S).ok, false, "zu wenig Perlen");
+  S.perlen = 5;
+  assert.equal(E.resetTalents(S).ok, true);
+  assert.equal(S.perlen, 5 - E.C.TALENT_RESET_PERLEN);
+  assert.equal(E.talentFree(S), 10);
+});
+
+test("Talente wirken im Kampf: Lebenspunkte, Barriere, zweiter Atem, Gegenschlag", () => {
+  const { E, S } = fresh("runenwirker");
+  S.level = 30;
+  const before = E.heroFighter(S).maxHp;
+  for (const [id, n] of [["d.hp", 3], ["d.ward", 3], ["d.mag", 2], ["d.tgh", 2], ["d.cap", 1]]) for (let i = 0; i < n; i++) assert.equal(E.learnTalent(S, id).ok, true, id);
+  const f = E.heroFighter(S);
+  assert.ok(f.maxHp > before, "mehr Lebenspunkte");
+  assert.ok(f.tal.ward > 0 && f.tal.purge === 1);
+  const foe = E.modelHeroFighter(30, "sturmhuene", 1.2);
+  const res = E.simulate(f, foe, "talenttest");
+  const wardEv = res.events.find((e) => e.kind === "talent" && e.id === "ward");
+  assert.ok(wardEv && wardEv.ward > 0, "Barriere zu Kampfbeginn");
+  assert.ok(res.events.some((e) => e.hits && e.hits.some((h) => h.absorbed > 0)), "Barriere faengt Schaden ab");
+  // Krieger mit zweitem Atem und Parade
+  const k = fresh("sturmhuene");
+  k.S.level = 40;
+  for (const [id, n] of [["d.hp", 3], ["d.blk", 3], ["d.tgh", 2], ["d.rip", 2], ["d.cap", 1]]) for (let i = 0; i < n; i++) k.E.learnTalent(k.S, id);
+  const kf = k.E.heroFighter(k.S);
+  let wind = 0;
+  for (let i = 0; i < 30; i++) {
+    const r = k.E.simulate(kf, k.E.modelHeroFighter(40, "meuchler", 1.25), "w" + i);
+    for (const e of r.events) {
+      if (e.kind === "talent" && e.id === "secondWind") wind++;
+      assert.ok(e.hp[0] >= 0 && e.hp[0] <= kf.maxHp);
+    }
+  }
+  assert.ok(wind > 0, "zweiter Atem greift");
+});
+
+test("Computerhelden bekommen gueltige Talente innerhalb ihres Budgets", () => {
+  const { E, D } = fresh();
+  for (const cls of Object.keys(D.CLASSES))
+    for (const L of [1, 9, 18, 40, 80]) {
+      const ranks = E.autoTalents(cls, L, 7);
+      const spent = Object.values(ranks).reduce((a, b) => a + b, 0);
+      assert.ok(spent <= E.talentPointsFor(L));
+      for (const id in ranks) assert.equal(E.talentCheck(cls, Object.assign({}, ranks, { [id]: ranks[id] - 1 }), id, E.talentPointsFor(L)).ok, true, cls + " " + id);
+    }
+});
+
+test("Glueck verbessert die Beute, Attribut-Erklaerungen liefern Werte", () => {
+  const { E, S } = fresh("meuchler");
+  S.level = 10;
+  const lb0 = E.lootBoost(S);
+  S.bought.glueck += 80;
+  assert.ok(E.lootBoost(S) > lb0);
+  for (const a of ["kraft", "geschick", "verstand", "konstitution", "glueck"]) assert.ok(E.attrEffects(S, a, 1).length >= 1, a);
+  const luck = E.attrEffects(S, "glueck", 5);
+  assert.ok(luck.some((x) => /Beute/.test(x.t)));
+});
+
+test("Fremde Heldenprofile: nur gueltige Talente der eigenen Klasse", () => {
+  const { SB } = fresh();
+  const h = SB.store.sanitizeHero("abc", { name: "Fremdling", race: "nordmann", cls: "sturmhuene", level: 20, attrs: { kraft: 100, geschick: 20, verstand: 20, konstitution: 80, glueck: 20 }, wMin: 20, wMax: 40, armor: 100, talents: { "o.dmg": 9, "d.cap": 1, "x.boese": 5, "c.cap": "viel" } });
+  assert.deepEqual(Object.keys(h.talents).sort(), ["c.cap", "d.cap", "o.dmg"]);
+  assert.equal(h.talents["o.dmg"], 3, "auf das Maximum begrenzt");
+  assert.equal(h.talents["c.cap"], 0, "ungueltiger Wert");
+  assert.ok(h.fighter.tal);
 });

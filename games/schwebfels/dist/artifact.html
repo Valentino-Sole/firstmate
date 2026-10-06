@@ -306,6 +306,40 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .attr .val { font-weight: 800; font-size: 17px; }
 .attr .cost { font-size: 12px; color: var(--fog); white-space: nowrap; }
 .attr.main { border-color: var(--gold-dim); }
+.attr .ainfo { font-size: 12px; color: var(--fog); line-height: 1.35; margin-top: 2px; }
+.attr .ainfo b { color: var(--parchment, #efe3c4); }
+.attr .aup { color: var(--jade); white-space: nowrap; }
+.attr .cost { margin-left: 6px; }
+
+/* Talentbaum */
+.talhead { margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+.taltree { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.talbranch { background: linear-gradient(var(--stone-3), var(--stone-2)); border: 1px solid #000; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.talbranch.b-o { border-top: 3px solid #c0533a; }
+.talbranch.b-d { border-top: 3px solid #4f8fbf; }
+.talbranch.b-c { border-top: 3px solid var(--gold); }
+.tb-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; }
+.tb-head b { font-family: var(--font-display); font-size: 17px; color: var(--gold-hi); }
+.tiers { display: flex; flex-direction: column; gap: 5px; }
+.tiers.locked { opacity: 0.45; }
+.tierlabel { font-size: 11px; color: var(--fog); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+.talent { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; text-align: left; padding: 6px 8px; border-radius: 4px; background: #120f16; border: 1px solid #3a3040; color: inherit; cursor: pointer; font: inherit; }
+.talent:hover { border-color: var(--gold-dim); }
+.talent[aria-disabled="true"] { cursor: default; }
+.talent .tn { font-weight: 800; font-size: 13.5px; }
+.talent .tr { font-weight: 800; font-size: 12px; color: var(--fog); }
+.talent .td { grid-column: 1 / -1; font-size: 11.5px; color: var(--fog); line-height: 1.3; }
+.talent .td i { color: var(--jade); font-style: normal; }
+.talent .tnote { grid-column: 1 / -1; font-size: 11px; color: var(--gold-hi); font-style: italic; }
+.talent.has { border-color: var(--gold-dim); background: linear-gradient(#221a10, #120f16); }
+.talent.has .tr { color: var(--gold-hi); }
+.talent.full { border-color: var(--gold); }
+.talent.cap { box-shadow: inset 0 0 0 1px rgba(201, 164, 65, 0.35); }
+.talent.cap.has { box-shadow: 0 0 12px rgba(255, 200, 90, 0.35); }
+.tab .badge { display: inline-block; min-width: 16px; padding: 0 4px; border-radius: 8px; background: var(--blood); color: #fff; font-size: 11px; line-height: 16px; margin-left: 3px; }
+@media (max-width: 860px) {
+  .taltree { grid-template-columns: 1fr; }
+}
 .plus { width: 34px; height: 34px; padding: 0; font-size: 20px; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 14px; margin-top: 10px; }
 .stats div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed rgba(164, 158, 148, 0.25); padding-bottom: 3px; }
@@ -381,6 +415,7 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .fx-text.stun { color: #ffe45a; font-size: 24px; margin-top: -30px; }
 .fx-text.heal { color: #7fffb0; font-size: 32px; }
 .fx-text.poison { color: #9fff5a; font-size: 26px; }
+.fx-text.talent { color: #ffe9a8; font-size: 26px; margin-top: -60px; text-shadow: 0 3px 0 #000, 0 0 14px rgba(255, 210, 120, 0.7); }
 @keyframes floatUp { 0% { opacity: 0; transform: translate(-50%, -20%) scale(0.6); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -190%) scale(1); } }
 .fx-banner { position: absolute; top: 26%; font-family: var(--font-display); font-size: 44px; color: var(--gold-hi); text-shadow: 0 3px 0 #000, 0 0 18px rgba(201, 164, 65, 0.5); padding: 4px 26px; background: linear-gradient(90deg, transparent, rgba(12, 10, 16, 0.85), transparent); animation: bannerIn 1.2s ease-out forwards; white-space: nowrap; }
 .fx-banner.left { left: 8%; }
@@ -632,7 +667,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     geschick: { name: "Geschick", short: "GES", desc: "Hauptwert von Schurken und Jägern. Erhöht ihren Schaden und schwächt Geschick-Angriffe gegen dich." },
     verstand: { name: "Verstand", short: "VER", desc: "Hauptwert der Magier. Erhöht ihren Zauberschaden und schwächt Zauber gegen dich." },
     konstitution: { name: "Konstitution", short: "KON", desc: "Bestimmt deine Lebenspunkte." },
-    glueck: { name: "Glück", short: "GLÜ", desc: "Erhöht die Chance auf kritische Treffer." },
+    glueck: { name: "Glück", short: "GLÜ", desc: "Erhöht die Chance auf kritische Treffer und verbessert die Beute." },
   };
 
   const LORE =
@@ -966,6 +1001,82 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     amulett: { slot: "amulett", arch: null, g: "n", names: ["Amulett", "Medaillon", "Runenanhänger", "Totem"] },
     ring: { slot: "ring", arch: null, g: "m", names: ["Ring", "Siegelring", "Runenring", "Knochenring"] },
     talisman: { slot: "talisman", arch: null, g: "m", names: ["Talisman", "Glücksbringer", "Runenstein", "Götzenbild"] },
+  };
+
+  /* Talentbaeume: je Klasse drei Zweige (Angriff, Verteidigung, Klassenpfad), angelehnt an die Spezialisierungen
+     und Reichsfaehigkeiten von Dark Age of Camelot. Werte gelten je Rang. Stufe 1 bis 4 eines Zweiges
+     werden mit 0, 3, 6 und 8 ausgegebenen Punkten in diesem Zweig frei. */
+  const TALENT_TIER_REQ = [0, 0, 3, 6, 8];
+  const TALENT_EFFECTS = {
+    dmg: (v) => "+" + pct(v) + " Schaden",
+    hp: (v) => "+" + pct(v) + " Lebenspunkte",
+    armor: (v) => "+" + pct(v) + " Rüstung",
+    crit: (v) => "+" + pct(v) + " Chance auf kritische Treffer",
+    critMult: (v) => "kritische Treffer +" + pct(v) + " stärker",
+    block: (v) => "+" + pct(v) + " Blockchance (mit Schild)",
+    evade: (v) => "+" + pct(v) + " Ausweichchance",
+    spDmg: (v) => "Spezialangriff +" + pct(v) + " Schaden",
+    spCrit: (v) => "Spezialangriff +" + pct(v) + " Kritchance",
+    spCritMult: (v) => "kritische Spezialangriffe +" + pct(v) + " stärker",
+    spPierce: (v) => "Spezialangriff durchdringt " + pct(v) + " der Rüstung",
+    execute: (v) => "+" + pct(v) + " Schaden gegen Gegner unter 35 % Lebenspunkten",
+    double: (v) => pct(v) + " Chance auf einen zweiten Schlag (60 %)",
+    pierce: (v) => "durchdringt " + pct(v) + " der gegnerischen Rüstung",
+    riposte: (v) => pct(v) + " Chance auf einen Gegenschlag nach Block oder Ausweichen",
+    ward: (v) => "Kampfbeginn mit einer Barriere aus " + pct(v) + " deiner Lebenspunkte",
+    secondWind: (v) => "einmal je Kampf unter 30 % Lebenspunkten: heilt " + pct(v),
+    purge: (v) => "wehrt " + v + (v === 1 ? " Betäubung oder Vergiftung" : " Betäubungen oder Vergiftungen") + " ab",
+    magicRes: (v) => "-" + pct(v) + " Schaden durch Zauber",
+    toughness: (v) => "-" + pct(v) + " erlittener Schaden",
+    lifesteal: (v) => pct(v) + " des verursachten Schadens heilt dich",
+    healPow: (v) => "Heilung des Spezialangriffs +" + pct(v),
+    poisonPow: (v) => "Gift +" + pct(v) + " stärker",
+    stunChance: (v) => "+" + pct(v) + " Chance zu betäuben",
+    afterStun: (v) => "+" + pct(v) + " Schaden gegen gerade betäubte Gegner",
+    rageBonus: (v) => "Blutrausch unter halben Lebenspunkten +" + pct(v) + " stärker",
+    opener: (v) => "schlägt immer zuerst zu, erster Angriff +" + pct(v) + " Schaden",
+    assassinate: () => "der erste Treffer ist immer kritisch",
+    spHits: (v) => "Spezialangriff mit " + v + " zusätzlichen Treffern (je 50 %)",
+    spEvery: () => "Spezialangriff schon bei jeder dritten statt vierten Aktion",
+    vanish: () => "unter 40 % Lebenspunkten einmal je Kampf: den nächsten zwei Angriffen ausweichen",
+    firstStrike: () => "",
+  };
+  function pct(v) {
+    return Math.round(v * 1000) / 10 + " %";
+  }
+  // Grundformen je Grundart: [Schluessel, Name, Stufe, Raenge, Wirkung je Rang, Beschreibung]
+  const TALENT_ARCH = {
+    krieger: {
+      o: [["dmg", "Waffenmeister", 1, 3, { dmg: 0.04 }], ["crit", "Schwachstellen", 2, 3, { crit: 0.02 }], ["exe", "Gnadenstoß", 2, 2, { execute: 0.1 }], ["dbl", "Doppelschlag", 3, 2, { double: 0.11 }], ["cap", "Sturmangriff", 4, 1, { opener: 1.2, firstStrike: 1 }, "Aktive Fähigkeit: Du stürmst los und triffst mit voller Wucht."]],
+      d: [["hp", "Zähigkeit", 1, 3, { hp: 0.04 }], ["blk", "Schildmeister", 2, 3, { block: 0.03 }], ["tgh", "Eiserner Wille", 2, 2, { toughness: 0.03 }], ["rip", "Parade", 3, 2, { riposte: 0.08 }], ["cap", "Schmerz ignorieren", 4, 1, { secondWind: 0.22 }, "Aktive Fähigkeit: Kurz vor dem Fall beißt du die Zähne zusammen und kommst wieder zu Kräften."]],
+    },
+    schurke: {
+      o: [["crit", "Tödliche Präzision", 1, 3, { crit: 0.03 }], ["cm", "Grausame Klinge", 2, 3, { critMult: 0.2 }], ["prc", "Rüstungsritzer", 2, 2, { pierce: 0.12 }], ["exe", "Gnadenstoß", 3, 2, { execute: 0.12 }], ["cap", "Meucheln", 4, 1, { assassinate: 1 }, "Aktive Fähigkeit: Aus dem Verborgenen sitzt der erste Stich immer."]],
+      d: [["eva", "Flinke Füße", 1, 3, { evade: 0.02 }], ["hp", "Zähigkeit", 2, 3, { hp: 0.04 }], ["pur", "Reinigung", 2, 2, { purge: 1 }], ["rip", "Konter", 3, 2, { riposte: 0.09 }], ["cap", "Verschwinden", 4, 1, { vanish: 1 }, "Aktive Fähigkeit: In höchster Not tauchst du in die Schatten ab."]],
+    },
+    jaeger: {
+      o: [["dmg", "Scharfes Auge", 1, 3, { dmg: 0.03 }], ["prc", "Durchschlag", 2, 3, { pierce: 0.1 }], ["crit", "Blattschuss", 2, 2, { crit: 0.02 }], ["dbl", "Schnellschuss", 3, 2, { double: 0.07 }], ["cap", "Pfeilsalve", 4, 1, { spHits: 2 }, "Aktive Fähigkeit: Ein Regen aus Pfeilen begleitet deinen Spezialangriff."]],
+      d: [["hp", "Zähigkeit", 1, 3, { hp: 0.04 }], ["eva", "Ausweichen", 2, 3, { evade: 0.02 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["ls", "Jagdinstinkt", 3, 2, { lifesteal: 0.04 }], ["cap", "Zweiter Atem", 4, 1, { secondWind: 0.2 }, "Aktive Fähigkeit: Wenn es eng wird, findest du neue Kraft."]],
+    },
+    magier: {
+      o: [["dmg", "Zerstörung", 1, 3, { dmg: 0.04 }], ["crit", "Fokussierte Macht", 2, 3, { crit: 0.02 }], ["cm", "Entfesselung", 2, 2, { critMult: 0.2 }], ["exe", "Vernichtung", 3, 2, { execute: 0.1 }], ["cap", "Wilde Macht", 4, 1, { critMult: 0.5, crit: 0.04 }, "Aktive Fähigkeit: Rohe Magie macht kritische Zauber verheerend."]],
+      d: [["hp", "Lebenskraft", 1, 3, { hp: 0.05 }], ["ward", "Barriere", 2, 3, { ward: 0.03 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["tgh", "Standhaftigkeit", 3, 2, { toughness: 0.04 }], ["cap", "Bannkreis", 4, 1, { ward: 0.08, purge: 1 }, "Aktive Fähigkeit: Ein Kreis aus Runen schützt dich zu Kampfbeginn."]],
+    },
+  };
+  // Klassenpfad: Name des Zweiges und die Besonderheit, die zur Spezialfaehigkeit passt
+  const TALENT_CLASS = {
+    schildritter: { names: ["Schwertkunst", "Schildwall", "Eid des Ritters"], sig: ["Nachsetzen", { afterStun: 0.3 }] },
+    meuchler: { names: ["Klingenkunst", "Schattenpfad", "Kehlschnitt"], sig: ["Blutige Ernte", { spCritMult: 0.2 }] },
+    langbogner: { names: ["Bogenkunst", "Waldläufer", "Pfeilhagel"], sig: ["Breitkopfspitzen", { spPierce: 0.3, spDmg: 0.05 }] },
+    lichtweber: { names: ["Lichtmagie", "Bannkunst", "Sonnenlanze"], sig: ["Heilendes Licht", { healPow: 0.3 }] },
+    sturmhuene: { names: ["Axtkunst", "Trollhaut", "Blutrausch"], sig: ["Wilder Zorn", { rageBonus: 0.12 }] },
+    nebelschleicher: { names: ["Klingenkunst", "Nebelpfad", "Giftklinge"], sig: ["Tödliches Gift", { poisonPow: 0.3 }] },
+    wolfsjaeger: { names: ["Jagdkunst", "Wildnis", "Frostpfeil"], sig: ["Klirrender Frost", { stunChance: 0.25, spDmg: 0.05 }] },
+    runenwirker: { names: ["Runenmagie", "Runenschild", "Runensturm"], sig: ["Runenkraft", { spDmg: 0.06 }] },
+    hainwaechter: { names: ["Klingentanz", "Rindenhaut", "Lebenssaft"], sig: ["Saft des Hains", { healPow: 0.3 }] },
+    schattentaenzer: { names: ["Klingenkunst", "Schattentanz", "Tanz der Schatten"], sig: ["Tanz der Klingen", { riposte: 0.1 }] },
+    mondschuetze: { names: ["Bogenkunst", "Feenpfad", "Mondpfeil"], sig: ["Silberspitze", { spCritMult: 0.2 }] },
+    dornenrufer: { names: ["Dornmagie", "Hainschutz", "Wurzelgriff"], sig: ["Dornenumklammerung", { afterStun: 0.3 }] },
   };
 
   const RARITIES = {
@@ -1320,7 +1431,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
     MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
-    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS,
+    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS,
   };
 })();
 
@@ -1618,6 +1729,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       story: { done: {}, next: 0 },
       house: { tier: 0, furn: {} },
       guild: null,
+      talents: {},
       shops: {},
       buffs: [],
       mounts: { owned: [] },
@@ -1686,6 +1798,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     S.guild = S.guild || null;
     S.seen = S.seen || {};
     S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
+    S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
@@ -1749,6 +1862,41 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     for (const a of D.ATTRS) out[a] = Math.round(out[a] * mult[a]);
     return out;
   };
+  // Glueck verbessert die Beute: hoehere Chance auf seltenere Gegenstaende und auf Funde ueberhaupt
+  E.lootBoost = function (S) {
+    const luck = E.heroAttrs(S).glueck;
+    const L = S.level;
+    return U.clamp(luck / (luck + 12 * L + 60), 0, 0.5);
+  };
+  // Was ein Attribut fuer diesen Helden bewirkt und was ein weiterer Punkt bringt
+  E.attrEffects = function (S, a, plus) {
+    plus = plus || 1;
+    const C = E.classOf(S);
+    const f = E.heroFighter(S);
+    const v = f.attrs[a];
+    const L = S.level;
+    const out = [];
+    const pctS = (x) => (Math.round(x * 1000) / 10).toString().replace(".", ",") + " %";
+    if (a === C.main) out.push({ t: "Hauptwert: jeder Punkt erhöht deinen Schaden", now: "Schaden ×" + (1 + v / 10).toFixed(1).replace(".", ","), up: "+" + pctS(plus / (10 + v)) + " Schaden" });
+    else if (a !== "konstitution" && a !== "glueck") {
+      const who = a === "kraft" ? "Krieger" : a === "geschick" ? "Schurken und Jäger" : "Magier";
+      out.push({ t: "Im Ring der Reiche schwächt es " + who + ", die dich angreifen: ihr Vorteil sinkt um die Hälfte deines Werts", now: "", up: "" });
+    }
+    if (a === "konstitution") {
+      const per = Math.round(f.prof.hpMult * (L + 1) * (1 + ((f.tal && f.tal.hp) || 0)));
+      out.push({ t: "Bestimmt deine Lebenspunkte", now: U.fmt(f.maxHp) + " LP", up: "+" + U.fmt(per * plus) + " LP" });
+    }
+    if (a === "glueck") {
+      const c0 = E.critChance(v, L, f.prof.critBonus);
+      const c1 = E.critChance(v + plus, L, f.prof.critBonus);
+      out.push({ t: "Kritische Treffer gegen Gegner deiner Stufe", now: pctS(c0), up: "+" + pctS(c1 - c0) });
+      const lb = E.lootBoost(S);
+      const lb1 = U.clamp((v + plus) / (v + plus + 12 * L + 60), 0, 0.5);
+      out.push({ t: "Bessere Beute: höhere Chance auf seltene Gegenstände und auf Funde in der Taverne", now: "+" + pctS(lb), up: "+" + pctS(lb1 - lb) });
+    }
+    if (a === "geschick" || a === "glueck") out.push({ t: "Zusammen mit " + (a === "geschick" ? "Glück" : "Geschick") + " entscheidet es, wer zuerst zuschlägt" + (f.prof.firstStrike ? " (du schlägst als Schurke ohnehin zuerst zu)" : ""), now: "", up: "" });
+    return out;
+  };
   E.armorTotal = function (S) {
     let a = 0;
     for (const s of D.SLOTS) if (S.equip[s] && S.equip[s].armor) a += S.equip[s].armor;
@@ -1763,6 +1911,118 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       firstStrike: !!C.firstStrike, critBonus: C.critBonus || 0, critMult: C.critMult || 2,
     };
   };
+  /* ---------------- Talentbaeume ---------------- */
+  E.C.TALENT_RESET_PERLEN = 3;
+  const TREE_CACHE = {};
+  // Baum einer Klasse: drei Zweige mit je fuenf Talenten (Stufe 1 bis 4)
+  E.talentTree = function (cls) {
+    if (TREE_CACHE[cls]) return TREE_CACHE[cls];
+    const C = D.CLASSES[cls];
+    const TA = D.TALENT_ARCH[C.arch];
+    const TC = D.TALENT_CLASS[cls];
+    const mk = (b, [k, name, tier, max, eff, note]) => ({ id: b + "." + k, branch: b, name, tier, max, eff, note: note || "" });
+    const classBranch = [
+      ["sp", C.special.name + "-Meisterschaft", 1, 3, { spDmg: 0.08 }],
+      ["spc", "Präziser " + C.special.name, 2, 3, { spCrit: 0.08 }],
+      ["sig", TC.sig[0], 2, 2, TC.sig[1]],
+      ["ls", "Kampfrausch", 3, 2, { lifesteal: 0.03 }],
+      ["cap", "Großmeister", 4, 1, { spEvery: 3 }, "Aktive Fähigkeit: " + C.special.name + " kommt öfter."],
+    ];
+    const tree = {
+      cls,
+      branches: [
+        { key: "o", name: TC.names[0], kind: "Angriff", talents: TA.o.map((t) => mk("o", t)) },
+        { key: "d", name: TC.names[1], kind: "Verteidigung", talents: TA.d.map((t) => mk("d", t)) },
+        { key: "c", name: TC.names[2], kind: "Klassenpfad", talents: classBranch.map((t) => mk("c", t)) },
+      ],
+    };
+    tree.byId = {};
+    for (const b of tree.branches) for (const t of b.talents) tree.byId[t.id] = t;
+    return (TREE_CACHE[cls] = tree);
+  };
+  E.talentPointsFor = (L) => Math.max(0, Math.floor(L / 2));
+  E.talentPoints = (S) => E.talentPointsFor(S.level);
+  const sumRanks = (ranks, pred) => Object.keys(ranks || {}).reduce((a, k) => a + (pred(k) ? ranks[k] || 0 : 0), 0);
+  E.talentSpent = (S) => sumRanks(S.talents, () => true);
+  E.talentFree = (S) => E.talentPoints(S) - E.talentSpent(S);
+  E.branchSpent = (ranks, b) => sumRanks(ranks, (k) => k.indexOf(b + ".") === 0);
+  E.talentCheck = function (cls, ranks, id, points) {
+    const tree = E.talentTree(cls);
+    const t = tree.byId[id];
+    if (!t) return { ok: false, msg: "Dieses Talent gibt es nicht." };
+    const cur = (ranks && ranks[id]) || 0;
+    if (cur >= t.max) return { ok: false, msg: "Schon voll ausgebaut." };
+    if (sumRanks(ranks, () => true) >= points) return { ok: false, msg: "Keine Talentpunkte frei. Alle zwei Stufen kommt einer dazu." };
+    const need = D.TALENT_TIER_REQ[t.tier];
+    if (E.branchSpent(ranks, t.branch) < need) return { ok: false, msg: "Dafür brauchst du " + need + " Punkte in diesem Zweig." };
+    return { ok: true, t };
+  };
+  E.learnTalent = function (S, id) {
+    S.talents = S.talents || {};
+    const c = E.talentCheck(S.cls, S.talents, id, E.talentPoints(S));
+    if (!c.ok) return c;
+    S.talents[id] = (S.talents[id] || 0) + 1;
+    return { ok: true, talent: c.t, rank: S.talents[id] };
+  };
+  E.resetTalents = function (S) {
+    if (!E.talentSpent(S)) return { ok: false, msg: "Du hast noch keine Talente gelernt." };
+    if (S.perlen < E.C.TALENT_RESET_PERLEN) return { ok: false, msg: "Das Zurücksetzen kostet " + E.C.TALENT_RESET_PERLEN + " Wolkenperlen." };
+    S.perlen -= E.C.TALENT_RESET_PERLEN;
+    S.talents = {};
+    return { ok: true };
+  };
+  // Alle Raenge zusammengefasst zu Wirkungen; ungueltige Eintraege (fremde Klasse, zu viele Punkte) fallen weg
+  E.talentEffects = function (cls, ranks, L) {
+    const tree = E.talentTree(cls);
+    const eff = { _names: {} };
+    let budget = L != null ? E.talentPointsFor(L) : Infinity;
+    for (const b of tree.branches)
+      for (const t of b.talents) {
+        let n = Math.min(t.max, Math.max(0, Math.floor((ranks && ranks[t.id]) || 0)));
+        n = Math.min(n, budget);
+        if (n <= 0) continue;
+        budget -= n;
+        for (const k in t.eff) {
+          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" ? 1 : n);
+          eff._names[k] = t.name;
+        }
+      }
+    if (eff.spEvery) eff.spEvery = 3;
+    return eff;
+  };
+  // Feste Werte aus Talenten auf einen Kaempfer anwenden; der Rest wirkt im Kampf
+  E.applyTalents = function (f, eff) {
+    f.tal = eff;
+    if (!eff) return f;
+    if (eff.hp) f.maxHp = Math.round(f.maxHp * (1 + eff.hp));
+    if (eff.armor) f.armor = Math.round(f.armor * (1 + eff.armor));
+    f.prof = Object.assign({}, f.prof);
+    if (eff.dmg) f.prof.dmgMult *= 1 + eff.dmg;
+    if (eff.crit) f.prof.critBonus = (f.prof.critBonus || 0) + eff.crit;
+    if (eff.critMult) f.prof.critMult = (f.prof.critMult || 2) + eff.critMult;
+    if (eff.block && f.prof.block > 0) f.prof.block += eff.block;
+    if (eff.evade) f.prof.evade = (f.prof.evade || 0) + eff.evade;
+    if (eff.firstStrike) f.prof.firstStrike = true;
+    return f;
+  };
+  // Talentverteilung fuer computergesteuerte Helden: ein Hauptzweig bis zur Spitze, dann der zweite
+  E.autoTalents = function (cls, L, seed, maxPts) {
+    const tree = E.talentTree(cls);
+    const r = U.rng("tal" + seed);
+    const order = [0, 1, 2].sort(() => r() - 0.5);
+    const ranks = {};
+    let pts = Math.min(E.talentPointsFor(L), maxPts != null ? maxPts : Infinity);
+    for (const bi of order) {
+      const b = tree.branches[bi];
+      for (const t of b.talents)
+        while (pts > 0 && E.talentCheck(cls, ranks, t.id, E.talentPointsFor(L)).ok) {
+          ranks[t.id] = (ranks[t.id] || 0) + 1;
+          pts--;
+        }
+    }
+    return ranks;
+  };
+
   E.gearVisual = function (equip) {
     const g = {};
     for (const s of ["helm", "ruestung", "umhang", "handschuhe", "stiefel", "waffe", "nebenhand"]) {
@@ -1778,7 +2038,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (C.arch === "krieger" && !(S.equip.nebenhand && S.equip.nebenhand.base === "schild")) prof.block = 0;
     const w = S.equip.waffe;
     const L = S.level;
-    return {
+    const f = {
       kind: "hero", name: S.name, level: L, cls: S.cls, realm: S.realm, race: S.race, gender: S.gender, look: S.look,
       gear: E.gearVisual(S.equip), mainKey: C.main, attrs, prof,
       maxHp: Math.round(attrs.konstitution * prof.hpMult * (L + 1)),
@@ -1787,6 +2047,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       armor: E.armorTotal(S),
       ranged: !!(w && D.BASES[w.base] && D.BASES[w.base].ranged),
     };
+    return E.applyTalents(f, E.talentEffects(S.cls, S.talents, L));
   };
   E.summaryOf = function (f) {
     const red = E.damageReduction(f.prof, f.armor, f.level);
@@ -1887,10 +2148,17 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return ((att.wMin + att.wMax) / 2) * (1 + eff / 10) * att.prof.dmgMult;
   }
 
+  // Talentnamen fuer die Anzeige im Kampf
+  const talName = (X, key, fallback) => (X.tal && X.tal._names && X.tal._names[key]) || fallback;
   E.simulate = function (A, B, seed, opts) {
     opts = opts || {};
     const r = U.rng(seed);
-    const mk = (X, hp) => Object.assign({}, X, { hp: hp != null ? Math.min(hp, X.maxHp) : X.maxHp, meter: 0, stun: false, poison: null, dodgeNext: false });
+    const mk = (X, hp) =>
+      Object.assign({}, X, {
+        hp: hp != null ? Math.min(hp, X.maxHp) : X.maxHp, meter: 0, stun: false, poison: null, dodgeNext: 0,
+        T: X.tal || {}, ward: Math.round(X.maxHp * ((X.tal && X.tal.ward) || 0)), purge: (X.tal && X.tal.purge) || 0,
+        windUsed: false, vanishUsed: false, opened: false, dazed: false,
+      });
     const f = [mk(A, opts.hp && opts.hp[0]), mk(B, opts.hp && opts.hp[1])];
     let turn;
     if (A.prof.firstStrike && !B.prof.firstStrike) turn = 0;
@@ -1898,8 +2166,83 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     else turn = (A.attrs.geschick + A.attrs.glueck) * U.rf(r, 0.8, 1.2) >= (B.attrs.geschick + B.attrs.glueck) * U.rf(r, 0.8, 1.2) ? 0 : 1;
     const pvp = A.kind !== "monster" && B.kind !== "monster";
     const events = [];
+    const hpNow = () => [f[0].hp, f[1].hp];
+    // Barrieren zu Kampfbeginn
+    for (let i = 0; i < 2; i++) if (f[i].ward > 0) events.push({ a: i, kind: "talent", id: "ward", name: talName(f[i], "ward", "Barriere"), ward: f[i].ward, hp: hpNow() });
+    // Ein Treffer: Schaden, Krit, Talente des Angreifers und des Verteidigers
+    function strike(att, def, h, special, i, bh) {
+      const AT = att.T;
+      const DT = def.T;
+      const roll = U.rf(r, att.wMin, att.wMax) / ((att.wMin + att.wMax) / 2);
+      let red = h.pierce ? 0 : E.damageReduction(def.prof, def.armor, att.level);
+      red *= 1 - Math.min(0.9, (AT.pierce || 0) + (special ? AT.spPierce || 0 : 0));
+      const fury = 1 + Math.max(0, i - 30) * 0.08;
+      let mult = h.mult;
+      if (special) mult *= 1 + (AT.spDmg || 0);
+      if (h.rage && att.hp < att.maxHp * 0.5) mult *= 1.5 + (AT.rageBonus || 0);
+      const tags = [];
+      if (!att.opened && AT.opener) {
+        mult *= 1 + AT.opener;
+        tags.push("opener");
+      }
+      if (AT.execute && def.hp < def.maxHp * 0.35) {
+        mult *= 1 + AT.execute;
+        tags.push("execute");
+      }
+      if (AT.afterStun && def.dazed) {
+        mult *= 1 + AT.afterStun;
+        tags.push("afterStun");
+      }
+      let dmg = bh * roll * mult * (1 - red) * fury;
+      const cBonus = att.prof.critBonus + (h.critBoost || 0) + (special ? AT.spCrit || 0 : 0);
+      const crit = (!att.opened && AT.assassinate) || r() < E.critChance(att.attrs.glueck, def.level, cBonus);
+      if (crit) dmg *= (att.prof.critMult || 2) + (special ? AT.spCritMult || 0 : 0);
+      if (!att.opened && AT.assassinate) tags.push("assassinate");
+      dmg *= 1 - (DT.toughness || 0);
+      if (att.mainKey === "verstand") dmg *= 1 - (DT.magicRes || 0);
+      dmg = Math.max(1, Math.round(dmg));
+      let absorbed = 0;
+      if (def.ward > 0) {
+        absorbed = Math.min(def.ward, dmg);
+        def.ward -= absorbed;
+        dmg -= absorbed;
+      }
+      def.hp = Math.max(0, def.hp - dmg);
+      att.opened = true;
+      const out = { res: crit ? "crit" : "hit", dmg };
+      if (absorbed) out.absorbed = absorbed;
+      if (h.tal) tags.push(h.tal);
+      if (tags.length) out.tags = tags;
+      return out;
+    }
+    // Reaktionen des Verteidigers nach einem Angriff: Verschwinden, zweiter Atem, Gegenschlag
+    function reactions(di, ai, ev, evaded) {
+      const def = f[di];
+      const att = f[ai];
+      const after = [];
+      if (def.hp <= 0) return after;
+      if (def.T.vanish && !def.vanishUsed && def.hp < def.maxHp * 0.4) {
+        def.vanishUsed = true;
+        def.dodgeNext = Math.max(def.dodgeNext, 2);
+        after.push({ a: di, kind: "talent", id: "vanish", name: talName(def, "vanish", "Verschwinden"), hp: hpNow() });
+      }
+      if (def.T.secondWind && !def.windUsed && def.hp < def.maxHp * 0.3) {
+        def.windUsed = true;
+        const heal = Math.round(def.maxHp * def.T.secondWind);
+        def.hp = Math.min(def.maxHp, def.hp + heal);
+        after.push({ a: di, kind: "talent", id: "secondWind", name: talName(def, "secondWind", "Zweiter Atem"), heal, hp: hpNow() });
+      }
+      if (evaded && def.T.riposte && att.hp > 0 && r() < def.T.riposte) {
+        const hit = strike(def, att, { mult: 0.7, tal: "riposte" }, false, curI, baseHit(def, att, pvp));
+        if (def.T.lifesteal) def.hp = Math.min(def.maxHp, def.hp + Math.round(hit.dmg * def.T.lifesteal));
+        after.push({ a: di, kind: "counter", name: talName(def, "riposte", "Gegenschlag"), hits: [hit], hp: hpNow() });
+      }
+      return after;
+    }
     let winner = -1;
+    let curI = 0;
     for (let i = 0; i < E.C.MAX_ACTIONS && winner < 0; i++) {
+      curI = i;
       const att = f[turn];
       const def = f[1 - turn];
       // Gift wirkt zu Beginn des eigenen Zuges
@@ -1907,7 +2250,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const pd = Math.max(1, Math.round(att.poison.dmg));
         att.hp = Math.max(0, att.hp - pd);
         att.poison.turns--;
-        events.push({ a: turn, kind: "dot", dmg: pd, hp: [f[0].hp, f[1].hp] });
+        events.push({ a: turn, kind: "dot", dmg: pd, hp: hpNow() });
         if (att.hp <= 0) {
           winner = 1 - turn;
           break;
@@ -1915,72 +2258,96 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
       if (att.stun) {
         att.stun = false;
-        events.push({ a: turn, kind: "stun", hits: [], hp: [f[0].hp, f[1].hp] });
+        att.dazed = true;
+        events.push({ a: turn, kind: "stun", hits: [], hp: hpNow() });
         turn = 1 - turn;
         continue;
       }
       att.meter++;
-      const special = att.meter % E.C.SPECIAL_EVERY === 0 ? att.prof.special : null;
+      const every = att.T.spEvery || E.C.SPECIAL_EVERY;
+      const special = att.meter % every === 0 ? att.prof.special : null;
       const S0 = special ? SPECIALS[special.id] || { hits: [{ mult: 1 }] } : { hits: [{ mult: 1 }] };
+      const hits = S0.hits.slice();
+      if (special && att.T.spHits) for (let k = 0; k < att.T.spHits; k++) hits.push({ mult: 0.5 });
+      if (!special && att.T.double && r() < att.T.double) hits.push({ mult: 0.6, tal: "double" });
       const out = [];
       let landed = false;
+      let evaded = false;
+      let healed = 0;
       const bh = baseHit(att, def, pvp);
-      for (const h0 of S0.hits) {
+      for (const h0 of hits) {
         if (def.hp <= 0) break;
         const h = Object.assign({}, h0);
-        if (h.rage && att.hp < att.maxHp * 0.5) h.mult *= 1.5;
         const sure = h.sure || att.prof.unblockable;
-        if (def.dodgeNext && !h.sure) {
-          def.dodgeNext = false;
+        if (def.dodgeNext > 0 && !h.sure) {
+          def.dodgeNext--;
           out.push({ res: "evade", dmg: 0 });
+          evaded = true;
           continue;
         }
         if (!sure && def.prof.evade && r() < def.prof.evade) {
           out.push({ res: "evade", dmg: 0 });
+          evaded = true;
           continue;
         }
         const blockChance = h.sure ? 0 : att.prof.unblockable ? def.prof.block * 0.5 : def.prof.block;
         if (blockChance && r() < blockChance) {
           out.push({ res: "block", dmg: 0 });
+          evaded = true;
           continue;
         }
-        const roll = U.rf(r, att.wMin, att.wMax) / ((att.wMin + att.wMax) / 2);
-        const red = h.pierce ? 0 : E.damageReduction(def.prof, def.armor, att.level);
-        // Lange Kaempfe werden hitziger: ab der 30. Aktion steigt der Schaden stetig
-        const fury = 1 + Math.max(0, i - 30) * 0.08;
-        let dmg = bh * roll * h.mult * (1 - red) * fury;
-        const crit = r() < E.critChance(att.attrs.glueck, def.level, att.prof.critBonus + (h.critBoost || 0));
-        if (crit) dmg *= att.prof.critMult || 2;
-        dmg = Math.max(1, Math.round(dmg));
-        def.hp = Math.max(0, def.hp - dmg);
+        const hit = strike(att, def, h, !!special, i, bh);
         landed = true;
-        out.push({ res: crit ? "crit" : "hit", dmg });
+        if (att.T.lifesteal && hit.dmg > 0) healed += Math.round(hit.dmg * att.T.lifesteal);
+        out.push(hit);
       }
+      def.dazed = false;
       const ev = { a: turn, kind: special ? "special" : "attack", sp: special ? special.id : null, spName: special ? special.name : null, hits: out };
-      if (special && S0.stun && landed && def.hp > 0 && (S0.stun >= 1 || r() < S0.stun)) {
-        def.stun = true;
-        ev.stun = true;
+      if (healed > 0 && att.hp > 0) {
+        att.hp = Math.min(att.maxHp, att.hp + healed);
+        ev.lifesteal = healed;
+      }
+      const stunChance = special && S0.stun ? Math.min(1, S0.stun + (att.T.stunChance || 0)) : 0;
+      const after = [];
+      if (special && stunChance && landed && def.hp > 0 && (stunChance >= 1 || r() < stunChance)) {
+        if (def.purge > 0) {
+          def.purge--;
+          after.push({ a: 1 - turn, kind: "talent", id: "purge", name: talName(def, "purge", "Reinigung"), hp: null });
+        } else {
+          def.stun = true;
+          ev.stun = true;
+        }
       }
       if (special && S0.poison && landed && def.hp > 0) {
-        def.poison = { turns: 3, dmg: bh * 0.28 * (1 - E.damageReduction(def.prof, def.armor, att.level) * 0.5) };
-        ev.poison = true;
+        if (def.purge > 0) {
+          def.purge--;
+          after.push({ a: 1 - turn, kind: "talent", id: "purge", name: talName(def, "purge", "Reinigung"), hp: null });
+        } else {
+          def.poison = { turns: 3, dmg: bh * 0.28 * (1 + (att.T.poisonPow || 0)) * (1 - E.damageReduction(def.prof, def.armor, att.level) * 0.5) };
+          ev.poison = true;
+        }
       }
       if (special && S0.heal && att.hp > 0) {
-        const heal = Math.round(att.maxHp * S0.heal);
+        const heal = Math.round(att.maxHp * S0.heal * (1 + (att.T.healPow || 0)));
         att.hp = Math.min(att.maxHp, att.hp + heal);
         ev.heal = heal;
       }
       if (special && S0.dodge) {
-        att.dodgeNext = true;
+        att.dodgeNext = Math.max(att.dodgeNext, 1);
         ev.dodge = true;
       }
-      ev.hp = [f[0].hp, f[1].hp];
+      ev.hp = hpNow();
       events.push(ev);
+      for (const x of after.concat(reactions(1 - turn, turn, ev, evaded))) {
+        if (!x.hp) x.hp = hpNow();
+        events.push(x);
+      }
       if (def.hp <= 0) winner = turn;
+      else if (att.hp <= 0) winner = 1 - turn;
       turn = 1 - turn;
     }
     if (winner < 0) winner = f[0].hp / f[0].maxHp >= f[1].hp / f[1].maxHp ? 0 : 1;
-    return { events, winner, hp: [f[0].hp, f[1].hp], max: [A.maxHp, B.maxHp] };
+    return { events, winner, hp: hpNow(), max: [A.maxHp, B.maxHp] };
   };
   /* Mehrere Gegner nacheinander, Lebenspunkte des Helden werden mitgenommen */
   E.simulateChain = function (hero, foes, seed) {
@@ -2182,7 +2549,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       perle: r() < 0.05 + 0.02 * diff + (rare ? 0.2 : 0) ? 1 : 0,
       seed: Math.floor(r() * 1e9),
     };
-    if (rare || r() < 0.3 + 0.08 * diff) offer.item = E.makeItem(r, { level: L + U.ri(r, 0, 1), cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + (rare ? 1 : 0), minRarity: rare ? "ungewoehnlich" : null });
+    const lb = E.lootBoost(S);
+    if (rare || r() < 0.3 + 0.08 * diff + lb * 0.25) offer.item = E.makeItem(r, { level: L + U.ri(r, 0, 1), cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + (rare ? 1 : 0) + lb, minRarity: rare ? "ungewoehnlich" : null });
     return offer;
   };
   // Staerke der Gegner in Hordenauftraegen: der Held kaempft ohne Pause gegen alle nacheinander
@@ -2335,7 +2703,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     S.perlen += rew.perlen;
     E.gainGold(S, rew.gold);
     const r = U.rng(U.hash(S.name + ch.key));
-    giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: final ? "episch" : "selten", boost: 1 }), rew);
+    giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: final ? "episch" : "selten", boost: 1 + E.lootBoost(S) }), rew);
     E.gainXp(S, rew.xp);
     for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
     S.stats.wins++;
@@ -2386,7 +2754,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       rew.gold = Math.round(E.goldBase(L) * 1.8 * (1 + E.goldBonus(S)));
       E.gainGold(S, rew.gold);
       const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
-      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 }), rew);
+      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 + E.lootBoost(S) }), rew);
       if (r() < 0.35) {
         S.perlen += 1;
         rew.perle = 1;
@@ -2512,18 +2880,19 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const f = E.modelHeroFighter(npc.level, npc.cls, npc.q);
     Object.assign(f, { name: npc.name, race: npc.race, realm: npc.realm, gender: npc.gender, look: npc.look, gear: npc.gear || E.npcGear(npc), kind: "hero" });
     if (D.CLASSES[npc.cls].arch === "krieger" && (!f.gear.nebenhand || f.gear.nebenhand.base !== "schild")) f.prof.block = 0;
-    return f;
+    return E.applyTalents(f, E.talentEffects(npc.cls, E.autoTalents(npc.cls, npc.level, npc.gearSeed), npc.level));
   };
   E.remoteFighter = function (h, st) {
     const C = D.CLASSES[h.cls];
     const prof = E.profileFor(h.cls);
     if (C.arch === "krieger" && !st.shield) prof.block = 0;
     const w = h.gear && h.gear.waffe;
-    return {
+    const f = {
       kind: "hero", name: h.name, level: h.level, cls: h.cls, realm: h.realm, race: h.race, gender: h.gender, look: h.look, gear: h.gear,
       mainKey: C.main, attrs: st.attrs, prof, maxHp: Math.round(st.attrs.konstitution * prof.hpMult * (h.level + 1)),
       wMin: st.wMin, wMax: st.wMax, armor: st.armor, ranged: !!(w && D.BASES[w.base] && D.BASES[w.base].ranged),
     };
+    return E.applyTalents(f, E.talentEffects(h.cls, h.talents || {}, h.level));
   };
   E.meEntry = (S) => ({ id: "me", kind: "me", name: S.name, race: S.race, realm: S.realm, cls: S.cls, gender: S.gender, look: S.look, level: S.level, honor: S.honor, guild: S.guild ? { id: S.guild.id, name: S.guild.name, tag: S.guild.tag } : null });
   E.allHeroes = function (S, now, remote) {
@@ -2607,12 +2976,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const f = E.modelHeroFighter(w.level, w.cls, w.q);
     Object.assign(f, { name: w.name, race: w.race, realm: w.realm, gender: w.gender, look: w.look, gear: E.npcGear(w), kind: "hero" });
     if (D.CLASSES[w.cls].arch === "krieger" && (!f.gear.nebenhand || f.gear.nebenhand.base !== "schild")) f.prof.block = 0;
-    return f;
+    return E.applyTalents(f, E.talentEffects(w.cls, E.autoTalents(w.cls, w.level, w.gearSeed, w.tp), w.level));
   };
   E.rivalFighter = (opp) => opp.fighter || (opp.kind === "wander" ? E.wanderFighter(opp) : E.npcFighter(opp));
   E.arenaRivals = function (S, now, remote) {
     now = now || E.now();
-    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm;
+    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm + ":" + JSON.stringify(S.talents || {});
     const all = E.allHeroes(S, now, remote);
     const me = all.find((h) => h.kind === "me");
     const byId = {};
@@ -2654,16 +3023,23 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         gender: r() < 0.5 ? "m" : "w", level: Math.max(1, L + (tg.c < 0.4 ? 1 : tg.c > 0.7 ? -1 : 0)), q: 1, gearSeed: Math.floor(r() * 1e9), guild: null, tier: ti,
         look: { skin: U.pick(r, R0.skins), hair: U.pick(r, R0.hairs), hairStyle: U.ri(r, 0, 5), beard: U.ri(r, 0, 4), eyes: U.pick(r, D.EYES).c, tattoo: r() < 0.6 ? U.pick(r, D.TATTOOS).id : "keine", tattooColor: U.pick(r, D.TATTOO_COLORS).c, scar: r() < 0.3 ? U.pick(r, D.SCARS).id : "keine", horns: U.ri(r, 0, 2) },
       };
-      let lo = 0.15;
-      let hi = 1.8;
-      for (let k = 0; k < 7; k++) {
-        w.q = (lo + hi) / 2;
-        const c = est(E.wanderFighter(w), w.id + k);
-        if (c > tg.c) lo = w.q;
-        else hi = w.q;
+      // Wanderkaempfer bekommen hoechstens so viele Talentpunkte wie der Held selbst ausgegeben hat
+      w.tp = E.talentSpent(S);
+      for (let tries = 0; tries < 5; tries++) {
+        let lo = 0.15;
+        let hi = 1.8;
+        for (let k = 0; k < 7; k++) {
+          w.q = (lo + hi) / 2;
+          const c = est(E.wanderFighter(w), w.id + k);
+          if (c > tg.c) lo = w.q;
+          else hi = w.q;
+        }
+        w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
+        w.chance = est(E.wanderFighter(w), w.id);
+        // Selbst ganz schwach noch zu stark: eine Stufe tiefer suchen
+        if (w.chance >= tg.c - 0.15 || w.level <= 1) break;
+        w.level = Math.max(1, w.level - Math.max(1, Math.round(L * 0.15)));
       }
-      w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
-      w.chance = est(E.wanderFighter(w), w.id);
       w.honor = Math.max(0, Math.round(me.honor * (1.3 - tg.c * 0.6)));
       out.push(w);
     });
@@ -2759,7 +3135,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * (b.final ? 8 : 3));
       const r = U.rng(U.hash(b.mon.id + now));
-      giveItem(S, E.makeItem(r, { level: b.L, cls: S.cls, minRarity: b.final ? "episch" : "selten", boost: b.final ? 2 : 0.6 }), rew);
+      giveItem(S, E.makeItem(r, { level: b.L, cls: S.cls, minRarity: b.final ? "episch" : "selten", boost: (b.final ? 2 : 0.6) + E.lootBoost(S) }), rew);
       if (b.final) {
         rew.perlen = 3;
         S.perlen += 3;
@@ -4149,6 +4525,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       wMax: f.wMax,
       armor: f.armor,
       shield: !!(S.equip.nebenhand && S.equip.nebenhand.base === "schild"),
+      talents: S.talents || {},
       updatedAt: Date.now(),
     };
     const json = JSON.stringify(Object.assign({}, pub, { updatedAt: 0 }));
@@ -4218,7 +4595,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       level,
       honor: Math.round(num(h.honor, 0, 1e7)),
       gear,
+      talents: {},
     };
+    // Talente nur, wenn sie zum Baum der Klasse passen; die Punktzahl begrenzt die Stufe im Kampf
+    const tree = SB.engine.talentTree(h.cls);
+    if (h.talents && typeof h.talents === "object")
+      for (const k of Object.keys(h.talents).slice(0, 40)) if (tree.byId[k]) hero.talents[k] = num(h.talents[k], 0, tree.byId[k].max) | 0;
     hero.fighter = SB.engine.remoteFighter(hero, { attrs, wMin, wMax: Math.max(wMin + 1, Math.round(num(h.wMax, 2, 1e6))), armor: Math.round(num(h.armor, 0, 1e7)), shield: !!h.shield });
     return hero;
   };
@@ -9889,6 +10271,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         f.m.update(dt * speed);
         f.shadow.position.x = f.m.obj.position.x;
         if (f.aura) f.aura.position.copy(f.m.obj.position);
+        if (f.bubble) {
+          f.bubble.position.x = f.m.obj.position.x;
+          f.bubble.position.z = f.m.obj.position.z;
+          f.bubble.visible = f.m.obj.visible;
+        }
         if (f.poisonFx) {
           f.poisonFx.position.set(f.m.obj.position.x, (f.m.headY || 1.8) + 0.2, f.m.obj.position.z);
           f.poisonFx.rotation.y += dt * 2;
@@ -10115,8 +10502,87 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const report = (side, ev, idx) => {
       if (opts.onImpact) opts.onImpact(side, hp[side], ev, idx);
     };
+    // Talente im Kampf: Schutzkugel, Beschriftungen fuer Treffer mit Talentwirkung
+    const TAL_COLOR = { ward: "#9fd8ff", secondWind: "#7fffb0", vanish: "#b48cff", purge: "#fff6c8" };
+    const TAG_TEXT = { double: "Doppelschlag!", opener: "Sturmangriff!", assassinate: "Meucheln!", execute: "Gnadenstoß!", afterStun: "Nachsetzen!" };
+    function setBubble(f, on) {
+      if (f.bubble) scene.remove(f.bubble);
+      f.bubble = null;
+      if (!on) return;
+      const hgt = (f.m.headY || 1.8) + 0.4;
+      const g = grp([f.m.obj.position.x, hgt / 2, f.m.obj.position.z]);
+      const sm = new T.MeshBasicMaterial({ color: col("#9fd8ff"), transparent: true, opacity: 0.18, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide });
+      g.add(new T.Mesh(G.sph(1, 24, 16), sm));
+      g.add(mesh(G.torus(0.98, 0.02, PI * 2, 4, 48), glow("#cfeaff", 0.7), { r: [PI / 2, 0, 0] }));
+      g.scale.set(0.95, hgt / 2, 0.95);
+      g.userData.mat = sm;
+      scene.add(g);
+      f.bubble = g;
+    }
+    function bubbleHit(f, left) {
+      if (!f.bubble) return;
+      const m = f.bubble.userData.mat;
+      tween(0.3, (u) => (m.opacity = 0.18 + 0.4 * Math.sin(u * PI)));
+      if (left <= 0) {
+        const b = f.bubble;
+        f.bubble = null;
+        burst(b.position.clone(), "#cfeaff", 18, 2.2);
+        tween(0.3, (u) => {
+          b.scale.multiplyScalar(1.04);
+          m.opacity = 0.3 * (1 - u);
+          if (u >= 1) scene.remove(b);
+        });
+      }
+    }
+    function lightColumn(f, color) {
+      const c = new T.Mesh(G.cyl(0.7, 0.7, 4, 16, true), new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+      c.position.set(f.m.obj.position.x, 2, f.m.obj.position.z);
+      scene.add(c);
+      return tween(0.9, (u) => {
+        c.material.opacity = 0.2 * Math.sin(u * PI);
+        c.scale.set(1 - u * 0.4, 1, 1 - u * 0.4);
+        if (u >= 1) scene.remove(c);
+      });
+    }
+    async function playTalent(ev) {
+      const A = F[ev.a];
+      const color = TAL_COLOR[ev.id] || "#ffd27a";
+      banner(ev.name, A.side);
+      ring(A, color, true);
+      rising(A, color, 14);
+      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
+      if (ev.id === "ward") {
+        A.wardLeft = ev.ward;
+        setBubble(A, true);
+        floatText(A, "Barriere " + SB.util.fmt(ev.ward), "talent");
+      } else if (ev.id === "secondWind") {
+        lightColumn(A, color);
+        hp[ev.a] = ev.hp[ev.a];
+        floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
+        report(ev.a, ev, -1);
+      } else if (ev.id === "vanish") {
+        burst(A.m.obj.position.clone().setY(1), color, 22, 1.8, 0.4);
+        A.m.obj.visible = false;
+        await wait(0.35);
+        A.m.obj.visible = true;
+        A.m.play("evade", 0.4);
+        floatText(A, "Verschwunden!", "evade");
+      } else if (ev.id === "purge") {
+        lightColumn(A, color);
+        clearStars(A);
+        floatText(A, "Gereinigt!", "talent");
+      }
+      await wait(0.75);
+    }
+
     async function impact(ev, A, Bf, hit, idx) {
       const def = 1 - ev.a;
+      if (hit.tags) for (const t of hit.tags) if (TAG_TEXT[t]) floatText(t === "double" || t === "opener" || t === "assassinate" ? A : Bf, t === "execute" && A.m.arch === "magier" ? "Vernichtung!" : TAG_TEXT[t], "talent");
+      if (hit.absorbed) {
+        Bf.wardLeft = (Bf.wardLeft || 0) - hit.absorbed;
+        floatText(Bf, "Absorbiert " + SB.util.fmt(hit.absorbed), "block");
+        bubbleHit(Bf, Bf.wardLeft);
+      }
       if (hit.res === "evade") {
         const dx = Bf.side * 0.7;
         Bf.m.play("evade", 0.4);
@@ -10148,6 +10614,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     async function play(ev) {
       const A = F[ev.a];
       const Bf = F[1 - ev.a];
+      if (ev.kind === "talent") {
+        await playTalent(ev);
+        if (ev.hp) {
+          hp[0] = ev.hp[0];
+          hp[1] = ev.hp[1];
+        }
+        return;
+      }
+      if (ev.kind === "counter") {
+        floatText(A, ev.name + "!", "talent");
+        ring(A, "#ffe27a", false);
+      }
       if (ev.kind === "dot") {
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : Math.max(0, hp[ev.a] - ev.dmg);
         A.m.play("hit", 0.35);
@@ -10234,6 +10712,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         if (opts.sfx) opts.sfx("heal");
         report(ev.a, ev, -1);
       }
+      if (ev.lifesteal) {
+        hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.lifesteal;
+        rising(A, "#ff7a8a", 8);
+        floatText(A, "+" + SB.util.fmt(ev.lifesteal), "heal");
+        report(ev.a, ev, -1);
+      }
       if (ev.poison) {
         floatText(Bf, "Vergiftet!", "poison");
         setPoison(Bf, true);
@@ -10260,6 +10744,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       async nextFoe(desc, foeHp, heroHp) {
         const old = F[1];
         clearStars(old);
+        setBubble(old, false);
+        setBubble(F[0], false);
+        F[0].wardLeft = 0;
         setAura(old, null);
         setPoison(old, false);
         setPoison(F[0], false);
@@ -11410,7 +11897,22 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   /* ---------- Toasts ---------- */
+  // Meldungen waehrend eines Kampfes warten bis zum Ergebnis, damit nichts den Ausgang verraet
+  const heldNotices = [];
+  UI.notice = (fn) =>
+    queueMicrotask(() => {
+      if (UI.inBattle) heldNotices.push(fn);
+      else fn();
+    });
+  UI.flushNotices = function () {
+    const list = heldNotices.splice(0);
+    list.forEach((fn, i) => setTimeout(fn, 250 + i * 450));
+  };
   UI.toast = function (text, kind, icon) {
+    if (UI.inBattle) {
+      heldNotices.push(() => UI.toast(text, kind, icon));
+      return;
+    }
     const box = $("#toasts");
     if (!box) return;
     const t = document.createElement("div");
@@ -11425,15 +11927,20 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }, 3800);
   };
   SB.bus.on("toast", (p) => UI.toast(p.text, p.kind === "info" ? "" : p.kind));
-  SB.bus.on("levelup", (p) => {
-    UI.toast("Stufe " + p.level + " erreicht! Eine Wolkenperle als Belohnung.", "gold", "xp");
-    SB.audio.play("levelup");
-    if (UI.hub) UI.hub.cheer();
-  });
-  SB.bus.on("achievement", (a) => {
-    UI.toast("Abzeichen „" + a.name + "“: +" + a.perlen + (a.perlen === 1 ? " Wolkenperle" : " Wolkenperlen"), "gold", "abzeichen");
-    SB.audio.play("chime");
-  });
+  SB.bus.on("levelup", (p) =>
+    UI.notice(() => {
+      const tp = E.talentPointsFor(p.level) > E.talentPointsFor(p.level - 1);
+      UI.toast("Stufe " + p.level + " erreicht! Eine Wolkenperle als Belohnung." + (tp ? " Dazu ein neuer Talentpunkt." : ""), "gold", "xp");
+      SB.audio.play("levelup");
+      if (UI.hub) UI.hub.cheer();
+    })
+  );
+  SB.bus.on("achievement", (a) =>
+    UI.notice(() => {
+      UI.toast("Abzeichen „" + a.name + "“: +" + a.perlen + (a.perlen === 1 ? " Wolkenperle" : " Wolkenperlen"), "gold", "abzeichen");
+      SB.audio.play("chime");
+    })
+  );
   SB.bus.on("remote", () => {
     if (UI.panelId === "arena" || UI.panelId === "ruhmeshalle" || UI.panelId === "gildenhalle") UI.renderPanel();
   });
@@ -11695,7 +12202,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
     }
     const C = D.CLASSES[S.cls];
-    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it))) b.held = "+";
+    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it)) || E.talentFree(S) > 0) b.held = "+";
     if (!S.guild) b.gildenhalle = "?";
     if (UI.isNight() && E.nightHuntsLeft(S) > 0 && !E.busy(S, now)) b.mondtor = "☾";
     return b;
@@ -11897,6 +12404,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     { when: () => UI.S.level >= 3, text: () => "Im Steinkreis erzählt die Seherin die Chronik deines Reiches und deiner Klasse. Jedes Kapitel bringt seltene Beute.", btn: "Zum Steinkreis", act: () => UI.openPanel("steinkreis"), panel: "steinkreis" },
     { when: () => UI.S.level >= 5, text: () => "Im Ring der Reiche kämpfst du gegen Helden aus den anderen Reichen. Ehre bringt dich in der Rangliste nach oben, für dich und für dein Reich.", btn: "Leinen los" },
     { when: () => UI.S.level >= 10, text: () => "Stufe 10! Das Tor zur Tiefe hat sich geöffnet. Dort warten Bosse mit seltener und epischer Beute.", btn: "Ab in die Tiefe", act: () => UI.openPanel("tiefen"), panel: "tiefen" },
+    { when: () => UI.S.level >= 2 && E.talentFree(UI.S) > 0, text: () => "Du hast einen Talentpunkt! Im Charakterbogen unter „Talente“ wählst du besondere Fähigkeiten deiner Klasse. Sie wirken in jedem Kampf.", btn: "Zu den Talenten", act: () => {
+      UI.tabs.held = "talente";
+      UI.openPanel("held");
+    }, panel: "held" },
     { when: () => UI.S.level >= 2 && UI.isNight(), text: () => "Es ist Nacht. Hinter dem Steinkreis leuchtet jetzt das Mondtor: Dort warten Nachtjagden und die Händlerin Selene, aber nur bis zum Morgengrauen.", btn: "Zum Mondtor", act: () => UI.openPanel("mondtor"), panel: "mondtor" },
   ];
   UI.checkHint = function () {
@@ -12078,7 +12589,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   const estCache = new Map();
   function estimate(hero, foes, key) {
-    const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block;
+    const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block + "|" + hero.maxHp + "|" + JSON.stringify(hero.tal || {});
     if (estCache.has(k)) return estCache.get(k);
     const v = E.estimateWin(hero, foes, 30, key);
     estCache.set(k, v);
@@ -12260,7 +12771,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     },
     render() {
       const tab = UI.tabs.held || "ausruestung";
-      let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["aussehen", "Aussehen"], ["geschichte", "Geschichte"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="held" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      const free = E.talentFree(S());
+      let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["talente", "Talente" + (free > 0 ? ' <span class="badge">' + free + "</span>" : "")], ["aussehen", "Aussehen"], ["geschichte", "Geschichte"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="held" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      if (tab === "talente") return h + talents();
       if (tab === "bestiarium") return h + bestiary();
       if (tab === "abzeichen") return h + achievements();
       if (tab === "aussehen") return h + looks();
@@ -12294,8 +12807,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     for (const a of D.ATTRS) {
       let cost = 0;
       for (let i = 0; i < UI.qty; i++) cost += E.attrCost(s.bought[a] + i);
+      const fx = E.attrEffects(s, a, UI.qty);
+      const info = fx.map((x) => '<div class="ainfo">' + esc(x.t) + (x.now ? ': <b class="num">' + esc(x.now) + "</b>" : "") + (x.up ? ' <span class="aup">(' + esc(x.up) + " für " + UI.qty + (UI.qty === 1 ? " Punkt" : " Punkte") + ")</span>" : "") + "</div>").join("");
       h +=
-        '<div class="attr' + (a === C.main ? " main" : "") + '" title="' + esc(D.ATTR_INFO[a].desc) + '">' + I.ui(a) + "<div><div>" + D.ATTR_INFO[a].name + (a === C.main ? ' <span class="tag">Hauptwert</span>' : "") + '</div><div class="cost">' + UI.gold(cost) + "</div></div>" +
+        '<div class="attr' + (a === C.main ? " main" : "") + '" title="' + esc(D.ATTR_INFO[a].desc) + '">' + I.ui(a) + "<div><div>" + D.ATTR_INFO[a].name + (a === C.main ? ' <span class="tag">Hauptwert</span>' : "") + ' <span class="cost">' + UI.gold(cost) + "</span></div>" + info + "</div>" +
         '<span class="val num">' + U.fmt(sum.attrs[a]) + '</span><button class="btn plus" data-act="attr" data-a="' + a + '"' + (s.gold < E.attrCost(s.bought[a]) ? " disabled" : "") + ' aria-label="' + D.ATTR_INFO[a].name + ' erhöhen">+</button></div>';
     }
     h += "</div>";
@@ -12309,17 +12824,87 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       '<div class="stats"><div><span>' + I.ui("konstitution") + ' Lebenspunkte</span><b class="num">' + U.fmt(sum.hp) + "</b></div>" +
       "<div><span>" + I.ui("schaden") + ' Schaden</span><b class="num">' + U.fmt(sum.dmgMin) + " bis " + U.fmt(sum.dmgMax) + "</b></div>" +
       "<div><span>" + I.ui("ruestung") + ' Rüstung</span><b class="num">' + U.fmt(sum.armor) + " (" + Math.round(sum.reduction * 100) + " %)</b></div>" +
-      "<div><span>" + I.ui("glueck") + ' Kritisch</span><b class="num">' + Math.round(sum.crit * 100) + " % · ×" + String(AR.critMult || 2).replace(".", ",") + "</b></div>" +
+      "<div><span>" + I.ui("glueck") + ' Kritisch</span><b class="num">' + Math.round(sum.crit * 100) + " % · ×" + String(Math.round((E.heroFighter(s).prof.critMult || 2) * 100) / 100).replace(".", ",") + "</b></div>" +
       special.map(([ic, n, v]) => "<div><span>" + I.ui(ic) + " " + n + '</span><b class="num">' + v + "</b></div>").join("") +
       "<div><span>" + I.ui("ehre") + ' Ehre</span><b class="num">' + U.fmt(s.honor) + "</b></div>" +
       "<div><span>" + I.ui("stall") + " Reittier</span><b>" + (mount ? esc(mount.name) : "keins") + "</b></div>" +
       "<div><span>" + I.ui("gilde") + " Gilde</span><b>" + (s.guild ? esc(s.guild.name) : "keine") + "</b></div></div>";
-    h += '<div class="special"><b>' + esc(C.special.name) + "</b> (jede vierte Aktion): " + esc(C.special.desc) + "</div>";
+    const hf = E.heroFighter(s);
+    h += '<div class="special"><b>' + esc(C.special.name) + "</b> (jede " + (hf.tal && hf.tal.spEvery ? "dritte" : "vierte") + " Aktion): " + esc(C.special.desc) + "</div>";
     const buffs = E.activeBuffs(s);
     if (buffs.length) h += '<div class="muted" style="font-size:13px;margin-top:6px">Aktive Tränke: ' + buffs.map((b) => esc(D.POTIONS.find((p) => p.id === b.id).name) + ' (<span class="num" data-until="' + b.until + '"></span>)').join(", ") + "</div>";
     h += invSection();
     return h;
   }
+  /* Talentbaum: drei Zweige, Stufen werden mit Punkten im Zweig frei */
+  function talentText(t, rank) {
+    return Object.keys(t.eff)
+      .filter((k) => k !== "firstStrike" || !t.eff.opener)
+      .map((k) => {
+        const per = t.eff[k];
+        const val = k === "spEvery" || k === "assassinate" || k === "vanish" || k === "firstStrike" || k === "spHits" ? per : per * rank;
+        const fn = D.TALENT_EFFECTS[k];
+        return fn ? fn(val) : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+  function talents() {
+    const s = S();
+    const tree = E.talentTree(s.cls);
+    const pts = E.talentPoints(s);
+    const free = E.talentFree(s);
+    const ranks = s.talents || {};
+    let h =
+      '<div class="row talhead"><span class="chip">' + I.ui("abzeichen") + " <b>" + free + "</b> von " + pts + " Talentpunkten frei</span>" +
+      '<span class="muted small">Alle zwei Stufen gibt es einen Punkt. Talente wirken in jedem Kampf: Aufträge, Chronik, Arena, Dungeons und Nachtjagd.</span><span class="spacer"></span>' +
+      '<button class="btn small ghost" data-act="resetTalents"' + (!E.talentSpent(s) || s.perlen < E.C.TALENT_RESET_PERLEN ? " disabled" : "") + ">Zurücksetzen · " + E.C.TALENT_RESET_PERLEN + " " + I.ui("perle") + "</button></div>";
+    h += '<div class="taltree">';
+    for (const b of tree.branches) {
+      const spent = E.branchSpent(ranks, b.key);
+      h += '<div class="talbranch b-' + b.key + '"><div class="tb-head"><b>' + esc(b.name) + '</b><span class="muted small">' + b.kind + " · " + spent + " Punkte</span></div>";
+      for (let tier = 1; tier <= 4; tier++) {
+        const need = D.TALENT_TIER_REQ[tier];
+        const open = spent >= need;
+        h += '<div class="tiers' + (open ? "" : " locked") + '">' + (tier > 1 ? '<div class="tierlabel">' + (open ? "Stufe " + tier : "ab " + need + " Punkten im Zweig") + "</div>" : "");
+        for (const t of b.talents.filter((x) => x.tier === tier)) {
+          const r = ranks[t.id] || 0;
+          const can = E.talentCheck(s.cls, ranks, t.id, pts).ok;
+          h +=
+            '<button class="talent' + (t.tier === 4 ? " cap" : "") + (r > 0 ? " has" : "") + (r >= t.max ? " full" : "") + '" data-act="learnTalent" data-id="' + t.id + '"' + (can ? "" : " aria-disabled=\"true\"") + ">" +
+            '<span class="tn">' + esc(t.name) + '</span><span class="tr">' + r + "/" + t.max + "</span>" +
+            '<span class="td">' + esc(talentText(t, Math.max(1, r))) + (r > 0 && r < t.max ? '<br><i>Nächster Rang: ' + esc(talentText(t, r + 1)) + "</i>" : "") + "</span>" +
+            (t.note ? '<span class="tnote">' + esc(t.note) + "</span>" : "") +
+            "</button>";
+        }
+        h += "</div>";
+      }
+      h += "</div>";
+    }
+    h += "</div>";
+    return h;
+  }
+  A.learnTalent = (el) => {
+    const res = E.learnTalent(S(), el.dataset.id);
+    if (!done(res)) return;
+    SB.audio.play(res.talent.tier === 4 ? "levelup" : "chime");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.resetTalents = () => {
+    UI.dialog(
+      "<h3>Talente zurücksetzen?</h3><p>Alle Punkte kommen zurück und du kannst sie neu verteilen. Das kostet " + E.C.TALENT_RESET_PERLEN + " Wolkenperlen, du hast " + S().perlen + ".</p>" +
+        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Abbrechen</button><button class="btn" data-act="resetTalentsYes">Zurücksetzen</button></div>'
+    );
+  };
+  A.resetTalentsYes = () => {
+    if (!done(E.resetTalents(S()))) return;
+    UI.closeDialog();
+    SB.audio.play("well");
+    UI.toast("Deine Talente sind zurückgesetzt. Verteile die Punkte neu.", "good", "abzeichen");
+    UI.saveNow();
+    UI.refresh();
+  };
   A.qty = (el) => {
     UI.qty = +el.dataset.q;
     UI.renderPanel();
@@ -13177,6 +13762,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       async function play2d(ev) {
         const a = ev.a;
         const d = 1 - a;
+        if (ev.kind === "talent") {
+          if (ev.hp) {
+            hpNow[0] = ev.hp[0];
+            hpNow[1] = ev.hp[1];
+            setHp(0, hpNow[0]);
+            setHp(1, hpNow[1]);
+          }
+          say2d("<b>" + esc(names[a]) + ": " + esc(ev.name) + "</b>" + (ev.heal ? ", heilt " + U.fmt(ev.heal) : "") + (ev.ward ? ", Barriere " + U.fmt(ev.ward) : ""));
+          await wait(500);
+          return;
+        }
+        if (ev.kind === "counter") say2d("<b>" + esc(names[a]) + ": " + esc(ev.name) + "!</b>");
         if (ev.kind === "stun") {
           say2d(esc(names[a]) + " ist betäubt und setzt aus.");
           await wait(500);
@@ -13199,7 +13796,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             figs[d].classList.add("hit");
             setTimeout(() => figs[d].classList.remove("hit"), 150);
             SB.audio.play(h.res === "crit" ? "crit" : "hit");
-            txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "");
+            const TAGS = { double: "Doppelschlag", opener: "Sturmangriff", assassinate: "Meucheln", execute: "Gnadenstoß", afterStun: "Nachsetzen" };
+            const tags = (h.tags || []).filter((t) => TAGS[t]).map((t) => TAGS[t]);
+            txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + (tags.length ? " [" + tags.join(", ") + "]" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "") + (h.absorbed ? " (" + U.fmt(h.absorbed) + " von der Barriere abgefangen)" : "");
           }
           say2d(txt);
           await wait(420);
@@ -13208,6 +13807,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           hpNow[a] = ev.hp[a];
           setHp(a, hpNow[a]);
           say2d(esc(names[a]) + " heilt sich um " + U.fmt(ev.heal) + ".");
+        }
+        if (ev.lifesteal) {
+          hpNow[a] = ev.hp[a];
+          setHp(a, hpNow[a]);
+          say2d(esc(names[a]) + " zieht " + U.fmt(ev.lifesteal) + " Lebenspunkte ab.");
         }
         if (ev.poison) say2d(esc(names[d]) + " ist vergiftet.");
         if (ev.stun) say2d(esc(names[d]) + " ist betäubt.");
@@ -13296,6 +13900,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           root.innerHTML = "";
           root.onclick = null;
           UI.inBattle = false;
+          UI.flushNotices();
           UI.updateMusic();
           if (UI.hub) UI.hub.resume();
           resolve();

@@ -290,6 +290,7 @@
       story: { done: {}, next: 0 },
       house: { tier: 0, furn: {} },
       guild: null,
+      talents: {},
       shops: {},
       buffs: [],
       mounts: { owned: [] },
@@ -358,6 +359,7 @@
     S.guild = S.guild || null;
     S.seen = S.seen || {};
     S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
+    S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
@@ -421,6 +423,41 @@
     for (const a of D.ATTRS) out[a] = Math.round(out[a] * mult[a]);
     return out;
   };
+  // Glueck verbessert die Beute: hoehere Chance auf seltenere Gegenstaende und auf Funde ueberhaupt
+  E.lootBoost = function (S) {
+    const luck = E.heroAttrs(S).glueck;
+    const L = S.level;
+    return U.clamp(luck / (luck + 12 * L + 60), 0, 0.5);
+  };
+  // Was ein Attribut fuer diesen Helden bewirkt und was ein weiterer Punkt bringt
+  E.attrEffects = function (S, a, plus) {
+    plus = plus || 1;
+    const C = E.classOf(S);
+    const f = E.heroFighter(S);
+    const v = f.attrs[a];
+    const L = S.level;
+    const out = [];
+    const pctS = (x) => (Math.round(x * 1000) / 10).toString().replace(".", ",") + " %";
+    if (a === C.main) out.push({ t: "Hauptwert: jeder Punkt erhöht deinen Schaden", now: "Schaden ×" + (1 + v / 10).toFixed(1).replace(".", ","), up: "+" + pctS(plus / (10 + v)) + " Schaden" });
+    else if (a !== "konstitution" && a !== "glueck") {
+      const who = a === "kraft" ? "Krieger" : a === "geschick" ? "Schurken und Jäger" : "Magier";
+      out.push({ t: "Im Ring der Reiche schwächt es " + who + ", die dich angreifen: ihr Vorteil sinkt um die Hälfte deines Werts", now: "", up: "" });
+    }
+    if (a === "konstitution") {
+      const per = Math.round(f.prof.hpMult * (L + 1) * (1 + ((f.tal && f.tal.hp) || 0)));
+      out.push({ t: "Bestimmt deine Lebenspunkte", now: U.fmt(f.maxHp) + " LP", up: "+" + U.fmt(per * plus) + " LP" });
+    }
+    if (a === "glueck") {
+      const c0 = E.critChance(v, L, f.prof.critBonus);
+      const c1 = E.critChance(v + plus, L, f.prof.critBonus);
+      out.push({ t: "Kritische Treffer gegen Gegner deiner Stufe", now: pctS(c0), up: "+" + pctS(c1 - c0) });
+      const lb = E.lootBoost(S);
+      const lb1 = U.clamp((v + plus) / (v + plus + 12 * L + 60), 0, 0.5);
+      out.push({ t: "Bessere Beute: höhere Chance auf seltene Gegenstände und auf Funde in der Taverne", now: "+" + pctS(lb), up: "+" + pctS(lb1 - lb) });
+    }
+    if (a === "geschick" || a === "glueck") out.push({ t: "Zusammen mit " + (a === "geschick" ? "Glück" : "Geschick") + " entscheidet es, wer zuerst zuschlägt" + (f.prof.firstStrike ? " (du schlägst als Schurke ohnehin zuerst zu)" : ""), now: "", up: "" });
+    return out;
+  };
   E.armorTotal = function (S) {
     let a = 0;
     for (const s of D.SLOTS) if (S.equip[s] && S.equip[s].armor) a += S.equip[s].armor;
@@ -435,6 +472,118 @@
       firstStrike: !!C.firstStrike, critBonus: C.critBonus || 0, critMult: C.critMult || 2,
     };
   };
+  /* ---------------- Talentbaeume ---------------- */
+  E.C.TALENT_RESET_PERLEN = 3;
+  const TREE_CACHE = {};
+  // Baum einer Klasse: drei Zweige mit je fuenf Talenten (Stufe 1 bis 4)
+  E.talentTree = function (cls) {
+    if (TREE_CACHE[cls]) return TREE_CACHE[cls];
+    const C = D.CLASSES[cls];
+    const TA = D.TALENT_ARCH[C.arch];
+    const TC = D.TALENT_CLASS[cls];
+    const mk = (b, [k, name, tier, max, eff, note]) => ({ id: b + "." + k, branch: b, name, tier, max, eff, note: note || "" });
+    const classBranch = [
+      ["sp", C.special.name + "-Meisterschaft", 1, 3, { spDmg: 0.08 }],
+      ["spc", "Präziser " + C.special.name, 2, 3, { spCrit: 0.08 }],
+      ["sig", TC.sig[0], 2, 2, TC.sig[1]],
+      ["ls", "Kampfrausch", 3, 2, { lifesteal: 0.03 }],
+      ["cap", "Großmeister", 4, 1, { spEvery: 3 }, "Aktive Fähigkeit: " + C.special.name + " kommt öfter."],
+    ];
+    const tree = {
+      cls,
+      branches: [
+        { key: "o", name: TC.names[0], kind: "Angriff", talents: TA.o.map((t) => mk("o", t)) },
+        { key: "d", name: TC.names[1], kind: "Verteidigung", talents: TA.d.map((t) => mk("d", t)) },
+        { key: "c", name: TC.names[2], kind: "Klassenpfad", talents: classBranch.map((t) => mk("c", t)) },
+      ],
+    };
+    tree.byId = {};
+    for (const b of tree.branches) for (const t of b.talents) tree.byId[t.id] = t;
+    return (TREE_CACHE[cls] = tree);
+  };
+  E.talentPointsFor = (L) => Math.max(0, Math.floor(L / 2));
+  E.talentPoints = (S) => E.talentPointsFor(S.level);
+  const sumRanks = (ranks, pred) => Object.keys(ranks || {}).reduce((a, k) => a + (pred(k) ? ranks[k] || 0 : 0), 0);
+  E.talentSpent = (S) => sumRanks(S.talents, () => true);
+  E.talentFree = (S) => E.talentPoints(S) - E.talentSpent(S);
+  E.branchSpent = (ranks, b) => sumRanks(ranks, (k) => k.indexOf(b + ".") === 0);
+  E.talentCheck = function (cls, ranks, id, points) {
+    const tree = E.talentTree(cls);
+    const t = tree.byId[id];
+    if (!t) return { ok: false, msg: "Dieses Talent gibt es nicht." };
+    const cur = (ranks && ranks[id]) || 0;
+    if (cur >= t.max) return { ok: false, msg: "Schon voll ausgebaut." };
+    if (sumRanks(ranks, () => true) >= points) return { ok: false, msg: "Keine Talentpunkte frei. Alle zwei Stufen kommt einer dazu." };
+    const need = D.TALENT_TIER_REQ[t.tier];
+    if (E.branchSpent(ranks, t.branch) < need) return { ok: false, msg: "Dafür brauchst du " + need + " Punkte in diesem Zweig." };
+    return { ok: true, t };
+  };
+  E.learnTalent = function (S, id) {
+    S.talents = S.talents || {};
+    const c = E.talentCheck(S.cls, S.talents, id, E.talentPoints(S));
+    if (!c.ok) return c;
+    S.talents[id] = (S.talents[id] || 0) + 1;
+    return { ok: true, talent: c.t, rank: S.talents[id] };
+  };
+  E.resetTalents = function (S) {
+    if (!E.talentSpent(S)) return { ok: false, msg: "Du hast noch keine Talente gelernt." };
+    if (S.perlen < E.C.TALENT_RESET_PERLEN) return { ok: false, msg: "Das Zurücksetzen kostet " + E.C.TALENT_RESET_PERLEN + " Wolkenperlen." };
+    S.perlen -= E.C.TALENT_RESET_PERLEN;
+    S.talents = {};
+    return { ok: true };
+  };
+  // Alle Raenge zusammengefasst zu Wirkungen; ungueltige Eintraege (fremde Klasse, zu viele Punkte) fallen weg
+  E.talentEffects = function (cls, ranks, L) {
+    const tree = E.talentTree(cls);
+    const eff = { _names: {} };
+    let budget = L != null ? E.talentPointsFor(L) : Infinity;
+    for (const b of tree.branches)
+      for (const t of b.talents) {
+        let n = Math.min(t.max, Math.max(0, Math.floor((ranks && ranks[t.id]) || 0)));
+        n = Math.min(n, budget);
+        if (n <= 0) continue;
+        budget -= n;
+        for (const k in t.eff) {
+          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" ? 1 : n);
+          eff._names[k] = t.name;
+        }
+      }
+    if (eff.spEvery) eff.spEvery = 3;
+    return eff;
+  };
+  // Feste Werte aus Talenten auf einen Kaempfer anwenden; der Rest wirkt im Kampf
+  E.applyTalents = function (f, eff) {
+    f.tal = eff;
+    if (!eff) return f;
+    if (eff.hp) f.maxHp = Math.round(f.maxHp * (1 + eff.hp));
+    if (eff.armor) f.armor = Math.round(f.armor * (1 + eff.armor));
+    f.prof = Object.assign({}, f.prof);
+    if (eff.dmg) f.prof.dmgMult *= 1 + eff.dmg;
+    if (eff.crit) f.prof.critBonus = (f.prof.critBonus || 0) + eff.crit;
+    if (eff.critMult) f.prof.critMult = (f.prof.critMult || 2) + eff.critMult;
+    if (eff.block && f.prof.block > 0) f.prof.block += eff.block;
+    if (eff.evade) f.prof.evade = (f.prof.evade || 0) + eff.evade;
+    if (eff.firstStrike) f.prof.firstStrike = true;
+    return f;
+  };
+  // Talentverteilung fuer computergesteuerte Helden: ein Hauptzweig bis zur Spitze, dann der zweite
+  E.autoTalents = function (cls, L, seed, maxPts) {
+    const tree = E.talentTree(cls);
+    const r = U.rng("tal" + seed);
+    const order = [0, 1, 2].sort(() => r() - 0.5);
+    const ranks = {};
+    let pts = Math.min(E.talentPointsFor(L), maxPts != null ? maxPts : Infinity);
+    for (const bi of order) {
+      const b = tree.branches[bi];
+      for (const t of b.talents)
+        while (pts > 0 && E.talentCheck(cls, ranks, t.id, E.talentPointsFor(L)).ok) {
+          ranks[t.id] = (ranks[t.id] || 0) + 1;
+          pts--;
+        }
+    }
+    return ranks;
+  };
+
   E.gearVisual = function (equip) {
     const g = {};
     for (const s of ["helm", "ruestung", "umhang", "handschuhe", "stiefel", "waffe", "nebenhand"]) {
@@ -450,7 +599,7 @@
     if (C.arch === "krieger" && !(S.equip.nebenhand && S.equip.nebenhand.base === "schild")) prof.block = 0;
     const w = S.equip.waffe;
     const L = S.level;
-    return {
+    const f = {
       kind: "hero", name: S.name, level: L, cls: S.cls, realm: S.realm, race: S.race, gender: S.gender, look: S.look,
       gear: E.gearVisual(S.equip), mainKey: C.main, attrs, prof,
       maxHp: Math.round(attrs.konstitution * prof.hpMult * (L + 1)),
@@ -459,6 +608,7 @@
       armor: E.armorTotal(S),
       ranged: !!(w && D.BASES[w.base] && D.BASES[w.base].ranged),
     };
+    return E.applyTalents(f, E.talentEffects(S.cls, S.talents, L));
   };
   E.summaryOf = function (f) {
     const red = E.damageReduction(f.prof, f.armor, f.level);
@@ -559,10 +709,17 @@
     return ((att.wMin + att.wMax) / 2) * (1 + eff / 10) * att.prof.dmgMult;
   }
 
+  // Talentnamen fuer die Anzeige im Kampf
+  const talName = (X, key, fallback) => (X.tal && X.tal._names && X.tal._names[key]) || fallback;
   E.simulate = function (A, B, seed, opts) {
     opts = opts || {};
     const r = U.rng(seed);
-    const mk = (X, hp) => Object.assign({}, X, { hp: hp != null ? Math.min(hp, X.maxHp) : X.maxHp, meter: 0, stun: false, poison: null, dodgeNext: false });
+    const mk = (X, hp) =>
+      Object.assign({}, X, {
+        hp: hp != null ? Math.min(hp, X.maxHp) : X.maxHp, meter: 0, stun: false, poison: null, dodgeNext: 0,
+        T: X.tal || {}, ward: Math.round(X.maxHp * ((X.tal && X.tal.ward) || 0)), purge: (X.tal && X.tal.purge) || 0,
+        windUsed: false, vanishUsed: false, opened: false, dazed: false,
+      });
     const f = [mk(A, opts.hp && opts.hp[0]), mk(B, opts.hp && opts.hp[1])];
     let turn;
     if (A.prof.firstStrike && !B.prof.firstStrike) turn = 0;
@@ -570,8 +727,83 @@
     else turn = (A.attrs.geschick + A.attrs.glueck) * U.rf(r, 0.8, 1.2) >= (B.attrs.geschick + B.attrs.glueck) * U.rf(r, 0.8, 1.2) ? 0 : 1;
     const pvp = A.kind !== "monster" && B.kind !== "monster";
     const events = [];
+    const hpNow = () => [f[0].hp, f[1].hp];
+    // Barrieren zu Kampfbeginn
+    for (let i = 0; i < 2; i++) if (f[i].ward > 0) events.push({ a: i, kind: "talent", id: "ward", name: talName(f[i], "ward", "Barriere"), ward: f[i].ward, hp: hpNow() });
+    // Ein Treffer: Schaden, Krit, Talente des Angreifers und des Verteidigers
+    function strike(att, def, h, special, i, bh) {
+      const AT = att.T;
+      const DT = def.T;
+      const roll = U.rf(r, att.wMin, att.wMax) / ((att.wMin + att.wMax) / 2);
+      let red = h.pierce ? 0 : E.damageReduction(def.prof, def.armor, att.level);
+      red *= 1 - Math.min(0.9, (AT.pierce || 0) + (special ? AT.spPierce || 0 : 0));
+      const fury = 1 + Math.max(0, i - 30) * 0.08;
+      let mult = h.mult;
+      if (special) mult *= 1 + (AT.spDmg || 0);
+      if (h.rage && att.hp < att.maxHp * 0.5) mult *= 1.5 + (AT.rageBonus || 0);
+      const tags = [];
+      if (!att.opened && AT.opener) {
+        mult *= 1 + AT.opener;
+        tags.push("opener");
+      }
+      if (AT.execute && def.hp < def.maxHp * 0.35) {
+        mult *= 1 + AT.execute;
+        tags.push("execute");
+      }
+      if (AT.afterStun && def.dazed) {
+        mult *= 1 + AT.afterStun;
+        tags.push("afterStun");
+      }
+      let dmg = bh * roll * mult * (1 - red) * fury;
+      const cBonus = att.prof.critBonus + (h.critBoost || 0) + (special ? AT.spCrit || 0 : 0);
+      const crit = (!att.opened && AT.assassinate) || r() < E.critChance(att.attrs.glueck, def.level, cBonus);
+      if (crit) dmg *= (att.prof.critMult || 2) + (special ? AT.spCritMult || 0 : 0);
+      if (!att.opened && AT.assassinate) tags.push("assassinate");
+      dmg *= 1 - (DT.toughness || 0);
+      if (att.mainKey === "verstand") dmg *= 1 - (DT.magicRes || 0);
+      dmg = Math.max(1, Math.round(dmg));
+      let absorbed = 0;
+      if (def.ward > 0) {
+        absorbed = Math.min(def.ward, dmg);
+        def.ward -= absorbed;
+        dmg -= absorbed;
+      }
+      def.hp = Math.max(0, def.hp - dmg);
+      att.opened = true;
+      const out = { res: crit ? "crit" : "hit", dmg };
+      if (absorbed) out.absorbed = absorbed;
+      if (h.tal) tags.push(h.tal);
+      if (tags.length) out.tags = tags;
+      return out;
+    }
+    // Reaktionen des Verteidigers nach einem Angriff: Verschwinden, zweiter Atem, Gegenschlag
+    function reactions(di, ai, ev, evaded) {
+      const def = f[di];
+      const att = f[ai];
+      const after = [];
+      if (def.hp <= 0) return after;
+      if (def.T.vanish && !def.vanishUsed && def.hp < def.maxHp * 0.4) {
+        def.vanishUsed = true;
+        def.dodgeNext = Math.max(def.dodgeNext, 2);
+        after.push({ a: di, kind: "talent", id: "vanish", name: talName(def, "vanish", "Verschwinden"), hp: hpNow() });
+      }
+      if (def.T.secondWind && !def.windUsed && def.hp < def.maxHp * 0.3) {
+        def.windUsed = true;
+        const heal = Math.round(def.maxHp * def.T.secondWind);
+        def.hp = Math.min(def.maxHp, def.hp + heal);
+        after.push({ a: di, kind: "talent", id: "secondWind", name: talName(def, "secondWind", "Zweiter Atem"), heal, hp: hpNow() });
+      }
+      if (evaded && def.T.riposte && att.hp > 0 && r() < def.T.riposte) {
+        const hit = strike(def, att, { mult: 0.7, tal: "riposte" }, false, curI, baseHit(def, att, pvp));
+        if (def.T.lifesteal) def.hp = Math.min(def.maxHp, def.hp + Math.round(hit.dmg * def.T.lifesteal));
+        after.push({ a: di, kind: "counter", name: talName(def, "riposte", "Gegenschlag"), hits: [hit], hp: hpNow() });
+      }
+      return after;
+    }
     let winner = -1;
+    let curI = 0;
     for (let i = 0; i < E.C.MAX_ACTIONS && winner < 0; i++) {
+      curI = i;
       const att = f[turn];
       const def = f[1 - turn];
       // Gift wirkt zu Beginn des eigenen Zuges
@@ -579,7 +811,7 @@
         const pd = Math.max(1, Math.round(att.poison.dmg));
         att.hp = Math.max(0, att.hp - pd);
         att.poison.turns--;
-        events.push({ a: turn, kind: "dot", dmg: pd, hp: [f[0].hp, f[1].hp] });
+        events.push({ a: turn, kind: "dot", dmg: pd, hp: hpNow() });
         if (att.hp <= 0) {
           winner = 1 - turn;
           break;
@@ -587,72 +819,96 @@
       }
       if (att.stun) {
         att.stun = false;
-        events.push({ a: turn, kind: "stun", hits: [], hp: [f[0].hp, f[1].hp] });
+        att.dazed = true;
+        events.push({ a: turn, kind: "stun", hits: [], hp: hpNow() });
         turn = 1 - turn;
         continue;
       }
       att.meter++;
-      const special = att.meter % E.C.SPECIAL_EVERY === 0 ? att.prof.special : null;
+      const every = att.T.spEvery || E.C.SPECIAL_EVERY;
+      const special = att.meter % every === 0 ? att.prof.special : null;
       const S0 = special ? SPECIALS[special.id] || { hits: [{ mult: 1 }] } : { hits: [{ mult: 1 }] };
+      const hits = S0.hits.slice();
+      if (special && att.T.spHits) for (let k = 0; k < att.T.spHits; k++) hits.push({ mult: 0.5 });
+      if (!special && att.T.double && r() < att.T.double) hits.push({ mult: 0.6, tal: "double" });
       const out = [];
       let landed = false;
+      let evaded = false;
+      let healed = 0;
       const bh = baseHit(att, def, pvp);
-      for (const h0 of S0.hits) {
+      for (const h0 of hits) {
         if (def.hp <= 0) break;
         const h = Object.assign({}, h0);
-        if (h.rage && att.hp < att.maxHp * 0.5) h.mult *= 1.5;
         const sure = h.sure || att.prof.unblockable;
-        if (def.dodgeNext && !h.sure) {
-          def.dodgeNext = false;
+        if (def.dodgeNext > 0 && !h.sure) {
+          def.dodgeNext--;
           out.push({ res: "evade", dmg: 0 });
+          evaded = true;
           continue;
         }
         if (!sure && def.prof.evade && r() < def.prof.evade) {
           out.push({ res: "evade", dmg: 0 });
+          evaded = true;
           continue;
         }
         const blockChance = h.sure ? 0 : att.prof.unblockable ? def.prof.block * 0.5 : def.prof.block;
         if (blockChance && r() < blockChance) {
           out.push({ res: "block", dmg: 0 });
+          evaded = true;
           continue;
         }
-        const roll = U.rf(r, att.wMin, att.wMax) / ((att.wMin + att.wMax) / 2);
-        const red = h.pierce ? 0 : E.damageReduction(def.prof, def.armor, att.level);
-        // Lange Kaempfe werden hitziger: ab der 30. Aktion steigt der Schaden stetig
-        const fury = 1 + Math.max(0, i - 30) * 0.08;
-        let dmg = bh * roll * h.mult * (1 - red) * fury;
-        const crit = r() < E.critChance(att.attrs.glueck, def.level, att.prof.critBonus + (h.critBoost || 0));
-        if (crit) dmg *= att.prof.critMult || 2;
-        dmg = Math.max(1, Math.round(dmg));
-        def.hp = Math.max(0, def.hp - dmg);
+        const hit = strike(att, def, h, !!special, i, bh);
         landed = true;
-        out.push({ res: crit ? "crit" : "hit", dmg });
+        if (att.T.lifesteal && hit.dmg > 0) healed += Math.round(hit.dmg * att.T.lifesteal);
+        out.push(hit);
       }
+      def.dazed = false;
       const ev = { a: turn, kind: special ? "special" : "attack", sp: special ? special.id : null, spName: special ? special.name : null, hits: out };
-      if (special && S0.stun && landed && def.hp > 0 && (S0.stun >= 1 || r() < S0.stun)) {
-        def.stun = true;
-        ev.stun = true;
+      if (healed > 0 && att.hp > 0) {
+        att.hp = Math.min(att.maxHp, att.hp + healed);
+        ev.lifesteal = healed;
+      }
+      const stunChance = special && S0.stun ? Math.min(1, S0.stun + (att.T.stunChance || 0)) : 0;
+      const after = [];
+      if (special && stunChance && landed && def.hp > 0 && (stunChance >= 1 || r() < stunChance)) {
+        if (def.purge > 0) {
+          def.purge--;
+          after.push({ a: 1 - turn, kind: "talent", id: "purge", name: talName(def, "purge", "Reinigung"), hp: null });
+        } else {
+          def.stun = true;
+          ev.stun = true;
+        }
       }
       if (special && S0.poison && landed && def.hp > 0) {
-        def.poison = { turns: 3, dmg: bh * 0.28 * (1 - E.damageReduction(def.prof, def.armor, att.level) * 0.5) };
-        ev.poison = true;
+        if (def.purge > 0) {
+          def.purge--;
+          after.push({ a: 1 - turn, kind: "talent", id: "purge", name: talName(def, "purge", "Reinigung"), hp: null });
+        } else {
+          def.poison = { turns: 3, dmg: bh * 0.28 * (1 + (att.T.poisonPow || 0)) * (1 - E.damageReduction(def.prof, def.armor, att.level) * 0.5) };
+          ev.poison = true;
+        }
       }
       if (special && S0.heal && att.hp > 0) {
-        const heal = Math.round(att.maxHp * S0.heal);
+        const heal = Math.round(att.maxHp * S0.heal * (1 + (att.T.healPow || 0)));
         att.hp = Math.min(att.maxHp, att.hp + heal);
         ev.heal = heal;
       }
       if (special && S0.dodge) {
-        att.dodgeNext = true;
+        att.dodgeNext = Math.max(att.dodgeNext, 1);
         ev.dodge = true;
       }
-      ev.hp = [f[0].hp, f[1].hp];
+      ev.hp = hpNow();
       events.push(ev);
+      for (const x of after.concat(reactions(1 - turn, turn, ev, evaded))) {
+        if (!x.hp) x.hp = hpNow();
+        events.push(x);
+      }
       if (def.hp <= 0) winner = turn;
+      else if (att.hp <= 0) winner = 1 - turn;
       turn = 1 - turn;
     }
     if (winner < 0) winner = f[0].hp / f[0].maxHp >= f[1].hp / f[1].maxHp ? 0 : 1;
-    return { events, winner, hp: [f[0].hp, f[1].hp], max: [A.maxHp, B.maxHp] };
+    return { events, winner, hp: hpNow(), max: [A.maxHp, B.maxHp] };
   };
   /* Mehrere Gegner nacheinander, Lebenspunkte des Helden werden mitgenommen */
   E.simulateChain = function (hero, foes, seed) {
@@ -854,7 +1110,8 @@
       perle: r() < 0.05 + 0.02 * diff + (rare ? 0.2 : 0) ? 1 : 0,
       seed: Math.floor(r() * 1e9),
     };
-    if (rare || r() < 0.3 + 0.08 * diff) offer.item = E.makeItem(r, { level: L + U.ri(r, 0, 1), cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + (rare ? 1 : 0), minRarity: rare ? "ungewoehnlich" : null });
+    const lb = E.lootBoost(S);
+    if (rare || r() < 0.3 + 0.08 * diff + lb * 0.25) offer.item = E.makeItem(r, { level: L + U.ri(r, 0, 1), cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + (rare ? 1 : 0) + lb, minRarity: rare ? "ungewoehnlich" : null });
     return offer;
   };
   // Staerke der Gegner in Hordenauftraegen: der Held kaempft ohne Pause gegen alle nacheinander
@@ -1007,7 +1264,7 @@
     S.perlen += rew.perlen;
     E.gainGold(S, rew.gold);
     const r = U.rng(U.hash(S.name + ch.key));
-    giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: final ? "episch" : "selten", boost: 1 }), rew);
+    giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: final ? "episch" : "selten", boost: 1 + E.lootBoost(S) }), rew);
     E.gainXp(S, rew.xp);
     for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
     S.stats.wins++;
@@ -1058,7 +1315,7 @@
       rew.gold = Math.round(E.goldBase(L) * 1.8 * (1 + E.goldBonus(S)));
       E.gainGold(S, rew.gold);
       const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
-      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 }), rew);
+      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 + E.lootBoost(S) }), rew);
       if (r() < 0.35) {
         S.perlen += 1;
         rew.perle = 1;
@@ -1184,18 +1441,19 @@
     const f = E.modelHeroFighter(npc.level, npc.cls, npc.q);
     Object.assign(f, { name: npc.name, race: npc.race, realm: npc.realm, gender: npc.gender, look: npc.look, gear: npc.gear || E.npcGear(npc), kind: "hero" });
     if (D.CLASSES[npc.cls].arch === "krieger" && (!f.gear.nebenhand || f.gear.nebenhand.base !== "schild")) f.prof.block = 0;
-    return f;
+    return E.applyTalents(f, E.talentEffects(npc.cls, E.autoTalents(npc.cls, npc.level, npc.gearSeed), npc.level));
   };
   E.remoteFighter = function (h, st) {
     const C = D.CLASSES[h.cls];
     const prof = E.profileFor(h.cls);
     if (C.arch === "krieger" && !st.shield) prof.block = 0;
     const w = h.gear && h.gear.waffe;
-    return {
+    const f = {
       kind: "hero", name: h.name, level: h.level, cls: h.cls, realm: h.realm, race: h.race, gender: h.gender, look: h.look, gear: h.gear,
       mainKey: C.main, attrs: st.attrs, prof, maxHp: Math.round(st.attrs.konstitution * prof.hpMult * (h.level + 1)),
       wMin: st.wMin, wMax: st.wMax, armor: st.armor, ranged: !!(w && D.BASES[w.base] && D.BASES[w.base].ranged),
     };
+    return E.applyTalents(f, E.talentEffects(h.cls, h.talents || {}, h.level));
   };
   E.meEntry = (S) => ({ id: "me", kind: "me", name: S.name, race: S.race, realm: S.realm, cls: S.cls, gender: S.gender, look: S.look, level: S.level, honor: S.honor, guild: S.guild ? { id: S.guild.id, name: S.guild.name, tag: S.guild.tag } : null });
   E.allHeroes = function (S, now, remote) {
@@ -1279,12 +1537,12 @@
     const f = E.modelHeroFighter(w.level, w.cls, w.q);
     Object.assign(f, { name: w.name, race: w.race, realm: w.realm, gender: w.gender, look: w.look, gear: E.npcGear(w), kind: "hero" });
     if (D.CLASSES[w.cls].arch === "krieger" && (!f.gear.nebenhand || f.gear.nebenhand.base !== "schild")) f.prof.block = 0;
-    return f;
+    return E.applyTalents(f, E.talentEffects(w.cls, E.autoTalents(w.cls, w.level, w.gearSeed, w.tp), w.level));
   };
   E.rivalFighter = (opp) => opp.fighter || (opp.kind === "wander" ? E.wanderFighter(opp) : E.npcFighter(opp));
   E.arenaRivals = function (S, now, remote) {
     now = now || E.now();
-    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm;
+    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm + ":" + JSON.stringify(S.talents || {});
     const all = E.allHeroes(S, now, remote);
     const me = all.find((h) => h.kind === "me");
     const byId = {};
@@ -1326,16 +1584,23 @@
         gender: r() < 0.5 ? "m" : "w", level: Math.max(1, L + (tg.c < 0.4 ? 1 : tg.c > 0.7 ? -1 : 0)), q: 1, gearSeed: Math.floor(r() * 1e9), guild: null, tier: ti,
         look: { skin: U.pick(r, R0.skins), hair: U.pick(r, R0.hairs), hairStyle: U.ri(r, 0, 5), beard: U.ri(r, 0, 4), eyes: U.pick(r, D.EYES).c, tattoo: r() < 0.6 ? U.pick(r, D.TATTOOS).id : "keine", tattooColor: U.pick(r, D.TATTOO_COLORS).c, scar: r() < 0.3 ? U.pick(r, D.SCARS).id : "keine", horns: U.ri(r, 0, 2) },
       };
-      let lo = 0.15;
-      let hi = 1.8;
-      for (let k = 0; k < 7; k++) {
-        w.q = (lo + hi) / 2;
-        const c = est(E.wanderFighter(w), w.id + k);
-        if (c > tg.c) lo = w.q;
-        else hi = w.q;
+      // Wanderkaempfer bekommen hoechstens so viele Talentpunkte wie der Held selbst ausgegeben hat
+      w.tp = E.talentSpent(S);
+      for (let tries = 0; tries < 5; tries++) {
+        let lo = 0.15;
+        let hi = 1.8;
+        for (let k = 0; k < 7; k++) {
+          w.q = (lo + hi) / 2;
+          const c = est(E.wanderFighter(w), w.id + k);
+          if (c > tg.c) lo = w.q;
+          else hi = w.q;
+        }
+        w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
+        w.chance = est(E.wanderFighter(w), w.id);
+        // Selbst ganz schwach noch zu stark: eine Stufe tiefer suchen
+        if (w.chance >= tg.c - 0.15 || w.level <= 1) break;
+        w.level = Math.max(1, w.level - Math.max(1, Math.round(L * 0.15)));
       }
-      w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
-      w.chance = est(E.wanderFighter(w), w.id);
       w.honor = Math.max(0, Math.round(me.honor * (1.3 - tg.c * 0.6)));
       out.push(w);
     });
@@ -1431,7 +1696,7 @@
       rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * (b.final ? 8 : 3));
       const r = U.rng(U.hash(b.mon.id + now));
-      giveItem(S, E.makeItem(r, { level: b.L, cls: S.cls, minRarity: b.final ? "episch" : "selten", boost: b.final ? 2 : 0.6 }), rew);
+      giveItem(S, E.makeItem(r, { level: b.L, cls: S.cls, minRarity: b.final ? "episch" : "selten", boost: (b.final ? 2 : 0.6) + E.lootBoost(S) }), rew);
       if (b.final) {
         rew.perlen = 3;
         S.perlen += 3;

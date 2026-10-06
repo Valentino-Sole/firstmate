@@ -37,7 +37,7 @@
   };
   const estCache = new Map();
   function estimate(hero, foes, key) {
-    const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block;
+    const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block + "|" + hero.maxHp + "|" + JSON.stringify(hero.tal || {});
     if (estCache.has(k)) return estCache.get(k);
     const v = E.estimateWin(hero, foes, 30, key);
     estCache.set(k, v);
@@ -219,7 +219,9 @@
     },
     render() {
       const tab = UI.tabs.held || "ausruestung";
-      let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["aussehen", "Aussehen"], ["geschichte", "Geschichte"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="held" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      const free = E.talentFree(S());
+      let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["talente", "Talente" + (free > 0 ? ' <span class="badge">' + free + "</span>" : "")], ["aussehen", "Aussehen"], ["geschichte", "Geschichte"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="held" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      if (tab === "talente") return h + talents();
       if (tab === "bestiarium") return h + bestiary();
       if (tab === "abzeichen") return h + achievements();
       if (tab === "aussehen") return h + looks();
@@ -253,8 +255,10 @@
     for (const a of D.ATTRS) {
       let cost = 0;
       for (let i = 0; i < UI.qty; i++) cost += E.attrCost(s.bought[a] + i);
+      const fx = E.attrEffects(s, a, UI.qty);
+      const info = fx.map((x) => '<div class="ainfo">' + esc(x.t) + (x.now ? ': <b class="num">' + esc(x.now) + "</b>" : "") + (x.up ? ' <span class="aup">(' + esc(x.up) + " für " + UI.qty + (UI.qty === 1 ? " Punkt" : " Punkte") + ")</span>" : "") + "</div>").join("");
       h +=
-        '<div class="attr' + (a === C.main ? " main" : "") + '" title="' + esc(D.ATTR_INFO[a].desc) + '">' + I.ui(a) + "<div><div>" + D.ATTR_INFO[a].name + (a === C.main ? ' <span class="tag">Hauptwert</span>' : "") + '</div><div class="cost">' + UI.gold(cost) + "</div></div>" +
+        '<div class="attr' + (a === C.main ? " main" : "") + '" title="' + esc(D.ATTR_INFO[a].desc) + '">' + I.ui(a) + "<div><div>" + D.ATTR_INFO[a].name + (a === C.main ? ' <span class="tag">Hauptwert</span>' : "") + ' <span class="cost">' + UI.gold(cost) + "</span></div>" + info + "</div>" +
         '<span class="val num">' + U.fmt(sum.attrs[a]) + '</span><button class="btn plus" data-act="attr" data-a="' + a + '"' + (s.gold < E.attrCost(s.bought[a]) ? " disabled" : "") + ' aria-label="' + D.ATTR_INFO[a].name + ' erhöhen">+</button></div>';
     }
     h += "</div>";
@@ -268,17 +272,87 @@
       '<div class="stats"><div><span>' + I.ui("konstitution") + ' Lebenspunkte</span><b class="num">' + U.fmt(sum.hp) + "</b></div>" +
       "<div><span>" + I.ui("schaden") + ' Schaden</span><b class="num">' + U.fmt(sum.dmgMin) + " bis " + U.fmt(sum.dmgMax) + "</b></div>" +
       "<div><span>" + I.ui("ruestung") + ' Rüstung</span><b class="num">' + U.fmt(sum.armor) + " (" + Math.round(sum.reduction * 100) + " %)</b></div>" +
-      "<div><span>" + I.ui("glueck") + ' Kritisch</span><b class="num">' + Math.round(sum.crit * 100) + " % · ×" + String(AR.critMult || 2).replace(".", ",") + "</b></div>" +
+      "<div><span>" + I.ui("glueck") + ' Kritisch</span><b class="num">' + Math.round(sum.crit * 100) + " % · ×" + String(Math.round((E.heroFighter(s).prof.critMult || 2) * 100) / 100).replace(".", ",") + "</b></div>" +
       special.map(([ic, n, v]) => "<div><span>" + I.ui(ic) + " " + n + '</span><b class="num">' + v + "</b></div>").join("") +
       "<div><span>" + I.ui("ehre") + ' Ehre</span><b class="num">' + U.fmt(s.honor) + "</b></div>" +
       "<div><span>" + I.ui("stall") + " Reittier</span><b>" + (mount ? esc(mount.name) : "keins") + "</b></div>" +
       "<div><span>" + I.ui("gilde") + " Gilde</span><b>" + (s.guild ? esc(s.guild.name) : "keine") + "</b></div></div>";
-    h += '<div class="special"><b>' + esc(C.special.name) + "</b> (jede vierte Aktion): " + esc(C.special.desc) + "</div>";
+    const hf = E.heroFighter(s);
+    h += '<div class="special"><b>' + esc(C.special.name) + "</b> (jede " + (hf.tal && hf.tal.spEvery ? "dritte" : "vierte") + " Aktion): " + esc(C.special.desc) + "</div>";
     const buffs = E.activeBuffs(s);
     if (buffs.length) h += '<div class="muted" style="font-size:13px;margin-top:6px">Aktive Tränke: ' + buffs.map((b) => esc(D.POTIONS.find((p) => p.id === b.id).name) + ' (<span class="num" data-until="' + b.until + '"></span>)').join(", ") + "</div>";
     h += invSection();
     return h;
   }
+  /* Talentbaum: drei Zweige, Stufen werden mit Punkten im Zweig frei */
+  function talentText(t, rank) {
+    return Object.keys(t.eff)
+      .filter((k) => k !== "firstStrike" || !t.eff.opener)
+      .map((k) => {
+        const per = t.eff[k];
+        const val = k === "spEvery" || k === "assassinate" || k === "vanish" || k === "firstStrike" || k === "spHits" ? per : per * rank;
+        const fn = D.TALENT_EFFECTS[k];
+        return fn ? fn(val) : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+  function talents() {
+    const s = S();
+    const tree = E.talentTree(s.cls);
+    const pts = E.talentPoints(s);
+    const free = E.talentFree(s);
+    const ranks = s.talents || {};
+    let h =
+      '<div class="row talhead"><span class="chip">' + I.ui("abzeichen") + " <b>" + free + "</b> von " + pts + " Talentpunkten frei</span>" +
+      '<span class="muted small">Alle zwei Stufen gibt es einen Punkt. Talente wirken in jedem Kampf: Aufträge, Chronik, Arena, Dungeons und Nachtjagd.</span><span class="spacer"></span>' +
+      '<button class="btn small ghost" data-act="resetTalents"' + (!E.talentSpent(s) || s.perlen < E.C.TALENT_RESET_PERLEN ? " disabled" : "") + ">Zurücksetzen · " + E.C.TALENT_RESET_PERLEN + " " + I.ui("perle") + "</button></div>";
+    h += '<div class="taltree">';
+    for (const b of tree.branches) {
+      const spent = E.branchSpent(ranks, b.key);
+      h += '<div class="talbranch b-' + b.key + '"><div class="tb-head"><b>' + esc(b.name) + '</b><span class="muted small">' + b.kind + " · " + spent + " Punkte</span></div>";
+      for (let tier = 1; tier <= 4; tier++) {
+        const need = D.TALENT_TIER_REQ[tier];
+        const open = spent >= need;
+        h += '<div class="tiers' + (open ? "" : " locked") + '">' + (tier > 1 ? '<div class="tierlabel">' + (open ? "Stufe " + tier : "ab " + need + " Punkten im Zweig") + "</div>" : "");
+        for (const t of b.talents.filter((x) => x.tier === tier)) {
+          const r = ranks[t.id] || 0;
+          const can = E.talentCheck(s.cls, ranks, t.id, pts).ok;
+          h +=
+            '<button class="talent' + (t.tier === 4 ? " cap" : "") + (r > 0 ? " has" : "") + (r >= t.max ? " full" : "") + '" data-act="learnTalent" data-id="' + t.id + '"' + (can ? "" : " aria-disabled=\"true\"") + ">" +
+            '<span class="tn">' + esc(t.name) + '</span><span class="tr">' + r + "/" + t.max + "</span>" +
+            '<span class="td">' + esc(talentText(t, Math.max(1, r))) + (r > 0 && r < t.max ? '<br><i>Nächster Rang: ' + esc(talentText(t, r + 1)) + "</i>" : "") + "</span>" +
+            (t.note ? '<span class="tnote">' + esc(t.note) + "</span>" : "") +
+            "</button>";
+        }
+        h += "</div>";
+      }
+      h += "</div>";
+    }
+    h += "</div>";
+    return h;
+  }
+  A.learnTalent = (el) => {
+    const res = E.learnTalent(S(), el.dataset.id);
+    if (!done(res)) return;
+    SB.audio.play(res.talent.tier === 4 ? "levelup" : "chime");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.resetTalents = () => {
+    UI.dialog(
+      "<h3>Talente zurücksetzen?</h3><p>Alle Punkte kommen zurück und du kannst sie neu verteilen. Das kostet " + E.C.TALENT_RESET_PERLEN + " Wolkenperlen, du hast " + S().perlen + ".</p>" +
+        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Abbrechen</button><button class="btn" data-act="resetTalentsYes">Zurücksetzen</button></div>'
+    );
+  };
+  A.resetTalentsYes = () => {
+    if (!done(E.resetTalents(S()))) return;
+    UI.closeDialog();
+    SB.audio.play("well");
+    UI.toast("Deine Talente sind zurückgesetzt. Verteile die Punkte neu.", "good", "abzeichen");
+    UI.saveNow();
+    UI.refresh();
+  };
   A.qty = (el) => {
     UI.qty = +el.dataset.q;
     UI.renderPanel();

@@ -55,6 +55,9 @@ async function playBattle(page, name, watch) {
   await page.waitForSelector("#battle:not([hidden])", { timeout: 15000 });
   await page.waitForTimeout(watch || 2200);
   await shot(page, name + "-kampf");
+  // Waehrend des Kampfes darf keine Meldung das Ergebnis verraten
+  const early = await page.evaluate(() => (document.getElementById("toasts") || { textContent: "" }).textContent);
+  if (/Abzeichen|erreicht/.test(early)) errors.push(name + ": Meldung schon während des Kampfes: " + early);
   await page.click("#battle [data-skip]");
   await page.waitForSelector("#battleDone", { timeout: 60000 });
   await page.waitForTimeout(400);
@@ -251,6 +254,30 @@ await open(page, "tiefen");
 await shot(page, "23-dungeon-offen");
 await page.click('[data-act="dungeonFight"]:not([disabled])');
 await playBattle(page, "23b-dungeon");
+
+step("Talente und Attribute");
+await page.evaluate(() => {
+  SB.ui.tabs.held = "talente";
+  SB.ui.refresh();
+});
+await open(page, "held");
+await page.click('[data-act="tab"][data-panel="held"][data-tab="talente"]');
+await page.waitForTimeout(400);
+for (const id of ["d.hp", "d.hp", "d.hp", "o.dmg", "o.dmg", "o.dmg"]) {
+  await page.click('[data-act="learnTalent"][data-id="' + id + '"]');
+  await page.waitForTimeout(150);
+}
+await shot(page, "23c-talente");
+const learned = await page.evaluate(() => SB.engine.talentSpent(SB.ui.S));
+if (learned !== 6) errors.push("Talente: " + learned + " statt 6 Punkte gelernt");
+await page.click('[data-act="tab"][data-panel="held"][data-tab="ausruestung"]');
+await page.waitForTimeout(600);
+await page.evaluate(() => document.querySelector(".attrs").scrollIntoView());
+await shot(page, "23d-attribute");
+const hasInfo = await page.$$eval(".attr .ainfo", (l) => l.length);
+if (hasInfo < 5) errors.push("Attribute: Erklärungen fehlen");
+await page.click('[data-act="closePanel"]');
+await page.waitForTimeout(300);
 
 step("Mondtor bei Tag");
 await page.evaluate(() => {

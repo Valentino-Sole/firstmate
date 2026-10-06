@@ -95,6 +95,18 @@
       async function play2d(ev) {
         const a = ev.a;
         const d = 1 - a;
+        if (ev.kind === "talent") {
+          if (ev.hp) {
+            hpNow[0] = ev.hp[0];
+            hpNow[1] = ev.hp[1];
+            setHp(0, hpNow[0]);
+            setHp(1, hpNow[1]);
+          }
+          say2d("<b>" + esc(names[a]) + ": " + esc(ev.name) + "</b>" + (ev.heal ? ", heilt " + U.fmt(ev.heal) : "") + (ev.ward ? ", Barriere " + U.fmt(ev.ward) : ""));
+          await wait(500);
+          return;
+        }
+        if (ev.kind === "counter") say2d("<b>" + esc(names[a]) + ": " + esc(ev.name) + "!</b>");
         if (ev.kind === "stun") {
           say2d(esc(names[a]) + " ist betäubt und setzt aus.");
           await wait(500);
@@ -117,7 +129,9 @@
             figs[d].classList.add("hit");
             setTimeout(() => figs[d].classList.remove("hit"), 150);
             SB.audio.play(h.res === "crit" ? "crit" : "hit");
-            txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "");
+            const TAGS = { double: "Doppelschlag", opener: "Sturmangriff", assassinate: "Meucheln", execute: "Gnadenstoß", afterStun: "Nachsetzen" };
+            const tags = (h.tags || []).filter((t) => TAGS[t]).map((t) => TAGS[t]);
+            txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + (tags.length ? " [" + tags.join(", ") + "]" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "") + (h.absorbed ? " (" + U.fmt(h.absorbed) + " von der Barriere abgefangen)" : "");
           }
           say2d(txt);
           await wait(420);
@@ -126,6 +140,11 @@
           hpNow[a] = ev.hp[a];
           setHp(a, hpNow[a]);
           say2d(esc(names[a]) + " heilt sich um " + U.fmt(ev.heal) + ".");
+        }
+        if (ev.lifesteal) {
+          hpNow[a] = ev.hp[a];
+          setHp(a, hpNow[a]);
+          say2d(esc(names[a]) + " zieht " + U.fmt(ev.lifesteal) + " Lebenspunkte ab.");
         }
         if (ev.poison) say2d(esc(names[d]) + " ist vergiftet.");
         if (ev.stun) say2d(esc(names[d]) + " ist betäubt.");
@@ -214,6 +233,7 @@
           root.innerHTML = "";
           root.onclick = null;
           UI.inBattle = false;
+          UI.flushNotices();
           UI.updateMusic();
           if (UI.hub) UI.hub.resume();
           resolve();

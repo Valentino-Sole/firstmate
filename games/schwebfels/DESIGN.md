@@ -52,6 +52,7 @@ Auf der Insel ist Leben: Leute trinken vor der Taverne aus Krügen, ein Spielman
 | Stadtwache | **Wachturm** | Schichten zu 5 Minuten |
 | Dungeons | **Das Tor zur Tiefe** | 6 Dungeons mit je 8 Bossen |
 | Glücksrad | **Wunschbrunnen** | Freier Wurf mit sichtbarem **Zeitgeber bis Mitternacht**, Perlenwurf nur als eigener Knopf |
+| (kein Gegenstück) | **Talentbäume** | Je Klasse drei Zweige (Angriff, Verteidigung, Klassenpfad) mit je fünf Talenten; alle zwei Stufen ein Punkt, Stufen eines Zweigs öffnen sich mit 3, 6 und 8 Punkten darin; Zurücksetzen kostet 3 Wolkenperlen. Siehe Abschnitt 4a |
 | (kein Gegenstück) | **Mondtor** | Öffnet sich nur bei Nacht: drei Nachtjagden pro Tag gegen zwei Nachtwesen der eigenen Insel (sichere seltene Beute, kein Tatendrang) und die Händlerin Selene mit drei besonderen Stücken |
 | (kein Gegenstück) | **Heim** | Vier Ausbaustufen (Zeltlager bis Turmfeste) und sieben Einrichtungen mit dauerhaften Boni, als begehbare 3D-Ansicht |
 | Album, Erfolge | **Bestiarium**, **Abzeichen** | 20 Abzeichen mit Perlen-Belohnung |
@@ -67,6 +68,16 @@ Kämpfe laufen automatisch und abwechselnd ab, höchstens 90 Aktionen; ab der 30
 - **Mehrere Gegner** (Horden, Chronik): der Held kämpft nacheinander gegen alle, zwischen zwei Gegnern kehren 12 % der Lebenspunkte zurück.
 - Ein Kampf ist durch einen festen Zufallswert bestimmt: Neuladen ändert den Ausgang nicht.
 
+## 4a. Talentbäume
+
+Vorbild ist Dark Age of Camelot: Dort verteilt jede Klasse Punkte auf eigene Spezialisierungslinien (Waffenarten, Schilde, Parieren, Schleichen, Gifte, Magielinien) und kauft mit Reichspunkten Reichsfähigkeiten, passive wie Zähigkeit oder Magie meiden und aktive wie Schmerz ignorieren, Reinigung oder Pfeilsalve. Schwebfels verbindet beides zu einem kleinen Baum je Klasse; Namen und Werte sind eigene.
+
+- **Angriff** (je Grundart): mehr Schaden, Kritchance und Kritstärke, Rüstung durchdringen, Gnadenstoß gegen geschwächte Gegner, Doppelschlag; Spitze: Sturmangriff (Krieger), Meucheln (Schurke), Pfeilsalve (Jäger), Wilde Macht (Magier).
+- **Verteidigung**: Lebenspunkte, Block, Ausweichen, Barriere, Magie meiden, Zähigkeit, Gegenschlag, Lebensraub, Reinigung gegen Betäubung und Gift; Spitze: Schmerz ignorieren, Verschwinden, Zweiter Atem, Bannkreis.
+- **Klassenpfad**: stärkt die eigene Spezialfähigkeit (Schaden, Kritchance, eine Besonderheit je Klasse wie stärkeres Gift, mehr Heilung, höhere Betäubungschance); Spitze: Großmeister, die Spezialfähigkeit kommt schon bei jeder dritten Aktion.
+- Talente wirken in jedem Kampf und sind im 3D-Kampf zu sehen: Schutzkugel der Barriere, Lichtsäule beim zweiten Atem, Rauch beim Verschwinden, Einblendungen für Gegenschlag, Doppelschlag, Gnadenstoß und Lebensraub.
+- Computerhelden und Wanderkämpfer verteilen ihre Punkte selbst; Wanderkämpfer bekommen höchstens so viele Punkte, wie der Held ausgegeben hat.
+
 ## 5. Balance
 
 - `tests/balance.mjs`: Klassen-Duelle im Mittel zwischen etwa 44 und 58 %; Aufträge und Dungeon-Bosse für alle zwölf Klassen.
@@ -75,6 +86,8 @@ Kämpfe laufen automatisch und abwechselnd ab, höchstens 90 Aktionen; ab der 30
 - Chronik-Kapitel: auf der Kapitelstufe mit durchschnittlicher Ausrüstung meist 60 bis 100 %.
 - Nachtjagd: mit durchschnittlicher Ausrüstung je nach Klasse und Stufe etwa 55 bis 95 %.
 - Arena: die vier Herausforderer liegen bei etwa 75, 60, 45 und 30 % Siegchance.
+- Talente (`tests/talents.mjs`): jede Klasse mit jedem Schwerpunkt gegen alle anderen Klassen auf Stufe 20 und 40 im Mittel zwischen etwa 39 und 62 %, also so ausgeglichen wie ohne Talente; Aufträge werden mit Talenten nur leicht leichter.
+- Glück verbessert die Beute (Fundchance und Seltenheit), damit es sich auch für Nicht-Schurken lohnt.
 
 ## 6. Technik
 
@@ -82,4 +95,5 @@ Kämpfe laufen automatisch und abwechselnd ab, höchstens 90 Aktionen; ab der 30
 - 3D mit three.js 0.160 (vom CDN). Figuren, Monster, Gebäude, Waffen und alle Texturen entstehen zur Laufzeit im Code (Canvas-Malerei, Formen, Röhren, Drehkörper). Ohne WebGL schaltet das Spiel auf eine 2D-Ansicht um.
 - Musik und Klänge werden live mit WebAudio erzeugt: eigene Stücke für Insel bei Tag und Nacht, Taverne, Kampf, Dungeon, Heim und Chronik; Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders.
 - Speichern im Browser (localStorage) und als Spielstand-Code; in claude.ai zusätzlich privat im Konto, mit öffentlichem Heldenprofil für Arena und Ranglisten und öffentlichen Gildenprofilen.
+- Meldungen wie Stufenaufstieg und Abzeichen erscheinen erst nach dem Kampf, damit nichts den Ausgang verrät.
 - Spielstände aus Version 1 werden übernommen; beim ersten Start wählt der Held sein Reich, Stufe, Gold, Ausrüstung und Erfolge bleiben.
