@@ -230,7 +230,47 @@ function buildPack(file, gameBones) {
       use: { race: "nordmann", gender: "m" },
     },
   };
-  P.write(file, { v: 1, gen, clips });
+  // Ruestungsteil wie aus fit_piece.py: Ring um den mittleren Wirbel, 3 cm ueber der Koerperoberflaeche
+  const G = [12, 24, -0.25, 1.25];
+  const rows = 5;
+  const tto = [];
+  const uvp = [];
+  const pidx = [];
+  for (let r = 0; r < rows; r++) {
+    for (let a = 0; a < G[1]; a++) {
+      const t = r / (rows - 1);
+      const th = -Math.PI + ((a + 0.5) * 2 * Math.PI) / G[1];
+      tto.push(t, th, 0.03, t, th, 0.03);
+      uvp.push(a / G[1], t);
+    }
+  }
+  for (let r = 0; r < rows - 1; r++) {
+    for (let a = 0; a < G[1]; a++) {
+      const i0 = r * G[1] + a;
+      const i1 = r * G[1] + ((a + 1) % G[1]);
+      pidx.push(i0, i1 + G[1], i1, i0, i0 + G[1], i1 + G[1]);
+    }
+  }
+  const bits = new Uint8Array((G[0] * G[1]) / 8);
+  for (let ti = 2; ti <= 10; ti++) for (let a = 0; a < G[1]; a++) bits[(ti * G[1] + a) >> 3] |= 1 << ((ti * G[1] + a) & 7);
+  const nv = rows * G[1];
+  const pieces = {
+    probe_brust: {
+      slot: "brust",
+      forms: ["harnisch"],
+      bones: ["Spine01"],
+      grid: G,
+      ref: "probe",
+      uv: P.q16(uvp),
+      idx: P.u16(pidx),
+      bone: P.u8(new Array(nv * 2).fill(0)),
+      tto: P.q16(tto),
+      w: P.u8(new Array(nv).fill(255)),
+      tex: P.img(png(4, 4, [90, 110, 140]), "image/png"),
+      occ: { Spine01: P.u8(Array.from(bits)) },
+    },
+  };
+  P.write(file, { v: 1, gen, clips, pieces });
 }
 
 /* ---------- Bauen und im Browser pruefen ---------- */
@@ -289,6 +329,27 @@ const res = await page.evaluate(async () => {
   ok(!!P.weapon && P.weapon.parent === P.B["hand.R"], "Waffe nicht an der rechten Hand");
   ok(!!P.helmet && P.B.head.children.includes(P.helmet), "Helm nicht am Kopf");
   ok(P.B["hand.R"].name === "RightHand" && P.B.chest.name === "Spine", "Spielgelenke falsch zugeordnet");
+  // Ruestungsteil passend zum Harnisch: angelegt, Haut darunter ausgeblendet, Abstand zur Achse plausibel, Bild aus dem Teil
+  const armored = R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear: Object.assign({ ruestung: { base: "harnisch", rarity: "selten", style: 0 } }, gear) });
+  ok((armored.parts.rigPieces || []).includes("probe_brust"), "Harnisch legt das Ruestungsteil nicht an");
+  ok(armored.parts.mesh.geometry.index.count < m.parts.mesh.geometry.index.count, "Haut unter dem Ruestungsteil nicht ausgeblendet");
+  const pm = armored.parts.body.children.find((o) => o.isSkinnedMesh && o !== armored.parts.mesh);
+  if (pm) {
+    const p = pm.geometry.attributes.position;
+    const sp = armored.parts.B.chest.parent;
+    const wp = new THREE.Vector3();
+    sp.getWorldPosition(wp);
+    let rmin = 1e9;
+    let rmax = 0;
+    for (let i = 0; i < p.count; i++) {
+      const r = Math.hypot(p.getX(i) - wp.x, p.getZ(i) - wp.z);
+      rmin = Math.min(rmin, r);
+      rmax = Math.max(rmax, r);
+    }
+    ok(rmin > 0.15 && rmax < 0.35, "Ruestungsteil liegt nicht ueber dem Koerper (Abstand " + rmin.toFixed(2) + " bis " + rmax.toFixed(2) + ")");
+  } else fails.push("kein Netz fuer das Ruestungsteil");
+  ok(SB.icons.item({ base: "harnisch", rarity: "selten", style: 0 }).includes("<image"), "Gegenstandsbild kommt nicht aus dem Ruestungsteil");
+  ok(!SB.icons.item({ base: "schwert", rarity: "selten", style: 0 }).includes("<image"), "Gegenstand ohne Ruestungsteil muss das Symbol behalten");
   const left = R.buildHero({ race: "nordmann", gender: "w", cls: "sturmhuene" });
   ok(!left.parts.clips, "Voelker ohne erzeugte Figur muessen die alten Figuren behalten");
   for (let i = 0; i < 20; i++) m.update(1 / 60);

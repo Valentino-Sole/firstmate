@@ -3676,7 +3676,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (glowC) body += `<circle cx="32" cy="32" r="31" fill="url(#h${id})" opacity="${item.rarity === "selten" ? 0.5 : 0.8}"/>`;
     if (item.rarity === "legendaer")
       body += `<g opacity=".55">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<path d="M32 32 L${32 + Math.cos((i / 8) * Math.PI * 2) * 32} ${32 + Math.sin((i / 8) * Math.PI * 2) * 32}" stroke="${rar}" stroke-width="2.4"/>`).join("")}</g>`;
-    body += fn(id, c, glowC, item.style || 0);
+    // Gegenstand mit eigenem 3D-Ruestungsteil (src/r3d-rigged.js): Bild des Teils statt des gezeichneten Symbols
+    const RG = SB.R3D && SB.R3D.rigged;
+    const pic = RG && RG.iconFor ? RG.iconFor(item) : null;
+    body += pic ? `<image href="${pic}" x="3" y="3" width="58" height="58"/>` : fn(id, c, glowC, item.style || 0);
     if (item.rarity === "episch" || item.rarity === "legendaer") body += `<path d="M55 3 L57 8 L62 10 L57 12 L55 17 L53 12 L48 10 L53 8 Z" fill="${rar}" stroke="${O}" stroke-width=".8"/>`;
     return svg(body);
   };
@@ -7940,6 +7943,75 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (pick) out.push(pick);
     }
     return out;
+  };
+
+  /* Gegenstandsbild aus dem Ruestungsteil selbst (passt so genau zum angelegten Modell). Das Teil liegt dafuer in
+     Ruhelage auf der ersten Figur mit eigenem Skelett; das Bild wird einmal erzeugt und gemerkt. */
+  const ICON = {};
+  let iconR = null;
+  let iconScene = null;
+  let iconCam = null;
+  RG.pieceIcon = function (name, size) {
+    size = size || 128;
+    const ck = name + "|" + size;
+    if (ICON[ck] !== undefined) return ICON[ck];
+    const Pc = PIECES()[name];
+    const Pr = PIECES()[name];
+    const key = Pr && GEN()[Pr.ref] && GEN()[Pr.ref].kind === "rig" ? Pr.ref : Object.keys(GEN()).find((k) => GEN()[k].kind === "rig");
+    if (!Pc || !key || !R.ready()) return (ICON[ck] = null);
+    T = R.T();
+    try {
+      if (!iconR) {
+        iconR = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        iconR.outputColorSpace = T.SRGBColorSpace;
+        iconR.toneMapping = T.ACESFilmicToneMapping;
+        iconR.toneMappingExposure = 1.15;
+        iconScene = new T.Scene();
+        if (R.envMap) iconScene.environment = R.envMap(iconR);
+        iconScene.add(new T.HemisphereLight("#e6ecff", "#3a3028", 1.3));
+        const k = new T.DirectionalLight("#fff0d8", 2.4);
+        k.position.set(3, 5, 5);
+        iconScene.add(k);
+        iconCam = new T.PerspectiveCamera(30, 1, 0.01, 50);
+      }
+      iconR.setSize(size, size, false);
+      let g = pieceGeo(name, key, GEN()[key]);
+      if (Pc.slot === "handschuhe") {
+        // nur der linke Handschuh, Finger nach unten
+        const p = g.attributes.position.array;
+        const idx = g.index.array;
+        const keep = [];
+        for (let t = 0; t < idx.length; t += 3) if (p[idx[t] * 3] > 0) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+        g = g.clone();
+        g.setIndex(keep);
+        g = g.toNonIndexed();
+      }
+      const mesh = new T.Mesh(g, mat("piece." + name, Pc.tex, null, "rigpiece." + name));
+      if (Pc.slot === "handschuhe") mesh.rotation.z = -Math.PI / 2;
+      mesh.rotation.y = 0.3;
+      iconScene.add(mesh);
+      const box = new T.Box3().setFromObject(mesh);
+      const c = box.getCenter(new T.Vector3());
+      const sz = box.getSize(new T.Vector3());
+      const span = Math.max(sz.x, sz.y, sz.z * 0.8) * 1.12;
+      iconCam.position.set(c.x, c.y + span * 0.08, c.z + span / (2 * Math.tan((30 * Math.PI) / 360)) + sz.z * 0.5);
+      iconCam.lookAt(c);
+      iconR.setClearColor(0x000000, 0);
+      iconR.render(iconScene, iconCam);
+      const url = iconR.domElement.toDataURL("image/png");
+      iconScene.remove(mesh);
+      return (ICON[ck] = url);
+    } catch (e) {
+      console.warn("Gegenstandsbild fehlgeschlagen", e);
+      return (ICON[ck] = null);
+    }
+  };
+  // Bild fuer einen Gegenstand, wenn ein passendes Ruestungsteil existiert
+  RG.iconFor = function (item) {
+    const B = SB.data && SB.data.BASES && item && SB.data.BASES[item.base];
+    if (!B || !SLOT[B.slot] || !Object.keys(PIECES()).length) return null;
+    const names = RG.piecesFor({ [B.slot]: item }, (item.vis && item.vis.c) || "midgard");
+    return names.length ? RG.pieceIcon(names[0]) : null;
   };
 
   /* ---------- Abspielen ---------- */
