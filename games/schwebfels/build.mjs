@@ -17,7 +17,14 @@ const cdn = [...html.matchAll(/<script src="(https:[^"]+)"><\/script>/g)].map((m
 const fonts = [...html.matchAll(/<link rel="stylesheet" href="(https:[^"]+)">/g)].map((m) => m[1]);
 const bodyMarkup = html.slice(html.indexOf("<body>") + 6, html.indexOf("<!-- BUILD:SCRIPTS -->")).trim();
 
-const inlineJs = scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");
+// Modellpaket (assets/schwebfels.pack, aus assets-src/ gebaut) als Base64 einbetten
+let packJs = "";
+try {
+  packJs = "<script>globalThis.SB_PACK=\"" + readFileSync(path.join(dir, "assets/schwebfels.pack")).toString("base64") + "\";</script>";
+} catch (e) {
+  console.warn("Hinweis: assets/schwebfels.pack fehlt, das Spiel nutzt die alten Figuren.");
+}
+const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");
 const cdnTags = cdn.map((u) => '<script src="' + u + '"></script>').join("\n");
 const fontTags = fonts.map((u) => '<link rel="stylesheet" href="' + u + '">').join("\n");
 

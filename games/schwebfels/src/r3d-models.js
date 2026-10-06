@@ -1064,7 +1064,18 @@
     });
   }
 
+  // Version 5: modellierte Helden aus dem Modellpaket, sonst die alte prozedurale Figur
   R.buildHero = function (desc) {
+    if (R.human && R.human.ok()) {
+      try {
+        return R.human.build(desc);
+      } catch (e) {
+        console.warn("Modellierter Held nicht moeglich, alte Figur", e);
+      }
+    }
+    return buildHeroOld(desc);
+  };
+  const buildHeroOld = function (desc) {
     const D = SB.data;
     const raceId = D.RACES[desc.race] ? desc.race : OLD_RACE[desc.race] || "albier";
     const race = D.RACES[raceId];
@@ -1606,7 +1617,7 @@
             if (name === "defeat") u = 1;
           }
         }
-        if (kind === "hero") poseHero(model, name, u, dt);
+        if (kind === "hero") (parts.rig && R.human ? R.human.pose : poseHero)(model, name, u, dt);
         else if (R.poseMonster) R.poseMonster(model, name, u, dt);
         if (model.inner) model.inner.update(dt);
         const t = model.t;
@@ -1688,27 +1699,12 @@
     return s;
   }
 
-  function poseHero(m, name, u) {
-    const P = m.parts;
+  // Zustand einer Bewegung (gemeinsam fuer alte und neue Heldenfiguren)
+  function poseState(m, name, u, s, v) {
     const t = m.t;
-    const s = stance(m);
     const br = Math.sin(t * 2.1);
-    let shL = s.shL.slice();
-    let shR = s.shR.slice();
-    let elL = s.elL + br * 0.04;
-    let elR = s.elR - br * 0.04;
-    let hipL = s.hipL;
-    let hipR = s.hipR;
-    let knL = s.knL;
-    let knR = s.knR;
-    let lean = s.lean + br * 0.015;
-    let twist = s.twist;
-    let y = s.y + br * 0.012;
-    let headX = s.head + Math.sin(t * 1.1) * 0.03;
-    let rootRX = 0;
-    let rootRZ = 0;
-    let rootY = 0;
     const A = m.arch;
+    let { shL, shR, elL, elR, hipL, hipR, knL, knR, lean, twist, y, headX, rootRX, rootRZ, rootY } = v;
     switch (name) {
       case "attack": {
         const up = u < 0.4 ? ease(u / 0.4) : 1 - ease((u - 0.4) / 0.6);
@@ -1885,6 +1881,19 @@
         break;
       }
     }
+    return { shL, shR, elL, elR, hipL, hipR, knL, knR, lean, twist, y, headX, rootRX, rootRZ, rootY, br };
+  }
+  R.poseState = poseState;
+  R.stance = stance;
+
+  function poseHero(m, name, u) {
+    const P = m.parts;
+    const t = m.t;
+    const s = stance(m);
+    const br = Math.sin(t * 2.1);
+    const v0 = { shL: s.shL.slice(), shR: s.shR.slice(), elL: s.elL + br * 0.04, elR: s.elR - br * 0.04, hipL: s.hipL, hipR: s.hipR, knL: s.knL, knR: s.knR,
+      lean: s.lean + br * 0.015, twist: s.twist, y: s.y + br * 0.012, headX: s.head + Math.sin(t * 1.1) * 0.03, rootRX: 0, rootRZ: 0, rootY: 0 };
+    const { shL, shR, elL, elR, hipL, hipR, knL, knR, lean, twist, y, headX, rootRX, rootRZ, rootY } = poseState(m, name, u, s, v0);
     P.body.position.y = y + rootY;
     P.body.rotation.x = rootRX;
     P.body.rotation.z = rootRZ;

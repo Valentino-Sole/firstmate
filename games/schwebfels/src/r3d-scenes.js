@@ -37,6 +37,43 @@
     }
     return r;
   }
+  /* Umgebungslicht fuer modellierte Figuren (Metall braucht eine Spiegelung): weicher Himmel, warmer Boden.
+     Je Renderer einmal erzeugt, da Texturen nicht zwischen WebGL-Kontexten geteilt werden. */
+  function envMap(r) {
+    if (r.userData && r.userData.env) return r.userData.env;
+    const sc = new T.Scene();
+    const geo = new T.SphereGeometry(10, 32, 16);
+    const cols = [];
+    const p = geo.attributes.position;
+    const top = new T.Color("#dfe8f4");
+    const hor = new T.Color("#b8a88e");
+    const bot = new T.Color("#2c241c");
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i) / 10;
+      const c = y > 0 ? hor.clone().lerp(top, Math.pow(y, 0.6)) : hor.clone().lerp(bot, Math.pow(-y, 0.5));
+      cols.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute("color", new T.Float32BufferAttribute(cols, 3));
+    sc.add(new T.Mesh(geo, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide })));
+    // zwei helle Flaechen als Lichtquellen in der Spiegelung
+    const lm = new T.MeshBasicMaterial({ color: new T.Color(6, 5.6, 5) });
+    const l1 = new T.Mesh(new T.PlaneGeometry(5, 3), lm);
+    l1.position.set(4, 6, 5);
+    l1.lookAt(0, 0, 0);
+    sc.add(l1);
+    const l2 = new T.Mesh(new T.PlaneGeometry(4, 2), new T.MeshBasicMaterial({ color: new T.Color(2, 2.4, 3.2) }));
+    l2.position.set(-6, 3, -4);
+    l2.lookAt(0, 0, 0);
+    sc.add(l2);
+    const pm = new T.PMREMGenerator(r);
+    const env = pm.fromScene(sc, 0.02).texture;
+    pm.dispose();
+    geo.dispose();
+    r.userData = r.userData || {};
+    r.userData.env = env;
+    return env;
+  }
+  R.envMap = envMap;
   function killRenderer(r) {
     try {
       r.dispose();
@@ -1039,6 +1076,7 @@
     const D = SB.data;
     const renderer = makeRenderer(el, { shadows: hi, maxDpr: hi ? 1.75 : 1.25 });
     const scene = new T.Scene();
+    scene.environment = envMap(renderer);
     const camera = new T.PerspectiveCamera(40, 1, 0.5, 700);
     let dayMode = opts.dayCycle || "zyklus";
     const sky = skyDome();
@@ -2017,6 +2055,7 @@
     opts = opts || {};
     const renderer = makeRenderer(el, { alpha: true, maxDpr: 2, exposure: 1.1 });
     const scene = new T.Scene();
+    scene.environment = envMap(renderer);
     const camera = new T.PerspectiveCamera(30, 1, 0.1, 100);
     const dist = opts.distance || 7.2;
     camera.position.set(0, 1.5 + (dist - 7.2) * 0.08, dist);
@@ -2099,6 +2138,10 @@
       play(name, dur) {
         if (model) model.play(name, dur);
       },
+      get model() {
+        return model;
+      },
+      camera,
       dispose() {
         cancelAnimationFrame(raf);
         ro.disconnect();
@@ -2215,6 +2258,7 @@
     opts = opts || {};
     const renderer = makeRenderer(el, { shadows: opts.quality !== "niedrig", maxDpr: 2, exposure: 1.1 });
     const scene = new T.Scene();
+    scene.environment = envMap(renderer);
     scene.background = col("#120f16");
     scene.fog = new T.Fog("#120f16", 14, 30);
     const camera = new T.PerspectiveCamera(38, 1, 0.1, 100);
@@ -2384,6 +2428,7 @@
       if (!snapR) {
         snapR = makeRenderer(null, { alpha: true, preserve: true, maxDpr: 1, exposure: 1.15 });
         snapScene = new T.Scene();
+        snapScene.environment = envMap(snapR);
         snapScene.add(new T.HemisphereLight("#e6ecff", "#3a3028", 1.3));
         const k = new T.DirectionalLight("#fff0d8", 2.4);
         k.position.set(3, 5, 5);
@@ -2451,6 +2496,7 @@
     opts = opts || {};
     const renderer = makeRenderer(el, { maxDpr: 2, exposure: 1.15 });
     const scene = new T.Scene();
+    scene.environment = envMap(renderer);
     const camera = new T.PerspectiveCamera(36, 1, 0.1, 500);
     const setting = SETTINGS[opts.setting] ? opts.setting : "quest";
     const S = SETTINGS[setting];

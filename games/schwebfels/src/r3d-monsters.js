@@ -829,6 +829,14 @@
   }
   R.buildMonster = function (m) {
     if (!T) init();
+    // Version 5: modellierte Bestie, falls fuer diese Familie vorhanden
+    if (R.beasts && R.beasts.has && R.beasts.has(m.arch, m.visual)) {
+      try {
+        return R.beasts.build(m);
+      } catch (e) {
+        console.warn("Modellierte Bestie nicht moeglich, alte Figur", e);
+      }
+    }
     const root = grp();
     const P = {};
     const arch = B[m.arch] ? m.arch : ALIAS[m.arch] || "ghul";
@@ -869,6 +877,7 @@
   const ease = (u) => u * u * (3 - 2 * u);
   const bell = (u) => Math.sin(PI * u);
   R.poseMonster = function (m, name, u) {
+    if (m.parts && m.parts.beast) return R.beasts.pose(m, name, u);
     const P = m.parts;
     const t = m.t;
     const root = m.obj.children[0];

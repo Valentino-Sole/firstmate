@@ -112,7 +112,10 @@
         saved = null;
       }
     }
-    M.boot(saved || SB.store.loadLocal());
+    // Modellpaket zuerst entpacken (dauert nur einen Augenblick), danach starten
+    const go = () => M.boot(saved || SB.store.loadLocal());
+    if (SB.assets && SB.assets.load) SB.assets.load().then(go, go);
+    else go();
   };
   if (hot && typeof hot.ready === "function") hot.ready(start);
   else start((hot && hot.data) || {});
