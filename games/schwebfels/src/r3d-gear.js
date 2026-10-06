@@ -383,10 +383,18 @@
   // Krieger: Brustharnisch, Plattenpanzer, Schuppenpanzer, Kriegsharnisch
   const shoulder = (r, big) => (big || r >= 3 ? "harnisch.schulter.gross" : "harnisch.schulter");
   const tabard = (r) => (r >= 4 ? "harnisch.wappenrock.lang" : "harnisch.wappenrock");
-  CLOTH["harnisch.0"] = (r) => pick("harnisch.gambeson", "harnisch.brust", shoulder(r), tabard(r), "harnisch.guertel", r >= 1 && "harnisch.arm", r >= 2 && "harnisch.kette", r >= 3 && "harnisch.bein");
-  CLOTH["harnisch.1"] = (r) => pick("harnisch.gambeson", "harnisch.brust", shoulder(r, true), "harnisch.arm", "harnisch.bein", "harnisch.beintaschen", "harnisch.guertel", r >= 2 && "harnisch.kette", r >= 4 && "harnisch.wappenrock.lang");
-  CLOTH["harnisch.2"] = (r) => pick("harnisch.gambeson", "harnisch.schuppe", shoulder(r), "harnisch.kette", "harnisch.guertel", r >= 1 && "harnisch.arm", r >= 3 && tabard(r));
-  CLOTH["harnisch.3"] = (r) => pick("harnisch.gambeson", "harnisch.brust", shoulder(r, true), "harnisch.arm", "harnisch.kette", tabard(r), "harnisch.bein", "harnisch.guertel", r >= 2 && "harnisch.beintaschen");
+  // Unter dem Wappenrock nur die Seiten des Kettenhemds und keine Beinplatten (der Rock deckt sie),
+  // sonst druecken sie vorne durch den Stoff
+  const UNDER = { "harnisch.kette": "harnisch.kette.seiten", "harnisch.bein": null };
+  const plate = (...keys) => {
+    const l = pick(...keys);
+    if (!l.some((k) => /wappenrock/.test(k))) return l;
+    return l.map((k) => (k in UNDER ? UNDER[k] : k)).filter((k) => k && G.has(k));
+  };
+  CLOTH["harnisch.0"] = (r) => plate("harnisch.gambeson", "harnisch.brust", shoulder(r), tabard(r), "harnisch.guertel", r >= 1 && "harnisch.arm", r >= 2 && "harnisch.kette", r >= 3 && "harnisch.bein");
+  CLOTH["harnisch.1"] = (r) => plate("harnisch.gambeson", "harnisch.brust", shoulder(r, true), "harnisch.arm", "harnisch.bein", "harnisch.beintaschen", "harnisch.guertel", r >= 2 && "harnisch.kette", r >= 4 && "harnisch.wappenrock.lang");
+  CLOTH["harnisch.2"] = (r) => plate("harnisch.gambeson", "harnisch.schuppe", shoulder(r), "harnisch.kette", "harnisch.guertel", r >= 1 && "harnisch.arm", r >= 3 && tabard(r));
+  CLOTH["harnisch.3"] = (r) => plate("harnisch.gambeson", "harnisch.brust", shoulder(r, true), "harnisch.arm", "harnisch.kette", tabard(r), "harnisch.bein", "harnisch.guertel", r >= 2 && "harnisch.beintaschen");
   // Schurke: Schattenwams, Nachtgewand, Diebesleder
   CLOTH["schattenwams.0"] = (r) => pick("schurke.hemd", "schurke.wams", "schurke.schoss", "schurke.guertel", "schurke.riemen.a", r >= 1 && "schurke.tuch", r >= 1 && "schurke.arm", r >= 2 && "schurke.guertel2", r >= 2 && "schurke.riemen.b", r >= 3 && "schurke.umhang");
   CLOTH["schattenwams.1"] = (r) => pick("schurke.hemd", "schurke.wams", "schurke.mantel", "schurke.guertel", "schurke.tuch", r >= 1 && "schurke.arm", r >= 2 && "schurke.riemen.a", r >= 3 && "schurke.umhang");

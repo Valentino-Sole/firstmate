@@ -278,7 +278,8 @@ def leg_loft(piece, side, y0, y1, margin=0.012, flare=0.012, nang=22, nrows=8, m
         for i in range(n - 1):
             FF += [[i, i + 1, i + 1 + n], [i, i + 1 + n, i + n]]
         FF = np.array(FF)
-        piece.add(PP, UU, np.vstack([FF, FF[:, ::-1]]), "trim")
+        PP, UU, FF, _ = two_sided(PP, UU, FF, np.vstack([NN, NN]))
+        piece.add(PP, UU, FF, "trim")
     return P
 
 
@@ -401,6 +402,18 @@ def decimate(P, F, ratio):
     bpy.data.objects.remove(ob)
     bpy.data.meshes.remove(me)
     return P2, F2
+
+
+def two_sided(P, UV, F, N, W=None, gap=0.0008):
+    """Beidseitige duenne Flaeche (Borte, Band): die Rueckseite bekommt eigene, leicht nach hinten
+    versetzte Ecken. Teilen sich Vorder- und Rueckseite die Ecken, heben sich die Normalen auf und die
+    Flaeche erscheint im Spiel schwarz (auch weil das Spiel Naehte gleicher Lage zusammenfasst)."""
+    n = len(P)
+    P2 = np.vstack([P, P - N * gap])
+    UV2 = np.vstack([UV, UV])
+    F2 = np.vstack([F, F[:, ::-1] + n])
+    W2 = None if W is None else np.vstack([W, W])
+    return P2, UV2, F2, W2
 
 
 def solidify(P, F, N, thick, uv, mat_out, mat_in=None, mat_edge=None, piece=None, W=None):

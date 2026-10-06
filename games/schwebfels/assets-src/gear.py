@@ -129,8 +129,14 @@ def skirt(piece, y_top, y_bot, flare=0.06, clear=0.012, panels=None, nang=44, nr
         uv = np.stack([np.tile(L, nrows) * 7, np.repeat((y_top - ys) * 7, cols)], axis=1)
         tt = np.repeat(t, cols)
         xs = P[:, 0]
-        wl = np.clip(0.5 + xs / 0.16, 0, 1) * tt ** 0.9 * 0.8
-        wr = np.clip(0.5 - xs / 0.16, 0, 1) * tt ** 0.9 * 0.8
+        # Roecke folgen den Oberschenkeln nach ihrer eigenen Laenge (unten am staerksten), damit kein Bein
+        # durchsticht. Schmale Baender wie Guertel folgen nach absoluter Hoehe, sonst zerrt das Bein an ihrem Unterrand.
+        if y_top - y_bot < 0.12:
+            tl = np.clip((HIP_Y + 0.02 - P[:, 1]) / (HIP_Y - KNEE_Y + 0.06), 0, 1)
+        else:
+            tl = tt
+        wl = np.clip(0.5 + xs / 0.16, 0, 1) * tl ** 0.7 * 0.9
+        wr = np.clip(0.5 - xs / 0.16, 0, 1) * tl ** 0.7 * 0.9
         W = np.zeros((len(P), len(HB.BONES)))
         if shoulders:
             # Umhang: oben Brust/Nacken, nach unten Ruecken und Huefte
@@ -178,9 +184,9 @@ def strip(piece, pts, nrm, width, row, up=False, side=0, W=None, lift=0.0016, ma
     for i in range(L - 1):
         F += [[i, i + 1, i + 1 + L], [i, i + 1 + L, i + L]]
     F = np.array(F)
-    # beidseitig sichtbar: Rueckseite anhaengen
-    F = np.vstack([F, F[:, ::-1]])
+    # beidseitig sichtbar: Rueckseite mit eigenen Ecken anhaengen
     WW = None if W is None else np.vstack([W, W])
+    P, UV, F, WW = GL.two_sided(P, UV, F, np.vstack([nrm, nrm]), WW)
     piece.add(P, UV, F, mat, WW)
 
 
@@ -500,9 +506,11 @@ def warrior():
     bracer("harnisch.arm", mat="metal", offset=0.014, trim=2)
     leg_plates("harnisch.bein")
     belt("harnisch.guertel", HIP_Y + 0.03, h=0.022, offset=0.034, layer=7)
-    panels_skirt("harnisch.wappenrock", HIP_Y + 0.01, KNEE_Y - 0.06, FRONT_BACK(0.42), "cloth3", layer=4, clear=0.045, flare=0.03, hem_row=2, side_rows=2, hem_w=0.03)
-    panels_skirt("harnisch.wappenrock.lang", HIP_Y + 0.01, ANKLE_Y + 0.1, FRONT_BACK(0.45), "cloth3", layer=4, clear=0.045, flare=0.05, hem_row=4, side_rows=4, hem_w=0.035)
+    panels_skirt("harnisch.wappenrock", HIP_Y + 0.01, KNEE_Y - 0.06, FRONT_BACK(0.92), "cloth3", layer=4, clear=0.045, flare=0.03, hem_row=2, side_rows=2, hem_w=0.03)
+    panels_skirt("harnisch.wappenrock.lang", HIP_Y + 0.01, ANKLE_Y + 0.1, FRONT_BACK(0.95), "cloth3", layer=4, clear=0.045, flare=0.05, hem_row=4, side_rows=4, hem_w=0.035)
     panels_skirt("harnisch.kette", HIP_Y + 0.02, HIP_Y - 0.3, [(-math.pi, math.pi)], "chain", "chain", layer=3, clear=0.02, flare=0.03)
+    # unter dem Wappenrock nur die Seiten (vorne und hinten deckt der Rock, sonst drueckt das Kettenhemd durch)
+    panels_skirt("harnisch.kette.seiten", HIP_Y + 0.02, HIP_Y - 0.3, [(0.84, math.pi - 0.84), (-math.pi + 0.84, -0.84)], "chain", "chain", layer=3, clear=0.02, flare=0.03)
     panels_skirt("harnisch.beintaschen", HIP_Y + 0.02, HIP_Y - 0.17, [(-1.05, -0.37), (-0.33, 0.33), (0.37, 1.05)], "metal", "metal", layer=5, clear=0.05, flare=0.025, hem_row=2, hem_w=0.014)
 
 
