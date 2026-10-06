@@ -41,24 +41,55 @@ python make_pack.py $B ../assets/schwebfels.pack
 
 Feste Ausrüstung (Waffen, Schilde, Schmuck, Kopfschmuck) entsteht im Spiel selbst aus Bauregeln (`src/r3d-items.js`).
 
-## Erzeugte Figuren (Bild-zu-3D-Strecke, im Aufbau)
+## Erzeugte Figuren (Meshy-Strecke)
 
-Ziel: Figuren, Ausrüstung und Bestien aus den Konzeptbildern des Kapitäns mit einem Bild-zu-3D-Dienst erzeugen
-(geplant: Tripo, Abrechnung in Credits, jeder Auftrag meldet die abgebuchten Credits als `consumed_credit`),
-in Blender auf das Spielskelett bringen und als eigenes Paket `assets/gen.pack` neben `schwebfels.pack` einbetten.
+Figuren aus den Konzeptbildern des Kapitäns entstehen bei Meshy (Bild zu 3D, Rigging, Bewegungen aus der
+Meshy-Bibliothek), werden hier ins Spielformat gebracht und als eigenes Paket `assets/gen.pack` neben `schwebfels.pack`
+eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) statt der Formeln der alten Figuren.
 
 | Datei | Inhalt |
 |---|---|
-| `gen/probe.py` | Technikcheck mit einem freien Modell: Import, Aufräumen, Reduzieren, Ausrichten, Gelenke, Gewichte (Bone Heat), Kleidungsteil anpassen, Haut darunter ausblenden, Export (npz und GLB mit Draco) |
+| `gen/meshy_api.py` | Bestellen bei Meshy: Bild zu 3D, Rigging, Bewegungen; Budgetgrenze, Trockenlauf, Credit-Protokoll (`credits.jsonl`); Schlüssel nur aus `MESHY_API_KEY` |
+| `gen/meshy.py` | Geriggte GLB samt Bewegungen ins Spielformat: Ausrichten, Zielhöhe, T-Haltung, Skelett ohne Ruhedrehungen, Gewichte, Reduzieren, Texturatlas, Zuordnung der Spielgelenke, Haltepunkte, Bewegungen mit Schlagmarken |
+| `gen/gltf.py` | Kleiner glTF-Leser (Knoten, Skins, Netze, Materialien, Bilder, Animationen) |
+| `gen/fit_piece.py` | Rüstungsteil (einzeln erzeugte GLB) an einen Referenzkörper anpassen und knochenbezogen speichern; im Spiel legt es sich über Querschnittsprofile an jeden Körper mit gleichem Skelett an, die Haut darunter wird ausgeblendet |
+| `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |
+| `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
 | `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
-| `gen/packbones.py` | Knochenliste aus `assets/schwebfels.pack` lesen, kein Zwischenordner nötig |
-| `gen/gen_pack.py` | npz-Dateien der Figuren zu `assets/gen.pack` zusammenfassen |
+| `gen/packbones.py` | Knochenliste und Körperhöhen aus `assets/schwebfels.pack` lesen |
 
 ```sh
-python gen/probe.py CesiumMan.glb ../assets/schwebfels.pack <aus>/probe.npz <aus>/probe.glb <aus>/probe.json 2.12
-python gen/gen_pack.py <aus> ../assets/gen.pack
+export MESHY_API_KEY=...                       # in den Umgebungseinstellungen, nie im Chat
+cd assets-src/gen
+python meshy_api.py kosten                     # Schätzung ohne Schlüssel
+python meshy_api.py figur nordmann_f tafel02.png --hoehe 1.95 --budget 40
+python meshy_api.py bewegungen nordmann_f --budget 60      # einmal, gilt für alle Figuren
+python meshy.py <aus>/nordmann_f.npz meshy/nordmann_f/rigged.glb --race nordmann --gender f \
+    --anim meshy/nordmann_f/bewegungen_1.glb --anim meshy/nordmann_f/bewegungen_2.glb
+python meshy_api.py figur kreidezwerg_m tafel01.png --hoehe 1.45 --budget 40
+python meshy.py <aus>/kreidezwerg_m.npz meshy/kreidezwerg_m/rigged.glb --race kreidezwerg --gender m --no-clips
+python gen_pack.py <aus> ../../assets/gen.pack
+cd ../.. && node build.mjs                     # oder GEN_PACK=<datei> node build.mjs zum Ausprobieren
 ```
 
-Im Spiel: `R.buildHero({ gen: "<figur>", genGear: ["<teil>", ...], ... })` baut den erzeugten Körper mit eigener Textur
-und eigenen Gelenken, gleiche Bewegungen wie alle Helden; Teile in `genGear` blenden die Haut darunter aus.
-`gen.pack` gehört erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat.
+Wichtige Regeln der Strecke:
+- Alle Skelette werden auf Weltausrichtung und T-Haltung gebracht (Meshy-Figuren stehen schon so). Darum passt jede
+  Bewegung auf jede Figur mit gleichen Knochennamen; der Hüftweg wird auf die Hüfthöhe der Figur umgerechnet.
+  Bewegungen also nur einmal bei Meshy kaufen; weitere Figuren mit `--no-clips` einlesen.
+- `--as-meshy` baut für fremde Testmodelle (etwa Mixamo-Figuren) das 24-Knochen-Skelett von Meshy nach.
+- Figuren mit `--race` und `--gender` ersetzen im Spiel automatisch den Körper dieses Volkes (auch bei Inselbewohnern);
+  `gen_pack.py --no-auto` schaltet das ab, dann nur über `R.buildHero({ gen: "<figur>", ... })`.
+- Größe: Ziel 8.000 bis 12.000 Dreiecke je Held (`--tris`), Textur 1024 px (`--tex`), Bewegungen mit 30 Bildern pro
+  Sekunde und ohne unbewegte Knochen. `build.mjs` bettet beide Pakete mit gzip ein.
+- Meshy-Skelett: 24 Knochen ohne Finger (Hips, Spine02, Spine01, Spine, neck, Head, Schultern, Arme, Hände, Beine,
+  Füße, Zehen). Waffen hängen an der Hand; ein Greifen der Finger gibt es nicht.
+- Rüstungsteile: `python fit_piece.py <aus>/teile/harnisch_eisen.npz <aus>/nordmann_f.npz harnisch.glb --slot brust
+  --forms harnisch.0,harnisch` (Plätze `brust`, `handschuhe`, `stiefel`, `helm`, `hose`; ein einzelner Handschuh oder
+  Stiefel wird mit `--paar` gespiegelt; `--rot 0,0,90` dreht das Teil vorher). `gen_pack.py` nimmt alles aus dem
+  Unterordner `teile` auf. Im Spiel trägt eine Figur das Teil, dessen Form oder Grundart zum angelegten Gegenstand passt
+  (`forms`); ein Teil ohne Formliste passt zu jedem Gegenstand des Platzes. Ein Helm als Teil ersetzt den gebauten Helm.
+- Rigging per API nur für Zweibeiner. Bestien laufen weiter über `beasts/` und `src/r3d-beasts.js`.
+- `gen.pack` gehört erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat.
+
+Prüfen ohne Credits: Testmodelle aus dem three.js-Repository (`examples/models/gltf/Soldier.glb`, `Xbot.glb`,
+`RobotExpressive/RobotExpressive.glb`) mit `--as-meshy` einlesen; sie dienen nur dem Test und gehören nicht ins Spiel.

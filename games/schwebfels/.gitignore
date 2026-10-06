@@ -1,2 +1,4 @@
 screens/
 node_modules/
+# Downloads der Meshy-Bestellungen (assets-src/gen/meshy_api.py), gehoeren nicht ins Repository
+assets-src/gen/meshy/

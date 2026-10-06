@@ -533,9 +533,13 @@
   /* ---------- Held ---------- */
   HU.build = function (desc) {
     T = R.T();
-    if (desc.gen && GEN()[desc.gen]) return buildGen(desc);
+    const RG = R.rigged;
+    if (desc.gen && GEN()[desc.gen]) return RG && RG.is(desc.gen) ? RG.build(desc, desc.gen) : buildGen(desc);
     const D = SB.data;
     const raceId = D.RACES[desc.race] ? desc.race : OLD_RACE[desc.race] || "albier";
+    // Figur mit eigenem Skelett (Meshy-Strecke), die fuer dieses Volk und Geschlecht hinterlegt ist
+    const auto = RG && !desc.noGen ? RG.auto(raceId, desc.gender) : null;
+    if (auto) return RG.build(desc, auto);
     const race = D.RACES[raceId];
     const clsId = D.CLASSES[desc.cls] ? desc.cls : OLD_CLS[desc.cls] || "schildritter";
     const C = D.CLASSES[clsId];
@@ -628,8 +632,10 @@
     if (pre) QA.multiply(pre);
     bone.quaternion.copy(QA);
   }
-  HU.pose = function (m, name, u) {
+  HU.pose = function (m, name, u, dt) {
     const P = m.parts;
+    // Figuren mit eigenem Skelett spielen Clips ab (src/r3d-rigged.js)
+    if (P.clips) return P.clips.tick(dt || 0);
     const B = P.B;
     const t = m.t;
     const s = R.stance(m);

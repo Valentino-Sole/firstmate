@@ -75,23 +75,46 @@
     return res(header);
   }
 
+  // build.mjs bettet die Pakete mit gzip verkleinert ein; der Browser entpackt sie selbst
+  async function unzip(u8) {
+    if (u8[0] !== 0x1f || u8[1] !== 0x8b) return u8;
+    const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+
   A.load = async function () {
     try {
       let u8;
       if (globalThis.SB_PACK) {
-        u8 = b64(globalThis.SB_PACK);
+        u8 = await unzip(b64(globalThis.SB_PACK));
         globalThis.SB_PACK = null;
       } else {
         const r = await fetch("assets/schwebfels.pack");
         if (!r.ok) throw new Error("Modellpaket nicht gefunden");
-        u8 = new Uint8Array(await r.arrayBuffer());
+        u8 = await unzip(new Uint8Array(await r.arrayBuffer()));
       }
-      A.data = parse(u8);
-      // erzeugte Figuren (eigenes Paket, optional)
+      const data = parse(u8);
+      // erzeugte Figuren (eigenes Paket, optional): Koerper, Skelette und gemeinsame Bewegungen
       if (globalThis.SB_GENPACK) {
-        A.data.gen = parse(b64(globalThis.SB_GENPACK)).gen || {};
+        const g = parse(await unzip(b64(globalThis.SB_GENPACK)));
+        data.gen = g.gen || {};
+        data.clips = g.clips || {};
+        data.rigPieces = g.pieces || {};
         globalThis.SB_GENPACK = null;
+        // Texturen der Figuren mit eigenem Skelett und ihrer Ruestungsteile vorab laden (Portraits gleich farbig)
+        const waits = [];
+        for (const k in data.gen) {
+          const e = data.gen[k];
+          const t = e.kind === "rig" && e.tex ? A.texture("rig." + k, e.tex, { srgb: true }) : null;
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.rigPieces) {
+          const t = A.texture("rigpiece." + k, data.rigPieces[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
+      A.data = data;
     } catch (e) {
       A.error = e;
       console.warn("Modellpaket nicht verfuegbar, alte Figuren werden genutzt", e);
@@ -113,11 +136,15 @@
     tex.anisotropy = 4;
     const img = new Image();
     const url = URL.createObjectURL(new Blob([ref.bytes], { type: ref.mime }));
-    img.onload = () => {
-      tex.image = img;
-      tex.needsUpdate = true;
-      URL.revokeObjectURL(url);
-    };
+    tex.userData.ready = new Promise((res) => {
+      img.onload = () => {
+        tex.image = img;
+        tex.needsUpdate = true;
+        URL.revokeObjectURL(url);
+        res();
+      };
+      img.onerror = () => res();
+    });
     img.src = url;
     return (TEXC[key] = tex);
   };

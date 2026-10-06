@@ -51,8 +51,16 @@ node tests/e2e.mjs screens           # Browser-Durchlauf mit Bildschirmfotos (Pl
 - Der Kapitän fand die selbst gebauten Figuren (Code aus Grundformen) zu nah an „Playmobil“, Männer zu weiblich, und es fehlen sechs der zwölf Völker im Spiel. Neuer Weg: Modelle aus seinen Konzeptbildern mit einem Bild-zu-3D-Dienst erzeugen, in Blender anpassen, ins Spiel einbauen.
 - Vorgabe des Kapitäns: erst ein vollständig eingebauter Qualitätstest (Nordmann und deutlich anders proportionierter Kreidezwerg, passende Bestie, kleine überarbeitete Kampfumgebung; an einem Helden zwei einzeln wechselbare Brustpanzer sowie wechselbare Handschuhe, Stiefel, Helm und Waffe; geprüft im Stand, beim Laufen und beim Angriff; keine Haut durch die Kleidung; Gegenstandsbild passt zum angelegten Modell; echte Spielbilder neben den Konzeptvorlagen; Doku der Modelle, Nacharbeit und tatsächlich verbrauchten Credits).
 - Bezahlte Erzeugung erst nach vereinbartem Testbudget. Übrige Klassen, Völker und Gegenstände erst, wenn der Test überzeugt.
-- Erledigt: Technikcheck der ganzen Strecke mit einem freien Modell ohne Credits (siehe `assets-src/README.md`, Abschnitt „Erzeugte Figuren“); Ladefunktion im Spiel (`gen` in `src/r3d-human.js`, `assets/gen.pack` in `build.mjs` und `src/r3d-assets.js`).
-- Offen: Testbudget und Zugangsschlüssel. Der Schlüssel gehört in die Umgebungseinstellungen als `TRIPO_API_KEY`, nie in den Chat.
+- Entscheidung des Kapitäns (Oktober 2026): Dienst ist **Meshy** (statt Tripo), Modelle mit Meshy-Skelett und Meshy-Bewegungen. Spiellogik, Lichtsetzung und Render-Einstellungen bleiben unverändert.
+- Erledigt (Meshy-Strecke, siehe `assets-src/README.md`, Abschnitt „Erzeugte Figuren“):
+  - `assets-src/gen/meshy_api.py` bestellt Figur, Rigging und Bewegungen mit Budgetgrenze und Credit-Protokoll.
+  - `assets-src/gen/meshy.py` bringt geriggte GLBs samt Bewegungen ins Spielformat (T-Haltung, Skelett ohne Ruhedrehungen, gemeinsame Bewegungen für alle Figuren, Schlagmarken, Haltepunkte).
+  - `src/r3d-rigged.js` spielt die Bewegungen im Spiel ab (AnimationMixer), wählt je Kampfstil und Waffe einen Clip und legt den Schlag genau auf das Ende der Spieldauer; Waffen, Schild und Helm hängen an den Meshy-Knochen.
+  - Modellpakete werden mit gzip eingebettet (Seite 8,9 MB auf 6,7 MB).
+  - Geprüft mit freien Testmodellen aus dem three.js-Repository (nicht im Spiel): Umrechnung exakt (unter 1 mm), Bewegungen eines Modells laufen auf anderen, Kampf, Insel und Browser-Durchlauf ohne Fehler.
+- Echtes Meshy-Skelett (aus Meshys Bibliotheksvorschau): 24 Knochen ohne Finger, alle ohne Ruhedrehung in T-Haltung. Bewegungen deshalb nur einmal kaufen (20 Stück, 60 Credits) und mit allen Figuren teilen.
+- Offen: Testbudget und Zugangsschlüssel. Der Schlüssel gehört in die Umgebungseinstellungen als `MESHY_API_KEY`, nie in den Chat. Die Meshy-API braucht einen bezahlten Plan; Modelle gehören dann dem Kapitän (Gratis-Plan: CC BY 4.0 mit Nennung).
+- Offen: wechselbare Rüstungsteile auf Meshy-Körpern (Meshy liefert Figur und Kleidung aus einem Guss) und Bestien (Rigging per API nur für Zweibeiner). Erst mit den ersten echten Modellen entscheiden.
 - Werkzeuge in einer neuen Sitzung: `python3 -m venv <ordner> && <ordner>/bin/pip install bpy==5.2.2 pillow scipy`.
 - Das Konzeptpaket des Kapitäns (zwei Zip-Dateien „Schwebfels-Claude-Teil-1/2“) liegt nicht im Repository; in einer neuen Sitzung bitte erneut hochladen lassen. Testvorlagen: Tafel 02 (Nordmann, Frau), Tafel 01 (Kreidezwerg, Mann), Tafel 10 (Krieger in fünf Seltenheiten), Tafel 14 (Kriegerwaffen), Tafel 19 (Wolf), Midgard-Designkonzept (Umgebung).
 
