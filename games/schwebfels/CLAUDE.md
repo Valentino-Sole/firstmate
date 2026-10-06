@@ -13,7 +13,7 @@ Das Spiel liegt im Repository `valentino-sole/firstmate` im Ordner `games/schweb
 - Immer auf Deutsch, Anrede „Kapitän“.
 - Empathisch und lösungsorientiert. Für Recherche nur seriöse Quellen, Quellen am Ende verlinken.
 - Ihn nicht in Entscheidungen bestätigen, die unklug sind; ehrlich sagen, was nicht geht, und eine bessere Lösung vorschlagen.
-- Niemals Gedankenstriche (weder „—“ noch „–“), auch nicht in Code-Kommentaren, Texten im Spiel oder Doku.
+- Niemals Gedankenstriche (weder den langen noch den mittellangen Strich, Unicode U+2014 und U+2013), auch nicht in Code-Kommentaren, Texten im Spiel oder Doku.
 - Nach jeder Runde: was neu ist, was geprüft wurde (Tests, Balance), offene Punkte, Link zum Spiel.
 
 ## Arbeitsablauf
