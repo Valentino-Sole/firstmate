@@ -10,6 +10,8 @@ Aufrufe (Ausgabeordner mit --out, Standard: ./meshy):
   python meshy_api.py figur <name> <bild.png|jpg> --hoehe 1.9 [--budget 60] [--polys 15000] [--pose t-pose]
                                     [--prompt "Texturhinweis"] [--trocken]
       Bild zu 3D (mit Textur), danach Rigging; laedt model.glb, rigged.glb sowie Gang und Lauf herunter
+  python meshy_api.py teil <name> <bild.png|jpg> [--polys 5000] [--budget 30] [--trocken]
+      Ruestungsteil: nur Bild zu 3D (ohne Rigging), danach fit_piece.py
   python meshy_api.py bewegungen <name> [--clips standard|mehr|<id,id,...>] [--budget 90] [--trocken]
       Bewegungen aus der Meshy-Bibliothek auf das Skelett dieser Figur (je Anfrage bis zu 10, 3 Credits je Bewegung).
       Weil alle Meshy-Figuren dasselbe Skelett haben, reicht das einmal; meshy.py teilt die Bewegungen mit allen Figuren.
@@ -133,33 +135,47 @@ def data_uri(path):
     return "data:%s;base64,%s" % (mime, base64.b64encode(open(path, "rb").read()).decode("ascii"))
 
 
+def request_3d(bild, polys, pose, prompt):
+    body = {"image_url": "(Bild " + os.path.basename(bild) + ")", "ai_model": "latest", "topology": "triangle", "should_remesh": True,
+            "target_polycount": polys, "should_texture": True, "enable_pbr": False, "texture_resolution": "2k",
+            "remove_lighting": True, "image_enhancement": True, "target_formats": ["glb"]}
+    if pose:
+        body["pose_mode"] = pose
+    if prompt:
+        body["texture_prompt"] = prompt[:800]
+    return body
+
+
+def image_to_3d(S, body, bild):
+    """Bild zu 3D (einmal je Figur oder Teil), laedt model.glb und das Vorschaubild."""
+    st = S.state
+    if st.get("image_to_3d", {}).get("ok"):
+        return
+    body = dict(body, image_url=data_uri(bild))
+    tid = call("POST", "image-to-3d", body)["result"]
+    st["image_to_3d"] = {"id": tid}
+    S.save()
+    t = wait("image-to-3d", tid)
+    S.credits("image-to-3d", t)
+    if t["status"] != "SUCCEEDED":
+        raise SystemExit("Bild zu 3D fehlgeschlagen: " + json.dumps(t.get("task_error", {}), ensure_ascii=False))
+    download(t["model_urls"]["glb"], os.path.join(S.dir, "model.glb"))
+    if t.get("thumbnail_url"):
+        download(t["thumbnail_url"], os.path.join(S.dir, "vorschau.png"))
+    st["image_to_3d"]["ok"] = True
+    S.save()
+
+
 def cmd_figur(a):
     S = Store(a.out, a.name)
     st = S.state
     cost = (0 if st.get("image_to_3d", {}).get("ok") else PRICE["image-to-3d"]) + (0 if st.get("rigging", {}).get("ok") else PRICE["rigging"])
     guard(a.budget, cost, "Figur %s (Bild zu 3D und Rigging)" % a.name)
-    body = {"image_url": "(Bild " + os.path.basename(a.bild) + ")", "ai_model": "latest", "topology": "triangle", "should_remesh": True,
-            "target_polycount": a.polys, "should_texture": True, "enable_pbr": False, "texture_resolution": "2k", "pose_mode": a.pose,
-            "remove_lighting": True, "image_enhancement": True, "target_formats": ["glb"]}
-    if a.prompt:
-        body["texture_prompt"] = a.prompt[:800]
+    body = request_3d(a.bild, a.polys, a.pose, a.prompt)
     if a.trocken:
         print("Trockenlauf, nichts gesendet:\n POST image-to-3d", json.dumps(body, ensure_ascii=False), "\n POST rigging", json.dumps({"input_task_id": "<aus Schritt 1>", "height_meters": a.hoehe}))
         return
-    if not st.get("image_to_3d", {}).get("ok"):
-        body["image_url"] = data_uri(a.bild)
-        tid = call("POST", "image-to-3d", body)["result"]
-        st["image_to_3d"] = {"id": tid}
-        S.save()
-        t = wait("image-to-3d", tid)
-        S.credits("image-to-3d", t)
-        if t["status"] != "SUCCEEDED":
-            raise SystemExit("Bild zu 3D fehlgeschlagen: " + json.dumps(t.get("task_error", {}), ensure_ascii=False))
-        download(t["model_urls"]["glb"], os.path.join(S.dir, "model.glb"))
-        if t.get("thumbnail_url"):
-            download(t["thumbnail_url"], os.path.join(S.dir, "vorschau.png"))
-        st["image_to_3d"]["ok"] = True
-        S.save()
+    image_to_3d(S, body, a.bild)
     if not st.get("rigging", {}).get("ok"):
         tid = call("POST", "rigging", {"input_task_id": st["image_to_3d"]["id"], "height_meters": a.hoehe})["result"]
         st["rigging"] = {"id": tid}
@@ -176,6 +192,19 @@ def cmd_figur(a):
                 download(u, os.path.join(S.dir, fn))
         st["rigging"]["ok"] = True
         S.save()
+    print("Fertig:", S.dir)
+
+
+def cmd_teil(a):
+    """Ruestungsteil: nur Bild zu 3D (kein Rigging); danach fit_piece.py."""
+    S = Store(a.out, a.name)
+    cost = 0 if S.state.get("image_to_3d", {}).get("ok") else PRICE["image-to-3d"]
+    guard(a.budget, cost, "Teil %s (Bild zu 3D)" % a.name)
+    body = request_3d(a.bild, a.polys, None, a.prompt)
+    if a.trocken:
+        print("Trockenlauf, nichts gesendet:\n POST image-to-3d", json.dumps(body, ensure_ascii=False))
+        return
+    image_to_3d(S, body, a.bild)
     print("Fertig:", S.dir)
 
 
@@ -247,6 +276,13 @@ def main():
     p.add_argument("--prompt")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
+    p = sub.add_parser("teil")
+    p.add_argument("name")
+    p.add_argument("bild")
+    p.add_argument("--polys", type=int, default=5000)
+    p.add_argument("--prompt")
+    p.add_argument("--budget", type=int)
+    p.add_argument("--trocken", action="store_true")
     p = sub.add_parser("bewegungen")
     p.add_argument("name")
     p.add_argument("--clips", default="standard")
@@ -259,6 +295,8 @@ def main():
     a = ap.parse_args()
     if a.cmd == "figur":
         cmd_figur(a)
+    elif a.cmd == "teil":
+        cmd_teil(a)
     elif a.cmd == "bewegungen":
         cmd_bewegungen(a)
     elif a.cmd == "kosten":

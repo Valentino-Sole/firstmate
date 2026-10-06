@@ -49,7 +49,8 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 
 | Datei | Inhalt |
 |---|---|
-| `gen/meshy_api.py` | Bestellen bei Meshy: Bild zu 3D, Rigging, Bewegungen; Budgetgrenze, Trockenlauf, Credit-Protokoll (`credits.jsonl`); Schlüssel nur aus `MESHY_API_KEY` |
+| `gen/werkstatt.py` | Alles in einem Schritt: Figur oder Rüstungsteil bestellen, umrechnen, Paket und Spielvorschau bauen |
+| `gen/meshy_api.py` | Bestellen bei Meshy: Bild zu 3D (Figur oder Teil), Rigging, Bewegungen; Budgetgrenze, Trockenlauf, Credit-Protokoll (`credits.jsonl`); Schlüssel nur aus `MESHY_API_KEY` |
 | `gen/meshy.py` | Geriggte GLB samt Bewegungen ins Spielformat: Ausrichten, Zielhöhe, T-Haltung, Skelett ohne Ruhedrehungen, Gewichte, Reduzieren, Texturatlas, Zuordnung der Spielgelenke, Haltepunkte, Bewegungen mit Schlagmarken |
 | `gen/gltf.py` | Kleiner glTF-Leser (Knoten, Skins, Netze, Materialien, Bilder, Animationen) |
 | `gen/fit_piece.py` | Rüstungsteil (einzeln erzeugte GLB) an einen Referenzkörper anpassen und knochenbezogen speichern; im Spiel legt es sich über Querschnittsprofile an jeden Körper mit gleichem Skelett an, die Haut darunter wird ausgeblendet |
@@ -57,6 +58,21 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
 | `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
 | `gen/packbones.py` | Knochenliste und Körperhöhen aus `assets/schwebfels.pack` lesen |
+
+Am einfachsten über die Werkstatt (bestellen, umrechnen, Paket und Spielvorschau in einem Schritt, alles unter
+`assets-src/gen/meshy/`, das nicht ins Repository gehört):
+
+```sh
+cd assets-src/gen
+python werkstatt.py kosten
+python werkstatt.py figur nordmann_f tafel02.png --race nordmann --gender f --budget 100   # erste Figur: mit Bewegungen
+python werkstatt.py figur kreidezwerg_m tafel01.png --race kreidezwerg --gender m --budget 40
+python werkstatt.py teil harnisch_eisen brust.png --slot brust --forms harnisch --ref nordmann_f --budget 30
+python werkstatt.py teil handschuh_leder handschuh.png --slot handschuhe --ref nordmann_f --paar --budget 30
+python werkstatt.py paket                       # Vorschau: assets-src/gen/meshy/vorschau/schwebfels.html
+```
+
+Die einzelnen Schritte von Hand:
 
 ```sh
 export MESHY_API_KEY=...                       # in den Umgebungseinstellungen, nie im Chat
