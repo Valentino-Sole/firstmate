@@ -40,3 +40,25 @@ python make_pack.py $B ../assets/schwebfels.pack
 | `pack.py`, `make_pack.py` | Paketformat und Zusammenbau |
 
 Feste Ausrüstung (Waffen, Schilde, Schmuck, Kopfschmuck) entsteht im Spiel selbst aus Bauregeln (`src/r3d-items.js`).
+
+## Erzeugte Figuren (Bild-zu-3D-Strecke, im Aufbau)
+
+Ziel: Figuren, Ausrüstung und Bestien aus den Konzeptbildern des Kapitäns mit einem Bild-zu-3D-Dienst erzeugen
+(geplant: Tripo, Abrechnung in Credits, jeder Auftrag meldet die abgebuchten Credits als `consumed_credit`),
+in Blender auf das Spielskelett bringen und als eigenes Paket `assets/gen.pack` neben `schwebfels.pack` einbetten.
+
+| Datei | Inhalt |
+|---|---|
+| `gen/probe.py` | Technikcheck mit einem freien Modell: Import, Aufräumen, Reduzieren, Ausrichten, Gelenke, Gewichte (Bone Heat), Kleidungsteil anpassen, Haut darunter ausblenden, Export (npz und GLB mit Draco) |
+| `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
+| `gen/packbones.py` | Knochenliste aus `assets/schwebfels.pack` lesen, kein Zwischenordner nötig |
+| `gen/gen_pack.py` | npz-Dateien der Figuren zu `assets/gen.pack` zusammenfassen |
+
+```sh
+python gen/probe.py CesiumMan.glb ../assets/schwebfels.pack <aus>/probe.npz <aus>/probe.glb <aus>/probe.json 2.12
+python gen/gen_pack.py <aus> ../assets/gen.pack
+```
+
+Im Spiel: `R.buildHero({ gen: "<figur>", genGear: ["<teil>", ...], ... })` baut den erzeugten Körper mit eigener Textur
+und eigenen Gelenken, gleiche Bewegungen wie alle Helden; Teile in `genGear` blenden die Haut darunter aus.
+`gen.pack` gehört erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat.

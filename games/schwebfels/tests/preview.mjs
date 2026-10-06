@@ -84,7 +84,7 @@ const info = await page.evaluate(
       const mon = D.MONSTERS.find((x) => x.id === (desc.monster || "moorschlund"));
       const foe = E.monsterFighter(mon, desc.level || 6, 1);
       const sim = E.simulate(hero, foe, 7);
-      const b = R.createBattle(el, { setting: desc.setting || "quest", realm: desc.hero.realm, left: { kind: "hero", race: hero.race, cls: hero.cls, realm: desc.hero.realm, gender: hero.gender, look: hero.look, gear: hero.gear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: "hibernia" }, hp: [hero.maxHp, foe.maxHp], dayTime: 0.35 });
+      const b = R.createBattle(el, { setting: desc.setting || "quest", realm: desc.hero.realm, left: { kind: "hero", race: hero.race, cls: hero.cls, realm: desc.hero.realm, gender: hero.gender, look: hero.look, gear: hero.gear, gen: desc.hero.gen, genGear: desc.hero.genGear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: "hibernia" }, hp: [hero.maxHp, foe.maxHp], dayTime: 0.35 });
       globalThis.__b = b;
       globalThis.__ev = sim.events || sim.log || [];
       (async () => {

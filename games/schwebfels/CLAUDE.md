@@ -46,6 +46,16 @@ node tests/e2e.mjs screens           # Browser-Durchlauf mit Bildschirmfotos (Pl
 - Version 4: Talentbäume je Klasse (angelehnt an Dark Age of Camelot), Meldungen erst nach dem Kampf, Attribut-Erklärungen, Glück verbessert die Beute.
 - Aufbau des Codes: `README.md`. Spieldesign, Formeln und Balance: `DESIGN.md`.
 
+## Laufend: Qualitätstest mit Bild-zu-3D (Version 5)
+
+- Der Kapitän fand die selbst gebauten Figuren (Code aus Grundformen) zu nah an „Playmobil“, Männer zu weiblich, und es fehlen sechs der zwölf Völker im Spiel. Neuer Weg: Modelle aus seinen Konzeptbildern mit einem Bild-zu-3D-Dienst erzeugen, in Blender anpassen, ins Spiel einbauen.
+- Vorgabe des Kapitäns: erst ein vollständig eingebauter Qualitätstest (Nordmann und deutlich anders proportionierter Kreidezwerg, passende Bestie, kleine überarbeitete Kampfumgebung; an einem Helden zwei einzeln wechselbare Brustpanzer sowie wechselbare Handschuhe, Stiefel, Helm und Waffe; geprüft im Stand, beim Laufen und beim Angriff; keine Haut durch die Kleidung; Gegenstandsbild passt zum angelegten Modell; echte Spielbilder neben den Konzeptvorlagen; Doku der Modelle, Nacharbeit und tatsächlich verbrauchten Credits).
+- Bezahlte Erzeugung erst nach vereinbartem Testbudget. Übrige Klassen, Völker und Gegenstände erst, wenn der Test überzeugt.
+- Erledigt: Technikcheck der ganzen Strecke mit einem freien Modell ohne Credits (siehe `assets-src/README.md`, Abschnitt „Erzeugte Figuren“); Ladefunktion im Spiel (`gen` in `src/r3d-human.js`, `assets/gen.pack` in `build.mjs` und `src/r3d-assets.js`).
+- Offen: Testbudget und Zugangsschlüssel. Der Schlüssel gehört in die Umgebungseinstellungen als `TRIPO_API_KEY`, nie in den Chat.
+- Werkzeuge in einer neuen Sitzung: `python3 -m venv <ordner> && <ordner>/bin/pip install bpy==5.2.2 pillow scipy`.
+- Das Konzeptpaket des Kapitäns (zwei Zip-Dateien „Schwebfels-Claude-Teil-1/2“) liegt nicht im Repository; in einer neuen Sitzung bitte erneut hochladen lassen. Testvorlagen: Tafel 02 (Nordmann, Frau), Tafel 01 (Kreidezwerg, Mann), Tafel 10 (Krieger in fünf Seltenheiten), Tafel 14 (Kriegerwaffen), Tafel 19 (Wolf), Midgard-Designkonzept (Umgebung).
+
 ## Offene Punkte
 
 - Grafik der Figuren: Der Kapitän findet sie zu sehr „Playmobil“ und bringt ein eigenes Konzept. Bis dahin die Figurenform nicht grundlegend umbauen, danach nach seinem Konzept.

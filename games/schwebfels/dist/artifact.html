@@ -4871,6 +4871,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         u8 = new Uint8Array(await r.arrayBuffer());
       }
       A.data = parse(u8);
+      // erzeugte Figuren (eigenes Paket, optional)
+      if (globalThis.SB_GENPACK) {
+        A.data.gen = parse(b64(globalThis.SB_GENPACK)).gen || {};
+        globalThis.SB_GENPACK = null;
+      }
     } catch (e) {
       A.error = e;
       console.warn("Modellpaket nicht verfuegbar, alte Figuren werden genutzt", e);
@@ -7163,8 +7168,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
   /* ---------- Skelett ---------- */
   function makeRig(pk) {
+    return makeRigJ(H().profiles[pk].j);
+  }
+  function makeRigJ(J) {
     const D = H();
-    const J = D.profiles[pk].j;
     const bones = D.bones.map((b) => {
       const bone = new T.Bone();
       bone.name = b[0];
@@ -7285,9 +7292,86 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   }
   HU.skinMat = skinMat;
 
+  /* ---------- Erzeugte Figuren (Bild-zu-3D-Strecke) ----------
+     Eigener Koerper mit gemalter Textur und eigenen Gelenken, gleiches Skelett und gleiche Bewegungen wie
+     alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
+  const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
+  HU.hasGen = (key) => !!GEN()[key];
+  const GGEO = {};
+  function genGeo(src, ck, hide) {
+    if (GGEO[ck]) return GGEO[ck];
+    const g = new T.BufferGeometry();
+    g.setAttribute("position", new T.BufferAttribute(src.pos, 3));
+    g.setAttribute("normal", new T.BufferAttribute(smoothNormals(src.pos, src.idx), 3));
+    g.setAttribute("uv", new T.BufferAttribute(src.uv, 2));
+    g.setAttribute("skinIndex", new T.BufferAttribute(src.skinI, 4));
+    g.setAttribute("skinWeight", new T.BufferAttribute(src.skinW, 4, true));
+    let idx = src.idx;
+    if (hide) {
+      const out = [];
+      for (let t = 0; t < idx.length / 3; t++) if (!hide(t)) out.push(idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]);
+      idx = new Uint32Array(out);
+    }
+    g.setIndex(new T.BufferAttribute(idx, 1));
+    return (GGEO[ck] = g);
+  }
+  const GMAT = {};
+  function genMat(key, ref, color) {
+    if (GMAT[key]) return GMAT[key];
+    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture("gen." + key, ref, { srgb: true }) : null });
+    return (GMAT[key] = m);
+  }
+  function buildGen(desc) {
+    const D = SB.data;
+    const G0 = GEN()[desc.gen];
+    const clsId = D.CLASSES[desc.cls] ? desc.cls : "schildritter";
+    const C = D.CLASSES[clsId];
+    const gear = desc.gear || {};
+    const root = R.grp();
+    const body = R.grp();
+    root.add(body);
+    const rig = makeRigJ(G0.j);
+    const worn = (desc.genGear || []).filter((p) => G0.pieces[p]);
+    const masks = worn.map((p) => G0.pieces[p].mask).filter(Boolean);
+    const hide = masks.length ? (t) => masks.some((m) => (m[t >> 3] >> (t & 7)) & 1) : null;
+    const mesh = new T.SkinnedMesh(genGeo(G0, desc.gen + "|" + worn.join(","), hide), genMat(desc.gen, G0.tex));
+    mesh.add(rig.bones[0]);
+    mesh.updateMatrixWorld(true);
+    mesh.bind(new T.Skeleton(rig.bones));
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    body.add(mesh);
+    const prof = { j: G0.j, top: G0.top, sockets: G0.sockets };
+    const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true };
+    for (const p of worn) {
+      const src = G0.pieces[p];
+      const m = new T.SkinnedMesh(genGeo(src, desc.gen + "." + p, null), genMat(desc.gen + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
+      m.bind(mesh.skeleton, mesh.bindMatrix);
+      m.frustumCulled = false;
+      m.castShadow = true;
+      body.add(m);
+    }
+    if (R.gear && R.gear.attachRigid && (gear.waffe || gear.nebenhand)) R.gear.attachRigid(parts, { waffe: gear.waffe, nebenhand: gear.nebenhand }, desc.realm || C.realm);
+    const model = R.makeModel(root, parts, "hero");
+    model.cls = clsId;
+    model.arch = C.arch;
+    model.realm = desc.realm || C.realm;
+    const wpn = gear.waffe;
+    model.dual = !!(wpn && ["dolch", "sichel", "kurzschwert"].indexOf(wpn.base) >= 0);
+    model.ranged = !!(wpn && D.BASES[wpn.base] && D.BASES[wpn.base].ranged);
+    model.weaponBase = wpn ? wpn.base : null;
+    model.hipH = jointOf(rig, "hips").y;
+    model.height = G0.top;
+    model.headY = jointOf(rig, "head").y + 0.12;
+    model.projColor = "#ffd25a";
+    model.rest = restPose(rig);
+    return model;
+  }
+
   /* ---------- Held ---------- */
   HU.build = function (desc) {
     T = R.T();
+    if (desc.gen && GEN()[desc.gen]) return buildGen(desc);
     const D = SB.data;
     const raceId = D.RACES[desc.race] ? desc.race : OLD_RACE[desc.race] || "albier";
     const race = D.RACES[raceId];

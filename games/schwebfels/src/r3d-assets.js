@@ -87,6 +87,11 @@
         u8 = new Uint8Array(await r.arrayBuffer());
       }
       A.data = parse(u8);
+      // erzeugte Figuren (eigenes Paket, optional)
+      if (globalThis.SB_GENPACK) {
+        A.data.gen = parse(b64(globalThis.SB_GENPACK)).gen || {};
+        globalThis.SB_GENPACK = null;
+      }
     } catch (e) {
       A.error = e;
       console.warn("Modellpaket nicht verfuegbar, alte Figuren werden genutzt", e);

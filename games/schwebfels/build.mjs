@@ -24,6 +24,12 @@ try {
 } catch (e) {
   console.warn("Hinweis: assets/schwebfels.pack fehlt, das Spiel nutzt die alten Figuren.");
 }
+// Erzeugte Figuren aus der Bild-zu-3D-Strecke (assets/gen.pack, aus assets-src/gen/ gebaut), falls vorhanden
+try {
+  packJs += "<script>globalThis.SB_GENPACK=\"" + readFileSync(path.join(dir, "assets/gen.pack")).toString("base64") + "\";</script>";
+} catch (e) {
+  /* ohne erzeugte Figuren */
+}
 const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");
 const cdnTags = cdn.map((u) => '<script src="' + u + '"></script>').join("\n");
 const fontTags = fonts.map((u) => '<link rel="stylesheet" href="' + u + '">').join("\n");
