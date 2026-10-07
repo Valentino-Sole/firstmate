@@ -496,7 +496,7 @@
     P.dataset.id = id;
     UI.renderPanel(true);
     if (UI.hub) {
-      UI.hub.focus(id === "einstellungen" || id === "held" ? null : id);
+      UI.hub.focus(id === "einstellungen" || id === "held" || id === "figurenprobe" ? null : id);
       const wide = innerWidth > 860;
       UI.hub.setInset(wide ? P.offsetWidth + 24 : 0);
       if (!wide) UI.hub.pause();

@@ -48,7 +48,13 @@ Größen für das Skelett (Spielhöhe 2,0 entspricht etwa 1,8 m): Nordmann 1,9; 
 
 ## 3. Ausrüstung für den Wechseltest (an der Nordmann-Kriegerin)
 
-Erst freistellen (Bild zu Bild), ansehen, dann Bild zu 3D ohne Haltung.
+Geändert am 7. Oktober 2026: Brust, Handschuhe und Stiefel nicht einzeln freistellen, sondern die Heldin in voller
+Rüstung erzeugen (Bild zu Bild mit nano-banana-pro, je 9 Credits; Bild zu 3D in A-Haltung, je 30; Skelett, je 5) und
+in Blender nach Körperbereichen zerlegen. Die Teile sitzen dann schon am Körper, das spart Credits und Nacharbeit.
+Helm und Schwert bleiben starre Einzelteile (unten). Die Auftragstexte für die Vorlagen stehen im Protokoll
+(`credits.jsonl`, Namen `ruestung-normal-bild` und `ruestung-gruen-bild`).
+
+Früherer Weg (nur noch für den Helm genutzt): erst freistellen (Bild zu Bild), ansehen, dann Bild zu 3D ohne Haltung.
 
 ```sh
 python3 -I $GEN/meshy.py img2img $A brust-normal-bild "From the warrior in the reference image, extract only the torso armor as a standalone 3D game asset: the steel breastplate with shoulder pauldrons, the quilted gambeson underneath with its short skirt, and the belt. No head, no neck, no arms below the pauldrons, no hands, no legs, no shield, no sword, no cape. Shown as if worn by an invisible mannequin, hollow inside, front view, plain white background, same materials, colors and painted style." $A/vorlagen/10-krieger-normal.png --ratio 3:4

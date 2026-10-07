@@ -1,2 +1,5 @@
 screens/
 node_modules/
+# erzeugte Figuren (Bild-zu-3D) erst nach Abnahme durch den Kapitaen ins Repository
+assets/gen-*.pack
+dist/gen-*.js

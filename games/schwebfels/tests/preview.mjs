@@ -31,6 +31,8 @@ const info = await page.evaluate(
     document.body.appendChild(el);
     const R = SB.R3D;
     const t0 = performance.now();
+    // erzeugte Figuren liegen in einer eigenen Datei je Reich (dist/gen-<reich>.js) und werden erst geladen
+    if ((desc.hero && desc.hero.gen) || desc.gen) await SB.assets.loadGen(desc.genRealm || "midgard");
     if (desc.only) {
       R.gear.debugOnly = desc.only;
       R.gear.debugHideBody = !!desc.hideBody;

@@ -87,17 +87,50 @@
         u8 = new Uint8Array(await r.arrayBuffer());
       }
       A.data = parse(u8);
-      // erzeugte Figuren (eigenes Paket, optional)
-      if (globalThis.SB_GENPACK) {
-        A.data.gen = parse(b64(globalThis.SB_GENPACK)).gen || {};
-        globalThis.SB_GENPACK = null;
-      }
+      A.data.gen = A.data.gen || {};
     } catch (e) {
       A.error = e;
       console.warn("Modellpaket nicht verfuegbar, alte Figuren werden genutzt", e);
     }
     done(A.data);
     return A.data;
+  };
+
+  /* Erzeugte Figuren je Reich: eigene Datei gen-<reich>.js neben der Seite (setzt globalThis.SB_GEN_<REICH> als
+     Base64), erst bei Bedarf geladen, damit die Spielseite klein bleibt. Ein Skript-Tag funktioniert auch bei
+     file:// (Vorschau und Tests), wo fetch nicht erlaubt ist. */
+  const GEN_LOAD = {};
+  A.loadGen = function (realm) {
+    if (GEN_LOAD[realm]) return GEN_LOAD[realm];
+    const key = "SB_GEN_" + realm.toUpperCase();
+    const take = () => {
+      const s = globalThis[key];
+      if (!s) return false;
+      Object.assign(A.data.gen, parse(b64(s)).gen || {});
+      globalThis[key] = null;
+      return true;
+    };
+    GEN_LOAD[realm] = A.ready.then(
+      () =>
+        new Promise((ok, fail) => {
+          if (!A.data) return fail(new Error("Modellpaket fehlt"));
+          if (take()) return ok(A.data.gen);
+          const el = document.createElement("script");
+          el.src = "gen-" + realm + ".js";
+          el.onload = () => {
+            try {
+              if (take()) ok(A.data.gen);
+              else fail(new Error("Figurendaten leer"));
+            } catch (e) {
+              fail(e);
+            }
+          };
+          el.onerror = () => fail(new Error("Figurendaten nicht gefunden"));
+          document.head.appendChild(el);
+        })
+    );
+    GEN_LOAD[realm].catch(() => (GEN_LOAD[realm] = null));
+    return GEN_LOAD[realm];
   };
 
   /* Bilder aus dem Paket als Textur (laedt im Hintergrund nach) */
