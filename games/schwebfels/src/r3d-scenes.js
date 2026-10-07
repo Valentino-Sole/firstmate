@@ -1281,9 +1281,12 @@
           v.hold = "drink";
           v.drinkPh = rr() * 7;
           const mm = mug();
-          mm.position.set(0, -0.06, 0.07);
-          mm.rotation.x = -0.4;
-          v.parts.handR.add(mm);
+          // modellierte Figuren greifen den Krug in der Faust (Achse entlang der Griffachse), alte halten ihn darunter
+          if (!(v.parts.handR && v.parts.handR.userData.grip)) {
+            mm.position.set(0, -0.06, 0.07);
+            mm.rotation.x = -0.4;
+          }
+          if (v.parts.handR) v.parts.handR.add(mm);
           patio.add(v.obj);
           life.push({ update: (dt) => v.update(dt) });
           seat++;
@@ -1473,8 +1476,8 @@
       const lantern2 = grp([0, 0, 0]);
       lantern2.add(mesh(G.sph(0.09, 8, 6), emis("#cfe0ff", 1.4)));
       lantern2.add(R.haloSprite("#cfe0ff", 0.9, 0.7));
-      lantern2.position.set(0, -0.12, 0.08);
-      selene.parts.handL.add(lantern2);
+      if (!(selene.parts.handL && selene.parts.handL.userData.grip)) lantern2.position.set(0, -0.12, 0.08);
+      if (selene.parts.handL) selene.parts.handL.add(lantern2);
       g.add(selene.obj);
       // Lichtbruecke aus schwebenden Steinen
       const bridge = grp();

@@ -79,6 +79,8 @@ node tests/rigged.mjs                # Figuren mit eigenem Skelett, Rüstungstei
 
 ## Offene Punkte
 
+- 3D-Heimatinsel: Seit den modellierten Helden (Version 5) brach der Aufbau der Insel ab (Laterne und Krug suchten einen Haltepunkt in der Hand, den die neuen Figuren nicht hatten), das Spiel zeigte dann nur die Kachelansicht. Im Zweig `claude/laughing-keller-x1l0zy` behoben und mit `tests/rigged.mjs` abgesichert; die veröffentlichte Fassung (Stand 7. Oktober 2026) hat den Fehler noch.
+
 - Grafik der Figuren: Der Kapitän findet sie zu sehr „Playmobil“ und bringt ein eigenes Konzept. Bis dahin die Figurenform nicht grundlegend umbauen, danach nach seinem Konzept.
 - Das Dokument „Spieldesign“ im Google-Drive-Ordner „Helden von Schwebfels (Claude-Projekt)“ zeigt noch Version 3; `DESIGN.md` ist aktuell.
 - Feedback des Kapitäns sammelt er im Drive-Dokument „Feedback und Ideen“ im selben Ordner; bei Bedarf dort nachlesen.

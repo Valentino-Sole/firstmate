@@ -531,7 +531,18 @@
   G.attachRigid = function (parts, gear, hc) {
     const IT = R.items;
     if (!IT) return;
+    T = R.T();
     const S = parts.prof.sockets;
+    // Haltepunkte in den Haenden fuer Dinge aus den Szenen (Krug, Laterne); die alten Figuren haben eigene. Rahmen wie
+    // bei Waffen: Y entlang der Griffachse, X in Fingerrichtung. userData.grip sagt den Szenen, dass hier gegriffen wird.
+    for (const [side, sock, mirror] of [["R", S.gripR, false], ["L", S.gripL, true]]) {
+      if (parts["hand" + side] || !sock || !parts.B["hand." + side]) continue;
+      const h = new T.Group();
+      h.quaternion.copy(gripFrame(sock, mirror));
+      placeOnBone(parts, h, "hand." + side, sock.p);
+      h.userData.grip = true;
+      parts["hand" + side] = h;
+    }
     const build = (it, base, variant) => {
       // erzeugte Waffe oder erzeugter Schild aus dem Figurenpaket (src/r3d-rigged.js) vor der Bauregel
       const gw = !base && variant == null && R.rigged && R.rigged.weaponFor ? R.rigged.weaponFor(it, hc) : null;

@@ -542,6 +542,20 @@ const res = await page.evaluate(async () => {
   if (b2.dispose) b2.dispose();
   el2.remove();
   for (let i = 0; i < Math.min(evs.length, 6); i++) await b.play(evs[i]);
+  // Heimatinseln bauen (Bewohner bekommen Krug und Laterne in die Hand); ein Fehler fiele sonst still auf die
+  // Kachelansicht zurueck
+  for (const realm of ["albion", "midgard", "hibernia"]) {
+    const el3 = document.createElement("div");
+    el3.style.cssText = "position:fixed;left:0;top:0;width:320px;height:200px";
+    document.body.appendChild(el3);
+    try {
+      const hub = R.createHub(el3, { quality: "niedrig", dayCycle: "zyklus", homeTier: 0, realm, onPick: () => {} });
+      if (hub && hub.dispose) hub.dispose();
+    } catch (e) {
+      fails.push("Heimatinsel " + realm + " laesst sich nicht bauen: " + e.message);
+    }
+    el3.remove();
+  }
   return { fails, timing: timing.map((x) => x.a + ":" + (x.s ? x.s.clip + "@" + x.s.t.toFixed(2) : "-")), lit, wide, per };
 });
 await browser.close();
