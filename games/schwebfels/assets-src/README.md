@@ -44,7 +44,7 @@ Feste Ausrüstung (Waffen, Schilde, Schmuck, Kopfschmuck) entsteht im Spiel selb
 ## Erzeugte Figuren (Bild-zu-3D-Strecke, im Aufbau)
 
 Ziel: Figuren, Ausrüstung und Bestien aus den Konzeptbildern des Kapitäns mit einem Bild-zu-3D-Dienst erzeugen
-(geplant: Tripo, Abrechnung in Credits, jeder Auftrag meldet die abgebuchten Credits als `consumed_credit`),
+(Meshy, Abrechnung in Credits, jeder Auftrag meldet die abgebuchten Credits als `consumed_credits`),
 in Blender auf das Spielskelett bringen und als eigenes Paket `assets/gen.pack` neben `schwebfels.pack` einbetten.
 
 | Datei | Inhalt |
@@ -54,7 +54,9 @@ in Blender auf das Spielskelett bringen und als eigenes Paket `assets/gen.pack` 
 | `gen/packbones.py` | Knochenliste aus `assets/schwebfels.pack` lesen, kein Zwischenordner nötig |
 | `gen/gen_pack.py` | npz-Dateien der Figuren zu `assets/gen.pack` zusammenfassen |
 | `gen/meshy.py` | Meshy-Schnittstelle: Bild zu Bild, Bild zu 3D, Skelett; lädt Ergebnisse sofort herunter und protokolliert die Credits je Auftrag (`credits.jsonl`, `report`) |
-| `gen/build_figure.py` | Erzeugte Figur (GLB) ins Spielformat: Skelett der Vorlage auf die 29 Spielknochen (Namen wie Mixamo oder Meshy, fehlende Finger geschätzt) oder Bone Heat, Höhe nach Körperprofil, Haltepunkte |
+| `gen/bake_lowpoly.py` | Spielfassung eines Originals: verschweißen, auf etwa 30.000 Flächen verkleinern, neue Texturaufteilung (Kopf mit mehr Bildfläche), Farbe und Oberflächendetails vom Original aufbacken |
+| `gen/decimate_glb.py` | Verkleinern unter Schutz der Texturnähte (abgelöst durch `bake_lowpoly.py`, bleibt für Vergleiche) |
+| `gen/build_figure.py` | Erzeugte Figur (GLB) ins Spielformat: Skelett der Vorlage auf die 29 Spielknochen (Namen wie Mixamo oder Meshy) oder Bone Heat, Höhe nach Körperprofil oder `--height`, Haltepunkte. Finger und Daumen werden entlang der Netzverbindungen vom Handgelenk aus getrennt (Fingerspitzen, Daumen nach rechter oder linker Hand), Gelenke an die echten Knöchel gelegt und die Handgewichte aufgeteilt; der Griffpunkt liegt in der Mitte der geschlossenen Faust. `FINGER_DEBUG=<ordner>` speichert die Handerkennung zum Prüfen |
 | `gen/crop_templates.py` | Vorlagen aus den Konzepttafeln schneiden |
 | `gen/PLAN-MIDGARD.md` | Ablaufplan des Qualitätstests mit allen Meshy-Aufträgen |
 
@@ -65,4 +67,7 @@ python gen/gen_pack.py <aus> ../assets/gen.pack
 
 Im Spiel: `R.buildHero({ gen: "<figur>", genGear: ["<teil>", ...], ... })` baut den erzeugten Körper mit eigener Textur
 und eigenen Gelenken, gleiche Bewegungen wie alle Helden; Teile in `genGear` blenden die Haut darunter aus.
+Erzeugte Hände schließen sich beim Greifen zur Faust (Haltepunkt mit `curl`, `thumb`, `thumbA`, `wrist`): Finger um die
+Knöchellinie, Daumen über die Finger, Handgelenk kippt die Waffe leicht nach oben. Die freie Hand bleibt locker.
+Nahaufnahme zum Prüfen: `tests/preview.mjs` mit `"camBone": ["hand.R", x, y, z, sichtwinkel]` folgt einem Knochen.
 `gen.pack` gehört erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat.

@@ -9,7 +9,7 @@ Aufruf (Ausgabeordner <aus>, Protokoll <aus>/credits.jsonl):
   python meshy.py img2img <aus> <name> "<anweisung>" <bild> [<bild> ...] [--model nano-banana-2] [--multiview] [--nobg] [--ratio 3:4]
   python meshy.py img23d  <aus> <name> <bild.png> [--pose a-pose|t-pose|none] [--pbr] [--res 2k] [--geom standard|2k|4k] [--polys N]
   python meshy.py multi23d <aus> <name> <bild1> <bild2> [...] [--pose a-pose] [--pbr]
-  python meshy.py rig     <aus> <name> <auftrag-id> [--height 1.8]
+  python meshy.py rig     <aus> <name> <auftrag-id oder figur.glb> [--height 1.8]   (GLB hoechstens 300.000 Flaechen, siehe decimate_glb.py)
   python meshy.py report  <aus>
 Mit --dry-run wird nur der Auftrag angezeigt (ohne Bilddaten), nichts gesendet.
 """
@@ -193,8 +193,12 @@ def main():
         run(cmd, out, name, body, [os.path.basename(p) for p in imgs], dry)
     elif cmd == "rig":
         h = float(opt(a, "--height", "1.8"))
-        out, name, tid = a[0], a[1], a[2]
-        run(cmd, out, name, {"input_task_id": tid, "height_meters": h}, [tid], dry)
+        out, name, src = a[0], a[1], a[2]
+        if src.lower().endswith(".glb") and os.path.exists(src):
+            body = {"model_url": "data:model/gltf-binary;base64," + base64.b64encode(open(src, "rb").read()).decode(), "height_meters": h}
+        else:
+            body = {"input_task_id": src, "height_meters": h}
+        run(cmd, out, name, body, [os.path.basename(src)], dry)
     else:
         print(__doc__)
 

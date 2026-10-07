@@ -36,6 +36,8 @@ for f in sorted(os.listdir(SRC)):
     z = np.load(os.path.join(SRC, f))
     e = part(z, "body")
     e.update({"j": P.arr(z["joints"], "f32"), "top": float(z["top"]), "sockets": json.loads(str(z["sockets"])), "tex": tex(z["tex"]), "pieces": {}})
+    if "nrm" in z.files:
+        e["nrm"] = tex(z["nrm"], 90)
     names = json.loads(str(z["pieces"])) if "pieces" in z.files else (["brust"] if "gar_pos" in z.files else [])
     for n in names:
         pre = "gar" if n == "brust" and "gar_pos" in z.files else "p_" + n

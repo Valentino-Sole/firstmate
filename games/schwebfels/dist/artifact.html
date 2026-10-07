@@ -7316,9 +7316,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return (GGEO[ck] = g);
   }
   const GMAT = {};
-  function genMat(key, ref, color) {
+  function genMat(key, ref, color, nrm) {
     if (GMAT[key]) return GMAT[key];
-    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture("gen." + key, ref, { srgb: true }) : null });
+    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.78, metalness: 0, map: ref ? SB.assets.texture("gen." + key, ref, { srgb: true }) : null });
+    if (nrm) {
+      // Feinheiten des hochaufgeloesten Originals (Falten, Naehte, Haarstraehnen) als Normalenbild
+      m.normalMap = SB.assets.texture("gen." + key + ".n", nrm, { srgb: false });
+      m.normalScale = new T.Vector2(1, 1);
+    }
     return (GMAT[key] = m);
   }
   function buildGen(desc) {
@@ -7334,7 +7339,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const worn = (desc.genGear || []).filter((p) => G0.pieces[p]);
     const masks = worn.map((p) => G0.pieces[p].mask).filter(Boolean);
     const hide = masks.length ? (t) => masks.some((m) => (m[t >> 3] >> (t & 7)) & 1) : null;
-    const mesh = new T.SkinnedMesh(genGeo(G0, desc.gen + "|" + worn.join(","), hide), genMat(desc.gen, G0.tex));
+    const mesh = new T.SkinnedMesh(genGeo(G0, desc.gen + "|" + worn.join(","), hide), genMat(desc.gen, G0.tex, null, G0.nrm));
     mesh.add(rig.bones[0]);
     mesh.updateMatrixWorld(true);
     mesh.bind(new T.Skeleton(rig.bones));
@@ -7342,7 +7347,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     mesh.castShadow = true;
     body.add(mesh);
     const prof = { j: G0.j, top: G0.top, sockets: G0.sockets };
-    const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true };
+    // erzeugte Haende sind schon locker gebeugt: freie Hand nur wenig weiter schliessen, mit Waffe ganz (attachRigid)
+    const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true, gripL: 0.12, gripR: 0.12 };
     for (const p of worn) {
       const src = G0.pieces[p];
       const m = new T.SkinnedMesh(genGeo(src, desc.gen + "." + p, null), genMat(desc.gen + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
@@ -7509,8 +7515,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     rot(B["shin.R"], knR, 0, 0, RP.shinR);
     rot(B["foot.L"], -(hipL + knL) * 0.7, 0, 0);
     rot(B["foot.R"], -(hipR + knR) * 0.7, 0, 0);
-    curl(B, "L", gripL, P.prof.sockets.gripL.axis);
-    curl(B, "R", gripR, P.prof.sockets.gripR.axis);
+    curl(B, "L", gripL, P.prof.sockets.gripL);
+    curl(B, "R", gripR, P.prof.sockets.gripR);
     if (P.focus) {
       // Fokus schwebt und dreht sich langsam
       P.focus.position.copy(P.focus.userData.hover);
@@ -7521,14 +7527,24 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   const AX = {};
-  function curl(B, side, k, axis) {
-    if (!AX[side]) AX[side] = new T.Vector3();
-    const a = AX[side].set(axis[0], axis[1], axis[2]).normalize();
+  const AT = {};
+  const V3s = (v, a) => v.set(a[0], a[1], a[2]).normalize();
+  function curl(B, side, k, sock) {
+    if (!AX[side]) {
+      AX[side] = new T.Vector3();
+      AT[side] = new T.Vector3();
+    }
+    const a = V3s(AX[side], sock.curl || sock.axis);
     const sgn = side === "L" ? -1 : 1;
     B["fing1." + side].quaternion.setFromAxisAngle(a, sgn * k * 1.25);
     B["fing2." + side].quaternion.setFromAxisAngle(a, sgn * k * 1.45);
-    B["thumb1." + side].quaternion.setFromAxisAngle(a, sgn * k * 0.35);
-    B["thumb2." + side].quaternion.setFromAxisAngle(a, sgn * k * 0.6);
+    // erzeugte Figuren: Daumen legt sich zur Handflaeche, Handgelenk kippt beim Greifen zur Daumenseite
+    const th = sock.thumb ? V3s(AT[side], sock.thumb) : a;
+    const ta = sock.thumbA || [0.35, 0.6];
+    const kt = sock.thumbA ? k * k : k; // Daumen legt sich erst beim festen Griff um
+    B["thumb1." + side].quaternion.setFromAxisAngle(th, sgn * kt * ta[0]);
+    B["thumb2." + side].quaternion.setFromAxisAngle(th, sgn * kt * ta[1]);
+    if (sock.wrist) B["hand." + side].quaternion.setFromAxisAngle(V3s(AT[side], sock.wrist), k * 0.6);
   }
 })();
 
