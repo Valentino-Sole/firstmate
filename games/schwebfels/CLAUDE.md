@@ -26,7 +26,8 @@ node tests/balance.mjs               # Klassen, Aufträge, Bosse
 node tests/progression.mjs all 30    # Spielverlauf bis Stufe 30
 node tests/talents.mjs               # Talentbäume je Schwerpunkt
 node tests/e2e.mjs screens           # Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium)
-node tests/rigged.mjs                # Figuren mit eigenem Skelett, Rüstungsteile, erzeugte Bestien
+node tests/rigged.mjs                # Figuren mit eigenem Skelett, Rüstungsteile, erzeugte Bestien, Heimatinseln
+node tests/smoke.mjs                 # Rauchtest: alle Völker, Klassen, Monster, Gegenstände und Szenen ohne stille Fehler
 ```
 
 - Der Browser-Durchlauf braucht three.js und Schriften vom CDN. Kommt der Testbrowser nicht ans Netz, lädt man die Dateien einmal herunter und zeigt mit `CDN_CACHE=<map.json>` darauf (Format in `README.md`).
