@@ -1,7 +1,7 @@
 """Zuschnitt: einzelne Modelle aus einer Konzepttafel ausschneiden (Meshy braucht ein Modell je Bild).
 
 Aufruf: python zuschnitt.py <tafel.png|jpg> <ausgabeordner> [--name tafel10] [--schwelle 0] [--min 0.4]
-                            [--box x0,y0,x1,y1 ...] [--rand 0.06]
+                            [--box x0,y0,x1,y1 ...] [--rand 0.06] [--freistellen]
         python zuschnitt.py --probe     Selbstpruefung mit einer gezeichneten Tafel (fuenf Figuren, Ueberschrift,
                                         Beschriftungen auf Pergament)
 
@@ -12,6 +12,11 @@ heissen <name>_1.png, <name>_2.png, ... (zeilenweise von links oben), mit etwas 
 <name>_uebersicht.png zeigt die Tafel mit nummerierten Rahmen zum Pruefen. Liegen zwei Gegenstaende zu nah
 beieinander oder gehoert eine Beschriftung zu einem Rahmen, mit --box von Hand schneiden (Pixel der Originaltafel,
 mehrfach angebbar).
+
+Meshy empfiehlt (docs.meshy.ai/en/webapp/image-to-3d, Oktober 2026): ein Modell je Bild, schlichter Hintergrund, bei
+unruhigem Hintergrund vorher freistellen, mindestens 512 x 512 Pixel. Darum werden kleine Ausschnitte auf 512 Pixel
+vergroessert, und --freistellen setzt den Gegenstand auf weissen Grund (Pergament, Schatten und Nachbarzeichnungen
+fallen weg; die Uebersicht zeigt das Ergebnis, bei Luecken im Gegenstand ohne --freistellen schneiden).
 """
 import argparse
 import os
@@ -70,17 +75,39 @@ def find_boxes(img, schwelle=0.0, min_pct=0.4):
         cur.append(b)
     if cur:
         rows.append(cur)
-    return [b for row in rows for b in sorted(row, key=lambda b: b[0])], tuple(int(round(c)) for c in bg)
+    return [b for row in rows for b in sorted(row, key=lambda b: b[0])], tuple(int(round(c)) for c in bg), thr
 
 
-def crop(img, box, rand, bg):
-    """Ausschnitt mit Rand in Hintergrundfarbe, quadratisch (Meshy und die Vorschau mögen ruhige Formate)."""
+def cutout(piece, bg, thr):
+    """Gegenstand auf weissen Grund: Maske aus dem Farbabstand zum Hintergrund, Teile verbunden, Loecher gefuellt,
+    nur grosse Stuecke, weicher Rand."""
+    from scipy import ndimage
+    a = np.asarray(piece).astype(np.float32)
+    m = np.linalg.norm(a - np.array(bg, np.float32), axis=2) > thr
+    m = ndimage.binary_opening(m, iterations=1)
+    m = ndimage.binary_closing(m, iterations=max(1, int(min(m.shape) * 0.01)))
+    m = ndimage.binary_fill_holes(m)
+    lab, n = ndimage.label(m)
+    if n:
+        sizes = ndimage.sum(m, lab, range(1, n + 1))
+        m = np.isin(lab, 1 + np.flatnonzero(sizes >= 0.02 * sizes.max()))
+    soft = ndimage.gaussian_filter(m.astype(np.float32), 1.0)[..., None]
+    return Image.fromarray(np.clip(a * soft + 255 * (1 - soft), 0, 255).astype(np.uint8))
+
+
+def crop(img, box, rand, bg, thr=None):
+    """Ausschnitt mit Rand, quadratisch, mindestens 512 Pixel (Empfehlung von Meshy); mit thr freigestellt auf Weiss."""
     x0, y0, x1, y1 = box
     w, h = x1 - x0, y1 - y0
     side = int(max(w, h) * (1 + 2 * rand))
-    out = Image.new("RGB", (side, side), bg)
     piece = img.convert("RGB").crop((x0, y0, x1, y1))
+    if thr is not None:
+        piece = cutout(piece, bg, thr)
+        bg = (255, 255, 255)
+    out = Image.new("RGB", (side, side), bg)
     out.paste(piece, ((side - w) // 2, (side - h) // 2))
+    if side < 512:
+        out = out.resize((512, 512), Image.LANCZOS)
     return out
 
 
@@ -101,11 +128,19 @@ def probe():
         d.ellipse([x + 80, y - 90, x + 160, y - 10], fill=(200, 170, 140), outline=(30, 20, 10))
         d.rectangle([x + 230, y + 60, x + 245, y + 480], fill=(90, 70, 50))
         d.text((x + 60, y + 560), "Seltenheit %d" % (i + 1), fill=(60, 40, 20), font=f)
-    boxes, _ = find_boxes(im)
+    boxes, bg, thr = find_boxes(im)
     ok = len(boxes) == 5 and all(abs(b[0] - (140 + i * 340)) < 12 and abs(b[3] - 700) < 12 for i, b in enumerate(boxes))
     if not ok:
         raise SystemExit("FEHLER: erwartet 5 Figuren in einer Reihe, gefunden %s" % boxes)
-    print("OK: Zuschnitt findet die fuenf Figuren der Probetafel, Ueberschrift und Beschriftungen bleiben draussen")
+    # freigestellt: Ecken weiss, Ruestung unveraendert, Speer noch da
+    c = np.asarray(crop(im, boxes[2], 0.06, bg, thr)).astype(int)
+    s = c.shape[0]
+    corner_white = (c[:8, :8] > 245).all()
+    body = c[s // 2, s // 2]
+    spear = (np.abs(c[s // 2] - np.array([90, 70, 50])).sum(axis=1) < 40).any()
+    if not (corner_white and np.abs(body - np.array([50, 90, 200])).sum() < 30 and spear):
+        raise SystemExit("FEHLER: Freistellen verliert den Gegenstand oder laesst Hintergrund stehen (Ecke weiss %s, Mitte %s, Speer %s)" % (corner_white, body, spear))
+    print("OK: Zuschnitt findet die fuenf Figuren der Probetafel, Ueberschrift und Beschriftungen bleiben draussen; Freistellen behaelt Figur und Speer")
 
 
 def main():
@@ -119,6 +154,7 @@ def main():
     ap.add_argument("--min", type=float, default=0.4, help="kleinste Flaeche eines Gegenstands in Prozent der Tafel")
     ap.add_argument("--box", action="append", default=[], help="x0,y0,x1,y1 in Pixeln der Tafel (mehrfach)")
     ap.add_argument("--rand", type=float, default=0.06)
+    ap.add_argument("--freistellen", action="store_true", help="Gegenstand auf weissen Grund setzen (unruhiger Hintergrund)")
     a = ap.parse_args()
     img = Image.open(a.tafel)
     name = a.name or os.path.splitext(os.path.basename(a.tafel))[0]
@@ -127,9 +163,10 @@ def main():
         boxes = [[int(float(v)) for v in b.split(",")] for b in a.box]
         if any(len(b) != 4 or b[2] <= b[0] or b[3] <= b[1] for b in boxes):
             raise SystemExit("--box braucht x0,y0,x1,y1 mit x1 > x0 und y1 > y0")
-        bg = tuple(int(round(c)) for c in background(np.asarray(img.convert("RGB")).astype(np.float32))[0])
+        med, spread = background(np.asarray(img.convert("RGB")).astype(np.float32))
+        bg, thr = tuple(int(round(c)) for c in med), a.schwelle or max(28.0, spread * 2.2)
     else:
-        boxes, bg = find_boxes(img, a.schwelle, a.min)
+        boxes, bg, thr = find_boxes(img, a.schwelle, a.min)
     if not boxes:
         raise SystemExit("Keine Gegenstaende gefunden; --schwelle kleiner setzen oder mit --box schneiden.")
     over = img.convert("RGB").copy()
@@ -141,7 +178,7 @@ def main():
         font = ImageFont.load_default()
     for i, b in enumerate(boxes, 1):
         p = os.path.join(a.out, "%s_%d.png" % (name, i))
-        crop(img, b, a.rand, bg).save(p)
+        crop(img, b, a.rand, bg, thr if a.freistellen else None).save(p)
         d.rectangle(b, outline=(220, 30, 30), width=lw)
         d.rectangle([b[0], b[1], b[0] + 14 * lw, b[1] + 10 * lw], fill=(220, 30, 30))
         d.text((b[0] + 3 * lw, b[1] + lw), str(i), fill=(255, 255, 255), font=font)

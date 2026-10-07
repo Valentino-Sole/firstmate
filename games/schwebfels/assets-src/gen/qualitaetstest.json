@@ -2,7 +2,7 @@
  "_hinweis": [
   "Plan fuer den Qualitaetstest des Kapitaens: python werkstatt.py plan qualitaetstest.json",
   "Vorher ohne Kosten pruefen: python werkstatt.py plan qualitaetstest.json --trocken (zeigt Kosten, bestellt nichts).",
-  "Bilder in assets-src/gen/konzepte/ ablegen (nicht im Repository). Jedes Bild zeigt genau ein Modell; Tafeln mit mehreren Teilen vorher zuschneiden: python zuschnitt.py tafel10.png konzepte --name tafel10 (Uebersicht mit Nummern pruefen, sonst --box).",
+  "Bilder in assets-src/gen/konzepte/ ablegen (nicht im Repository). Jedes Bild zeigt genau ein Modell; Tafeln mit mehreren Teilen vorher zuschneiden: python zuschnitt.py tafel10.png konzepte --name tafel10 (Uebersicht mit Nummern pruefen, sonst --box; bei unruhigem Hintergrund --freistellen, so empfiehlt es Meshy).",
   "Fuer wechselbare Brustpanzer die Figur in schlichter Grundkleidung zeigen (Meshy liefert Kleidung aus einem Guss).",
   "Liegt die Schaetzung ueber dem Budget, wird nichts bestellt. Ein erneuter Aufruf setzt fort: Fertiges und begonnene Auftraege (etwa nach einem Abbruch beim Warten) werden nicht neu bezahlt.",
   "Zeigt eine Tafel dasselbe Modell von mehreren Seiten, die weiteren Ansichten mit \"ansichten\": [\"konzepte/..._seite.png\", \"konzepte/..._ruecken.png\"] angeben (hoechstens 3, gleicher Preis); \"bild\" bleibt die Vorderansicht.",
