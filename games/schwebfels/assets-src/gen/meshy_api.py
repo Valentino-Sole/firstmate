@@ -339,8 +339,11 @@ def cmd_kosten(a):
     fig = PRICE["image-to-3d"] + PRICE["rigging"]
     print("Je Figur (Bild zu 3D mit 2K-Textur und Rigging): %d Credits" % fig)
     print("Bewegungen (%d Stueck, einmal fuer alle Figuren): %d Credits" % (n, n * PRICE["animation"]))
-    print("Qualitaetstest mit 2 Figuren ohne Wiederholungen: %d Credits" % (2 * fig + n * PRICE["animation"]))
-    print("Hinweis: Rigging per API nur fuer Zweibeiner; Bestien (Vierbeiner) brauchen einen eigenen Weg.")
+    print("Je Einzelmodell (Ruestungsteil, Waffe, Bestie, Requisit): %d Credits" % PRICE["image-to-3d"])
+    print("Zwei Figuren mit Bewegungen: %d Credits; den ganzen Qualitaetstest rechnet 'werkstatt.py plan ... --trocken'"
+          % (2 * fig + n * PRICE["animation"]))
+    print("Mehrere Ansichten eines Modells (bis zu 4 Bilder) kosten laut Meshy-Preisliste dasselbe wie ein Bild.")
+    print("Hinweis: Meshy riggt nur Zweibeiner; Bestien bekommen ihr Vierbeiner-Skelett hier im Werkzeug (beasts/from_glb.py).")
 
 
 def cmd_credits(a):
