@@ -3,6 +3,8 @@
 //   dist/artifact.html    Seiteninhalt ohne html/head/body-Huelle (fuer claude.ai Artifacts)
 // Aufruf: node build.mjs
 //   GEN_PACK=<datei>  anderes Paket mit erzeugten Figuren einbetten (Standard: assets/gen.pack, falls vorhanden)
+//   INSELN_DIR=<ordner>  Inselbilder <reich>.webp (albion, midgard, hibernia) fuer die gemalten Heimatinseln
+//                     (Standard: assets/inseln, falls vorhanden); ohne Bilder bleibt die 3D-Insel
 //   SPLIT=1           Modellpakete nicht in die Seite, sondern als eigene Dateien daneben (dist/packs/*.js); fuer ein
 //                     Artifact mit mehreren Dateien, wenn die Seite sonst ueber 16 MB kaeme (jede Datei hoechstens 16 MB)
 // Die Modellpakete werden mit gzip verkleinert eingebettet; src/r3d-assets.js entpackt sie im Browser.
@@ -52,6 +54,28 @@ try {
   console.log("Erzeugte Figuren eingebettet:", path.relative(dir, gen));
 } catch (e) {
   /* ohne erzeugte Figuren */
+}
+// Gemalte Heimatinseln (src/hub-painted.js): Bilder als Data-URI, mit SPLIT als eigene Datei
+{
+  const isl = {};
+  for (const r of ["albion", "midgard", "hibernia"]) {
+    try {
+      const src = process.env.INSELN_DIR ? path.resolve(process.env.INSELN_DIR) : path.join(dir, "assets/inseln");
+      isl[r] = "data:image/webp;base64," + readFileSync(path.join(src, r + ".webp")).toString("base64");
+    } catch (e) {
+      /* ohne Bild bleibt die 3D-Insel */
+    }
+  }
+  if (Object.keys(isl).length) {
+    const js = "globalThis.SB_INSELN=" + JSON.stringify(isl) + ";";
+    if (split) {
+      mkdirSync(path.join(out, "packs"), { recursive: true });
+      writeFileSync(path.join(out, "packs", "inseln.js"), js);
+      packFiles.push(["packs/inseln.js", Buffer.byteLength(js)]);
+      packJs += '<script src="packs/inseln.js"></script>';
+    } else packJs += "<script>" + js + "</script>";
+    console.log("Inselbilder eingebettet:", Object.keys(isl).join(", "));
+  }
 }
 const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");
 const cdnTags = cdn.map((u) => '<script src="' + u + '"></script>').join("\n");

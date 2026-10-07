@@ -1018,6 +1018,10 @@
       const dc = s.settings.dayCycle || "zyklus";
       let h = '<div class="section-title">Darstellung</div><div class="row">' + [["hoch", "3D mit Schatten"], ["niedrig", "3D schlicht"], ["aus", "Ohne 3D"]].map(([id, n]) => '<button class="tab' + (q === id ? " on" : "") + '" data-act="quality" data-q="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<p class="muted small">Die Änderung wird nach dem Neuladen der Seite wirksam.</p>';
+      if (SB.hubPainted && SB.hubPainted.has(s.realm)) {
+        const isl = s.settings.island === "3d" ? "3d" : "gemaelde";
+        h += '<div class="section-title">Heimatinsel</div><div class="row">' + [["gemaelde", "Gemälde"], ["3d", "3D-Modell"]].map(([id, n]) => '<button class="tab' + (isl === id ? " on" : "") + '" data-act="island" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
+      }
       h += '<div class="section-title">Tag und Nacht</div><div class="row">' + [["zyklus", "Automatisch (20 Minuten)"], ["echtzeit", "Echte Uhrzeit"], ["tag", "Immer Tag"], ["nacht", "Immer Nacht"]].map(([id, n]) => '<button class="tab' + (dc === id ? " on" : "") + '" data-act="dayCycle" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
@@ -1033,6 +1037,13 @@
     UI.saveNow();
     UI.renderPanel();
     UI.toast("Gespeichert. Lade die Seite neu, um die Darstellung zu wechseln.", "", "einstellungen");
+  };
+  A.island = (el) => {
+    S().settings.island = el.dataset.v;
+    UI.save();
+    SB.main.makeHub(S());
+    UI.refresh();
+    UI.renderPanel();
   };
   A.dayCycle = (el) => {
     S().settings.dayCycle = el.dataset.v;

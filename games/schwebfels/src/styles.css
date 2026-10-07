@@ -69,6 +69,13 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .stage-fallback button { padding: 16px 8px; border-radius: 10px; border: 1.5px solid var(--gold-dim); background: var(--stone-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .stage-fallback button .ic { width: 34px; height: 34px; }
 
+/* Gemalte Heimatinsel (src/hub-painted.js): Bild, Abdunklung bei Nacht und bewegte Details liegen in einer Ebene, die
+   verschoben und gezoomt wird; die Beschriftungen bleiben gleich gross */
+.painted-hub { position: absolute; inset: 0; overflow: hidden; background: #0b0d16; cursor: grab; touch-action: none; user-select: none; }
+.painted-hub .ph-world { position: absolute; left: 0; top: 0; width: 1536px; height: 1024px; transform-origin: 0 0; will-change: transform; }
+.painted-hub .ph-world img, .painted-hub .ph-world canvas, .painted-hub .ph-shade { position: absolute; inset: 0; width: 1536px; height: 1024px; pointer-events: none; }
+.painted-hub .ph-shade { background: linear-gradient(#24356f, #3a4c8c); mix-blend-mode: multiply; opacity: 0; transition: opacity 2s; }
+
 /* Beschriftungen auf der Insel */
 .hub-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .hub-label {

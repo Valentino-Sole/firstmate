@@ -25,22 +25,40 @@
     app.innerHTML = "";
   }
 
-  M.start = function (S) {
-    UI.S = S;
-    SB.audio.setSfx(S.settings.sound !== false);
-    SB.audio.setMusic(S.settings.music !== false);
-    UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
-    shell();
+  // Heimatinsel: das gemalte Inselbild des Reiches, falls vorhanden und nicht abgewaehlt, sonst die 3D-Insel
+  M.makeHub = function (S) {
     const stage = document.getElementById("stage");
-    if (UI.use3d) {
+    if (!stage) return;
+    if (UI.hub) UI.hub.dispose();
+    UI.hub = null;
+    stage.innerHTML = "";
+    const opts = { quality: S.settings.quality, dayCycle: S.settings.dayCycle || "zyklus", homeTier: S.house.tier, realm: S.realm, onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)) };
+    if (SB.hubPainted && SB.hubPainted.has(S.realm) && S.settings.island !== "3d") {
       try {
-        UI.hub = SB.R3D.createHub(stage, { quality: S.settings.quality, dayCycle: S.settings.dayCycle || "zyklus", homeTier: S.house.tier, realm: S.realm, onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)) });
+        UI.hub = SB.hubPainted.create(stage, opts);
+      } catch (e) {
+        console.warn("Gemalte Insel nicht verfuegbar", e);
+        UI.hub = null;
+      }
+    }
+    if (!UI.hub && UI.use3d) {
+      try {
+        UI.hub = SB.R3D.createHub(stage, opts);
       } catch (e) {
         console.warn("3D-Insel nicht verfuegbar", e);
         UI.hub = null;
       }
     }
     if (!UI.hub) stage.innerHTML = '<div class="stage-fallback"><div class="fb-grid"></div></div>';
+  };
+
+  M.start = function (S) {
+    UI.S = S;
+    SB.audio.setSfx(S.settings.sound !== false);
+    SB.audio.setMusic(S.settings.music !== false);
+    UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
+    shell();
+    M.makeHub(S);
     E.tick(S);
     UI.refresh();
     clearInterval(ticker);

@@ -4,3 +4,5 @@ node_modules/
 assets-src/gen/meshy/
 # Konzeptbilder des Kapitaens fuer die Werkstatt (Plan qualitaetstest.json), gehoeren nicht ins Repository
 assets-src/gen/konzepte/
+# Inselbilder des Kapitaens (gemalte Heimatinseln); bis zu seiner Freigabe nicht im Repository
+assets/inseln/
