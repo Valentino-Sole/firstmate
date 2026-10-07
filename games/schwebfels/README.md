@@ -28,13 +28,14 @@ node tests/balance.mjs
 node tests/progression.mjs all 30
 node tests/talents.mjs
 
-# Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium)
+# Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium); das Handy mit doppelter Pixeldichte wie echte Geräte
 node build.mjs && node tests/e2e.mjs screens
 
 # Figuren mit eigenem Skelett (Meshy-Strecke) mit einer eigenen Prüffigur
 node tests/rigged.mjs
 
 # Rauchtest: alle Völker, Klassen, Monster, Gegenstände und Szenen; meldet auch stille Ausweichdarstellungen
+# und prüft, dass im Heim jeder Stufe der Held von der Kamera aus zu sehen ist
 node tests/smoke.mjs
 ```
 

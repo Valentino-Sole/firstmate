@@ -601,7 +601,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   .res { gap: 4px; }
   .chip { padding: 3px 7px; font-size: 13px; }
   .chip.hon, .daychip span { display: none; }
-  #create { grid-template-columns: 1fr; grid-template-rows: 36vh 1fr; }
+  /* minmax(0, ...): die 3D-Ansicht uebernimmt die Breite ihres Feldes; mit 1fr koennte sie das Feld (und das Formular)
+     breiter als den Bildschirm halten, etwa auf Handys mit hoher Pixeldichte */
+  #create { grid-template-columns: minmax(0, 1fr); grid-template-rows: 36vh minmax(0, 1fr); }
   #create .cform { border-left: 0; border-top: 2px solid var(--gold-dim); }
   #create .ctitle h1 { font-size: 34px; }
   #create .ctitle p { display: none; }

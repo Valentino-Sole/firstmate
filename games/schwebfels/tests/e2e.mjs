@@ -24,8 +24,8 @@ const errors = [];
 const cdnMap = process.env.CDN_CACHE ? JSON.parse(readFileSync(process.env.CDN_CACHE, "utf8")) : null;
 const browser = await pw.chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"] });
 
-async function newPage(vp) {
-  const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+async function newPage(vp, dpr = 1) {
+  const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: dpr });
   const page = await ctx.newPage();
   // Optional: CDN_CACHE zeigt auf eine JSON-Datei {url: lokaler Pfad}, z. B. fuer Umgebungen,
   // in denen der Testbrowser das CDN nicht direkt erreicht.
@@ -108,10 +108,11 @@ step("Charakterbogen");
 await open(page, "held");
 await page.waitForTimeout(900);
 await shot(page, "06-charakter");
-const plus = await page.$('[data-act="attr"]:not([disabled])');
-if (plus) await plus.click();
-const invItem = await page.$('[data-ref^="inv:"]');
-if (invItem) {
+// Locator statt Element: das Panel wird nach dem Klick neu gezeichnet, ein vorher geholtes Element waere dann weg
+const plus = page.locator('[data-act="attr"]:not([disabled])').first();
+if (await plus.count()) await plus.click();
+const invItem = page.locator('[data-ref^="inv:"]').first();
+if (await invItem.count()) {
   await invItem.click();
   await page.waitForTimeout(300);
   await shot(page, "06b-vergleich");
@@ -153,8 +154,8 @@ await page.evaluate(() => {
 });
 await open(page, "steinkreis");
 await shot(page, "10-chronik");
-const sf = await page.$('[data-act="storyFight"]:not([disabled])');
-if (!sf) errors.push("Kein Chronik-Kapitel verfügbar");
+const sf = page.locator('[data-act="storyFight"]:not([disabled])').first();
+if (!(await sf.count())) errors.push("Kein Chronik-Kapitel verfügbar");
 else {
   await sf.click();
   await playBattle(page, "11-chronik");
@@ -359,11 +360,14 @@ await page.context().close();
 
 /* ---- Mobil ---- */
 step("Mobil");
-const mob = await newPage({ width: 390, height: 844 });
+// doppelte Pixeldichte wie bei ueblichen Handys: dort hielt die 3D-Ansicht das Formular frueher breiter als den Bildschirm
+const mob = await newPage({ width: 390, height: 844 }, 2);
 await mob.goto(url);
 await mob.waitForSelector("#create:not([hidden])");
 await mob.waitForTimeout(1200);
 await shot(mob, "30-mobil-erstellung");
+const createWide = await mob.evaluate(() => [...document.querySelectorAll("#create .cform, #create [data-cact]")].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1).length);
+if (createWide) errors.push("Mobil: " + createWide + " Teile der Heldenerschaffung ragen über den Bildschirm");
 await mob.click('[data-cact="realm"][data-v="hibernia"]');
 await mob.waitForTimeout(400);
 await mob.fill("#heroName", "Pim");

@@ -603,7 +603,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   .res { gap: 4px; }
   .chip { padding: 3px 7px; font-size: 13px; }
   .chip.hon, .daychip span { display: none; }
-  #create { grid-template-columns: 1fr; grid-template-rows: 36vh 1fr; }
+  /* minmax(0, ...): die 3D-Ansicht uebernimmt die Breite ihres Feldes; mit 1fr koennte sie das Feld (und das Formular)
+     breiter als den Bildschirm halten, etwa auf Handys mit hoher Pixeldichte */
+  #create { grid-template-columns: minmax(0, 1fr); grid-template-rows: 36vh minmax(0, 1fr); }
   #create .cform { border-left: 0; border-top: 2px solid var(--gold-dim); }
   #create .ctitle h1 { font-size: 34px; }
   #create .ctitle p { display: none; }
@@ -14770,7 +14772,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (tier === 0) {
         const tent = new T.Mesh(new T.ConeGeometry(4.2, 4.2, 4, 1, true, PI * 0.5, PI * 1.0), pm("cloth", "#6a5a42", { ds: true }));
         tent.position.set(0, 2.1, 0);
-        tent.rotation.y = PI / 4 + PI;
+        // offene Seite zur Kamera: die beiden Zeltbahnen liegen hinten und links wie die Waende der festen Haeuser
+        tent.rotation.y = PI / 4;
         room.add(tent);
       } else if (tier === 3) {
         const wall = new T.Mesh(new T.CylinderGeometry(4.2, 4.2, 4.2, 18, 1, true, PI * 0.5, PI), tiled("stone", "#5e5a54", 6, 2, { side: T.DoubleSide }));
@@ -14875,6 +14878,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     raf = requestAnimationFrame(frame);
     return {
+      // fuer Tests: Szene, Kamera und Held
+      _view: () => ({ scene, camera, hero }),
       update(s) {
         state = Object.assign({}, state, s);
         build();

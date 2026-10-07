@@ -52,7 +52,26 @@ const res = await page.evaluate(async () => {
   for (const base in D.BASES) for (const rarity of ["gewoehnlich", "episch", "legendaer"]) tryit("Gegenstand " + base, () => { SB.icons.item({ base, rarity, style: 0 }); n++; });
   // Szenen
   for (const realm of ["albion", "midgard", "hibernia"]) tryit("Insel " + realm, () => R.createHub(box(), { quality: "niedrig", dayCycle: "zyklus", homeTier: 2, realm, onPick: () => {} }));
-  for (const tier of [0, 1, 2, 3, 4]) tryit("Heim " + tier, () => R.createHome(box(), { tier, realm: "midgard" }));
+  // Heim in jeder Stufe mit Held und voller Einrichtung; die Kamera muss den Helden sehen (das Zelt der ersten Stufe
+  // verdeckte ihn frueher ganz)
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const furn = {};
+  for (const f of D.FURNITURE) furn[f.id] = f.levels.length - 1;
+  for (const tier of [0, 1, 2, 3, 4]) {
+    let home = null;
+    tryit("Heim " + tier, () => { home = R.createHome(box(), {}); home.update({ tier, furn, realm: "midgard", hero: { kind: "hero", race: "nordmann", gender: "m", cls: "sturmhuene", realm: "midgard" } }); n++; });
+    if (!home) continue;
+    await frames();
+    const { scene, camera, hero } = home._view();
+    const T = globalThis.THREE;
+    const target = new T.Vector3(); hero.obj.getWorldPosition(target); target.y += 1.0;
+    const ray = new T.Raycaster(camera.position.clone(), target.clone().sub(camera.position).normalize());
+    ray.camera = camera;
+    const hit = ray.intersectObjects(scene.children, true).find((h) => h.object.visible && h.object.isMesh);
+    let o = hit && hit.object; while (o && o !== hero.obj) o = o.parent;
+    if (!o) out.push("Heim " + tier + ": Held von der Kamera aus verdeckt (zuerst getroffen: " + (hit ? hit.object.name || hit.object.type : "nichts") + ")");
+    home.dispose();
+  }
   tryit("Heldenansicht", () => { const v = R.createHeroView(box(), {}); v.set({ race: "albier", gender: "w", cls: "lichtweber" }); return v; });
   for (const setting of ["quest", "arena", "dungeon", "story"]) for (const realm of ["albion", "midgard", "hibernia"])
     tryit("Kampf " + setting + " " + realm, () => R.createBattle(box(), { setting, realm, left: { kind: "hero", race: "nordmann", cls: "sturmhuene", realm, gender: "m" }, right: { kind: "monster", arch: "wolf", color: "#777", accent: "#fc5", realm }, hp: [10, 10], dayTime: 0.4 }));

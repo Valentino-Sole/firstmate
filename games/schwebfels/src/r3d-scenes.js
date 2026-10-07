@@ -2289,7 +2289,8 @@
       if (tier === 0) {
         const tent = new T.Mesh(new T.ConeGeometry(4.2, 4.2, 4, 1, true, PI * 0.5, PI * 1.0), pm("cloth", "#6a5a42", { ds: true }));
         tent.position.set(0, 2.1, 0);
-        tent.rotation.y = PI / 4 + PI;
+        // offene Seite zur Kamera: die beiden Zeltbahnen liegen hinten und links wie die Waende der festen Haeuser
+        tent.rotation.y = PI / 4;
         room.add(tent);
       } else if (tier === 3) {
         const wall = new T.Mesh(new T.CylinderGeometry(4.2, 4.2, 4.2, 18, 1, true, PI * 0.5, PI), tiled("stone", "#5e5a54", 6, 2, { side: T.DoubleSide }));
@@ -2394,6 +2395,8 @@
     }
     raf = requestAnimationFrame(frame);
     return {
+      // fuer Tests: Szene, Kamera und Held
+      _view: () => ({ scene, camera, hero }),
       update(s) {
         state = Object.assign({}, state, s);
         build();
