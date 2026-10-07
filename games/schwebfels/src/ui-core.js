@@ -35,21 +35,37 @@
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
   // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
+  // Ohne Helden (Heldenerschaffung) gilt die Voreinstellung: an
+  const genOn = () => !(UI.S && UI.S.settings.genFigures === false);
+  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite)
+  UI.GEN_REALMS = ["midgard"];
   const withGen = (d) => {
-    if (!UI.S || UI.S.settings.genFigures === false || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
     return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
   };
+  UI.withGen = withGen;
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
-  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper
+  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
+  // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
   UI.loadGenFigures = function (realm) {
-    if (!UI.use3d || !UI.S || UI.S.settings.genFigures === false) return;
-    SB.assets
+    if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    return SB.assets
       .loadGen(realm)
       .then(() => SB.R3D.human.preloadGen())
       .then(
-        () => UI.S && UI.refresh(),
-        (e) => console.warn("Neue Figuren nicht geladen", e)
+        () => {
+          if (UI.S) UI.refresh();
+          return "bereit";
+        },
+        (e) => {
+          if (e && e.missing) {
+            console.info("Keine Figurendatei fuer " + realm + ", es bleiben die gebauten Figuren");
+            return "fehlt";
+          }
+          console.warn("Neue Figuren nicht geladen", e);
+          return "fehler";
+        }
       );
   };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia

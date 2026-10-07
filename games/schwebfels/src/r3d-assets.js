@@ -179,7 +179,12 @@
               fail(e);
             }
           };
-          el.onerror = () => fail(new Error("Figurendaten nicht gefunden"));
+          el.onerror = () => {
+            // keine Figurendatei neben der Seite (etwa beim Entwickeln ohne Paket): erwartbar, kein Fehler im Paket
+            const e = new Error("Figurendaten nicht gefunden");
+            e.missing = true;
+            fail(e);
+          };
           document.head.appendChild(el);
         })
     );

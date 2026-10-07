@@ -503,6 +503,40 @@
     }
     return (GMAT[key] = m);
   }
+  // Guertel nur am Rumpf: in A-Haltung haengen die Haende auf Guertelhoehe und machten ihn bei aelteren Paketen viel
+  // zu breit (Wurfmesser schwebten neben der Huefte). Von der Mitte aus bis zur ersten Luecke im Querschnitt.
+  const GSOCK = {};
+  function genSockets(key, G0) {
+    if (GSOCK[key]) return GSOCK[key];
+    const S = Object.assign({}, G0.sockets);
+    const b = S.belt;
+    if (b && b.left && b.right && G0.pos) {
+      const P = G0.pos;
+      const yb = b.left[1];
+      const l = [];
+      const r = [];
+      for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i + 1] - yb) < 0.02) (P[i] >= 0 ? l : r).push(Math.abs(P[i]));
+      const edge = (xs, fb) => {
+        if (!xs.length) return fb;
+        xs.sort((a, c) => a - c);
+        let e = xs[0];
+        for (const x of xs) {
+          if (x - e > 0.03) break;
+          e = x;
+        }
+        return e;
+      };
+      // beruehrt eine Hand die Huefte, gibt es auf dieser Seite keine Luecke: hoechstens wenig breiter als die andere Seite
+      let el = edge(l, b.left[0]);
+      let er = edge(r, -b.right[0]);
+      const m = Math.min(el, er) * 1.15;
+      el = Math.min(el, m);
+      er = Math.min(er, m);
+      S.belt = Object.assign({}, b, { left: [el, yb, b.left[2]], right: [-er, yb, b.right[2]] });
+    }
+    return (GSOCK[key] = S);
+  }
+  HU.genSockets = (key) => (GEN()[key] ? genSockets(key, GEN()[key]) : null);
   function buildGen(desc) {
     const D = SB.data;
     const G0 = GEN()[desc.gen];
@@ -523,7 +557,7 @@
     mesh.frustumCulled = false;
     mesh.castShadow = true;
     body.add(mesh);
-    const prof = { j: G0.j, top: G0.top, sockets: G0.sockets };
+    const prof = { j: G0.j, top: G0.top, sockets: genSockets(desc.gen, G0) };
     // erzeugte Haende sind schon locker gebeugt: freie Hand nur wenig weiter schliessen, mit Waffe ganz (attachRigid)
     const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true, gripL: 0.12, gripR: 0.12 };
     for (const p of worn) {

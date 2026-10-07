@@ -493,6 +493,7 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 #create .ctitle { position: absolute; left: 24px; top: calc(18px + env(safe-area-inset-top, 0px)); z-index: 2; pointer-events: none; }
 #create .ctitle h1 { font-size: 58px; color: var(--gold-hi); text-shadow: 0 3px 0 #000, 0 0 24px rgba(201, 164, 65, 0.3); line-height: 0.95; }
 #create .ctitle p { margin: 6px 0 0; color: var(--fog); max-width: 420px; font-size: 14px; }
+#create .gen-note { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 2; width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--gold-dim); background: rgba(12, 10, 16, 0.78); color: var(--parch); font-size: 13px; text-align: center; pointer-events: none; }
 #create .cform { overflow-y: auto; padding: 18px 20px 28px; background: radial-gradient(ellipse at 50% 0%, #2a2530, var(--stone) 70%); border-left: 2px solid var(--gold-dim); }
 .step { display: flex; align-items: center; gap: 10px; margin: 16px 0 8px; }
 .step:first-child { margin-top: 0; }
@@ -617,6 +618,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   /* minmax(0, ...): die 3D-Ansicht uebernimmt die Breite ihres Feldes; mit 1fr koennte sie das Feld (und das Formular)
      breiter als den Bildschirm halten, etwa auf Handys mit hoher Pixeldichte */
   #create { grid-template-columns: minmax(0, 1fr); grid-template-rows: 36vh minmax(0, 1fr); }
+  #create .gen-note { bottom: 6px; padding: 3px 10px; font-size: 11.5px; }
   #create .cform { border-left: 0; border-top: 2px solid var(--gold-dim); }
   #create .ctitle h1 { font-size: 34px; }
   #create .ctitle p { display: none; }
@@ -4980,7 +4982,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
               fail(e);
             }
           };
-          el.onerror = () => fail(new Error("Figurendaten nicht gefunden"));
+          el.onerror = () => {
+            // keine Figurendatei neben der Seite (etwa beim Entwickeln ohne Paket): erwartbar, kein Fehler im Paket
+            const e = new Error("Figurendaten nicht gefunden");
+            e.missing = true;
+            fail(e);
+          };
           document.head.appendChild(el);
         })
     );
@@ -7450,6 +7457,40 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     return (GMAT[key] = m);
   }
+  // Guertel nur am Rumpf: in A-Haltung haengen die Haende auf Guertelhoehe und machten ihn bei aelteren Paketen viel
+  // zu breit (Wurfmesser schwebten neben der Huefte). Von der Mitte aus bis zur ersten Luecke im Querschnitt.
+  const GSOCK = {};
+  function genSockets(key, G0) {
+    if (GSOCK[key]) return GSOCK[key];
+    const S = Object.assign({}, G0.sockets);
+    const b = S.belt;
+    if (b && b.left && b.right && G0.pos) {
+      const P = G0.pos;
+      const yb = b.left[1];
+      const l = [];
+      const r = [];
+      for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i + 1] - yb) < 0.02) (P[i] >= 0 ? l : r).push(Math.abs(P[i]));
+      const edge = (xs, fb) => {
+        if (!xs.length) return fb;
+        xs.sort((a, c) => a - c);
+        let e = xs[0];
+        for (const x of xs) {
+          if (x - e > 0.03) break;
+          e = x;
+        }
+        return e;
+      };
+      // beruehrt eine Hand die Huefte, gibt es auf dieser Seite keine Luecke: hoechstens wenig breiter als die andere Seite
+      let el = edge(l, b.left[0]);
+      let er = edge(r, -b.right[0]);
+      const m = Math.min(el, er) * 1.15;
+      el = Math.min(el, m);
+      er = Math.min(er, m);
+      S.belt = Object.assign({}, b, { left: [el, yb, b.left[2]], right: [-er, yb, b.right[2]] });
+    }
+    return (GSOCK[key] = S);
+  }
+  HU.genSockets = (key) => (GEN()[key] ? genSockets(key, GEN()[key]) : null);
   function buildGen(desc) {
     const D = SB.data;
     const G0 = GEN()[desc.gen];
@@ -7470,7 +7511,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     mesh.frustumCulled = false;
     mesh.castShadow = true;
     body.add(mesh);
-    const prof = { j: G0.j, top: G0.top, sockets: G0.sockets };
+    const prof = { j: G0.j, top: G0.top, sockets: genSockets(desc.gen, G0) };
     // erzeugte Haende sind schon locker gebeugt: freie Hand nur wenig weiter schliessen, mit Waffe ganz (attachRigid)
     const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true, gripL: 0.12, gripR: 0.12 };
     for (const p of worn) {
@@ -17410,21 +17451,37 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
   // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
+  // Ohne Helden (Heldenerschaffung) gilt die Voreinstellung: an
+  const genOn = () => !(UI.S && UI.S.settings.genFigures === false);
+  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite)
+  UI.GEN_REALMS = ["midgard"];
   const withGen = (d) => {
-    if (!UI.S || UI.S.settings.genFigures === false || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
     return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
   };
+  UI.withGen = withGen;
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
-  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper
+  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
+  // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
   UI.loadGenFigures = function (realm) {
-    if (!UI.use3d || !UI.S || UI.S.settings.genFigures === false) return;
-    SB.assets
+    if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    return SB.assets
       .loadGen(realm)
       .then(() => SB.R3D.human.preloadGen())
       .then(
-        () => UI.S && UI.refresh(),
-        (e) => console.warn("Neue Figuren nicht geladen", e)
+        () => {
+          if (UI.S) UI.refresh();
+          return "bereit";
+        },
+        (e) => {
+          if (e && e.missing) {
+            console.info("Keine Figurendatei fuer " + realm + ", es bleiben die gebauten Figuren");
+            return "fehlt";
+          }
+          console.warn("Neue Figuren nicht geladen", e);
+          return "fehler";
+        }
       );
   };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
@@ -19692,7 +19749,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   function previewDesc() {
     const C = D.CLASSES[draft.cls];
     const tint = C.material === "platte" ? "#9aa4ad" : C.material === "leder" ? "#5a3d2a" : D.REALMS[draft.realm].color;
-    return {
+    // neue Figur (Bild zu 3D), sobald die Figurendatei des Reiches geladen ist
+    return UI.withGen({
       kind: "hero",
       race: draft.race,
       cls: draft.cls,
@@ -19706,7 +19764,29 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         nebenhand: { base: C.offhand, rarity: "gewoehnlich", style: 0 },
         umhang: { base: "umhang", tint: D.REALMS[draft.realm].color, style: 0 },
       },
-    };
+    });
+  }
+  // Hinweise, solange die neue Figur laedt und solange Aussehen und Ruestung auf ihr noch nicht wirken
+  const genLoad = {};
+  function genHints() {
+    const gen = !!previewDesc().gen;
+    const st = genLoad[draft.realm];
+    const note = $("#create .gen-note");
+    if (note) {
+      note.hidden = !gen && st !== "laedt" && st !== "fehler";
+      note.textContent = gen ? "Neue Figur: Rüstung, Helm und Umhang folgen noch." : st === "fehler" ? "Die neue Figur konnte nicht geladen werden, hier steht noch die alte." : "Neue Figur wird geladen …";
+    }
+    const look = $("#create .gen-look");
+    if (look) look.hidden = !gen;
+  }
+  function loadGen() {
+    const realm = draft.realm;
+    if (!view || genLoad[realm] || UI.GEN_REALMS.indexOf(realm) < 0) return;
+    genLoad[realm] = "laedt";
+    UI.loadGenFigures(realm).then((st) => {
+      genLoad[realm] = st;
+      if (view && !$("#create").hidden) updateView();
+    });
   }
   function modsText(mods) {
     const parts = [];
@@ -19740,6 +19820,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
       '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
+      '<p class="desc gen-look" hidden>Die neue Figur bringt Haut, Haare und Gesicht aus ihrem Modell mit. Die Wahl hier gilt vorerst nur, wenn du in den Einstellungen die neuen Figuren abschaltest.</p>' +
       (gest.length ? UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) :
         "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
         (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
@@ -19755,17 +19836,20 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     $("#create").dataset.realm = draft.realm;
   }
   function updateView() {
-    if (view) view.set(previewDesc());
-    else {
+    if (view) {
+      view.set(previewDesc());
+      loadGen();
+    } else {
       const fb = $("#create .cview .hv-fallback");
       if (fb) fb.innerHTML = I.silhouette(previewDesc().gear.ruestung.tint, "hero");
     }
+    genHints();
   }
   UI.showCreate = function (onDone) {
     const box = $("#create");
     draft = randomDraft("");
     box.innerHTML =
-      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div></div><div class="cform"></div>';
+      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div><p class="gen-note" hidden></p></div><div class="cform"></div>';
     box.hidden = false;
     const cv = box.querySelector(".cview");
     if (UI.use3d) {
@@ -19910,7 +19994,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     E.tick(S);
     UI.refresh();
     // Probe der neuen Figuren: bisher gibt es sie fuer Midgard
-    if (S.realm === "midgard") UI.loadGenFigures("midgard");
+    UI.loadGenFigures(S.realm);
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
     UI.saveNow();

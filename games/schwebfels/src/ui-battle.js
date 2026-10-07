@@ -267,7 +267,8 @@
   function previewDesc() {
     const C = D.CLASSES[draft.cls];
     const tint = C.material === "platte" ? "#9aa4ad" : C.material === "leder" ? "#5a3d2a" : D.REALMS[draft.realm].color;
-    return {
+    // neue Figur (Bild zu 3D), sobald die Figurendatei des Reiches geladen ist
+    return UI.withGen({
       kind: "hero",
       race: draft.race,
       cls: draft.cls,
@@ -281,7 +282,29 @@
         nebenhand: { base: C.offhand, rarity: "gewoehnlich", style: 0 },
         umhang: { base: "umhang", tint: D.REALMS[draft.realm].color, style: 0 },
       },
-    };
+    });
+  }
+  // Hinweise, solange die neue Figur laedt und solange Aussehen und Ruestung auf ihr noch nicht wirken
+  const genLoad = {};
+  function genHints() {
+    const gen = !!previewDesc().gen;
+    const st = genLoad[draft.realm];
+    const note = $("#create .gen-note");
+    if (note) {
+      note.hidden = !gen && st !== "laedt" && st !== "fehler";
+      note.textContent = gen ? "Neue Figur: Rüstung, Helm und Umhang folgen noch." : st === "fehler" ? "Die neue Figur konnte nicht geladen werden, hier steht noch die alte." : "Neue Figur wird geladen …";
+    }
+    const look = $("#create .gen-look");
+    if (look) look.hidden = !gen;
+  }
+  function loadGen() {
+    const realm = draft.realm;
+    if (!view || genLoad[realm] || UI.GEN_REALMS.indexOf(realm) < 0) return;
+    genLoad[realm] = "laedt";
+    UI.loadGenFigures(realm).then((st) => {
+      genLoad[realm] = st;
+      if (view && !$("#create").hidden) updateView();
+    });
   }
   function modsText(mods) {
     const parts = [];
@@ -315,6 +338,7 @@
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
       '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
+      '<p class="desc gen-look" hidden>Die neue Figur bringt Haut, Haare und Gesicht aus ihrem Modell mit. Die Wahl hier gilt vorerst nur, wenn du in den Einstellungen die neuen Figuren abschaltest.</p>' +
       (gest.length ? UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) :
         "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
         (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
@@ -330,17 +354,20 @@
     $("#create").dataset.realm = draft.realm;
   }
   function updateView() {
-    if (view) view.set(previewDesc());
-    else {
+    if (view) {
+      view.set(previewDesc());
+      loadGen();
+    } else {
       const fb = $("#create .cview .hv-fallback");
       if (fb) fb.innerHTML = I.silhouette(previewDesc().gear.ruestung.tint, "hero");
     }
+    genHints();
   }
   UI.showCreate = function (onDone) {
     const box = $("#create");
     draft = randomDraft("");
     box.innerHTML =
-      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div></div><div class="cform"></div>';
+      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div><p class="gen-note" hidden></p></div><div class="cform"></div>';
     box.hidden = false;
     const cv = box.querySelector(".cview");
     if (UI.use3d) {
