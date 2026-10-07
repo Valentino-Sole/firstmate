@@ -119,13 +119,14 @@ def cmd_teil(a):
     if not a.trocken and not os.path.exists(ref):
         raise SystemExit("Referenzfigur fehlt: zuerst 'werkstatt.py figur %s ...' (nichts bestellt)" % a.ref)
     if not a.trocken:
-        record(a.name, "teil", a.bild, platz=a.slot, formen=a.forms, referenz=a.ref, drehung=None if a.rot == "auto" else a.rot, spiegeln=a.flip, paar=a.paar)
+        record(a.name, "teil", a.bild, platz=a.slot, formen=a.forms, seltenheit=a.seltenheit, referenz=a.ref, drehung=None if a.rot == "auto" else a.rot,
+               spiegeln=a.flip, paar=a.paar)
     api("teil", a.name, a.bild, *(["--budget", a.budget] if a.budget else []), *extra)
     if a.trocken:
         return
     os.makedirs(os.path.join(BUILD, "teile"), exist_ok=True)
     args = [PY, os.path.join(HERE, "fit_piece.py"), os.path.join(BUILD, "teile", a.name + ".npz"), ref, os.path.join(ROOT, a.name, "model.glb"),
-            "--slot", a.slot, "--name", a.name, "--forms", a.forms, "--rot", a.rot]
+            "--slot", a.slot, "--name", a.name, "--forms", a.forms, "--seltenheit", a.seltenheit, "--rot", a.rot]
     if a.paar:
         args.append("--paar")
     if a.flip:
@@ -329,7 +330,7 @@ def cmd_plan(a):
     for f in figs:
         step("Figur " + f["name"], cmd_figur, N(name=f["name"], bild=img(f["bild"]), race=f["race"], gender=f["gender"], budget=left(), trocken=False))
     for t in teile:
-        step("Teil " + t["name"], cmd_teil, N(name=t["name"], bild=img(t["bild"]), slot=t["slot"], forms=t.get("forms", ""), ref=t["ref"],
+        step("Teil " + t["name"], cmd_teil, N(name=t["name"], bild=img(t["bild"]), slot=t["slot"], forms=t.get("forms", ""), seltenheit=t.get("seltenheit", ""), ref=t["ref"],
                                               rot=t.get("rot", "auto"), flip=t.get("flip", False), paar=t.get("paar", False), budget=left(), trocken=False))
     for w in waffen:
         step("Waffe " + w["name"], cmd_waffe, N(name=w["name"], bild=img(w["bild"]), base=w["base"], forms=w.get("forms", ""), seltenheit=w.get("seltenheit", ""),
@@ -530,6 +531,7 @@ def main():
     p.add_argument("bild")
     p.add_argument("--slot", required=True, choices=["brust", "handschuhe", "stiefel", "helm", "hose"])
     p.add_argument("--forms", default="")
+    p.add_argument("--seltenheit", default="")
     p.add_argument("--ref", required=True)
     p.add_argument("--rot", default="auto")
     p.add_argument("--flip", action="store_true")

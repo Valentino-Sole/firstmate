@@ -274,6 +274,8 @@ function buildPack(file, gameBones) {
       occ: { Spine01: P.u8(Array.from(bits)) },
     },
   };
+  // derselbe Brustpanzer nur fuer epische Gegenstaende (Seltenheit wie in fit_piece.py --seltenheit)
+  pieces.probe_brust_episch = Object.assign({}, pieces.probe_brust, { rarity: ["episch"], tex: P.img(png(4, 4, [160, 90, 200]), "image/png") });
   // Bestie wie aus beasts/from_glb.py: Rumpf und vier Beine als Kaesten, Rollen des Bestiensystems, eigene Textur
   const bb = [
     ["hips", -1, [0, 0.7, -0.4], [0, 0.7, 0], "spine"],
@@ -429,6 +431,8 @@ const res = await page.evaluate(async () => {
   // Ruestungsteil passend zum Harnisch: angelegt, Haut darunter ausgeblendet, Abstand zur Achse plausibel, Bild aus dem Teil
   const armored = R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear: Object.assign({ ruestung: { base: "harnisch", rarity: "selten", style: 0 } }, gear) });
   ok((armored.parts.rigPieces || []).includes("probe_brust"), "Harnisch legt das Ruestungsteil nicht an");
+  const epic = R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear: Object.assign({}, gear, { ruestung: { base: "harnisch", rarity: "episch", style: 0 } }) });
+  ok((epic.parts.rigPieces || []).join() === "probe_brust_episch", "epischer Harnisch waehlt nicht sein eigenes Teil: " + (epic.parts.rigPieces || []).join());
   ok(armored.parts.mesh.geometry.index.count < m.parts.mesh.geometry.index.count, "Haut unter dem Ruestungsteil nicht ausgeblendet");
   const pm = armored.parts.body.children.find((o) => o.isSkinnedMesh && o !== armored.parts.mesh);
   if (pm) {

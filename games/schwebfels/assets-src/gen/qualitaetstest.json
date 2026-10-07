@@ -6,7 +6,8 @@
   "Fuer wechselbare Brustpanzer die Figur in schlichter Grundkleidung zeigen (Meshy liefert Kleidung aus einem Guss).",
   "Liegt die Schaetzung ueber dem Budget, wird nichts bestellt. Ein erneuter Aufruf setzt fort, Fertiges wird nicht neu bezahlt.",
   "Meshy bewahrt Auftraege nur 3 Tage auf: einen begonnenen Lauf innerhalb von 3 Tagen abschliessen (Rigging und Bewegungen bauen auf den Auftraegen auf).",
-  "Brustpanzer: harnisch.0 ist der Brustharnisch, harnisch.1 der Plattenpanzer; der erste gilt auch fuer die uebrigen Harnische."
+  "Brustpanzer: harnisch.0 ist der Brustharnisch, harnisch.1 der Plattenpanzer; der erste gilt auch fuer die uebrigen Harnische.",
+  "Teile und Waffen lassen sich mit \"seltenheit\" (etwa \"episch,legendaer\") auf Seltenheiten beschraenken, zum Beispiel fuer die fuenf Stufen von Tafel 10; das passende Teil geht dann vor."
  ],
  "budget": 400,
  "figuren": [

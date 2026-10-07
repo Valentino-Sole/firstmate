@@ -139,7 +139,9 @@ Wichtige Regeln der Strecke:
   --forms harnisch.0,harnisch` (Plätze `brust`, `handschuhe`, `stiefel`, `helm`, `hose`; ein einzelner Handschuh oder
   Stiefel wird mit `--paar` gespiegelt; `--rot 0,0,90` dreht das Teil vorher). `gen_pack.py` nimmt alles aus dem
   Unterordner `teile` auf. Im Spiel trägt eine Figur das Teil, dessen Form oder Grundart zum angelegten Gegenstand passt
-  (`forms`); ein Teil ohne Formliste passt zu jedem Gegenstand des Platzes. Ein Helm als Teil ersetzt den gebauten Helm.
+  (`forms`); ein Teil ohne Formliste passt zu jedem Gegenstand des Platzes. Mit `--seltenheit episch,legendaer` gilt ein
+  Teil nur für diese Seltenheiten und geht dann vor (etwa ein eigener Panzer je Seltenheit wie auf Tafel 10). Ein Helm
+  als Teil ersetzt den gebauten Helm.
 - Bestien: Meshy riggt per API nur Zweibeiner und hat keine Tierbewegungen. `beasts/from_glb.py` gibt einem
   stehenden Tier aus einer GLB (Blick +Z) ein Vierbeiner-Skelett mit den Rollen des Bestiensystems (Wirbelsäule,
   Kopf, Schwanz, vier Beine mit je drei Gliedern, Gewichte per Bone Heat). Im Spiel bewegt es sich wie die anderen

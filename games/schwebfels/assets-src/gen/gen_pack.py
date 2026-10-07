@@ -69,7 +69,7 @@ def piece(z):
     """Ruestungsteil aus fit_piece.py: knochenbezogen, passt sich im Spiel jedem Koerper mit gleichen Knochen an."""
     meta = json.loads(str(z["meta"]))
     occ = z["occ"]
-    return ntex(z, {"slot": meta["slot"], "forms": meta["forms"], "bones": meta["bones"], "grid": [meta["nt"], meta["na"], meta["t0"], meta["t1"]], "ref": meta["ref"],
+    return ntex(z, {"slot": meta["slot"], "forms": meta["forms"], "rarity": meta.get("rarity", []), "bones": meta["bones"], "grid": [meta["nt"], meta["na"], meta["t0"], meta["t1"]], "ref": meta["ref"],
             "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "bone": P.arr(z["bone"], "u8"), "tto": P.q16(z["tto"]),
             "w": P.arr(np.round(z["w"][:, 0] * 255), "u8"), "tex": tex(z["tex"]),
             "occ": {n: P.arr(np.packbits(occ[i].astype(np.uint8).ravel(), bitorder="little"), "u8") for i, n in enumerate(meta["occ"])}})

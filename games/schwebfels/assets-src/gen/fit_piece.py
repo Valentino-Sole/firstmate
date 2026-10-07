@@ -264,6 +264,7 @@ def main():
     ap.add_argument("--slot", required=True, choices=sorted(REGION))
     ap.add_argument("--name")
     ap.add_argument("--forms", default="")
+    ap.add_argument("--seltenheit", default="", help="nur fuer diese Seltenheiten, z. B. episch,legendaer")
     ap.add_argument("--rot", default="auto", help="Drehung in Grad um X,Y,Z oder auto (Handschuh entlang des Arms)")
     ap.add_argument("--flip", action="store_true", help="Teil umdrehen, falls es verkehrt herum sitzt")
     ap.add_argument("--pad", type=float, default=0.02)
@@ -401,7 +402,7 @@ def main():
     remap = {b: i for i, b in enumerate(used)}
     enc_b = np.vectorize(lambda b: remap[int(b)])(enc[:, :, 0].astype(int))
     name = a.name or os.path.splitext(os.path.basename(a.piece))[0]
-    pmeta = {"name": name, "slot": a.slot, "forms": [f for f in a.forms.split(",") if f], "bones": [names[b] for b in used],
+    pmeta = {"name": name, "slot": a.slot, "forms": [f for f in a.forms.split(",") if f], "rarity": [r for r in a.seltenheit.split(",") if r], "bones": [names[b] for b in used],
              "nt": NT, "na": NA, "t0": T0, "t1": T1, "ref": os.path.splitext(os.path.basename(a.body))[0], "occ": sorted(occ)}
     np.savez_compressed(a.out, **M.normal_extra(g, tex), kind="piece", pos=fpos.astype(np.float32), uv=puv.astype(np.float32), idx=ptri.astype(np.int32),
                         bone=enc_b.astype(np.uint8), tto=enc[:, :, 1:].astype(np.float32), w=w2.astype(np.float32), tex=tex.astype(np.uint8),

@@ -362,6 +362,7 @@
     return (t) => cov[idx[t * 3]] && cov[idx[t * 3 + 1]] && cov[idx[t * 3 + 2]];
   }
   // Teile, die zur getragenen Ausruestung passen (Form oder Grundart, sonst jedes Teil des Platzes ohne Formliste)
+  // genaue Form vor Grundart vor Teil ohne Formliste; ein Teil mit Seltenheiten gilt nur fuer diese und geht dann vor
   RG.piecesFor = function (gear, culture) {
     const out = [];
     const L = PIECES();
@@ -370,14 +371,19 @@
       if (!it) continue;
       const V = R.gear && R.gear.visOf ? R.gear.visOf(it, culture) : { form: it.base, base: it.base };
       let pick = null;
-      for (const nm in L) {
+      let best = -1;
+      for (const nm of Object.keys(L).sort()) {
         const Pc = L[nm];
         if (Pc.slot !== SLOT[slot]) continue;
-        if (Pc.forms.indexOf(V.form) >= 0) {
+        const f = Pc.forms.indexOf(V.form) >= 0 ? 4 : Pc.forms.indexOf(V.base) >= 0 ? 2 : !Pc.forms.length ? 0 : -1;
+        if (f < 0) continue;
+        const rar = Pc.rarity && Pc.rarity.length ? Pc.rarity : null;
+        if (rar && rar.indexOf(it.rarity) < 0) continue;
+        const sc = f + (rar ? 1 : 0);
+        if (sc > best) {
+          best = sc;
           pick = nm;
-          break;
         }
-        if (!pick && (Pc.forms.indexOf(V.base) >= 0 || !Pc.forms.length)) pick = nm;
       }
       if (pick) out.push(pick);
     }
