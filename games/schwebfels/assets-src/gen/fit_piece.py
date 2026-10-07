@@ -3,7 +3,7 @@
 Aufruf:
   python fit_piece.py <ausgabe.npz> <referenzkoerper.npz> <teil.glb> --slot brust|handschuhe|stiefel|helm|hose
                       [--name harnisch_eisen] [--forms harnisch.0,harnisch] [--rot 0,0,90] [--pad 0.02]
-                      [--tris 4000] [--tex 512] [--paar] [--offset 0.012]
+                      [--tris 4000] [--tex 512] [--paar] [--flip] [--offset 0.012]
 
 Der Referenzkoerper ist eine npz-Datei aus meshy.py (Art "rig"). Schritte:
  1. Teil laden (alle Netze, Textur als Atlas), optional drehen (--rot in Grad um X, Y, Z) und reduzieren
@@ -158,6 +158,31 @@ def static_parts(path):
     return g, parts
 
 
+def glove_axis(P):
+    """Einzelnen Handschuh entlang des Arms legen (T-Haltung: linke Hand zeigt nach +X). Die Hauptachse des Teils wird
+    zur X-Achse, das breitere Ende (Hand) nach aussen. Sitzt er verkehrt herum: --flip."""
+    c = P - P.mean(0)
+    _, _, vt = np.linalg.svd(c, full_matrices=False)
+    m = vt[0]
+    s = c @ m
+    lo, hi = np.quantile(s, 0.15), np.quantile(s, 0.85)
+    rad = lambda sel: np.linalg.norm(c[sel] - np.outer(s[sel], m), axis=1).mean()  # noqa: E731
+    if rad(s <= lo) > rad(s >= hi):
+        m = -m
+    x = np.array([1.0, 0.0, 0.0])
+    return rot_to(m, x)
+
+
+def rot_to(a, b):
+    a = a / np.linalg.norm(a)
+    v = np.cross(a, b)
+    c = float(a @ b)
+    if c < -0.9999:
+        return np.diag([-1.0, 1.0, -1.0])
+    vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + vx + vx @ vx / (1 + c)
+
+
 def euler(deg):
     x, y, z = np.radians(deg)
     Rx = np.array([[1, 0, 0], [0, np.cos(x), -np.sin(x)], [0, np.sin(x), np.cos(x)]])
@@ -234,7 +259,8 @@ def main():
     ap.add_argument("--slot", required=True, choices=sorted(REGION))
     ap.add_argument("--name")
     ap.add_argument("--forms", default="")
-    ap.add_argument("--rot", default="0,0,0")
+    ap.add_argument("--rot", default="auto", help="Drehung in Grad um X,Y,Z oder auto (Handschuh entlang des Arms)")
+    ap.add_argument("--flip", action="store_true", help="Teil umdrehen, falls es verkehrt herum sitzt")
     ap.add_argument("--pad", type=float, default=0.02)
     ap.add_argument("--offset", type=float, default=0.012)
     ap.add_argument("--tris", type=int, default=4000)
@@ -257,8 +283,16 @@ def main():
     # Teil laden, drehen, Textur, Reduzieren
     g, parts = static_parts(a.piece)
     tex = M.atlas(g, parts, a.tex)
-    R0 = euler([float(x) for x in a.rot.split(",")])
-    ppos = np.concatenate([p["pos"] for p in parts]) @ R0.T
+    ppos = np.concatenate([p["pos"] for p in parts])
+    if a.rot == "auto":
+        R0 = np.eye(3)
+        if a.slot == "handschuhe":
+            R0 = glove_axis(ppos)
+    else:
+        R0 = euler([float(x) for x in a.rot.split(",")])
+    if a.flip:
+        R0 = np.diag([-1.0, 1.0, -1.0]) @ R0
+    ppos = ppos @ R0.T
     puv = np.concatenate([p["uv_game"] for p in parts])
     base = np.cumsum([0] + [len(p["pos"]) for p in parts])[:-1]
     ptri = np.concatenate([p["idx"] + b for p, b in zip(parts, base)])

@@ -75,6 +75,8 @@
   const BODY_HIT = { hit: 1, evade: 1 };
   // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden } }
   RG.MARKS = {};
+  // Waffenlage in der Hand: Drehung um den Griff (twist) und Neigung (tilt) in Bogenmass
+  RG.GRIP = { twist: 0, tilt: 0 };
 
   /* ---------- Geometrie, Material, Skelett ---------- */
   const GGEO = {};
@@ -635,6 +637,12 @@
     // ein getragener Helm als Ruestungsteil ersetzt den gebauten Helm
     const rigid = rp.some((nm) => PIECES()[nm].slot === "helm") ? Object.assign({}, gear, { helm: null }) : gear;
     if (R.gear && R.gear.attachRigid) R.gear.attachRigid(parts, rigid, culture);
+    // Stellschraube fuer die Waffenlage in der Hand (nach den ersten echten Meshy-Schlaegen abstimmen)
+    for (const w of [parts.weapon, parts.weapon2]) {
+      if (!w) continue;
+      if (RG.GRIP.twist) w.rotateY(RG.GRIP.twist);
+      if (RG.GRIP.tilt) w.rotateZ(RG.GRIP.tilt);
+    }
     parts.rigPieces = rp;
     const model = R.makeModel(root, parts, "hero");
     model.cls = clsId;

@@ -86,6 +86,8 @@ def cmd_teil(a):
             "--slot", a.slot, "--name", a.name, "--forms", a.forms, "--rot", a.rot]
     if a.paar:
         args.append("--paar")
+    if a.flip:
+        args.append("--flip")
     run(*args)
 
 
@@ -124,7 +126,8 @@ def main():
     p.add_argument("--slot", required=True, choices=["brust", "handschuhe", "stiefel", "helm", "hose"])
     p.add_argument("--forms", default="")
     p.add_argument("--ref", required=True)
-    p.add_argument("--rot", default="0,0,0")
+    p.add_argument("--rot", default="auto")
+    p.add_argument("--flip", action="store_true")
     p.add_argument("--paar", action="store_true")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
