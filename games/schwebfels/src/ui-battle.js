@@ -294,8 +294,6 @@
       note.hidden = !gen && st !== "laedt" && st !== "fehler";
       note.textContent = gen ? "Neue Figur: Rüstung, Helm und Umhang folgen noch." : st === "fehler" ? "Die neue Figur konnte nicht geladen werden, hier steht noch die alte." : "Neue Figur wird geladen …";
     }
-    const look = $("#create .gen-look");
-    if (look) look.hidden = !gen;
   }
   function loadGen() {
     const realm = draft.realm;
@@ -311,12 +309,15 @@
     for (const a of D.ATTRS) if (mods[a]) parts.push((mods[a] > 0 ? "+" : "") + mods[a] + " " + D.ATTR_INFO[a].name);
     return parts.length ? "(" + parts.join(", ") + ")" : "";
   }
+  let formMeshy = false;
   function renderForm() {
     const f = $("#create .cform");
     const R = D.RACES[draft.race];
     const C = D.CLASSES[draft.cls];
     const L = draft.look;
     const gest = UI.gestalten(draft.race, draft.gender);
+    const meshy = UI.meshyLook(draft.race, draft.gender) && !gest.length;
+    formMeshy = meshy;
     const sw = (arr, key) =>
       '<div class="swatches">' + arr.map((c) => {
         const col = typeof c === "string" ? c : c.c;
@@ -337,9 +338,8 @@
       racesOf(draft.realm).map((id) => '<button type="button" class="choice' + (draft.race === id ? " on" : "") + '" data-cact="race" data-v="' + id + '">' + D.RACES[id].name + "</button>").join("") + "</div>" +
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
-      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
-      '<p class="desc gen-look" hidden>Die neue Figur bringt Haut, Haare und Gesicht aus ihrem Modell mit. Die Wahl hier gilt vorerst nur, wenn du in den Einstellungen die neuen Figuren abschaltest.</p>' +
-      (gest.length ? UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) :
+      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 || meshy ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
+      (meshy ? '<p class="desc">Fertig modellierte Figur aus deinen Konzeptbildern: Haut, Haare und Gesicht gehören zum Modell.</p>' : gest.length ? UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) :
         "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
         (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
         "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
@@ -380,7 +380,10 @@
     if (!view) cv.insertAdjacentHTML("beforeend", '<div class="hv-fallback" style="position:absolute;inset:120px 20% 20px"></div>');
     // neue Figuren zeigen, sobald sie bereit sind (die aus der Seite kommen vor der Zusatzdatei)
     UI.onGen = () => {
-      if (view && !$("#create").hidden) updateView();
+      if ($("#create").hidden) return;
+      // sind die Figurendaten da, entfaellt bei Meshy-Voelkern die alte Wahl von Haut und Haaren
+      if (UI.meshyLook(draft.race, draft.gender) !== formMeshy && !UI.gestalten(draft.race, draft.gender).length) renderForm();
+      if (view) updateView();
     };
     renderForm();
     updateView();

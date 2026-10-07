@@ -81,9 +81,9 @@
   RG.MARKS = {};
   // Waffenlage in der Hand: Drehung um den Griff (twist) und Neigung (tilt) in Bogenmass
   RG.GRIP = { twist: 0, tilt: 0 };
-  // Dolche im Rueckhandgriff (Klinge an der Kleinfingerseite, am Unterarm entlang): im Kampfstand von Meshy zeigten die
-  // Klingen sonst zum eigenen Gesicht
-  RG.REVERSE = { dolch: true };
+  // Dolche im Rueckhandgriff (Klinge an der Kleinfingerseite): im Kampfstand von Meshy zeigten die Klingen sonst zum
+  // eigenen Gesicht. Etwas vom Unterarm weg geneigt und groesser, damit man sie auch an grossen Figuren (Trollblut) sieht.
+  RG.REVERSE = { dolch: { tilt: 0.6, scale: 1.4 } };
   // Hueftweg der Bewegungen zur Seite und nach vorn nur zum Teil uebernehmen: die Spielbewegung fuehrt die Figur selbst,
   // ganze Wege (Wirbel, Taumeln, Fallen) truegen sie sonst weit aus ihrem Platz. Gehen und Laufen bleiben auf der Stelle.
   RG.ROOT_XZ = 0.3;
@@ -832,7 +832,12 @@
       if (!w) continue;
       if (RG.GRIP.twist) w.rotateY(RG.GRIP.twist);
       if (RG.GRIP.tilt) w.rotateZ(RG.GRIP.tilt);
-      if (rev) w.rotateZ(Math.PI);
+      if (rev) {
+        w.rotateZ(Math.PI);
+        w.rotateX(rev.tilt || 0);
+        // kleinere Figuren (Glutzwerg) etwas kleinere Klingen
+        w.scale.multiplyScalar(1 + ((rev.scale || 1) - 1) * Math.max(0.5, Math.min(1, (E.top - 1.3) / 0.8)));
+      }
     }
     parts.rigPieces = rp;
     const model = R.makeModel(root, parts, "hero");

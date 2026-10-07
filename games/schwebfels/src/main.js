@@ -40,7 +40,8 @@
       onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)),
       onVisit: () => UI.panelId === "neu" && UI.renderPanel(),
     };
-    if (SB.hubPainted && SB.hubPainted.has(S.realm) && S.settings.island !== "3d") {
+    // Heimatinsel ist das Gemaelde des Reiches; die 3D-Insel bleibt nur fuer Fassungen ohne Inselbilder (Entwicklung, Tests)
+    if (SB.hubPainted && SB.hubPainted.has(S.realm)) {
       try {
         UI.hub = SB.hubPainted.create(stage, opts);
       } catch (e) {
@@ -61,12 +62,10 @@
 
   M.start = function (S, fresh) {
     UI.S = S;
-    // Version 5.4: die gemalte Insel ist wieder die Heimatinsel. Die Wahl "3D-Modell" stammt aus der Zeit, als auf dem
-    // Gemaelde noch kein Held stand; sie wird einmal zurueckgesetzt (in Einstellungen und unter "Neu prüfen" waehlbar).
-    if (S.settings.inselV !== 2) {
-      if (S.settings.island === "3d") delete S.settings.island;
-      S.settings.inselV = 2;
-    }
+    // Version 5.6: alte Wahlen aufgeraeumt (3D-Insel statt Gemaelde, neue Figuren abschalten); es gilt nur das neue Design
+    delete S.settings.island;
+    delete S.settings.inselV;
+    delete S.settings.genFigures;
     // Was neu ist, einmal von selbst zeigen (nicht bei frisch erschaffenen oder aus Version 1 uebernommenen Helden)
     const showNeu = !fresh && !S.migratedFrom && S.settings.neuV !== 1;
     S.settings.neuV = 1;

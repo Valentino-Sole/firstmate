@@ -35,8 +35,14 @@
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
   // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
-  // Ohne Helden (Heldenerschaffung) gilt die Voreinstellung: an
-  const genOn = () => !(UI.S && UI.S.settings.genFigures === false);
+  // Neue Figuren gelten immer (der Vergleich mit den alten ist seit Version 5.6 abgeschafft)
+  const genOn = () => true;
+  // Volk und Geschlecht mit fertig modellierter Figur (Meshy): Haut, Haare und Gesicht gehoeren zum Modell, die alte
+  // Wahl entfaellt. Massgeblich sind die geladenen Figurendaten.
+  UI.meshyLook = (race, gender) => {
+    const G = (UI.use3d && SB.assets.data && SB.assets.data.gen) || {};
+    return !!G[race + "-" + (gender === "w" ? "frau" : "mann")];
+  };
   // Reiche mit Figurendatei (gen-<reich>.js neben der Seite)
   UI.GEN_REALMS = ["midgard"];
   const withGen = (d) => {

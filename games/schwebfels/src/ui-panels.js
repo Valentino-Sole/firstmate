@@ -381,7 +381,8 @@
     let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
     h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
     const gest = UI.gestalten(s.race, s.gender);
-    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act", { race: s.race, gender: s.gender, cls: s.cls, realm: s.realm });
+    if (!gest.length && UI.meshyLook(s.race, s.gender)) h += '<p class="desc">Dein Held ist eine fertig modellierte Figur aus deinen Konzeptbildern: Haut, Haare und Gesicht gehören zum Modell. Weitere Gestalten kommen mit weiteren Modellen.</p>';
+    else if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act", { race: s.race, gender: s.gender, cls: s.cls, realm: s.realm });
     else {
       h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
       if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
@@ -1018,19 +1019,13 @@
       const dc = s.settings.dayCycle || "zyklus";
       let h = '<div class="section-title">Darstellung</div><div class="row">' + [["hoch", "3D mit Schatten"], ["niedrig", "3D schlicht"], ["aus", "Ohne 3D"]].map(([id, n]) => '<button class="tab' + (q === id ? " on" : "") + '" data-act="quality" data-q="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<p class="muted small">Die Änderung wird nach dem Neuladen der Seite wirksam.</p>';
-      if (SB.hubPainted && SB.hubPainted.has(s.realm)) {
-        const isl = s.settings.island === "3d" ? "3d" : "gemaelde";
-        h += '<div class="section-title">Heimatinsel</div><div class="row">' + [["gemaelde", "Gemälde"], ["3d", "3D-Modell"]].map(([id, n]) => '<button class="tab' + (isl === id ? " on" : "") + '" data-act="island" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
-      }
       h += '<div class="section-title">Tag und Nacht</div><div class="row">' + [["zyklus", "Automatisch (20 Minuten)"], ["echtzeit", "Echte Uhrzeit"], ["tag", "Immer Tag"], ["nacht", "Immer Nacht"]].map(([id, n]) => '<button class="tab' + (dc === id ? " on" : "") + '" data-act="dayCycle" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
       h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
-      const gf = s.settings.genFigures !== false;
-      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
-      h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
+      h += '<div class="section-title">Neue Figuren</div><div class="row"><button class="btn ghost" data-act="open" data-id="neu">Neu prüfen: Inseln und Figuren</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe öffnen</button></div>';
       h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
@@ -1055,7 +1050,6 @@
       const s = S();
       const hub = UI.hub;
       const shown = hub && hub.painted ? hub.realm() : null;
-      const isl = s.settings.island === "3d" ? "3d" : "gemaelde";
       const anyIsle = SB.hubPainted && NEU_ISLES.some((r) => SB.hubPainted.has(r));
       let h = '<div class="say">Hier siehst du alles Neue an einem Ort: die drei gemalten Heimatinseln und die Figuren, die Meshy aus deinen Konzeptbildern gebaut hat.</div>';
       h += '<div class="section-title">Die drei Heimatinseln</div>';
@@ -1064,11 +1058,9 @@
         h += '<p class="muted small">' + (innerWidth > 860 ? "Wähle ein Reich, dann erscheint seine Insel links neben diesem Fenster. Ziehen verschiebt das Bild, das Mausrad zoomt" : "Wähle ein Reich, dann schließt sich dieses Fenster und du siehst seine Insel. Wischen verschiebt das Bild") + ', die Orte lassen sich anklicken. Tag und Nacht wechseln mit der Uhr im Spiel.</p>';
         h += '<div class="realmcards small">' + NEU_ISLES.map((r) =>
           '<button type="button" class="realmcard r-' + r + (shown === r ? " on" : "") + '" data-act="neuInsel" data-v="' + r + '"' + (SB.hubPainted.has(r) ? "" : " disabled") + ">" + I.realm(r) + "<h3>" + esc(D.REALMS[r].isle) + "</h3><i>" + esc(D.REALMS[r].name) + (r === s.realm ? " · deine Insel" : "") + "</i></button>").join("") + "</div>";
-        h += '<div class="row" style="margin-top:10px"><span class="muted small">Darstellung deiner Heimatinsel:</span>' + [["gemaelde", "Gemälde (neu)"], ["3d", "3D-Modell (alt)"]].map(([id, n]) => '<button class="tab' + (isl === id ? " on" : "") + '" data-act="island" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
       }
       h += '<div class="section-title">Die neuen Figuren aus Meshy</div>';
       if (!UI.use3d) return h + '<p class="muted">Die Figuren brauchen die 3D-Darstellung. Schalte sie in den Einstellungen ein und lade die Seite neu.</p>';
-      const on = s.settings.genFigures !== false;
       const real = SB.R3D.rigged && SB.R3D.rigged.is && SB.R3D.rigged.is("nordmann-mann");
       h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann' + (real ? ", mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (Kampfstand, Laufen, Angriffe je Waffe, Bogenschuss, Zauber, Treffer, Parade, Ausweichen, Jubel, Niederlage)." : ", mit Skelett, Bewegungen des Spiels und Waffe in der Faust.") + '</p><div class="neu-figs">';
       for (const [r, n] of NEU_RACES) {
@@ -1077,12 +1069,12 @@
         h += '<div class="neu-fig"><b>' + n + '</b><span class="neu-st st-' + st + '">' + esc(txt) + '</span><small class="muted">' + where + "</small></div>";
       }
       h += "</div>";
-      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
+      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button></div>';
       const mine = UI.heroDesc(s);
       h += '<div class="section-title">Wo du sie im Spiel siehst</div><ul class="neu-list">';
       if (mine.gen) h += "<li><b>Dein Held " + esc(s.name) + "</b> trägt die neue Figur: rechts unten auf der Insel, im Charakterbogen, in jedem Kampf und im Portrait oben links.</li>";
       else if (s.realm !== "midgard" || (s.race !== "nordmann" && s.race !== "trollblut")) h += "<li><b>Dein Held " + esc(s.name) + "</b> ist " + esc(D.RACES[s.race].name) + " aus " + esc(D.REALMS[s.realm].name) + ": für dieses Volk gibt es noch keine neue Figur. Lege zum Ausprobieren einen Nordmann oder Trollblut in Midgard an (Einstellungen, „Neuen Helden beginnen“), oder sieh sie dir in der Figurenprobe an.</li>";
-      else h += "<li><b>Dein Held " + esc(s.name) + "</b> bekommt die neue Figur, sobald sie geladen ist" + (on ? "" : " (gerade abgeschaltet)") + ".</li>";
+      else h += "<li><b>Dein Held " + esc(s.name) + "</b> bekommt die neue Figur, sobald sie geladen ist.</li>";
       h += "<li><b>Gegner aus Midgard</b> (Nordmann und Trollblut) in der Arena und in der Rangliste.</li>";
       h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
       h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li></ul>";
@@ -1092,14 +1084,6 @@
   };
   A.neuInsel = (el) => {
     const r = el.dataset.v;
-    const s = S();
-    // fremde Inseln gibt es nur als Gemaelde: bei 3D-Modell erst auf das Gemaelde wechseln
-    if (!UI.hub || !UI.hub.painted) {
-      s.settings.island = "gemaelde";
-      UI.save();
-      SB.main.makeHub(s);
-      UI.refresh();
-    }
     if (UI.hub && UI.hub.visit) UI.hub.visit(r);
     if (innerWidth <= 860) UI.closePanel();
     else UI.renderPanel();
@@ -1238,13 +1222,6 @@
     UI.renderPanel();
     UI.toast("Gespeichert. Lade die Seite neu, um die Darstellung zu wechseln.", "", "einstellungen");
   };
-  A.island = (el) => {
-    S().settings.island = el.dataset.v;
-    UI.save();
-    SB.main.makeHub(S());
-    UI.refresh();
-    UI.renderPanel();
-  };
   A.dayCycle = (el) => {
     S().settings.dayCycle = el.dataset.v;
     if (UI.hub) UI.hub.setDayCycle(el.dataset.v);
@@ -1252,13 +1229,6 @@
     UI.renderPanel();
     UI.renderTop();
     UI.updateMusic();
-  };
-  A.genFigures = () => {
-    const S_ = S();
-    S_.settings.genFigures = S_.settings.genFigures === false;
-    UI.save();
-    if (S_.settings.genFigures) UI.loadGenFigures("midgard");
-    UI.refresh();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;
