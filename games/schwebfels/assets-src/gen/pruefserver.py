@@ -93,7 +93,7 @@ class H(BaseHTTPRequestHandler):
             model = IMAGES.get(digest(data))
             if not model:
                 return self.send(400, {"message": "Pruefserver: Bild nicht in der Zuordnung"})
-            tid = self.new_task(kind, 30, model=model, image=data)
+            tid = self.new_task(kind, 30, model=model, image=data, views=bool(body.get("multi_view_thumbnails")))
         elif kind == "rigging":
             if body.get("model_url"):
                 # Modell als Data-URI: wird unter den bekannten Modellen wiedergefunden
@@ -141,6 +141,8 @@ class H(BaseHTTPRequestHandler):
         out = {"id": tid, "status": "SUCCEEDED", "progress": 100, "consumed_credits": t["cost"], "task_error": {"message": ""}}
         if t["kind"] in ("image-to-3d", "multi-image-to-3d"):
             out.update(model_urls={"glb": url + ".glb"}, thumbnail_url=url + ".png")
+            if t.get("views"):
+                out["thumbnail_urls"] = {k: url + ".png" for k in ("front", "right", "back", "left")}
         elif t["kind"] == "rigging":
             out["result"] = {"rigged_character_glb_url": url + ".glb", "basic_animations": {"walking_glb_url": url + ".glb"}}
         else:

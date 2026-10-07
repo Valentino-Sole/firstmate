@@ -116,6 +116,10 @@ nicht mehr erraten werden. Ob das Rigging einen Auftrag aus mehreren Bildern dir
 (Remesh etwa nimmt ihn laut Doku nicht); lehnt Meshy ab, schickt `meshy_api.py` dasselbe Modell als Datei zum
 Rigging (laut Doku erlaubt, kein Aufpreis). Beides mit dem Prüfserver durchgespielt.
 
+Jede Bestellung fordert außerdem Meshys Vorschaubilder von allen vier Seiten an (laut Doku ohne Aufpreis); der
+Werkstattbericht zeigt sie neben dem Konzept, so lässt sich die Rückseite des Modells mit der Rückansicht der Tafel
+vergleichen, ohne die Datei zu öffnen.
+
 Die einzelnen Schritte von Hand:
 
 ```sh

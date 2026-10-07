@@ -208,7 +208,9 @@ def request_3d(bilder, polys, pose, prompt, pbr=True):
     names = ["(Bild " + os.path.basename(b) + ")" for b in bilder]
     body = {("image_url" if len(bilder) == 1 else "image_urls"): names[0] if len(bilder) == 1 else names, "ai_model": AI_MODEL, "topology": "triangle", "should_remesh": True,
             "target_polycount": polys, "should_texture": True, "enable_pbr": pbr, "texture_resolution": "2k",
-            "image_enhancement": True, "target_formats": ["glb"]}
+            "image_enhancement": True, "target_formats": ["glb"],
+            # vier Vorschaubilder (vorn, rechts, hinten, links) ohne Aufpreis: der Bericht zeigt so auch die Rueckseite
+            "multi_view_thumbnails": True}
     if AI_MODEL == "meshy-6" and len(bilder) == 1:
         body["remove_lighting"] = True  # bei einem Bild laut Doku nur mit meshy-6; bei mehreren Bildern ohnehin Standard
     if pose:
@@ -237,6 +239,12 @@ def image_to_3d(S, body, bilder):
     download(t["model_urls"]["glb"], os.path.join(S.dir, "model.glb"))
     if t.get("thumbnail_url"):
         download(t["thumbnail_url"], os.path.join(S.dir, "vorschau.png"))
+    for side, url in (t.get("thumbnail_urls") or {}).items():
+        if side != "front":
+            try:
+                download(url, os.path.join(S.dir, "vorschau_%s.png" % side))
+            except Exception as e:  # nur fuer den Bericht, kein Grund fuer einen Abbruch
+                print("  Vorschau %s nicht geladen: %s" % (side, e))
     st["image_to_3d"]["ok"] = True
     S.save()
 

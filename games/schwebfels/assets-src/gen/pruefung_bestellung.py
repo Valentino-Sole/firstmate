@@ -6,7 +6,7 @@ Spielt nach, was im echten Lauf Geld kosten koennte:
 - Abbruch waehrend Meshy an einer Figur aus zwei Ansichten rechnet, dann erneuter Aufruf: nichts doppelt bezahlt
 - Abbruch waehrend der ersten Bewegungen, dann erneuter Aufruf: jede Bewegung einmal bezahlt, Namen in Reihenfolge
 - Rigging lehnt einen Auftrag aus mehreren Bildern ab: das Modell geht als Datei zum Rigging
-- ein Einzelbild geht weiter an "Bild zu 3D"
+- ein Einzelbild geht weiter an "Bild zu 3D", mit Vorschaubildern von allen vier Seiten
 """
 import json
 import os
@@ -125,6 +125,8 @@ def main():
         S.api("--out", out, "teil", "axt", axt)
         st = json.load(open(os.path.join(out, "axt", "auftraege.json")))
         check(st["image_to_3d"].get("kind") == "image-to-3d" and st["image_to_3d"].get("ok"), "Teil: ein Bild ging nicht an 'Bild zu 3D': %s" % st)
+        check(all(os.path.exists(os.path.join(out, "axt", "vorschau_%s.png" % k)) for k in ("right", "back", "left")),
+              "Teil: die Vorschaubilder von rechts, hinten und links fehlen")
     finally:
         S.stop()
 

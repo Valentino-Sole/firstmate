@@ -513,7 +513,8 @@ def cmd_bericht(a):
         pics = []
         has_cmp = os.path.exists(os.path.join(m["dir"], "vergleich.png"))  # zeigt das Konzeptbild schon links
         views = [("ansicht_%d.png" % i, "Weitere Ansicht %d" % i) for i in (1, 2, 3)]
-        for fn, label in [("konzept.png", "Konzept")] + views + [("vorschau.png", "Meshy-Vorschau"), ("vergleich.png", "Konzept und Spielbilder")]:
+        sides = [("vorschau_%s.png" % k, "Meshy %s" % n) for k, n in (("right", "rechts"), ("back", "hinten"), ("left", "links"))]
+        for fn, label in [("konzept.png", "Konzept")] + views + [("vorschau.png", "Meshy-Vorschau")] + sides + [("vergleich.png", "Konzept und Spielbilder")]:
             if fn == "konzept.png" and has_cmp:
                 continue
             p = os.path.join(m["dir"], fn)
