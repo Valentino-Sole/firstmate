@@ -77,9 +77,12 @@ await page.click('[data-cact="realm"][data-v="midgard"]');
 await page.click('[data-cact="cls"][data-v="sturmhuene"]');
 await page.click('[data-cact="race"][data-v="trollblut"]');
 await page.click('[data-cact="gender"][data-v="m"]');
-await page.click('[data-cact="looks"][data-k="tattoo"][data-v="runen"]');
-await page.click('[data-cact="look"][data-k="tattooColor"][data-v="#4fffb0"]');
-await page.click('[data-cact="look"][data-k="eyes"][data-v="#9fe3ff"]');
+// mit fertig modellierter Figur (Meshy-Paket eingebettet) gibt es keine Wahl von Taetowierung und Augen
+if (await page.locator('[data-cact="looks"][data-k="tattoo"][data-v="runen"]').count()) {
+  await page.click('[data-cact="looks"][data-k="tattoo"][data-v="runen"]');
+  await page.click('[data-cact="look"][data-k="tattooColor"][data-v="#4fffb0"]');
+  await page.click('[data-cact="look"][data-k="eyes"][data-v="#9fe3ff"]');
+}
 await page.fill("#heroName", "Tilda Sturmfang");
 await page.waitForTimeout(800);
 await shot(page, "02-erstellung-midgard");
@@ -120,7 +123,9 @@ if (await invItem.count()) {
 }
 await page.click('[data-act="tab"][data-tab="aussehen"]');
 await page.waitForTimeout(900);
-await page.click('[data-act="lookn"][data-k="scar"][data-v="kreuz"]');
+// Spiegel: Narbe nur bei Figuren ohne fertiges Modell waehlbar
+if (await page.locator('[data-act="lookn"][data-k="scar"][data-v="kreuz"]').count()) await page.click('[data-act="lookn"][data-k="scar"][data-v="kreuz"]');
+else if (!(await page.locator(".mirror-form p.desc").count())) errors.push("Spiegel ohne Wahl und ohne Hinweis");
 await page.waitForTimeout(700);
 await shot(page, "07-aussehen");
 await page.click('[data-act="tab"][data-tab="geschichte"]');
