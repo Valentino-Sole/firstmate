@@ -80,6 +80,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 
 .painted-hub .ph-hero { position: absolute; left: 0; top: 0; z-index: 2; cursor: pointer; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55)); }
 .painted-hub .ph-hero .r3d-canvas { display: block; }
+.painted-hub .ph-visit { position: absolute; left: 0; top: 0; z-index: 3; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 6px 8px 6px 14px; border-radius: 6px; border: 1.5px solid var(--gold); background: linear-gradient(rgba(33, 30, 37, 0.95), rgba(12, 10, 16, 0.95)); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-weight: 800; color: var(--gold-hi); cursor: default; }
+.painted-hub .ph-visit .btn { flex: none; }
 
 /* Beschriftungen auf der Insel */
 .hub-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -160,6 +162,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .dock-btn:hover { border-color: var(--gold-dim); background: linear-gradient(#3a2f26, #241c17); }
 .dock-btn.active { border-color: var(--gold); background: linear-gradient(#5a4520, #2e2412); color: var(--gold-hi); }
 .dock-btn:active { transform: translateY(1px); }
+.dock-btn.dock-neu { border-color: var(--gold); background: linear-gradient(#4a3a1c, #2a2012); color: var(--gold-hi); box-shadow: 0 0 12px rgba(201, 164, 65, 0.35), 0 2px 0 #000; }
+.dock-btn.dock-neu .badge { background: var(--gold); color: var(--ink); }
 .dock-btn .badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--blood); color: #fff; font-size: 11px; display: grid; place-items: center; border: 1px solid #000; }
 
 /* Aktivitaet */
@@ -482,6 +486,17 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 #hint .porthole { width: 52px; height: 52px; }
 #hint p { margin: 0 0 8px; font-size: 14px; }
 #hint .btn.ghost { color: var(--parch); }
+
+/* Neu pruefen */
+.neu-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.neu-fig { display: grid; gap: 2px; padding: 8px 10px; border-radius: 4px; background: linear-gradient(var(--stone-3), var(--stone-2)); border: 1px solid #000; }
+.neu-fig b { font-family: var(--font-display); font-size: 19px; font-weight: 400; color: var(--gold-hi); }
+.neu-st { font-weight: 800; font-size: 13px; }
+.neu-st.st-bereit { color: var(--jade); }
+.neu-st.st-laedt { color: var(--gold-hi); }
+.neu-st.st-fehlt { color: #ff7a59; }
+.neu-list { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 5px; font-size: 14px; }
+.realmcard[disabled] { opacity: 0.45; cursor: default; }
 
 /* Heldenerschaffung */
 #create { position: fixed; inset: 0; z-index: 50; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 540px); background: radial-gradient(ellipse at 30% 40%, #2a2a44, var(--night) 70%); overflow: hidden; }
@@ -4620,6 +4635,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       armor: f.armor,
       shield: !!(S.equip.nebenhand && S.equip.nebenhand.base === "schild"),
       talents: S.talents || {},
+      // Rueckmeldung zur Darstellung: kommen die neuen Figuren (aus der Seite und aus der Zusatzdatei) und die gemalte Insel an?
+      diag: {
+        fig: SB.ui && SB.ui.genStatus ? Object.assign({}, SB.ui.genStatus) : null,
+        insel: SB.ui && SB.ui.hub ? (SB.ui.hub.painted ? "gemalt" : "3d") : "keine",
+        d3: !!(SB.ui && SB.ui.use3d),
+        mobil: typeof innerWidth === "number" && innerWidth <= 860,
+      },
       updatedAt: Date.now(),
     };
     const json = JSON.stringify(Object.assign({}, pub, { updatedAt: 0 }));
@@ -4944,6 +4966,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
       data.gen = data.gen || {};
+      // Koerper der waehlbaren Voelker direkt aus der Seite (build.mjs, GEN_KERN); der Rest kommt mit gen-<reich>.js
+      if (globalThis.SB_GENKERN) {
+        const k = parse(await unzip(b64(globalThis.SB_GENKERN))).gen || {};
+        for (const key in k) if (!data.gen[key]) data.gen[key] = k[key];
+        globalThis.SB_GENKERN = null;
+      }
       A.data = data;
     } catch (e) {
       A.error = e;
@@ -4963,7 +4991,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const take = () => {
       const s = globalThis[key];
       if (!s) return false;
-      Object.assign(A.data.gen, parse(b64(s)).gen || {});
+      // schon eingebettete Koerper behalten (gleiche Daten, Materialien und Geometrie sind dafuer schon gebaut)
+      const g = parse(b64(s)).gen || {};
+      for (const k in g) if (!A.data.gen[k]) A.data.gen[k] = g[k];
       globalThis[key] = null;
       return true;
     };
@@ -16938,6 +16968,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   function create(el, opts) {
     opts = opts || {};
     let realm = opts.realm;
+    // Heimat des Helden; realm ist die gerade gezeigte Insel (beim Besuch eine andere)
+    let home = opts.realm;
     let dayMode = opts.dayCycle || "zyklus";
     const low = opts.quality === "niedrig";
     const E = SB.engine;
@@ -16958,6 +16990,17 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const labelLayer = document.createElement("div");
     labelLayer.className = "hub-labels";
     root.appendChild(labelLayer);
+    // Besuch auf einer anderen Heimatinsel: Hinweis oben mit dem Weg zurueck
+    const visitBar = document.createElement("div");
+    visitBar.className = "ph-visit";
+    visitBar.hidden = true;
+    visitBar.innerHTML = '<span class="ph-visit-text"></span><button type="button" class="btn small">Zurück</button>';
+    visitBar.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    visitBar.querySelector("button").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      visit(home);
+    });
+    root.appendChild(visitBar);
     el.appendChild(root);
     const ctx = cv.getContext("2d");
 
@@ -17030,6 +17073,26 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       root.dataset.realm = realm;
       for (const id in labels) labels[id].hidden = !spots[id];
       initParticles();
+      const R = SB.data.REALMS;
+      visitBar.hidden = realm === home || !R[realm] || !R[home];
+      if (!visitBar.hidden) {
+        visitBar.querySelector(".ph-visit-text").textContent = "Zu Besuch auf " + R[realm].isle + " (" + R[realm].name + ")";
+        visitBar.querySelector("button").textContent = "Zurück nach " + R[home].isle;
+      }
+    }
+    function visit(r) {
+      if (!imgOf(r)) return false;
+      if (r !== realm) {
+        realm = r;
+        goal.zoom = 1;
+        goal.fx = IW / 2;
+        goal.fy = IH / 2;
+        load();
+        clampGoal();
+        applyDay();
+      }
+      if (opts.onVisit) opts.onVisit(realm);
+      return true;
     }
 
     // Tageszeit: Nacht dunkelt das Bild ab und laesst Fenster, Fackeln und Runen staerker leuchten
@@ -17263,6 +17326,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
     function place() {
       placeHero();
+      if (!visitBar.hidden) visitBar.style.transform = "translate(" + Math.round((safe.l + safe.r - inset) / 2) + "px," + Math.round(safe.t + 8) + "px) translateX(-50%)";
       world.style.transform = "translate(" + view.x.toFixed(1) + "px," + view.y.toFixed(1) + "px) scale(" + view.s.toFixed(4) + ")";
       for (const id in labels) {
         const s = spots[id];
@@ -17317,7 +17381,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       return best;
     }
     root.addEventListener("pointerdown", (ev) => {
-      if (ev.target.closest(".hub-label") || ev.target.closest(".ph-hero")) return;
+      if (ev.target.closest(".hub-label") || ev.target.closest(".ph-hero") || ev.target.closest(".ph-visit")) return;
       root.setPointerCapture(ev.pointerId);
       drag = { x: ev.clientX, y: ev.clientY, fx: goal.fx, fy: goal.fy, moved: 0 };
     });
@@ -17357,11 +17421,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       painted: true,
       setHero,
       realm: () => realm,
+      home: () => home,
+      visit,
       setHome(tier, realmId) {
-        if (realmId && realmId !== realm && imgOf(realmId)) {
-          realm = realmId;
+        // neue Heimat (Reichswechsel): dorthin wechseln, ausser waehrend eines Besuchs
+        if (realmId && realmId !== home && imgOf(realmId)) {
+          const atHome = realm === home;
+          home = realmId;
+          if (atHome) {
+            realm = realmId;
+            applyDay();
+          }
           load();
-          applyDay();
         }
       },
       setGuildColors() {},
@@ -17464,23 +17535,43 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
   // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
   // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
+  // Die Koerper der waehlbaren Voelker stecken in der Seite (build.mjs, GEN_KERN) und sind sofort bereit, sobald ihre
+  // Hautbilder dekodiert sind; die Datei gen-<reich>.js bringt die uebrigen (Figurenprobe). UI.genStatus fuer die Anzeige.
+  UI.genStatus = { kern: "", datei: "" };
+  const genChanged = () => {
+    if (UI.onGen) UI.onGen();
+    if (UI.S) UI.refresh();
+    if (UI.panelId === "neu" || UI.panelId === "figurenprobe") UI.renderPanel();
+  };
   UI.loadGenFigures = function (realm) {
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
-    return SB.assets
-      .loadGen(realm)
-      .then(() => SB.R3D.human.preloadGen())
+    const HU = SB.R3D.human;
+    const kern = SB.assets.ready.then(() => {
+      if (!Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length) return false;
+      UI.genStatus.kern = UI.genStatus.kern || "laedt";
+      return HU.preloadGen().then(() => {
+        UI.genStatus.kern = "bereit";
+        genChanged();
+        return true;
+      });
+    });
+    UI.genStatus.datei = UI.genStatus.datei === "bereit" ? "bereit" : "laedt";
+    return kern
+      .then(() => SB.assets.loadGen(realm))
+      .then(() => HU.preloadGen())
       .then(
         () => {
-          if (UI.S) UI.refresh();
+          UI.genStatus.datei = "bereit";
+          if (!UI.genStatus.kern) UI.genStatus.kern = "bereit";
+          genChanged();
           return "bereit";
         },
         (e) => {
-          if (e && e.missing) {
-            console.info("Keine Figurendatei fuer " + realm + ", es bleiben die gebauten Figuren");
-            return "fehlt";
-          }
-          console.warn("Neue Figuren nicht geladen", e);
-          return "fehler";
+          UI.genStatus.datei = e && e.missing ? "fehlt" : "fehler";
+          if (e && e.missing) console.info("Keine Figurendatei fuer " + realm + ", es bleiben die Figuren aus der Seite");
+          else console.warn("Neue Figuren nicht geladen", e);
+          genChanged();
+          return UI.genStatus.kern === "bereit" ? "bereit" : UI.genStatus.datei;
         }
       );
   };
@@ -17502,7 +17593,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (url) return '<img alt="" src="' + url + '">';
     return I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
   };
-  UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id]), 128, true) : "");
+  UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id])), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
   // Fertig modellierte Figuren (Meshy) fuer Volk und Geschlecht: dann waehlt das Aussehen nur die Gestalt, denn Haut,
   // Haare und Gesicht gehoeren zum Modell. Die Wahl steckt in look.hairStyle (wie bei den Inselbewohnern).
@@ -17888,6 +17979,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const b = UI.badges();
     dock.innerHTML =
       '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
+      '<button class="dock-btn dock-neu' + (UI.panelId === "neu" ? " active" : "") + '" data-act="open" data-id="neu">' + I.ui("held") + "<span>Neu prüfen</span><span class=\"badge\">neu</span></button>" +
       MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
@@ -19262,6 +19354,75 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       return h;
     },
   };
+  /* ================= Neu pruefen: Meshy-Figuren und gemalte Heimatinseln (Version 5.4) ================= */
+  const NEU_ISLES = ["albion", "midgard", "hibernia"];
+  const NEU_RACES = [["nordmann", "Nordmann"], ["trollblut", "Trollblut"], ["frostwicht", "Frostwicht"], ["glutzwerg", "Glutzwerg"]];
+  function neuFigStatus(race) {
+    const HU = SB.R3D && SB.R3D.human;
+    const ready = ["frau", "mann"].filter((x) => HU && HU.genReady && HU.genReady(race + "-" + x)).length;
+    if (ready === 2) return ["bereit", "bereit"];
+    const has = (SB.assets.data && SB.assets.data.gen) || {};
+    if (has[race + "-frau"] || has[race + "-mann"]) return ["laedt", "wird vorbereitet …"];
+    const st = UI.genStatus.datei;
+    return st === "fehlt" || st === "fehler" ? ["fehlt", "nicht geladen"] : ["laedt", "wird geladen …"];
+  }
+  P.neu = {
+    title: "Neu: Figuren und Inseln",
+    role: "Die Meshy-Figuren und die gemalten Heimatinseln prüfen",
+    portrait: () => '<span class="iconport">' + I.ui("held") + "</span>",
+    render() {
+      const s = S();
+      const hub = UI.hub;
+      const shown = hub && hub.painted ? hub.realm() : null;
+      const isl = s.settings.island === "3d" ? "3d" : "gemaelde";
+      const anyIsle = SB.hubPainted && NEU_ISLES.some((r) => SB.hubPainted.has(r));
+      let h = '<div class="say">Hier siehst du alles Neue an einem Ort: die drei gemalten Heimatinseln und die Figuren, die Meshy aus deinen Konzeptbildern gebaut hat.</div>';
+      h += '<div class="section-title">Die drei Heimatinseln</div>';
+      if (!anyIsle) h += '<p class="muted">In dieser Fassung fehlen die Inselbilder, deshalb steht hier die 3D-Insel.</p>';
+      else {
+        h += '<p class="muted small">' + (innerWidth > 860 ? "Wähle ein Reich, dann erscheint seine Insel links neben diesem Fenster. Ziehen verschiebt das Bild, das Mausrad zoomt" : "Wähle ein Reich, dann schließt sich dieses Fenster und du siehst seine Insel. Wischen verschiebt das Bild") + ', die Orte lassen sich anklicken. Tag und Nacht wechseln mit der Uhr im Spiel.</p>';
+        h += '<div class="realmcards small">' + NEU_ISLES.map((r) =>
+          '<button type="button" class="realmcard r-' + r + (shown === r ? " on" : "") + '" data-act="neuInsel" data-v="' + r + '"' + (SB.hubPainted.has(r) ? "" : " disabled") + ">" + I.realm(r) + "<h3>" + esc(D.REALMS[r].isle) + "</h3><i>" + esc(D.REALMS[r].name) + (r === s.realm ? " · deine Insel" : "") + "</i></button>").join("") + "</div>";
+        h += '<div class="row" style="margin-top:10px"><span class="muted small">Darstellung deiner Heimatinsel:</span>' + [["gemaelde", "Gemälde (neu)"], ["3d", "3D-Modell (alt)"]].map(([id, n]) => '<button class="tab' + (isl === id ? " on" : "") + '" data-act="island" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
+      }
+      h += '<div class="section-title">Die neuen Figuren aus Meshy</div>';
+      if (!UI.use3d) return h + '<p class="muted">Die Figuren brauchen die 3D-Darstellung. Schalte sie in den Einstellungen ein und lade die Seite neu.</p>';
+      const on = s.settings.genFigures !== false;
+      h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann, mit Skelett, Bewegungen des Spiels und Waffe in der Faust.</p><div class="neu-figs">';
+      for (const [r, n] of NEU_RACES) {
+        const [st, txt] = neuFigStatus(r);
+        const where = r === "nordmann" || r === "trollblut" ? "im Spiel und in der Figurenprobe" : "nur in der Figurenprobe (noch kein wählbares Volk)";
+        h += '<div class="neu-fig"><b>' + n + '</b><span class="neu-st st-' + st + '">' + esc(txt) + '</span><small class="muted">' + where + "</small></div>";
+      }
+      h += "</div>";
+      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle acht Figuren ansehen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
+      const mine = UI.heroDesc(s);
+      h += '<div class="section-title">Wo du sie im Spiel siehst</div><ul class="neu-list">';
+      if (mine.gen) h += "<li><b>Dein Held " + esc(s.name) + "</b> trägt die neue Figur: rechts unten auf der Insel, im Charakterbogen, in jedem Kampf und im Portrait oben links.</li>";
+      else if (s.realm !== "midgard" || (s.race !== "nordmann" && s.race !== "trollblut")) h += "<li><b>Dein Held " + esc(s.name) + "</b> ist " + esc(D.RACES[s.race].name) + " aus " + esc(D.REALMS[s.realm].name) + ": für dieses Volk gibt es noch keine neue Figur. Lege zum Ausprobieren einen Nordmann oder Trollblut in Midgard an (Einstellungen, „Neuen Helden beginnen“), oder sieh sie dir in der Figurenprobe an.</li>";
+      else h += "<li><b>Dein Held " + esc(s.name) + "</b> bekommt die neue Figur, sobald sie geladen ist" + (on ? "" : " (gerade abgeschaltet)") + ".</li>";
+      h += "<li><b>Gegner aus Midgard</b> (Nordmann und Trollblut) in der Arena und in der Rangliste.</li>";
+      h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
+      h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li></ul>";
+      h += '<div class="section-title">Noch nicht dabei</div><ul class="neu-list muted"><li>Rüstung, Helm und Umhang auf den neuen Figuren: kommt mit der Wechselausrüstung (nächster Schritt). Waffe und Schild sitzen schon in der Hand.</li><li>Neue Figuren für Albion und Hibernia: erst wenn du Midgard abgenommen hast.</li><li>Frostwicht und Glutzwerg als wählbare Völker: dafür brauche ich deine Entscheidung zu ihren Stärken.</li></ul>';
+      return h;
+    },
+  };
+  A.neuInsel = (el) => {
+    const r = el.dataset.v;
+    const s = S();
+    // fremde Inseln gibt es nur als Gemaelde: bei 3D-Modell erst auf das Gemaelde wechseln
+    if (!UI.hub || !UI.hub.painted) {
+      s.settings.island = "gemaelde";
+      UI.save();
+      SB.main.makeHub(s);
+      UI.refresh();
+    }
+    if (UI.hub && UI.hub.visit) UI.hub.visit(r);
+    if (innerWidth <= 860) UI.closePanel();
+    else UI.renderPanel();
+  };
+
   /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
   const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
   const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
@@ -19309,7 +19470,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
-      h += stage + '<div class="section-title">Volk</div><div class="row">';
+      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
       for (const r of FP_ORDER) {
         for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
           const k = r + "-" + sx;
@@ -19343,7 +19504,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           if (UI.panelId === "figurenprobe") UI.renderPanel();
         },
         () => {
-          FP.state = "fehler";
+          // ohne Zusatzdatei bleiben die Figuren, die in der Seite stecken (Nordmann und Trollblut)
+          FP.state = Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length ? "ok" : "fehler";
+          FP.partial = true;
           if (UI.panelId === "figurenprobe") UI.renderPanel();
         }
       );
@@ -19860,6 +20023,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
     }
     if (!view) cv.insertAdjacentHTML("beforeend", '<div class="hv-fallback" style="position:absolute;inset:120px 20% 20px"></div>');
+    // neue Figuren zeigen, sobald sie bereit sind (die aus der Seite kommen vor der Zusatzdatei)
+    UI.onGen = () => {
+      if (view && !$("#create").hidden) updateView();
+    };
     renderForm();
     updateView();
     box.onclick = (ev) => {
@@ -19920,6 +20087,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   UI.closeCreate = function () {
     const box = $("#create");
+    UI.onGen = null;
     if (view) view.dispose();
     view = null;
     box.hidden = true;
@@ -19964,7 +20132,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (UI.hub) UI.hub.dispose();
     UI.hub = null;
     stage.innerHTML = "";
-    const opts = { quality: S.settings.quality, dayCycle: S.settings.dayCycle || "zyklus", homeTier: S.house.tier, realm: S.realm, onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)) };
+    const opts = {
+      quality: S.settings.quality,
+      dayCycle: S.settings.dayCycle || "zyklus",
+      homeTier: S.house.tier,
+      realm: S.realm,
+      onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)),
+      onVisit: () => UI.panelId === "neu" && UI.renderPanel(),
+    };
     if (SB.hubPainted && SB.hubPainted.has(S.realm) && S.settings.island !== "3d") {
       try {
         UI.hub = SB.hubPainted.create(stage, opts);
@@ -19984,8 +20159,17 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (!UI.hub) stage.innerHTML = '<div class="stage-fallback"><div class="fb-grid"></div></div>';
   };
 
-  M.start = function (S) {
+  M.start = function (S, fresh) {
     UI.S = S;
+    // Version 5.4: die gemalte Insel ist wieder die Heimatinsel. Die Wahl "3D-Modell" stammt aus der Zeit, als auf dem
+    // Gemaelde noch kein Held stand; sie wird einmal zurueckgesetzt (in Einstellungen und unter "Neu prüfen" waehlbar).
+    if (S.settings.inselV !== 2) {
+      if (S.settings.island === "3d") delete S.settings.island;
+      S.settings.inselV = 2;
+    }
+    // Was neu ist, einmal von selbst zeigen (nicht bei frisch erschaffenen oder aus Version 1 uebernommenen Helden)
+    const showNeu = !fresh && !S.migratedFrom && S.settings.neuV !== 1;
+    S.settings.neuV = 1;
     SB.audio.setSfx(S.settings.sound !== false);
     SB.audio.setMusic(S.settings.music !== false);
     UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
@@ -20001,6 +20185,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     UI.updateMusic();
     // Helden aus Version 1 waehlen beim ersten Start ihr Reich
     if (S.migratedFrom) setTimeout(() => UI.showRealmChoice(), 400);
+    else if (showNeu) setTimeout(() => !UI.panelId && UI.openPanel("neu"), 700);
   };
 
   M.replaceState = function (S) {
@@ -20016,7 +20201,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     SB.store.clearLocal();
     UI.S = null;
     UI.use3d = SB.R3D.ready();
-    UI.showCreate((st) => M.start(st));
+    UI.showCreate((st) => M.start(st, true));
   };
 
   M.boot = function (saved) {
@@ -20024,7 +20209,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (S) M.start(S);
     else {
       UI.use3d = SB.R3D.ready();
-      UI.showCreate((st) => M.start(st));
+      UI.showCreate((st) => M.start(st, true));
     }
     // Spielstand im claude.ai-Konto abgleichen, falls verfuegbar
     SB.store.initCloud((cloud) => {
