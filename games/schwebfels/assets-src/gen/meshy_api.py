@@ -157,10 +157,17 @@ def data_uri(path):
     return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
 
 
+AI_MODEL = "latest"  # Meshy 7.1 (Stand Oktober 2026)
+
+
 def request_3d(bild, polys, pose, prompt, pbr=True):
-    body = {"image_url": "(Bild " + os.path.basename(bild) + ")", "ai_model": "latest", "topology": "triangle", "should_remesh": True,
+    # Felder laut API-Doku (docs.meshy.ai/en/api/image-to-3d, geprueft am 7. Oktober 2026); should_remesh mit
+    # target_polycount, damit das Rigging unter 300.000 Flaechen bleibt
+    body = {"image_url": "(Bild " + os.path.basename(bild) + ")", "ai_model": AI_MODEL, "topology": "triangle", "should_remesh": True,
             "target_polycount": polys, "should_texture": True, "enable_pbr": pbr, "texture_resolution": "2k",
-            "remove_lighting": True, "image_enhancement": True, "target_formats": ["glb"]}
+            "image_enhancement": True, "target_formats": ["glb"]}
+    if AI_MODEL == "meshy-6":
+        body["remove_lighting"] = True  # laut Doku nur bei meshy-6 unterstuetzt
     if pose:
         body["pose_mode"] = pose
     if prompt:
