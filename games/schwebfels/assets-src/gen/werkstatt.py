@@ -339,8 +339,9 @@ def cmd_plan(a):
     refs = {f["name"] for f in figs} | {f[:-4] for f in (os.listdir(BUILD) if os.path.isdir(BUILD) else []) if f.endswith(".npz")}
     badref = ["%s (Referenz %s)" % (t["name"], t["ref"]) for t in teile if t["ref"] not in refs]
     if missing or badref:
-        raise SystemExit("Plan unvollstaendig, nichts bestellt:%s%s" % (
-            "".join("\n  Bild fehlt: " + m for m in missing), "".join("\n  Teil ohne Figur: " + b for b in badref)))
+        raise SystemExit("Plan unvollstaendig, nichts bestellt:%s%s%s" % (
+            "".join("\n  Bild fehlt: " + m for m in missing), "".join("\n  Teil ohne Figur: " + b for b in badref),
+            "\n  Tipp: Tafeln mit mehreren Modellen zerlegt 'python zuschnitt.py <tafel> konzepte --name <name>'" if missing else ""))
     if total > budget:
         raise SystemExit("Abbruch vor jeder Bestellung: Schaetzung %d Credits liegt ueber dem Budget %d." % (total, budget))
     if a.trocken:
