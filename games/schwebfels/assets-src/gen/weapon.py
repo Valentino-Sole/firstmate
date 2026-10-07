@@ -11,6 +11,7 @@ aus den gebauten Waffen derselben Grundart, damit Haltung und Reichweite im Spie
    Speeren und Staeben weit davon (Kopf). Sitzt die Waffe verkehrt herum: --umdrehen.
  - Griffpunkt: knapp unter der Parierstange bzw. bei einem festen Anteil der Laenge vom Ende; --griff setzt den Anteil.
  - Schilde behalten die Meshy-Lage (Vorderseite +Z, oben +Y) und werden auf die Hoehe der gebauten Schilde gebracht.
+ - Ist das Modell breiter als fuer die Grundart vorgesehen (MAXW), wird es insgesamt kleiner (ohne --laenge).
 Im Spiel ersetzt die Waffe die gebaute Waffe, wenn Form oder Grundart (und, falls angegeben, die Seltenheit) passen;
 das Gegenstandsbild zeigt dann dieses Modell. gen_pack.py nimmt alles aus dem Unterordner "waffen" auf.
 """
@@ -34,6 +35,12 @@ BASES = {
     "speer": ("kopf", 1.678, 0.328, 0), "stab": ("kopf", 2.041, 0.3, 0), "runenstab": ("kopf", 1.9, 0.316, 0),
     "zepter": ("kopf", 0.792, 0.33, 0), "bogen": ("bogen", 1.74, 0.5, -1), "schild": ("schild", 1.082, 0.435, 0),
 }
+
+
+# groesste Breite (Meter, quer zur Klinge oder zum Schaft): etwa doppelt so viel wie bei den gebauten Waffen. Breitere
+# Modelle (riesige Kugel am Stab, Klotz am Hammer) werden insgesamt kleiner, statt die Figur zu verdecken
+MAXW = {"schwert": 0.4, "kurzschwert": 0.3, "dolch": 0.2, "axt": 0.45, "hammer": 0.4, "sichel": 0.4, "speer": 0.3,
+        "stab": 0.35, "runenstab": 0.35, "zepter": 0.3, "bogen": 0.5, "schild": 0.8}
 
 
 def area_pca(P, F):
@@ -149,6 +156,20 @@ def main():
     F = np.concatenate([p["idx"] + b for p, b in zip(parts, base)])
     target = a.laenge or length
     if mode == "schild":
+        # Vorderseite: die duennste waagerechte Richtung wird +Z (manche Modelle schauen zur Seite), vorn ist die Seite,
+        # die weiter vorsteht (Buckel); --umdrehen dreht um
+        S = surface_points(P, F)
+        Q = S[:, [0, 2]] - S[:, [0, 2]].mean(0)
+        val, vec = np.linalg.eigh(Q.T @ Q)
+        tx, tz = vec[:, 0]
+        ang = np.arctan2(tx, tz)
+        Ry = np.array([[np.cos(-ang), 0, np.sin(-ang)], [0, 1, 0], [-np.sin(-ang), 0, np.cos(-ang)]])
+        P = P @ Ry.T
+        z = (S @ Ry.T)[:, 2]
+        if (z.max() - z.mean() < z.mean() - z.min()) != bool(a.umdrehen):
+            P = P * np.array([-1.0, 1.0, -1.0])
+        if abs(np.degrees(ang)) > 20:
+            print("Schild gedreht: Vorderseite schaute %.0f Grad zur Seite" % np.degrees(ang))
         lo, hi = P.min(0), P.max(0)
         h = hi[1] - lo[1]
         sc = target / h
@@ -159,6 +180,10 @@ def main():
         R, origin, L, gf = orient(P, F, mode, frac, side, a.umdrehen, a.griff)
         sc = target / L
     P = ((P - origin) @ R.T) * sc
+    w = max(np.ptp(P[:, 0]), np.ptp(P[:, 2])) if mode != "schild" else np.ptp(P[:, 0])
+    if a.laenge is None and w > MAXW[a.base]:
+        print("Breiter als %.2f m: kleiner gesetzt (Laenge %.2f statt %.2f m)" % (MAXW[a.base], (np.ptp(P[:, 1])) * MAXW[a.base] / w, np.ptp(P[:, 1])))
+        P = P * (MAXW[a.base] / w)
     tris_in = len(F)
     if len(F) > a.tris * 1.05:
         one = np.zeros((len(P), 1), np.int64)

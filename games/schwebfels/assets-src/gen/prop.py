@@ -5,7 +5,7 @@ Aufruf: python prop.py <ausgabe.npz> <requisit.glb> --realm midgard --rolle baum
                        [--name ...] [--tris 4000] [--tex 1024]
 
 Das Modell bleibt in der Meshy-Lage (oben +Y, Vorderseite +Z, sonst --turn in Grad), steht mit dem tiefsten Punkt auf
-dem Boden, ist ueber der Grundflaeche mittig und wird auf die Zielhoehe gebracht. Im Kampf ersetzen die Requisiten
+dem Boden, ist ueber der Grundflaeche mittig und wird auf die Zielhoehe gebracht (hoechstens so breit wie fuer die Rolle vorgesehen, sonst kleiner). Im Kampf ersetzen die Requisiten
 eines Reiches dort die gebauten Baeume (Rolle baum) und Dekorationen (Rolle deko, je Modell hoechstens zwei Stueck);
 ein Wahrzeichen steht hinten in der Mitte zwischen den Kaempfern. Lichtsetzung und Bodeninsel bleiben gleich. gen_pack.py nimmt den Unterordner "requisiten" auf.
 """
@@ -21,8 +21,10 @@ sys.path.insert(0, HERE)
 import meshy as M  # noqa: E402
 import fit_piece as FP  # noqa: E402
 
-# Zielhoehe je Rolle (Meter, wie die gebauten Requisiten der Kampfbuehne)
+# Zielhoehe und groesste Breite je Rolle (Meter, wie die gebauten Requisiten der Kampfbuehne); breite Modelle (ein
+# flacher Fels, eine ausladende Krone) werden so kleiner, statt den Hintergrund zu verdecken
 HEIGHT = {"baum": 4.6, "deko": 0.8, "wahrzeichen": 3.2}
+WIDTH = {"baum": 3.6, "deko": 1.5, "wahrzeichen": 2.6}
 
 
 def main():
@@ -52,7 +54,12 @@ def main():
     foot = P[P[:, 1] < y0 + 0.1 * h]
     c = np.array([(foot[:, 0].max() + foot[:, 0].min()) / 2, y0, (foot[:, 2].max() + foot[:, 2].min()) / 2])
     target = a.hoehe or HEIGHT[a.rolle]
-    P = (P - c) * (target / h)
+    sc = target / h
+    w = max(np.ptp(P[:, 0]), np.ptp(P[:, 2]))
+    if not a.hoehe and w * sc > WIDTH[a.rolle]:
+        print("Breiter als %.1f m: kleiner gesetzt (Hoehe %.2f statt %.2f m)" % (WIDTH[a.rolle], h * WIDTH[a.rolle] / w, target))
+        sc = WIDTH[a.rolle] / w
+    P = (P - c) * sc
     tris_in = len(F)
     if len(F) > a.tris * 1.05:
         one = np.zeros((len(P), 1), np.int64)

@@ -348,6 +348,14 @@ def main():
 
     # Anpassen und Gewichte
     fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset)
+    if paired and not single:
+        # ein Paar aus einem Guss: Dreiecke, die beide Seiten verbinden (Schnuersenkel, Steg zwischen den Stiefeln), weg;
+        # sie wuerden beim Gehen quer gezogen
+        sgn = np.sign(fpos[:, 0] + 1e-9)
+        keep = (sgn[ptri[:, 0]] == sgn[ptri[:, 1]]) & (sgn[ptri[:, 1]] == sgn[ptri[:, 2]])
+        if not keep.all():
+            print("Verbindung zwischen links und rechts entfernt:", int((~keep).sum()), "Dreiecke")
+            ptri = ptri[keep]
     if paired:
         # jeder Handschuh und Stiefel folgt nur den Knochen seiner Seite; sonst ziehen Gewichte vom anderen Bein die
         # Innenseite beim Gehen quer hinueber

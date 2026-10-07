@@ -10426,7 +10426,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     legend(kit, c, 0, hy - 0.07, 0, 0.05);
   });
 
-  IT.wk = { sweep, wedge, arc, bez, shrink, mirrorX, helix, grip, spike, horn, leaf, antler, rock, rune, runeRow, runeRing, finial, legend, pommel, mats, core };
+  // Bausteine fuer die Ruestungsregeln (r3d-items-armor.js): holen three.js selbst, denn ein Fokus kann vor jeder Waffe
+  // gebaut werden (sonst fehlte er still an der Figur)
+  const WK = { sweep, wedge, arc, bez, shrink, mirrorX, helix, grip, spike, horn, leaf, antler, rock, rune, runeRow, runeRing, finial, legend, pommel, mats, core };
+  IT.wk = {};
+  for (const k in WK)
+    IT.wk[k] = function () {
+      T = R.T();
+      return WK[k].apply(this, arguments);
+    };
 })();
 
 </script>
