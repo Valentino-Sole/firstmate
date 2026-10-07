@@ -37,6 +37,7 @@ node tests/rigged.mjs                # Figuren mit eigenem Skelett, Rüstungstei
 
 - Das spielbare Spiel ist das Artifact https://claude.ai/artifact/U5K2ssSxMJTZaAhu4wCDmC (privat, gehört dem Kapitän).
 - Immer dieselbe Adresse aktualisieren: zuerst das Artifact lesen (`action: "read"` mit dieser `url`), dann `dist/artifact.html` mit derselben `url` veröffentlichen und ein kurzes `label` setzen (zum Beispiel „Version 5: …“). `capabilities` weglassen, dann bleiben die gespeicherten Rechte (Heldenprofile und Gilden in der Datenbank, Nutzer) erhalten.
+- Wird die Seite zu groß (viele erzeugte Figuren, Grenze 16 MB je Datei): `SPLIT=1 node build.mjs` legt die Modellpakete als eigene Dateien nach `dist/packs/` (Seite dann unter 1 MB). Beim Veröffentlichen zusätzlich `files: {"packs/schwebfels.js": "dist/packs/schwebfels.js", "packs/gen.js": "dist/packs/gen.js"}` angeben. Lokal geprüft; im Artifact noch nicht erprobt, deshalb zuerst an einem privaten Test-Artifact ausprobieren.
 - Danach committen und auf `claude/epic-brown-eplnsc` pushen. Commit-Nachrichten auf Deutsch, ohne Mitautor-Zeile für einen Agenten. Keinen Pull Request ohne ausdrückliche Bitte.
 
 ## Stand (Version 4)

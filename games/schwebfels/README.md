@@ -17,6 +17,8 @@ npx serve .            # dann index.html öffnen
 
 # Einzeldatei bauen: dist/schwebfels.html und dist/artifact.html
 node build.mjs
+# Modellpakete als eigene Dateien neben der Seite (dist/packs/), falls die Seite sonst über 16 MB käme
+SPLIT=1 node build.mjs
 
 # Tests der Spiellogik
 node --test tests/engine.test.mjs
