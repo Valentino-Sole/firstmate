@@ -7459,8 +7459,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       Object.keys(GEN()).map((k) => {
         if (GREADY[k]) return null;
         const G0 = GEN()[k];
-        const m = genMat(k, G0.tex, null, G0.nrm);
-        const waits = [m.map, m.normalMap].filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
+        // Figuren mit Meshy-Skelett und echten Bewegungen (src/r3d-rigged.js): dieselben Texturen wie dort vorladen
+        const texs =
+          G0.kind === "rig"
+            ? [SB.assets.texture("rig." + k, G0.tex, { srgb: true }), G0.ntex ? SB.assets.texture("rig." + k + ".n", G0.ntex, { srgb: false }) : null]
+            : ((m) => [m.map, m.normalMap])(genMat(k, G0.tex, null, G0.nrm));
+        const waits = texs.filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
         return Promise.all(waits).then(() => (GREADY[k] = true));
       })
     );
@@ -7808,9 +7812,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       case "walk":
         return ["Walk_Fight_Forward", "Casual_Walk", "Walking_Woman", "Walk", "Walking"];
       case "attack":
-        return (m.dual ? ["Double_Blade_Spin", "Double_Combo_Attack"] : W1[w] || []).concat(MELEE);
+        // Doppelklingen: Kombination statt Wirbel (der Wirbel traegt die Figur weit aus ihrem Platz)
+        return (m.dual ? ["Double_Combo_Attack", "Thrust_Slash", "Double_Blade_Spin"] : W1[w] || []).concat(MELEE);
       case "special":
-        return (A === "magier" ? ["Charged_Ground_Slam", "Charged_Spell_Cast_1"] : A === "jaeger" ? ["Draw_and_Shoot_from_Back", "Archery_Shot"] : A === "schurke" ? ["Double_Combo_Attack", "Double_Blade_Spin"] : ["Sword_Judgment", "Triple_Combo_Attack", "Charged_Slash"]).concat(MELEE);
+        return (A === "magier" ? ["Charged_Spell_Cast_1", "Charged_Spell_Cast", "Charged_Ground_Slam"] : A === "jaeger" ? ["Draw_and_Shoot_from_Back", "Archery_Shot"] : A === "schurke" ? ["Triple_Combo_Attack", "Double_Combo_Attack", "Double_Blade_Spin"] : ["Sword_Judgment", "Triple_Combo_Attack", "Charged_Slash"]).concat(MELEE);
       case "shoot":
         return (w === "speer" ? ["Thrust_Slash"] : ["Archery_Shot", "Draw_and_Shoot_from_Back"]).concat(["Charged_Spell_Cast"], MELEE);
       case "cast":
@@ -7822,7 +7827,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       case "evade":
         return ["Stand_Dodge", "Stand_Dodge_1", "Roll_Dodge", "Jump"];
       case "victory":
-        return ["Victory_Cheer", "Cheer_with_Both_Hands_Up", "Motivational_Cheer", "ThumbsUp", "Wave", "Yes"];
+        return ["Cheer_with_Both_Hands_Up", "Victory_Cheer", "Motivational_Cheer", "ThumbsUp", "Wave", "Yes"];
       case "defeat":
         return ["Dead", "Knock_Down", "dying_backwards", "Death"];
       case "sit":
@@ -7840,6 +7845,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   RG.MARKS = {};
   // Waffenlage in der Hand: Drehung um den Griff (twist) und Neigung (tilt) in Bogenmass
   RG.GRIP = { twist: 0, tilt: 0 };
+  // Dolche im Rueckhandgriff (Klinge an der Kleinfingerseite, am Unterarm entlang): im Kampfstand von Meshy zeigten die
+  // Klingen sonst zum eigenen Gesicht
+  RG.REVERSE = { dolch: true };
+  // Hueftweg der Bewegungen zur Seite und nach vorn nur zum Teil uebernehmen: die Spielbewegung fuehrt die Figur selbst,
+  // ganze Wege (Wirbel, Taumeln, Fallen) truegen sie sonst weit aus ihrem Platz. Gehen und Laufen bleiben auf der Stelle.
+  RG.ROOT_XZ = 0.3;
+  // Lange Staebe bleiben weitgehend aufrecht in der Hand (wie ein Wanderstab); die Bewegungen der Bibliothek sind ohne
+  // Stab aufgenommen, die locker gedrehte Hand liesse ihn sonst waagerecht durch den Koerper schwingen
+  RG.STAFF = { stab: 0.8, runenstab: 0.8 };
 
   /* ---------- Geometrie, Material, Skelett ---------- */
   const GGEO = {};
@@ -8369,6 +8383,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const hv = new Float32Array(n * 3);
     let low = 1e9;
     for (let i = 0; i < n * 3; i++) hv[i] = C.hips[i] * ratio;
+    if (!/walk|run/i.test(name))
+      for (let f = 0; f < n; f++)
+        for (const k of [0, 2]) hv[f * 3 + k] = hv[k] + (hv[f * 3 + k] - hv[k]) * RG.ROOT_XZ;
     for (let f = 0; f < n; f++) low = Math.min(low, hv[f * 3 + 1]);
     tracks.push(new T.VectorKeyframeTrack(hips + ".position", times, hv));
     const clip = new T.AnimationClip(name, C.d, tracks);
@@ -8376,7 +8393,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
   }
 
+  let QH = null, QW = null, QU = null;
   function Player(model, mesh, key, E, gender) {
+    if (!QH) {
+      QH = new T.Quaternion();
+      QW = new T.Quaternion();
+      QU = new T.Quaternion();
+    }
     this.m = model;
     this.key = key;
     this.E = E;
@@ -8472,6 +8495,19 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     this.cur = { action: "idle", act, kind: "loop", c };
     this.mixer.update(0);
   };
+  // Stab aufrichten: Weltlage zwischen Handdrehung und senkrecht (Richtung der Figur) mischen
+  Player.prototype.fixStaff = function () {
+    const W = this.m.parts.weapon;
+    const k = W && RG.STAFF[this.m.weaponBase];
+    if (!k || !W.parent) return;
+    if (!W.userData.q0) W.userData.q0 = W.quaternion.clone();
+    W.parent.updateWorldMatrix(true, false);
+    const qh = W.parent.getWorldQuaternion(QH);
+    const qw = QW.copy(qh).multiply(W.userData.q0);
+    this.m.obj.getWorldQuaternion(QU);
+    qw.slerp(QU, k);
+    W.quaternion.copy(qh.invert().multiply(qw));
+  };
   Player.prototype.tick = function (dt) {
     const m = this.m;
     const a = m.anim;
@@ -8488,6 +8524,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       this.pending = null;
     }
     this.mixer.update(dt);
+    this.fixStaff();
     // Sitzen: Huefte auf Bankhoehe wie bei den alten Figuren (Huefte 0,5 ueber dem Boden)
     const P = m.parts;
     const sit = this.cur && (this.cur.action === "sit" || this.cur.action === "drink");
@@ -8554,10 +8591,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const rigid = rp.some((nm) => PIECES()[nm].slot === "helm") ? Object.assign({}, gear, { helm: null }) : gear;
     if (R.gear && R.gear.attachRigid) R.gear.attachRigid(parts, rigid, culture);
     // Stellschraube fuer die Waffenlage in der Hand (nach den ersten echten Meshy-Schlaegen abstimmen)
+    const rev = gear.waffe && RG.REVERSE[gear.waffe.base];
     for (const w of [parts.weapon, parts.weapon2]) {
       if (!w) continue;
       if (RG.GRIP.twist) w.rotateY(RG.GRIP.twist);
       if (RG.GRIP.tilt) w.rotateZ(RG.GRIP.tilt);
+      if (rev) w.rotateZ(Math.PI);
     }
     parts.rigPieces = rp;
     const model = R.makeModel(root, parts, "hero");
@@ -19395,14 +19434,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       h += '<div class="section-title">Die neuen Figuren aus Meshy</div>';
       if (!UI.use3d) return h + '<p class="muted">Die Figuren brauchen die 3D-Darstellung. Schalte sie in den Einstellungen ein und lade die Seite neu.</p>';
       const on = s.settings.genFigures !== false;
-      h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann, mit Skelett, Bewegungen des Spiels und Waffe in der Faust.</p><div class="neu-figs">';
+      const real = SB.R3D.rigged && SB.R3D.rigged.is && SB.R3D.rigged.is("nordmann-mann");
+      h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann' + (real ? ", mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (Kampfstand, Laufen, Angriffe je Waffe, Bogenschuss, Zauber, Treffer, Parade, Ausweichen, Jubel, Niederlage)." : ", mit Skelett, Bewegungen des Spiels und Waffe in der Faust.") + '</p><div class="neu-figs">';
       for (const [r, n] of NEU_RACES) {
         const [st, txt] = neuFigStatus(r);
         const where = r === "nordmann" || r === "trollblut" ? "im Spiel und in der Figurenprobe" : "nur in der Figurenprobe (noch kein wählbares Volk)";
         h += '<div class="neu-fig"><b>' + n + '</b><span class="neu-st st-' + st + '">' + esc(txt) + '</span><small class="muted">' + where + "</small></div>";
       }
       h += "</div>";
-      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle acht Figuren ansehen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
+      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
       const mine = UI.heroDesc(s);
       h += '<div class="section-title">Wo du sie im Spiel siehst</div><ul class="neu-list">';
       if (mine.gen) h += "<li><b>Dein Held " + esc(s.name) + "</b> trägt die neue Figur: rechts unten auf der Insel, im Charakterbogen, in jedem Kampf und im Portrait oben links.</li>";
@@ -19431,15 +19471,22 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
-  const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
+  const FP = { fig: "nordmann-frau", pose: "", weapon: "axt", near: false, state: "", view: null, el: null, timer: 0 };
   const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
   const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
-  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["victory", "Jubel"]];
-  const FP_AXE = { base: "axt", variant: 0, rarity: "selten", vis: { f: "axt.0", c: "midgard", o: 0, v: 1 } };
+  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["special", "Spezialangriff"], ["hit", "Treffer"], ["block", "Parade"], ["evade", "Ausweichen"], ["victory", "Jubel"], ["defeat", "Niederlage"]];
+  // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
+  const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
+  const fpWeapon = () => FP_WEAPONS.find((w) => w[0] === FP.weapon) || FP_WEAPONS[0];
   const fpDesc = () => {
     const [race, sex] = FP.fig.split("-");
-    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: "sturmhuene", realm: "midgard", gear: FP.weapon ? { waffe: FP_AXE } : {} };
+    const w = fpWeapon();
+    const gear = w[0] ? { waffe: { base: w[0], variant: 0, rarity: "selten", vis: { f: w[0] + ".0", c: "midgard", o: 0, v: 1 } } } : {};
+    if (w[0] === "schwert") gear.nebenhand = { base: "schild", variant: 0, rarity: "selten", vis: { f: "schild.0", c: "midgard", o: 0, v: 1 } };
+    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: w[2], realm: "midgard", gear };
   };
+  // Angriff mit Bogen ist ein Schuss, mit dem Stab ein Zauber (wie im Kampf)
+  const fpAction = (pose) => (pose === "attack" && FP.weapon === "bogen" ? "shoot" : pose === "attack" && FP.weapon === "stab" ? "cast" : pose);
   function fpCamera() {
     const v = FP.view;
     if (!v || !v.model) return;
@@ -19464,7 +19511,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     clearInterval(FP.timer);
     FP.timer = 0;
     if (!FP.view || !FP.pose) return;
-    const go = () => FP.view && FP.view.play(FP.pose, 2.4);
+    // Dauer wie im Kampf (etwas laenger zum Hinsehen): der Schlag faellt ans Ende, danach klingt die Bewegung aus
+    const DUR = { attack: 0.6, special: 0.7, shoot: 0.6, cast: 0.6, hit: 0.45, block: 0.45, evade: 0.45, victory: 1.2, defeat: 1.2 };
+    const go = () => FP.view && FP.view.play(fpAction(FP.pose), DUR[fpAction(FP.pose)] || 2.4);
     go();
     FP.timer = setInterval(go, 2600);
   }
@@ -19474,7 +19523,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
       const gen = (SB.assets.data && SB.assets.data.gen) || {};
-      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
       h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
@@ -19485,7 +19534,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         }
       }
       h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
-      h += '<span class="spacer"></span><button class="tab' + (FP.weapon ? " on" : "") + '" data-act="fpWeapon">Axt ' + (FP.weapon ? "an" : "aus") + '</button><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
+      h += '</div><div class="section-title">Waffe</div><div class="row">' + FP_WEAPONS.map(([id, n]) => '<button class="tab' + (FP.weapon === id ? " on" : "") + '" data-act="fpWeapon" data-w="' + id + '">' + n + "</button>").join("");
+      h += '<span class="spacer"></span><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
       return h;
     },
     after(root) {
@@ -19536,8 +19586,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     UI.renderPanel();
     fpPlay();
   };
-  A.fpWeapon = () => {
-    FP.weapon = !FP.weapon;
+  A.fpWeapon = (el) => {
+    FP.weapon = el.dataset.w || "";
     UI.renderPanel();
     fpShow();
   };
