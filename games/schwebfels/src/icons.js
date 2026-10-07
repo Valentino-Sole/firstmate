@@ -255,7 +255,7 @@
     if (glowC) body += `<circle cx="32" cy="32" r="31" fill="url(#h${id})" opacity="${item.rarity === "selten" ? 0.5 : 0.8}"/>`;
     if (item.rarity === "legendaer")
       body += `<g opacity=".55">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<path d="M32 32 L${32 + Math.cos((i / 8) * Math.PI * 2) * 32} ${32 + Math.sin((i / 8) * Math.PI * 2) * 32}" stroke="${rar}" stroke-width="2.4"/>`).join("")}</g>`;
-    // Gegenstand mit eigenem 3D-Ruestungsteil (src/r3d-rigged.js): Bild des Teils statt des gezeichneten Symbols
+    // Gegenstand mit eigenem 3D-Modell (Ruestungsteil oder erzeugte Waffe, src/r3d-rigged.js): Bild des Modells statt Symbol
     const RG = SB.R3D && SB.R3D.rigged;
     const pic = RG && RG.iconFor ? RG.iconFor(item) : null;
     body += pic ? `<image href="${pic}" x="3" y="3" width="58" height="58"/>` : fn(id, c, glowC, item.style || 0);
