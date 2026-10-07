@@ -339,6 +339,30 @@ page.on("console", (m) => {
 await page.goto("file://" + path.join(tmp, "schwebfels.html"));
 await page.waitForFunction(() => globalThis.SB && SB.assets && SB.assets.ready, null, { timeout: 30000 });
 
+// Heldenerschaffung: fuer ein Volk mit fertig modellierten Figuren gibt es nur die Wahl der Gestalt
+await page.waitForSelector("#create .cform [data-cact=realm]", { timeout: 30000 });
+const creator = await page.evaluate(async () => {
+  const fails = [];
+  const ok = (c, msg) => c || fails.push(msg);
+  const click = (sel) => {
+    const b = document.querySelector("#create .cform " + sel);
+    ok(b, "Knopf fehlt: " + sel);
+    if (b) b.click();
+  };
+  const heads = () => [...document.querySelectorAll("#create .cform h4")].map((h) => h.textContent);
+  click("[data-cact=realm][data-v=midgard]");
+  click("[data-cact=race][data-v=nordmann]");
+  click("[data-cact=gender][data-v=m]");
+  ok(heads().includes("Gestalt") && !heads().includes("Haut"), "Erschaffung zeigt keine Gestalt fuer nordmann.m: " + heads().join(","));
+  ok(document.querySelectorAll("#create .cform [data-k=hairStyle]").length === 2, "zwei Gestalten erwartet");
+  click("[data-k=hairStyle][data-v='1']");
+  ok(document.querySelector("#create .cform [data-k=hairStyle][data-v='1']").classList.contains("on"), "Gestalt 2 nicht gewaehlt");
+  click("[data-cact=gender][data-v=w]");
+  ok(heads().includes("Haut") && !heads().includes("Gestalt"), "Erschaffung fuer nordmann.w braucht die alten Regler");
+  ok(SB.ui.gestaltHtml({ hairStyle: 3 }, 2, "data-act").includes('data-v="1">Gestalt 2'), "Spiegel waehlt die falsche Gestalt");
+  return fails;
+});
+
 const res = await page.evaluate(async () => {
   await SB.assets.ready;
   const R = SB.R3D;
@@ -464,7 +488,7 @@ const res = await page.evaluate(async () => {
   return { fails, timing: timing.map((x) => x.a + ":" + (x.s ? x.s.clip + "@" + x.s.t.toFixed(2) : "-")), lit, wide };
 });
 await browser.close();
-const all = res.fails.concat(errors);
+const all = creator.concat(res.fails, errors);
 console.log("Bewegungen:", res.timing.join(", "));
 if (all.length) {
   console.log("FEHLER:\n- " + all.join("\n- "));

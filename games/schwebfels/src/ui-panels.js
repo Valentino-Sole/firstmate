@@ -380,12 +380,16 @@
     }).join("") + "</div>";
     let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
     h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
-    h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
-    if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
-    h += "<h4>Augen</h4>" + sw(D.EYES, "eyes");
-    h += "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor");
-    h += "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id));
-    if (R.horns) h += "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]);
+    const gest = UI.gestalten(s.race, s.gender);
+    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act");
+    else {
+      h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
+      if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
+      h += "<h4>Augen</h4>" + sw(D.EYES, "eyes");
+      h += "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor");
+      h += "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id));
+      if (R.horns) h += "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]);
+    }
     h += "</div></div>";
     return h;
   }

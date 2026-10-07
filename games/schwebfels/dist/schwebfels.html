@@ -7602,12 +7602,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   RG.is = (key) => !!(GEN()[key] && GEN()[key].kind === "rig");
   // Figur, die im Spiel automatisch fuer dieses Volk und Geschlecht steht (gen_pack.py ohne --no-auto). Gibt es
   // mehrere, waehlt die Frisur aus dem Aussehen zwischen ihnen (so sehen auch Inselbewohner verschieden aus).
-  RG.auto = function (race, gender, variant) {
+  RG.variants = function (race, gender) {
     const g = gender === "w" ? "f" : "m";
     const G0 = GEN();
-    const all = Object.keys(G0)
+    return Object.keys(G0)
       .filter((k) => G0[k].use && G0[k].kind === "rig" && G0[k].use.race === race && G0[k].use.gender === g)
       .sort();
+  };
+  RG.auto = function (race, gender, variant) {
+    const all = RG.variants(race, gender);
     return all.length ? all[Math.abs(variant | 0) % all.length] : null;
   };
 
@@ -16575,6 +16578,22 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id]), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
+  // Fertig modellierte Figuren (Meshy) fuer Volk und Geschlecht: dann waehlt das Aussehen nur die Gestalt, denn Haut,
+  // Haare und Gesicht gehoeren zum Modell. Die Wahl steckt in look.hairStyle (wie bei den Inselbewohnern).
+  UI.gestalten = function (race, gender) {
+    const RG = SB.R3D && SB.R3D.rigged;
+    return RG && RG.variants ? RG.variants(race, gender).slice(0, D.HAIR_STYLES.length) : [];
+  };
+  UI.gestaltHtml = function (L, n, act) {
+    const cur = Math.abs(L.hairStyle | 0) % n;
+    let h = "<h4>Gestalt</h4>";
+    if (n > 1) {
+      h += '<div class="choices">';
+      for (let i = 0; i < n; i++) h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">Gestalt ' + (i + 1) + "</button>";
+      h += "</div>";
+    }
+    return h + '<p class="muted small">Diese Figur ist fertig modelliert: Haut, Haare und Gesicht gehören zu ihrer Gestalt.</p>';
+  };
 
   /* ---------- Speichern ---------- */
   let saveTimer = 0;
@@ -17658,12 +17677,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }).join("") + "</div>";
     let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
     h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
-    h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
-    if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
-    h += "<h4>Augen</h4>" + sw(D.EYES, "eyes");
-    h += "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor");
-    h += "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id));
-    if (R.horns) h += "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]);
+    const gest = UI.gestalten(s.race, s.gender);
+    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act");
+    else {
+      h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
+      if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
+      h += "<h4>Augen</h4>" + sw(D.EYES, "eyes");
+      h += "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor");
+      h += "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id));
+      if (R.horns) h += "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]);
+    }
     h += "</div></div>";
     return h;
   }
@@ -18686,6 +18709,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const R = D.RACES[draft.race];
     const C = D.CLASSES[draft.cls];
     const L = draft.look;
+    const gest = UI.gestalten(draft.race, draft.gender);
     const sw = (arr, key) =>
       '<div class="swatches">' + arr.map((c) => {
         const col = typeof c === "string" ? c : c.c;
@@ -18706,13 +18730,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       racesOf(draft.realm).map((id) => '<button type="button" class="choice' + (draft.race === id ? " on" : "") + '" data-cact="race" data-v="' + id + '">' + D.RACES[id].name + "</button>").join("") + "</div>" +
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
-      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span><button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button></div>' +
-      "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
-      (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
-      "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
-      "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor") +
-      "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id)) +
-      (R.horns ? "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]) : "") +
+      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
+      (gest.length ? UI.gestaltHtml(L, gest.length, "data-cact") :
+        "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
+        (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
+        "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
+        "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor") +
+        "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id)) +
+        (R.horns ? "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]) : "")) +
       '<div class="step"><span class="stepno">5</span><h3>Name</h3></div><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
       '<p class="delta-down" id="nameErr" hidden></p>' +
       '<div class="row" style="margin-top:18px"><button type="button" class="btn ghost" data-cact="random">Alles zufällig</button><button type="button" class="btn ghost" data-cact="import">Spielstand laden</button><span class="spacer"></span><button type="button" class="btn big" data-cact="start">Für ' + esc(D.REALMS[draft.realm].name) + "!</button></div>";

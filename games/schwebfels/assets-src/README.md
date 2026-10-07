@@ -97,7 +97,9 @@ Wichtige Regeln der Strecke:
   Bewegungen also nur einmal bei Meshy kaufen; weitere Figuren mit `--no-clips` einlesen.
 - `--as-meshy` baut für fremde Testmodelle (etwa Mixamo-Figuren) das 24-Knochen-Skelett von Meshy nach.
 - Figuren mit `--race` und `--gender` ersetzen im Spiel automatisch den Körper dieses Volkes (auch bei Inselbewohnern).
-  Mehrere Figuren für dasselbe Volk und Geschlecht sind erlaubt; die Frisur im Aussehen wählt zwischen ihnen;
+  Mehrere Figuren für dasselbe Volk und Geschlecht sind erlaubt. Heldenerschaffung und Spiegel zeigen für solche
+  Völker statt Haut, Haaren und Gesicht nur die Wahl der Gestalt (gespeichert als Frisur, so wählen auch die
+  Inselbewohner zwischen den Figuren);
   `gen_pack.py --no-auto` schaltet das ab, dann nur über `R.buildHero({ gen: "<figur>", ... })`.
 - Größe: Ziel 8.000 bis 12.000 Dreiecke je Held (`--tris`), Textur 1024 px (`--tex`), Bewegungen mit 30 Bildern pro
   Sekunde und ohne unbewegte Knochen. `build.mjs` bettet beide Pakete mit gzip ein.

@@ -17,12 +17,15 @@
   RG.is = (key) => !!(GEN()[key] && GEN()[key].kind === "rig");
   // Figur, die im Spiel automatisch fuer dieses Volk und Geschlecht steht (gen_pack.py ohne --no-auto). Gibt es
   // mehrere, waehlt die Frisur aus dem Aussehen zwischen ihnen (so sehen auch Inselbewohner verschieden aus).
-  RG.auto = function (race, gender, variant) {
+  RG.variants = function (race, gender) {
     const g = gender === "w" ? "f" : "m";
     const G0 = GEN();
-    const all = Object.keys(G0)
+    return Object.keys(G0)
       .filter((k) => G0[k].use && G0[k].kind === "rig" && G0[k].use.race === race && G0[k].use.gender === g)
       .sort();
+  };
+  RG.auto = function (race, gender, variant) {
+    const all = RG.variants(race, gender);
     return all.length ? all[Math.abs(variant | 0) % all.length] : null;
   };
 

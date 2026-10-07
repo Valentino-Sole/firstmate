@@ -55,6 +55,22 @@
   };
   UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id]), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
+  // Fertig modellierte Figuren (Meshy) fuer Volk und Geschlecht: dann waehlt das Aussehen nur die Gestalt, denn Haut,
+  // Haare und Gesicht gehoeren zum Modell. Die Wahl steckt in look.hairStyle (wie bei den Inselbewohnern).
+  UI.gestalten = function (race, gender) {
+    const RG = SB.R3D && SB.R3D.rigged;
+    return RG && RG.variants ? RG.variants(race, gender).slice(0, D.HAIR_STYLES.length) : [];
+  };
+  UI.gestaltHtml = function (L, n, act) {
+    const cur = Math.abs(L.hairStyle | 0) % n;
+    let h = "<h4>Gestalt</h4>";
+    if (n > 1) {
+      h += '<div class="choices">';
+      for (let i = 0; i < n; i++) h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">Gestalt ' + (i + 1) + "</button>";
+      h += "</div>";
+    }
+    return h + '<p class="muted small">Diese Figur ist fertig modelliert: Haut, Haare und Gesicht gehören zu ihrer Gestalt.</p>';
+  };
 
   /* ---------- Speichern ---------- */
   let saveTimer = 0;
