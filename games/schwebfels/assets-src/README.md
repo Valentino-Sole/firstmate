@@ -58,6 +58,7 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/prop.py` | Requisit der Kampfumgebung (Baum, Deko, Wahrzeichen) aus einer GLB: auf den Boden gestellt, mittig, Zielhöhe je Rolle |
 | `gen/qualitaetstest.json` | Plan des Qualitätstests: Figuren, zwei Brustpanzer, Handschuhe, Stiefel, Helm, Waffe, Bestie, Requisiten, Budget |
 | `gen/pruefung.py` | Prüfung von `weapon.py` und `prop.py` mit absichtlich schwierigen Prüfmodellen aus Blender (schräges Schwert, Axt kopfüber, Schild zur Seite, Stab mit riesiger Kugel, breiter Baum und Fels) |
+| `gen/zuschnitt.py` | Konzepttafel mit mehreren Gegenständen in einzelne Bilder schneiden (ein Modell je Bild für Meshy), mit nummerierter Übersicht; `--box` für Handschnitt, `--probe` prüft sich selbst |
 | `gen/pruefung_bestellung.py` | Prüfung der Bestellungen gegen den Prüfserver (ohne Blender, ohne Credits): Abbruch beim Warten auf Figur und Bewegungen ohne doppeltes Bezahlen, mehrere Ansichten, Rigging-Rückfall |
 | `gen/pruefserver.py` | Prüfserver, der wie die Meshy-API antwortet (Probelauf der Werkstatt ohne Credits) |
 | `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |

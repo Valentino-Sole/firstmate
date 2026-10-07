@@ -30,6 +30,7 @@ node tests/rigged.mjs                # Figuren mit eigenem Skelett, Rüstungstei
 node tests/smoke.mjs                 # Rauchtest: alle Völker, Klassen, Monster, Gegenstände und Szenen ohne stille Fehler
 python assets-src/gen/pruefung.py    # Werkzeuge für Waffen und Requisiten (braucht Blender als Python-Modul)
 python assets-src/gen/pruefung_bestellung.py   # Meshy-Bestellungen gegen den Prüfserver: Abbrüche, Ansichten, Rigging
+python assets-src/gen/zuschnitt.py --probe      # Zuschnitt von Konzepttafeln in einzelne Modelle
 ```
 
 - Der Browser-Durchlauf braucht three.js und Schriften vom CDN. Kommt der Testbrowser nicht ans Netz, lädt man die Dateien einmal herunter und zeigt mit `CDN_CACHE=<map.json>` darauf (Format in `README.md`).
@@ -74,6 +75,7 @@ python assets-src/gen/pruefung_bestellung.py   # Meshy-Bestellungen gegen den Pr
   - Werkstatt (`assets-src/gen/werkstatt.py`): Figur, Rüstungsteil oder Bestie in einem Befehl bestellen, umrechnen, ins Paket legen und eine Spielvorschau bauen.
   - Kein Auftrag wird doppelt bezahlt: Auftragsnummern stehen vor dem Warten fest, ein Abbruch (Netz, Sitzungsende, Download) wird beim nächsten Aufruf kostenlos fortgesetzt (vorher hätte ein abgebrochenes Modell ein zweites Mal gekostet; mit dem Prüfserver nachgestellt).
   - Mehrere Ansichten: Jeder Bestellbefehl und der Plan nehmen bis zu drei weitere Ansichten desselben Modells (`--ansichten`, im Plan `"ansichten"`); Meshy erzeugt dann aus bis zu vier Bildern, gleicher Preis. Lehnt das Rigging einen solchen Auftrag ab, geht das Modell als Datei zum Rigging.
+  - Zuschnitt (`assets-src/gen/zuschnitt.py`): schneidet die Gegenstände einer Konzepttafel (etwa die fünf Seltenheiten von Tafel 10) einzeln aus, ein Modell je Bild, mit nummerierter Übersicht zum Prüfen; `--box` für Handschnitt.
   - Geprüft mit freien Testmodellen aus dem three.js- und Khronos-Repository (nicht im Spiel): Umrechnung exakt (unter 1 mm), Bewegungen eines Modells laufen auf anderen, Rüstungsteile auf zwei sehr verschiedenen Körpern, Bestie im Kampf, Insel und Browser-Durchlauf ohne Fehler. `tests/rigged.mjs` prüft das alles mit einer eigenen Prüffigur ohne fremde Modelle.
 - Gegen die offizielle Meshy-API-Doku geprüft (7. Oktober 2026): alle Bestellfelder (`remove_lighting` nur bei meshy-6, deshalb weggelassen), alle 20 Bewegungsnummern gehören zu den erwarteten Namen der Bibliothek, Bewegungen kommen in der bestellten Reihenfolge mit Bibliotheksnamen, fehlgeschlagene Aufträge kosten nichts.
 - Echtes Meshy-Skelett (aus Meshys Bibliotheksvorschau): 24 Knochen ohne Finger, alle ohne Ruhedrehung in T-Haltung. Bewegungen deshalb nur einmal kaufen (20 Stück, 60 Credits) und mit allen Figuren teilen.
