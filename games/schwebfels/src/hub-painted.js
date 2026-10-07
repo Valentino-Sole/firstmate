@@ -78,6 +78,8 @@
   function create(el, opts) {
     opts = opts || {};
     let realm = opts.realm;
+    // Heimat des Helden; realm ist die gerade gezeigte Insel (beim Besuch eine andere)
+    let home = opts.realm;
     let dayMode = opts.dayCycle || "zyklus";
     const low = opts.quality === "niedrig";
     const E = SB.engine;
@@ -98,6 +100,17 @@
     const labelLayer = document.createElement("div");
     labelLayer.className = "hub-labels";
     root.appendChild(labelLayer);
+    // Besuch auf einer anderen Heimatinsel: Hinweis oben mit dem Weg zurueck
+    const visitBar = document.createElement("div");
+    visitBar.className = "ph-visit";
+    visitBar.hidden = true;
+    visitBar.innerHTML = '<span class="ph-visit-text"></span><button type="button" class="btn small">Zurück</button>';
+    visitBar.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    visitBar.querySelector("button").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      visit(home);
+    });
+    root.appendChild(visitBar);
     el.appendChild(root);
     const ctx = cv.getContext("2d");
 
@@ -170,6 +183,26 @@
       root.dataset.realm = realm;
       for (const id in labels) labels[id].hidden = !spots[id];
       initParticles();
+      const R = SB.data.REALMS;
+      visitBar.hidden = realm === home || !R[realm] || !R[home];
+      if (!visitBar.hidden) {
+        visitBar.querySelector(".ph-visit-text").textContent = "Zu Besuch auf " + R[realm].isle + " (" + R[realm].name + ")";
+        visitBar.querySelector("button").textContent = "Zurück nach " + R[home].isle;
+      }
+    }
+    function visit(r) {
+      if (!imgOf(r)) return false;
+      if (r !== realm) {
+        realm = r;
+        goal.zoom = 1;
+        goal.fx = IW / 2;
+        goal.fy = IH / 2;
+        load();
+        clampGoal();
+        applyDay();
+      }
+      if (opts.onVisit) opts.onVisit(realm);
+      return true;
     }
 
     // Tageszeit: Nacht dunkelt das Bild ab und laesst Fenster, Fackeln und Runen staerker leuchten
@@ -403,6 +436,7 @@
 
     function place() {
       placeHero();
+      if (!visitBar.hidden) visitBar.style.transform = "translate(" + Math.round((safe.l + safe.r - inset) / 2) + "px," + Math.round(safe.t + 8) + "px) translateX(-50%)";
       world.style.transform = "translate(" + view.x.toFixed(1) + "px," + view.y.toFixed(1) + "px) scale(" + view.s.toFixed(4) + ")";
       for (const id in labels) {
         const s = spots[id];
@@ -457,7 +491,7 @@
       return best;
     }
     root.addEventListener("pointerdown", (ev) => {
-      if (ev.target.closest(".hub-label") || ev.target.closest(".ph-hero")) return;
+      if (ev.target.closest(".hub-label") || ev.target.closest(".ph-hero") || ev.target.closest(".ph-visit")) return;
       root.setPointerCapture(ev.pointerId);
       drag = { x: ev.clientX, y: ev.clientY, fx: goal.fx, fy: goal.fy, moved: 0 };
     });
@@ -497,11 +531,18 @@
       painted: true,
       setHero,
       realm: () => realm,
+      home: () => home,
+      visit,
       setHome(tier, realmId) {
-        if (realmId && realmId !== realm && imgOf(realmId)) {
-          realm = realmId;
+        // neue Heimat (Reichswechsel): dorthin wechseln, ausser waehrend eines Besuchs
+        if (realmId && realmId !== home && imgOf(realmId)) {
+          const atHome = realm === home;
+          home = realmId;
+          if (atHome) {
+            realm = realmId;
+            applyDay();
+          }
           load();
-          applyDay();
         }
       },
       setGuildColors() {},

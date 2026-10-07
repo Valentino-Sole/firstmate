@@ -48,23 +48,43 @@
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
   // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
   // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
+  // Die Koerper der waehlbaren Voelker stecken in der Seite (build.mjs, GEN_KERN) und sind sofort bereit, sobald ihre
+  // Hautbilder dekodiert sind; die Datei gen-<reich>.js bringt die uebrigen (Figurenprobe). UI.genStatus fuer die Anzeige.
+  UI.genStatus = { kern: "", datei: "" };
+  const genChanged = () => {
+    if (UI.onGen) UI.onGen();
+    if (UI.S) UI.refresh();
+    if (UI.panelId === "neu" || UI.panelId === "figurenprobe") UI.renderPanel();
+  };
   UI.loadGenFigures = function (realm) {
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
-    return SB.assets
-      .loadGen(realm)
-      .then(() => SB.R3D.human.preloadGen())
+    const HU = SB.R3D.human;
+    const kern = SB.assets.ready.then(() => {
+      if (!Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length) return false;
+      UI.genStatus.kern = UI.genStatus.kern || "laedt";
+      return HU.preloadGen().then(() => {
+        UI.genStatus.kern = "bereit";
+        genChanged();
+        return true;
+      });
+    });
+    UI.genStatus.datei = UI.genStatus.datei === "bereit" ? "bereit" : "laedt";
+    return kern
+      .then(() => SB.assets.loadGen(realm))
+      .then(() => HU.preloadGen())
       .then(
         () => {
-          if (UI.S) UI.refresh();
+          UI.genStatus.datei = "bereit";
+          if (!UI.genStatus.kern) UI.genStatus.kern = "bereit";
+          genChanged();
           return "bereit";
         },
         (e) => {
-          if (e && e.missing) {
-            console.info("Keine Figurendatei fuer " + realm + ", es bleiben die gebauten Figuren");
-            return "fehlt";
-          }
-          console.warn("Neue Figuren nicht geladen", e);
-          return "fehler";
+          UI.genStatus.datei = e && e.missing ? "fehlt" : "fehler";
+          if (e && e.missing) console.info("Keine Figurendatei fuer " + realm + ", es bleiben die Figuren aus der Seite");
+          else console.warn("Neue Figuren nicht geladen", e);
+          genChanged();
+          return UI.genStatus.kern === "bereit" ? "bereit" : UI.genStatus.datei;
         }
       );
   };
@@ -86,7 +106,7 @@
     if (url) return '<img alt="" src="' + url + '">';
     return I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
   };
-  UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id]), 128, true) : "");
+  UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id])), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
   // Fertig modellierte Figuren (Meshy) fuer Volk und Geschlecht: dann waehlt das Aussehen nur die Gestalt, denn Haut,
   // Haare und Gesicht gehoeren zum Modell. Die Wahl steckt in look.hairStyle (wie bei den Inselbewohnern).
@@ -472,6 +492,7 @@
     const b = UI.badges();
     dock.innerHTML =
       '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
+      '<button class="dock-btn dock-neu' + (UI.panelId === "neu" ? " active" : "") + '" data-act="open" data-id="neu">' + I.ui("held") + "<span>Neu prüfen</span><span class=\"badge\">neu</span></button>" +
       MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);

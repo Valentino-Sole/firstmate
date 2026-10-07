@@ -87,6 +87,13 @@
       armor: f.armor,
       shield: !!(S.equip.nebenhand && S.equip.nebenhand.base === "schild"),
       talents: S.talents || {},
+      // Rueckmeldung zur Darstellung: kommen die neuen Figuren (aus der Seite und aus der Zusatzdatei) und die gemalte Insel an?
+      diag: {
+        fig: SB.ui && SB.ui.genStatus ? Object.assign({}, SB.ui.genStatus) : null,
+        insel: SB.ui && SB.ui.hub ? (SB.ui.hub.painted ? "gemalt" : "3d") : "keine",
+        d3: !!(SB.ui && SB.ui.use3d),
+        mobil: typeof innerWidth === "number" && innerWidth <= 860,
+      },
       updatedAt: Date.now(),
     };
     const json = JSON.stringify(Object.assign({}, pub, { updatedAt: 0 }));

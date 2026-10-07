@@ -378,6 +378,10 @@
       }
     }
     if (!view) cv.insertAdjacentHTML("beforeend", '<div class="hv-fallback" style="position:absolute;inset:120px 20% 20px"></div>');
+    // neue Figuren zeigen, sobald sie bereit sind (die aus der Seite kommen vor der Zusatzdatei)
+    UI.onGen = () => {
+      if (view && !$("#create").hidden) updateView();
+    };
     renderForm();
     updateView();
     box.onclick = (ev) => {
@@ -438,6 +442,7 @@
   };
   UI.closeCreate = function () {
     const box = $("#create");
+    UI.onGen = null;
     if (view) view.dispose();
     view = null;
     box.hidden = true;

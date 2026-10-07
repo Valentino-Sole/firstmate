@@ -1035,6 +1035,75 @@
       return h;
     },
   };
+  /* ================= Neu pruefen: Meshy-Figuren und gemalte Heimatinseln (Version 5.4) ================= */
+  const NEU_ISLES = ["albion", "midgard", "hibernia"];
+  const NEU_RACES = [["nordmann", "Nordmann"], ["trollblut", "Trollblut"], ["frostwicht", "Frostwicht"], ["glutzwerg", "Glutzwerg"]];
+  function neuFigStatus(race) {
+    const HU = SB.R3D && SB.R3D.human;
+    const ready = ["frau", "mann"].filter((x) => HU && HU.genReady && HU.genReady(race + "-" + x)).length;
+    if (ready === 2) return ["bereit", "bereit"];
+    const has = (SB.assets.data && SB.assets.data.gen) || {};
+    if (has[race + "-frau"] || has[race + "-mann"]) return ["laedt", "wird vorbereitet …"];
+    const st = UI.genStatus.datei;
+    return st === "fehlt" || st === "fehler" ? ["fehlt", "nicht geladen"] : ["laedt", "wird geladen …"];
+  }
+  P.neu = {
+    title: "Neu: Figuren und Inseln",
+    role: "Die Meshy-Figuren und die gemalten Heimatinseln prüfen",
+    portrait: () => '<span class="iconport">' + I.ui("held") + "</span>",
+    render() {
+      const s = S();
+      const hub = UI.hub;
+      const shown = hub && hub.painted ? hub.realm() : null;
+      const isl = s.settings.island === "3d" ? "3d" : "gemaelde";
+      const anyIsle = SB.hubPainted && NEU_ISLES.some((r) => SB.hubPainted.has(r));
+      let h = '<div class="say">Hier siehst du alles Neue an einem Ort: die drei gemalten Heimatinseln und die Figuren, die Meshy aus deinen Konzeptbildern gebaut hat.</div>';
+      h += '<div class="section-title">Die drei Heimatinseln</div>';
+      if (!anyIsle) h += '<p class="muted">In dieser Fassung fehlen die Inselbilder, deshalb steht hier die 3D-Insel.</p>';
+      else {
+        h += '<p class="muted small">' + (innerWidth > 860 ? "Wähle ein Reich, dann erscheint seine Insel links neben diesem Fenster. Ziehen verschiebt das Bild, das Mausrad zoomt" : "Wähle ein Reich, dann schließt sich dieses Fenster und du siehst seine Insel. Wischen verschiebt das Bild") + ', die Orte lassen sich anklicken. Tag und Nacht wechseln mit der Uhr im Spiel.</p>';
+        h += '<div class="realmcards small">' + NEU_ISLES.map((r) =>
+          '<button type="button" class="realmcard r-' + r + (shown === r ? " on" : "") + '" data-act="neuInsel" data-v="' + r + '"' + (SB.hubPainted.has(r) ? "" : " disabled") + ">" + I.realm(r) + "<h3>" + esc(D.REALMS[r].isle) + "</h3><i>" + esc(D.REALMS[r].name) + (r === s.realm ? " · deine Insel" : "") + "</i></button>").join("") + "</div>";
+        h += '<div class="row" style="margin-top:10px"><span class="muted small">Darstellung deiner Heimatinsel:</span>' + [["gemaelde", "Gemälde (neu)"], ["3d", "3D-Modell (alt)"]].map(([id, n]) => '<button class="tab' + (isl === id ? " on" : "") + '" data-act="island" data-v="' + id + '">' + n + "</button>").join("") + "</div>";
+      }
+      h += '<div class="section-title">Die neuen Figuren aus Meshy</div>';
+      if (!UI.use3d) return h + '<p class="muted">Die Figuren brauchen die 3D-Darstellung. Schalte sie in den Einstellungen ein und lade die Seite neu.</p>';
+      const on = s.settings.genFigures !== false;
+      h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann, mit Skelett, Bewegungen des Spiels und Waffe in der Faust.</p><div class="neu-figs">';
+      for (const [r, n] of NEU_RACES) {
+        const [st, txt] = neuFigStatus(r);
+        const where = r === "nordmann" || r === "trollblut" ? "im Spiel und in der Figurenprobe" : "nur in der Figurenprobe (noch kein wählbares Volk)";
+        h += '<div class="neu-fig"><b>' + n + '</b><span class="neu-st st-' + st + '">' + esc(txt) + '</span><small class="muted">' + where + "</small></div>";
+      }
+      h += "</div>";
+      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle acht Figuren ansehen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
+      const mine = UI.heroDesc(s);
+      h += '<div class="section-title">Wo du sie im Spiel siehst</div><ul class="neu-list">';
+      if (mine.gen) h += "<li><b>Dein Held " + esc(s.name) + "</b> trägt die neue Figur: rechts unten auf der Insel, im Charakterbogen, in jedem Kampf und im Portrait oben links.</li>";
+      else if (s.realm !== "midgard" || (s.race !== "nordmann" && s.race !== "trollblut")) h += "<li><b>Dein Held " + esc(s.name) + "</b> ist " + esc(D.RACES[s.race].name) + " aus " + esc(D.REALMS[s.realm].name) + ": für dieses Volk gibt es noch keine neue Figur. Lege zum Ausprobieren einen Nordmann oder Trollblut in Midgard an (Einstellungen, „Neuen Helden beginnen“), oder sieh sie dir in der Figurenprobe an.</li>";
+      else h += "<li><b>Dein Held " + esc(s.name) + "</b> bekommt die neue Figur, sobald sie geladen ist" + (on ? "" : " (gerade abgeschaltet)") + ".</li>";
+      h += "<li><b>Gegner aus Midgard</b> (Nordmann und Trollblut) in der Arena und in der Rangliste.</li>";
+      h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
+      h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li></ul>";
+      h += '<div class="section-title">Noch nicht dabei</div><ul class="neu-list muted"><li>Rüstung, Helm und Umhang auf den neuen Figuren: kommt mit der Wechselausrüstung (nächster Schritt). Waffe und Schild sitzen schon in der Hand.</li><li>Neue Figuren für Albion und Hibernia: erst wenn du Midgard abgenommen hast.</li><li>Frostwicht und Glutzwerg als wählbare Völker: dafür brauche ich deine Entscheidung zu ihren Stärken.</li></ul>';
+      return h;
+    },
+  };
+  A.neuInsel = (el) => {
+    const r = el.dataset.v;
+    const s = S();
+    // fremde Inseln gibt es nur als Gemaelde: bei 3D-Modell erst auf das Gemaelde wechseln
+    if (!UI.hub || !UI.hub.painted) {
+      s.settings.island = "gemaelde";
+      UI.save();
+      SB.main.makeHub(s);
+      UI.refresh();
+    }
+    if (UI.hub && UI.hub.visit) UI.hub.visit(r);
+    if (innerWidth <= 860) UI.closePanel();
+    else UI.renderPanel();
+  };
+
   /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
   const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
   const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
@@ -1082,7 +1151,7 @@
       let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
-      h += stage + '<div class="section-title">Volk</div><div class="row">';
+      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
       for (const r of FP_ORDER) {
         for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
           const k = r + "-" + sx;
@@ -1116,7 +1185,9 @@
           if (UI.panelId === "figurenprobe") UI.renderPanel();
         },
         () => {
-          FP.state = "fehler";
+          // ohne Zusatzdatei bleiben die Figuren, die in der Seite stecken (Nordmann und Trollblut)
+          FP.state = Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length ? "ok" : "fehler";
+          FP.partial = true;
           if (UI.panelId === "figurenprobe") UI.renderPanel();
         }
       );
