@@ -468,8 +468,12 @@
       Object.keys(GEN()).map((k) => {
         if (GREADY[k]) return null;
         const G0 = GEN()[k];
-        const m = genMat(k, G0.tex, null, G0.nrm);
-        const waits = [m.map, m.normalMap].filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
+        // Figuren mit Meshy-Skelett und echten Bewegungen (src/r3d-rigged.js): dieselben Texturen wie dort vorladen
+        const texs =
+          G0.kind === "rig"
+            ? [SB.assets.texture("rig." + k, G0.tex, { srgb: true }), G0.ntex ? SB.assets.texture("rig." + k + ".n", G0.ntex, { srgb: false }) : null]
+            : ((m) => [m.map, m.normalMap])(genMat(k, G0.tex, null, G0.nrm));
+        const waits = texs.filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
         return Promise.all(waits).then(() => (GREADY[k] = true));
       })
     );

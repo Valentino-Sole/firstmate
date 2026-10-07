@@ -48,9 +48,10 @@
       case "walk":
         return ["Walk_Fight_Forward", "Casual_Walk", "Walking_Woman", "Walk", "Walking"];
       case "attack":
-        return (m.dual ? ["Double_Blade_Spin", "Double_Combo_Attack"] : W1[w] || []).concat(MELEE);
+        // Doppelklingen: Kombination statt Wirbel (der Wirbel traegt die Figur weit aus ihrem Platz)
+        return (m.dual ? ["Double_Combo_Attack", "Thrust_Slash", "Double_Blade_Spin"] : W1[w] || []).concat(MELEE);
       case "special":
-        return (A === "magier" ? ["Charged_Ground_Slam", "Charged_Spell_Cast_1"] : A === "jaeger" ? ["Draw_and_Shoot_from_Back", "Archery_Shot"] : A === "schurke" ? ["Double_Combo_Attack", "Double_Blade_Spin"] : ["Sword_Judgment", "Triple_Combo_Attack", "Charged_Slash"]).concat(MELEE);
+        return (A === "magier" ? ["Charged_Spell_Cast_1", "Charged_Spell_Cast", "Charged_Ground_Slam"] : A === "jaeger" ? ["Draw_and_Shoot_from_Back", "Archery_Shot"] : A === "schurke" ? ["Triple_Combo_Attack", "Double_Combo_Attack", "Double_Blade_Spin"] : ["Sword_Judgment", "Triple_Combo_Attack", "Charged_Slash"]).concat(MELEE);
       case "shoot":
         return (w === "speer" ? ["Thrust_Slash"] : ["Archery_Shot", "Draw_and_Shoot_from_Back"]).concat(["Charged_Spell_Cast"], MELEE);
       case "cast":
@@ -62,7 +63,7 @@
       case "evade":
         return ["Stand_Dodge", "Stand_Dodge_1", "Roll_Dodge", "Jump"];
       case "victory":
-        return ["Victory_Cheer", "Cheer_with_Both_Hands_Up", "Motivational_Cheer", "ThumbsUp", "Wave", "Yes"];
+        return ["Cheer_with_Both_Hands_Up", "Victory_Cheer", "Motivational_Cheer", "ThumbsUp", "Wave", "Yes"];
       case "defeat":
         return ["Dead", "Knock_Down", "dying_backwards", "Death"];
       case "sit":
@@ -80,6 +81,15 @@
   RG.MARKS = {};
   // Waffenlage in der Hand: Drehung um den Griff (twist) und Neigung (tilt) in Bogenmass
   RG.GRIP = { twist: 0, tilt: 0 };
+  // Dolche im Rueckhandgriff (Klinge an der Kleinfingerseite, am Unterarm entlang): im Kampfstand von Meshy zeigten die
+  // Klingen sonst zum eigenen Gesicht
+  RG.REVERSE = { dolch: true };
+  // Hueftweg der Bewegungen zur Seite und nach vorn nur zum Teil uebernehmen: die Spielbewegung fuehrt die Figur selbst,
+  // ganze Wege (Wirbel, Taumeln, Fallen) truegen sie sonst weit aus ihrem Platz. Gehen und Laufen bleiben auf der Stelle.
+  RG.ROOT_XZ = 0.3;
+  // Lange Staebe bleiben weitgehend aufrecht in der Hand (wie ein Wanderstab); die Bewegungen der Bibliothek sind ohne
+  // Stab aufgenommen, die locker gedrehte Hand liesse ihn sonst waagerecht durch den Koerper schwingen
+  RG.STAFF = { stab: 0.8, runenstab: 0.8 };
 
   /* ---------- Geometrie, Material, Skelett ---------- */
   const GGEO = {};
@@ -609,6 +619,9 @@
     const hv = new Float32Array(n * 3);
     let low = 1e9;
     for (let i = 0; i < n * 3; i++) hv[i] = C.hips[i] * ratio;
+    if (!/walk|run/i.test(name))
+      for (let f = 0; f < n; f++)
+        for (const k of [0, 2]) hv[f * 3 + k] = hv[k] + (hv[f * 3 + k] - hv[k]) * RG.ROOT_XZ;
     for (let f = 0; f < n; f++) low = Math.min(low, hv[f * 3 + 1]);
     tracks.push(new T.VectorKeyframeTrack(hips + ".position", times, hv));
     const clip = new T.AnimationClip(name, C.d, tracks);
@@ -616,7 +629,13 @@
     return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
   }
 
+  let QH = null, QW = null, QU = null;
   function Player(model, mesh, key, E, gender) {
+    if (!QH) {
+      QH = new T.Quaternion();
+      QW = new T.Quaternion();
+      QU = new T.Quaternion();
+    }
     this.m = model;
     this.key = key;
     this.E = E;
@@ -712,6 +731,19 @@
     this.cur = { action: "idle", act, kind: "loop", c };
     this.mixer.update(0);
   };
+  // Stab aufrichten: Weltlage zwischen Handdrehung und senkrecht (Richtung der Figur) mischen
+  Player.prototype.fixStaff = function () {
+    const W = this.m.parts.weapon;
+    const k = W && RG.STAFF[this.m.weaponBase];
+    if (!k || !W.parent) return;
+    if (!W.userData.q0) W.userData.q0 = W.quaternion.clone();
+    W.parent.updateWorldMatrix(true, false);
+    const qh = W.parent.getWorldQuaternion(QH);
+    const qw = QW.copy(qh).multiply(W.userData.q0);
+    this.m.obj.getWorldQuaternion(QU);
+    qw.slerp(QU, k);
+    W.quaternion.copy(qh.invert().multiply(qw));
+  };
   Player.prototype.tick = function (dt) {
     const m = this.m;
     const a = m.anim;
@@ -728,6 +760,7 @@
       this.pending = null;
     }
     this.mixer.update(dt);
+    this.fixStaff();
     // Sitzen: Huefte auf Bankhoehe wie bei den alten Figuren (Huefte 0,5 ueber dem Boden)
     const P = m.parts;
     const sit = this.cur && (this.cur.action === "sit" || this.cur.action === "drink");
@@ -794,10 +827,12 @@
     const rigid = rp.some((nm) => PIECES()[nm].slot === "helm") ? Object.assign({}, gear, { helm: null }) : gear;
     if (R.gear && R.gear.attachRigid) R.gear.attachRigid(parts, rigid, culture);
     // Stellschraube fuer die Waffenlage in der Hand (nach den ersten echten Meshy-Schlaegen abstimmen)
+    const rev = gear.waffe && RG.REVERSE[gear.waffe.base];
     for (const w of [parts.weapon, parts.weapon2]) {
       if (!w) continue;
       if (RG.GRIP.twist) w.rotateY(RG.GRIP.twist);
       if (RG.GRIP.tilt) w.rotateZ(RG.GRIP.tilt);
+      if (rev) w.rotateZ(Math.PI);
     }
     parts.rigPieces = rp;
     const model = R.makeModel(root, parts, "hero");

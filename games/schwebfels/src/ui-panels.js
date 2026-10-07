@@ -1069,14 +1069,15 @@
       h += '<div class="section-title">Die neuen Figuren aus Meshy</div>';
       if (!UI.use3d) return h + '<p class="muted">Die Figuren brauchen die 3D-Darstellung. Schalte sie in den Einstellungen ein und lade die Seite neu.</p>';
       const on = s.settings.genFigures !== false;
-      h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann, mit Skelett, Bewegungen des Spiels und Waffe in der Faust.</p><div class="neu-figs">';
+      const real = SB.R3D.rigged && SB.R3D.rigged.is && SB.R3D.rigged.is("nordmann-mann");
+      h += '<p class="muted small">Acht Körper für Midgard, je Frau und Mann' + (real ? ", mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (Kampfstand, Laufen, Angriffe je Waffe, Bogenschuss, Zauber, Treffer, Parade, Ausweichen, Jubel, Niederlage)." : ", mit Skelett, Bewegungen des Spiels und Waffe in der Faust.") + '</p><div class="neu-figs">';
       for (const [r, n] of NEU_RACES) {
         const [st, txt] = neuFigStatus(r);
         const where = r === "nordmann" || r === "trollblut" ? "im Spiel und in der Figurenprobe" : "nur in der Figurenprobe (noch kein wählbares Volk)";
         h += '<div class="neu-fig"><b>' + n + '</b><span class="neu-st st-' + st + '">' + esc(txt) + '</span><small class="muted">' + where + "</small></div>";
       }
       h += "</div>";
-      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle acht Figuren ansehen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
+      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button><button class="tab' + (on ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (on ? "an" : "aus (Vergleich mit den alten)") + "</button></div>";
       const mine = UI.heroDesc(s);
       h += '<div class="section-title">Wo du sie im Spiel siehst</div><ul class="neu-list">';
       if (mine.gen) h += "<li><b>Dein Held " + esc(s.name) + "</b> trägt die neue Figur: rechts unten auf der Insel, im Charakterbogen, in jedem Kampf und im Portrait oben links.</li>";
@@ -1105,15 +1106,22 @@
   };
 
   /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
-  const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
+  const FP = { fig: "nordmann-frau", pose: "", weapon: "axt", near: false, state: "", view: null, el: null, timer: 0 };
   const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
   const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
-  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["victory", "Jubel"]];
-  const FP_AXE = { base: "axt", variant: 0, rarity: "selten", vis: { f: "axt.0", c: "midgard", o: 0, v: 1 } };
+  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["special", "Spezialangriff"], ["hit", "Treffer"], ["block", "Parade"], ["evade", "Ausweichen"], ["victory", "Jubel"], ["defeat", "Niederlage"]];
+  // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
+  const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
+  const fpWeapon = () => FP_WEAPONS.find((w) => w[0] === FP.weapon) || FP_WEAPONS[0];
   const fpDesc = () => {
     const [race, sex] = FP.fig.split("-");
-    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: "sturmhuene", realm: "midgard", gear: FP.weapon ? { waffe: FP_AXE } : {} };
+    const w = fpWeapon();
+    const gear = w[0] ? { waffe: { base: w[0], variant: 0, rarity: "selten", vis: { f: w[0] + ".0", c: "midgard", o: 0, v: 1 } } } : {};
+    if (w[0] === "schwert") gear.nebenhand = { base: "schild", variant: 0, rarity: "selten", vis: { f: "schild.0", c: "midgard", o: 0, v: 1 } };
+    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: w[2], realm: "midgard", gear };
   };
+  // Angriff mit Bogen ist ein Schuss, mit dem Stab ein Zauber (wie im Kampf)
+  const fpAction = (pose) => (pose === "attack" && FP.weapon === "bogen" ? "shoot" : pose === "attack" && FP.weapon === "stab" ? "cast" : pose);
   function fpCamera() {
     const v = FP.view;
     if (!v || !v.model) return;
@@ -1138,7 +1146,9 @@
     clearInterval(FP.timer);
     FP.timer = 0;
     if (!FP.view || !FP.pose) return;
-    const go = () => FP.view && FP.view.play(FP.pose, 2.4);
+    // Dauer wie im Kampf (etwas laenger zum Hinsehen): der Schlag faellt ans Ende, danach klingt die Bewegung aus
+    const DUR = { attack: 0.6, special: 0.7, shoot: 0.6, cast: 0.6, hit: 0.45, block: 0.45, evade: 0.45, victory: 1.2, defeat: 1.2 };
+    const go = () => FP.view && FP.view.play(fpAction(FP.pose), DUR[fpAction(FP.pose)] || 2.4);
     go();
     FP.timer = setInterval(go, 2600);
   }
@@ -1148,7 +1158,7 @@
     portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
       const gen = (SB.assets.data && SB.assets.data.gen) || {};
-      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
       h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
@@ -1159,7 +1169,8 @@
         }
       }
       h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
-      h += '<span class="spacer"></span><button class="tab' + (FP.weapon ? " on" : "") + '" data-act="fpWeapon">Axt ' + (FP.weapon ? "an" : "aus") + '</button><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
+      h += '</div><div class="section-title">Waffe</div><div class="row">' + FP_WEAPONS.map(([id, n]) => '<button class="tab' + (FP.weapon === id ? " on" : "") + '" data-act="fpWeapon" data-w="' + id + '">' + n + "</button>").join("");
+      h += '<span class="spacer"></span><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
       return h;
     },
     after(root) {
@@ -1210,8 +1221,8 @@
     UI.renderPanel();
     fpPlay();
   };
-  A.fpWeapon = () => {
-    FP.weapon = !FP.weapon;
+  A.fpWeapon = (el) => {
+    FP.weapon = el.dataset.w || "";
     UI.renderPanel();
     fpShow();
   };

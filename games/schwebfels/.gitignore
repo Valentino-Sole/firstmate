@@ -8,4 +8,5 @@ assets-src/gen/konzepte/
 assets/inseln/
 # erzeugte Figuren (Bild-zu-3D) erst nach Abnahme durch den Kapitaen ins Repository
 assets/gen-*.pack
+assets/gen.pack
 dist/gen-*.js
