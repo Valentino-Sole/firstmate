@@ -386,6 +386,7 @@
   RG.weaponName = function (it, culture) {
     const L = WEAPONS();
     if (!it || !Object.keys(L).length) return null;
+    if (it.gen && L[it.gen]) return it.gen; // ausdruecklich gewaehlt (Werkstattbilder)
     const V = R.gear && R.gear.visOf ? R.gear.visOf(it, culture) : { form: it.base, base: it.base };
     let best = null;
     let score = -1;

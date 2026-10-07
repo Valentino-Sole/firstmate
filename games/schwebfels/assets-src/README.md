@@ -74,8 +74,13 @@ python werkstatt.py teil handschuh_leder handschuh.png --slot handschuhe --ref n
 python werkstatt.py bestie wolf tafel19.png --archs wolf --hoehe 1.15 --budget 30
 python werkstatt.py waffe axt_bart axt.png --base axt --budget 30   # ein Gegenstand je Bild
 python werkstatt.py paket                       # Vorschau: assets-src/gen/meshy/vorschau/schwebfels.html
-python werkstatt.py bilder nordmann_f --konzept tafel02.png --waffe axt   # Spielbilder neben dem Konzeptbild
+python werkstatt.py bilder nordmann_f --waffe axt   # Spielbilder neben dem Konzeptbild (auch für Teile, Waffen, Bestien)
+python werkstatt.py notiz nordmann_f "Schultern von Hand geglättet"   # Nacharbeit festhalten
+python werkstatt.py bericht                     # meshy/bericht.html: Bilder, Kennzahlen, Nacharbeit, verbrauchte Credits
 ```
+
+Die Werkstatt merkt sich je Modell Art, Konzeptbild und Einstellungen (`meshy/<name>/werkstatt.json`); der Bericht
+fasst alles für den Kapitän zusammen, die Credits stammen aus Meshys Antworten (`credits.jsonl`).
 
 Die einzelnen Schritte von Hand:
 
