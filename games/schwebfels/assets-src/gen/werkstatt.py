@@ -1,4 +1,4 @@
-"""Werkstatt: Meshy-Figuren und Ruestungsteile in einem Schritt bestellen, umrechnen und als Spielvorschau bauen.
+"""Werkstatt: Meshy-Figuren, Ruestungsteile, Waffen und Bestien in einem Schritt bestellen, umrechnen und als Spielvorschau bauen.
 
 Alles landet unter assets-src/gen/meshy/ (nicht im Repository): Downloads je Figur, npz-Dateien in build/, das
 Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schluessel kommt aus MESHY_API_KEY.
@@ -11,6 +11,10 @@ Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schlu
   python werkstatt.py bestie wolf tafel19.png --archs wolf --hoehe 1.15 --budget 30
       Bild zu 3D fuer ein Tier, danach Vierbeiner-Skelett und Gewichte (beasts/from_glb.py); bewegt wird es im Spiel
       wie die anderen Bestien, die Monsterarten aus --archs zeigen dann dieses Tier
+  python werkstatt.py waffe axt_bart tafel14_axt.png --base axt --budget 30
+      Bild zu 3D fuer eine Waffe oder einen Schild (ein Gegenstand je Bild, Tafeln vorher zuschneiden), danach in die
+      Lage der gebauten Waffen bringen (weapon.py); ersetzt im Spiel die gebaute Waffe dieser Grundart (--forms,
+      --seltenheit grenzen ein; --umdrehen, falls Griff und Spitze vertauscht sind)
   python werkstatt.py paket
       Figurenpaket bauen und eine Spielvorschau (vorschau/schwebfels.html) mit allen Figuren und Teilen erzeugen
   python werkstatt.py bilder nordmann_f --konzept tafel02.png [--klasse sturmhuene] [--waffe axt]
@@ -105,6 +109,23 @@ def cmd_bestie(a):
         "--family", a.name, "--archs", a.archs, "--height", a.hoehe, "--turn", a.turn)
 
 
+def cmd_waffe(a):
+    extra = ["--trocken"] if a.trocken else []
+    api("teil", a.name, a.bild, "--polys", "4000", *(["--budget", a.budget] if a.budget else []), *extra)
+    if a.trocken:
+        return
+    os.makedirs(os.path.join(BUILD, "waffen"), exist_ok=True)
+    args = [PY, os.path.join(HERE, "weapon.py"), os.path.join(BUILD, "waffen", a.name + ".npz"), os.path.join(ROOT, a.name, "model.glb"),
+            "--base", a.base, "--name", a.name, "--forms", a.forms, "--seltenheit", a.seltenheit]
+    if a.umdrehen:
+        args.append("--umdrehen")
+    if a.griff is not None:
+        args += ["--griff", a.griff]
+    if a.laenge is not None:
+        args += ["--laenge", a.laenge]
+    run(*args)
+
+
 def cmd_paket(a):
     pack = os.path.join(BUILD, "gen.pack")
     run(PY, os.path.join(HERE, "gen_pack.py"), BUILD, pack)
@@ -175,6 +196,17 @@ def main():
     p.add_argument("--turn", default="0")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
+    p = sub.add_parser("waffe")
+    p.add_argument("name")
+    p.add_argument("bild")
+    p.add_argument("--base", required=True)
+    p.add_argument("--forms", default="")
+    p.add_argument("--seltenheit", default="")
+    p.add_argument("--umdrehen", action="store_true")
+    p.add_argument("--griff", type=float)
+    p.add_argument("--laenge", type=float)
+    p.add_argument("--budget", type=int)
+    p.add_argument("--trocken", action="store_true")
     sub.add_parser("paket")
     p = sub.add_parser("bilder")
     p.add_argument("name")
@@ -189,6 +221,8 @@ def main():
         cmd_teil(a)
     elif a.cmd == "bestie":
         cmd_bestie(a)
+    elif a.cmd == "waffe":
+        cmd_waffe(a)
     elif a.cmd == "paket":
         cmd_paket(a)
     elif a.cmd == "bilder":

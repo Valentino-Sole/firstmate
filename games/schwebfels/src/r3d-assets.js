@@ -100,6 +100,7 @@
         data.gen = g.gen || {};
         data.clips = g.clips || {};
         data.rigPieces = g.pieces || {};
+        data.genWeapons = g.weapons || {};
         // erzeugte Bestien (beasts/from_glb.py) neben die gebauten; gleiche Familie ersetzt die gebaute
         data.beasts = Object.assign({}, data.beasts || {}, g.beasts || {});
         globalThis.SB_GENPACK = null;
@@ -112,6 +113,10 @@
         }
         for (const k in data.rigPieces) {
           const t = A.texture("rigpiece." + k, data.rigPieces[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.genWeapons) {
+          const t = A.texture("weapon." + k, data.genWeapons[k].tex, { srgb: true });
           if (t) waits.push(t.userData.ready);
         }
         for (const k in g.beasts || {}) {

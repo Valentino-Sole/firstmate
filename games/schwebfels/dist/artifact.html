@@ -4887,6 +4887,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         data.gen = g.gen || {};
         data.clips = g.clips || {};
         data.rigPieces = g.pieces || {};
+        data.genWeapons = g.weapons || {};
         // erzeugte Bestien (beasts/from_glb.py) neben die gebauten; gleiche Familie ersetzt die gebaute
         data.beasts = Object.assign({}, data.beasts || {}, g.beasts || {});
         globalThis.SB_GENPACK = null;
@@ -4899,6 +4900,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         }
         for (const k in data.rigPieces) {
           const t = A.texture("rigpiece." + k, data.rigPieces[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.genWeapons) {
+          const t = A.texture("weapon." + k, data.genWeapons[k].tex, { srgb: true });
           if (t) waits.push(t.userData.ready);
         }
         for (const k in g.beasts || {}) {
@@ -7957,19 +7962,64 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return out;
   };
 
-  /* Gegenstandsbild aus dem Ruestungsteil selbst (passt so genau zum angelegten Modell). Das Teil liegt dafuer in
-     Ruhelage auf der ersten Figur mit eigenem Skelett; das Bild wird einmal erzeugt und gemerkt. */
+  /* ---------- Erzeugte Waffen und Schilde (assets-src/gen/weapon.py) ----------
+     Feste Form mit Griffpunkt im Ursprung in der Lage der gebauten Waffen; ersetzt die gebaute Waffe bei jedem Helden,
+     wenn Grundart und (falls angegeben) Form oder Seltenheit passen. */
+  const WEAPONS = () => (SB.assets && SB.assets.data && SB.assets.data.genWeapons) || {};
+  RG.weaponName = function (it, culture) {
+    const L = WEAPONS();
+    if (!it || !Object.keys(L).length) return null;
+    const V = R.gear && R.gear.visOf ? R.gear.visOf(it, culture) : { form: it.base, base: it.base };
+    let best = null;
+    let score = -1;
+    for (const nm of Object.keys(L).sort()) {
+      const W = L[nm];
+      if (W.base !== V.base) continue;
+      if (W.forms.length && W.forms.indexOf(V.form) < 0 && W.forms.indexOf(V.base) < 0) continue;
+      if (W.rarity.length && W.rarity.indexOf(it.rarity) < 0) continue;
+      const sc = (W.forms.indexOf(V.form) >= 0 ? 2 : 0) + (W.rarity.length ? 1 : 0);
+      if (sc > score) {
+        best = nm;
+        score = sc;
+      }
+    }
+    return best;
+  };
+  const WGEO = {};
+  function weaponMesh(name) {
+    T = R.T();
+    const W = WEAPONS()[name];
+    if (!WGEO[name]) {
+      const g = new T.BufferGeometry();
+      g.setAttribute("position", new T.BufferAttribute(W.pos, 3));
+      g.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(W.pos, W.idx), 3));
+      g.setAttribute("uv", new T.BufferAttribute(W.uv, 2));
+      g.setIndex(new T.BufferAttribute(W.idx, 1));
+      WGEO[name] = g;
+    }
+    const m = new T.Mesh(WGEO[name], mat("weapon." + name, W.tex, null, "weapon." + name));
+    m.castShadow = true;
+    return m;
+  }
+  RG.weaponFor = function (it, culture) {
+    const nm = RG.weaponName(it, culture);
+    if (!nm || !R.ready()) return null;
+    T = R.T();
+    const g = new T.Group();
+    g.add(weaponMesh(nm));
+    g.userData.genWeapon = nm;
+    return g;
+  };
+
+  /* Gegenstandsbild aus dem 3D-Modell selbst (passt so genau zum angelegten Modell). Ruestungsteile liegen dafuer in
+     Ruhelage auf der ersten Figur mit eigenem Skelett, Waffen schraeg im Bild; jedes Bild wird einmal erzeugt. */
   const ICON = {};
   let iconR = null;
   let iconScene = null;
   let iconCam = null;
-  RG.pieceIcon = function (name, size) {
-    size = size || 128;
-    const ck = name + "|" + size;
+  function renderIcon(ck, size, make) {
     if (ICON[ck] !== undefined) return ICON[ck];
-    const Pc = PIECES()[name];
-    const key = Pc && GEN()[Pc.ref] && GEN()[Pc.ref].kind === "rig" ? Pc.ref : Object.keys(GEN()).find((k) => GEN()[k].kind === "rig");
-    if (!Pc || !key || !R.ready()) return (ICON[ck] = null);
+    if (!R.ready()) return (ICON[ck] = null);
     T = R.T();
     try {
       if (!iconR) {
@@ -7985,7 +8035,33 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         iconScene.add(k);
         iconCam = new T.PerspectiveCamera(30, 1, 0.01, 50);
       }
+      const obj = make();
+      if (!obj) return (ICON[ck] = null);
       iconR.setSize(size, size, false);
+      iconScene.add(obj);
+      obj.updateMatrixWorld(true);
+      const box = new T.Box3().setFromObject(obj);
+      const c = box.getCenter(new T.Vector3());
+      const sz = box.getSize(new T.Vector3());
+      const span = Math.max(sz.x, sz.y, sz.z * 0.8) * 1.12;
+      iconCam.position.set(c.x, c.y + span * 0.08, c.z + span / (2 * Math.tan((30 * Math.PI) / 360)) + sz.z * 0.5);
+      iconCam.lookAt(c);
+      iconR.setClearColor(0x000000, 0);
+      iconR.render(iconScene, iconCam);
+      const url = iconR.domElement.toDataURL("image/png");
+      iconScene.remove(obj);
+      return (ICON[ck] = url);
+    } catch (e) {
+      console.warn("Gegenstandsbild fehlgeschlagen", e);
+      return (ICON[ck] = null);
+    }
+  }
+  RG.pieceIcon = function (name, size) {
+    size = size || 128;
+    return renderIcon(name + "|" + size, size, () => {
+      const Pc = PIECES()[name];
+      const key = Pc && GEN()[Pc.ref] && GEN()[Pc.ref].kind === "rig" ? Pc.ref : Object.keys(GEN()).find((k) => GEN()[k].kind === "rig");
+      if (!Pc || !key) return null;
       let g = pieceGeo(name, key, GEN()[key]);
       if (Pc.slot === "handschuhe") {
         // nur der linke Handschuh, Finger nach unten
@@ -8000,28 +8076,37 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const mesh = new T.Mesh(g, mat("piece." + name, Pc.tex, null, "rigpiece." + name));
       if (Pc.slot === "handschuhe") mesh.rotation.z = -Math.PI / 2;
       mesh.rotation.y = 0.3;
-      iconScene.add(mesh);
-      const box = new T.Box3().setFromObject(mesh);
-      const c = box.getCenter(new T.Vector3());
-      const sz = box.getSize(new T.Vector3());
-      const span = Math.max(sz.x, sz.y, sz.z * 0.8) * 1.12;
-      iconCam.position.set(c.x, c.y + span * 0.08, c.z + span / (2 * Math.tan((30 * Math.PI) / 360)) + sz.z * 0.5);
-      iconCam.lookAt(c);
-      iconR.setClearColor(0x000000, 0);
-      iconR.render(iconScene, iconCam);
-      const url = iconR.domElement.toDataURL("image/png");
-      iconScene.remove(mesh);
-      return (ICON[ck] = url);
-    } catch (e) {
-      console.warn("Gegenstandsbild fehlgeschlagen", e);
-      return (ICON[ck] = null);
-    }
+      return mesh;
+    });
   };
-  // Bild fuer einen Gegenstand, wenn ein passendes Ruestungsteil existiert
+  RG.weaponIcon = function (name, size) {
+    size = size || 128;
+    return renderIcon("w|" + name + "|" + size, size, () => {
+      const W = WEAPONS()[name];
+      if (!W) return null;
+      const m = weaponMesh(name);
+      const g = new T.Group();
+      g.add(m);
+      // Schild von vorn, Waffen schraeg mit der Spitze nach rechts oben
+      if (W.base === "schild") g.rotation.y = 0.3;
+      else {
+        m.rotation.y = 0.35;
+        g.rotation.z = -Math.PI / 4;
+      }
+      return g;
+    });
+  };
+  // Bild fuer einen Gegenstand, wenn ein passendes Ruestungsteil oder eine erzeugte Waffe existiert
   RG.iconFor = function (item) {
     const B = SB.data && SB.data.BASES && item && SB.data.BASES[item.base];
-    if (!B || !SLOT[B.slot] || !Object.keys(PIECES()).length) return null;
-    const names = RG.piecesFor({ [B.slot]: item }, (item.vis && item.vis.c) || "midgard");
+    if (!B) return null;
+    const culture = (item.vis && item.vis.c) || "midgard";
+    if (B.slot === "waffe" || B.slot === "nebenhand") {
+      const w = RG.weaponName(item, culture);
+      return w ? RG.weaponIcon(w) : null;
+    }
+    if (!SLOT[B.slot] || !Object.keys(PIECES()).length) return null;
+    const names = RG.piecesFor({ [B.slot]: item }, culture);
     return names.length ? RG.pieceIcon(names[0]) : null;
   };
 
@@ -8811,6 +8896,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (!IT) return;
     const S = parts.prof.sockets;
     const build = (it, base, variant) => {
+      // erzeugte Waffe oder erzeugter Schild aus dem Figurenpaket (src/r3d-rigged.js) vor der Bauregel
+      const gw = !base && variant == null && R.rigged && R.rigged.weaponFor ? R.rigged.weaponFor(it, hc) : null;
+      if (gw) return gw;
       const V = visOf(it, hc);
       const b = base || V.base;
       if (!IT.forms[b]) return null;

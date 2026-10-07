@@ -54,6 +54,7 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/meshy.py` | Geriggte GLB samt Bewegungen ins Spielformat: Ausrichten, Zielhöhe, T-Haltung, Skelett ohne Ruhedrehungen, Gewichte, Reduzieren, Texturatlas, Zuordnung der Spielgelenke, Haltepunkte, Bewegungen mit Schlagmarken |
 | `gen/gltf.py` | Kleiner glTF-Leser (Knoten, Skins, Netze, Materialien, Bilder, Animationen) |
 | `gen/fit_piece.py` | Rüstungsteil (einzeln erzeugte GLB) an einen Referenzkörper anpassen und knochenbezogen speichern; im Spiel legt es sich über Querschnittsprofile an jeden Körper mit gleichem Skelett an, die Haut darunter wird ausgeblendet |
+| `gen/weapon.py` | Waffe oder Schild (einzeln erzeugte GLB) in die Lage der gebauten Waffen bringen: Hauptachse, Griffende, Griffpunkt, Schneide; Länge wie die gebaute Waffe gleicher Grundart |
 | `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |
 | `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
 | `beasts/from_glb.py` | Tier aus einer GLB (z. B. Meshy Bild zu 3D) mit Vierbeiner-Skelett und Rollen für das Bestiensystem des Spiels |
@@ -71,6 +72,7 @@ python werkstatt.py figur kreidezwerg_m tafel01.png --race kreidezwerg --gender 
 python werkstatt.py teil harnisch_eisen brust.png --slot brust --forms harnisch --ref nordmann_f --budget 30
 python werkstatt.py teil handschuh_leder handschuh.png --slot handschuhe --ref nordmann_f --paar --budget 30
 python werkstatt.py bestie wolf tafel19.png --archs wolf --hoehe 1.15 --budget 30
+python werkstatt.py waffe axt_bart axt.png --base axt --budget 30   # ein Gegenstand je Bild
 python werkstatt.py paket                       # Vorschau: assets-src/gen/meshy/vorschau/schwebfels.html
 python werkstatt.py bilder nordmann_f --konzept tafel02.png --waffe axt   # Spielbilder neben dem Konzeptbild
 ```
@@ -118,6 +120,12 @@ Wichtige Regeln der Strecke:
   Kopf, Schwanz, vier Beine mit je drei Gliedern, Gewichte per Bone Heat). Im Spiel bewegt es sich wie die anderen
   Bestien (`src/r3d-beasts.js`), behält seine Textur und wird je Gegner leicht in dessen Farbe getönt. `--archs wolf`
   legt fest, welche Monsterarten es darstellt; `gen_pack.py` nimmt alles aus dem Unterordner `bestien` auf.
+- Waffen und Schilde: `python weapon.py <aus>/waffen/axt_bart.npz axt.glb --base axt` legt den Griffpunkt in den
+  Ursprung, Klinge oder Schaft entlang +Y und Schneide oder Axtblatt entlang X, wie bei den gebauten Waffen. Das
+  Griffende erkennt es an der breitesten Stelle (Parierstange nahe am Griff, Axt- oder Hammerkopf weit davon); sitzt
+  es verkehrt, `--umdrehen`. Im Spiel ersetzt die Waffe bei jedem Helden die gebaute Waffe derselben Grundart
+  (`--forms` und `--seltenheit` grenzen ein), das Gegenstandsbild zeigt dann das Modell. Konzepttafeln mit mehreren
+  Waffen vorher so zuschneiden, dass jedes Bild nur eine Waffe zeigt. `gen_pack.py` nimmt den Unterordner `waffen` auf.
 - `gen.pack` gehört erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat.
 
 Prüfen ohne Credits: Testmodelle aus dem three.js-Repository (`examples/models/gltf/Soldier.glb`, `Xbot.glb`,

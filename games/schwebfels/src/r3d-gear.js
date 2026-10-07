@@ -533,6 +533,9 @@
     if (!IT) return;
     const S = parts.prof.sockets;
     const build = (it, base, variant) => {
+      // erzeugte Waffe oder erzeugter Schild aus dem Figurenpaket (src/r3d-rigged.js) vor der Bauregel
+      const gw = !base && variant == null && R.rigged && R.rigged.weaponFor ? R.rigged.weaponFor(it, hc) : null;
+      if (gw) return gw;
       const V = visOf(it, hc);
       const b = base || V.base;
       if (!IT.forms[b]) return null;

@@ -308,7 +308,18 @@ function buildPack(file, gameBones) {
       meta: { family: "pruefwolf", archs: ["wolf"], height: 0.95, headY: 0.85, length: 1.3, groups: [[0, 0, bi.length]], mats: ["skin"], matNames: ["skin"], features: {}, bones: bb, textured: true },
     },
   };
-  P.write(file, { v: 1, gen, clips, pieces, beasts });
+  // Waffe wie aus weapon.py: Griff im Ursprung, Klinge entlang +Y, Parierstange entlang X
+  const wp = [];
+  const wi = [];
+  for (const [x0, x1, y0, y1] of [[-0.03, 0.03, 0.09, 0.95], [-0.12, 0.12, 0.06, 0.09], [-0.015, 0.015, -0.13, 0.06]]) {
+    const base = wp.length / 3;
+    for (const z of [-0.01, 0.01]) wp.push(x0, y0, z, x1, y0, z, x1, y1, z, x0, y1, z);
+    for (const f of [[0, 1, 2], [0, 2, 3], [5, 4, 7], [5, 7, 6], [1, 5, 6], [1, 6, 2], [4, 0, 3], [4, 3, 7]]) wi.push(base + f[0], base + f[1], base + f[2]);
+  }
+  const weapons = {
+    pruefschwert: { pos: P.q16(wp), uv: P.q16(new Array((wp.length / 3) * 2).fill(0.5)), idx: P.u16(wi), tex: P.img(png(4, 4, [200, 60, 60]), "image/png"), base: "schwert", forms: [], rarity: [] },
+  };
+  P.write(file, { v: 1, gen, clips, pieces, beasts, weapons });
 }
 
 /* ---------- Bauen und im Browser pruefen ---------- */
@@ -424,7 +435,14 @@ const res = await page.evaluate(async () => {
     ok(rmin > 0.15 && rmax < 0.35, "Ruestungsteil liegt nicht ueber dem Koerper (Abstand " + rmin.toFixed(2) + " bis " + rmax.toFixed(2) + ")");
   } else fails.push("kein Netz fuer das Ruestungsteil");
   ok(SB.icons.item({ base: "harnisch", rarity: "selten", style: 0 }).includes("<image"), "Gegenstandsbild kommt nicht aus dem Ruestungsteil");
-  ok(!SB.icons.item({ base: "schwert", rarity: "selten", style: 0 }).includes("<image"), "Gegenstand ohne Ruestungsteil muss das Symbol behalten");
+  ok(!SB.icons.item({ base: "axt", rarity: "selten", style: 0 }).includes("<image"), "Gegenstand ohne eigenes Modell muss das Symbol behalten");
+  ok(SB.icons.item({ base: "schwert", rarity: "selten", style: 0 }).includes("<image"), "Gegenstandsbild kommt nicht aus der erzeugten Waffe");
+  // erzeugte Waffe in der Hand, bei Figuren mit eigenem Skelett und bei alten Figuren
+  ok(P.weapon && P.weapon.userData.genWeapon === "pruefschwert", "erzeugte Waffe ersetzt die gebaute nicht");
+  const axe = R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear: { waffe: { base: "axt", rarity: "selten", style: 0 } } });
+  ok(axe.parts.weapon && !axe.parts.weapon.userData.genWeapon, "Axt ohne erzeugtes Modell muss gebaut bleiben");
+  const oldFig = R.buildHero({ race: "nordmann", gender: "w", cls: "sturmhuene", gear });
+  ok(oldFig.parts.weapon && oldFig.parts.weapon.userData.genWeapon === "pruefschwert", "alte Figuren bekommen die erzeugte Waffe nicht");
   // erzeugte Bestie stellt die Monsterart "wolf" dar, gebaute Bestien bleiben
   ok(R.beasts.familyOf("wolf") === "pruefwolf", "erzeugte Bestie wird fuer Woelfe nicht gewaehlt");
   ok(R.beasts.familyOf("schlund") === "schlund", "gebaute Bestie fuer Schlund verloren");

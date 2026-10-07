@@ -44,7 +44,7 @@ Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` a
 | `src/icons.js` | Eigene Vektor-Symbole für Gegenstände, Reiche und Oberfläche |
 | `src/r3d-models.js` | 3D-Helden: gemalte Texturen, Gesichter mit Tattoos und Narben, Reichsrüstungen, Prunkwaffen, Animationen |
 | `src/r3d-assets.js`, `src/r3d-human.js` | Modellpakete laden (gzip), modellierte Helden aus `assets/schwebfels.pack` mit Bewegungen per Formel |
-| `src/r3d-rigged.js` | Figuren mit eigenem Skelett aus `assets/gen.pack` (Meshy-Strecke): abgespielte Bewegungen je Kampfstil und Waffe, Schlag im Takt des Kampfes |
+| `src/r3d-rigged.js` | Figuren mit eigenem Skelett aus `assets/gen.pack` (Meshy-Strecke): abgespielte Bewegungen je Kampfstil und Waffe, Schlag im Takt des Kampfes, Rüstungsteile, erzeugte Waffen und ihre Gegenstandsbilder |
 | `src/r3d-monsters.js` | 15 Monstergattungen mit eigenen Animationen, Frost und Moos je nach Heimat |
 | `src/r3d-scenes.js` | 3D-Schauplätze: Heimatinsel mit Tag-Nacht-Wechsel, Bewohnern und Mondtor, Heldenansicht, Heim, Kampfbühnen, Portraits |
 | `src/r3d-realms.js` | Die drei Heimatinseln: Landschaft, Gebäude, Wetter und Wahrzeichen je Reich |

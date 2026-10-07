@@ -7,6 +7,7 @@ Jede npz-Datei ist eine Figur (Name = Dateiname). Zwei Arten:
    Bewegungen. Bewegungen landen einmal im gemeinsamen Teil "clips" und gelten fuer jede Figur mit gleichen Knochennamen.
    Figuren mit Volk und Geschlecht (meshy.py --race/--gender) ersetzen im Spiel automatisch den Koerper dieses Volkes,
    ausser mit --no-auto.
+Unterordner: "teile" (fit_piece.py), "bestien" (beasts/from_glb.py), "waffen" (weapon.py).
 build.mjs bettet das Paket neben schwebfels.pack ein.
 """
 import io
@@ -75,10 +76,26 @@ def beast(z):
             "tex": tex(z["tex"]), "meta": meta}
 
 
+def weapon(z):
+    """Waffe oder Schild aus weapon.py: feste Form mit Griffpunkt im Ursprung, ersetzt im Spiel die gebaute Waffe."""
+    meta = json.loads(str(z["meta"]))
+    return {"pos": P.q16(z["pos"]), "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "tex": tex(z["tex"]),
+            "base": meta["base"], "forms": meta["forms"], "rarity": meta["rarity"]}
+
+
 gen = {}
 clips = {}
 pieces = {}
 beasts = {}
+weapons = {}
+WD = os.path.join(SRC, "waffen")
+if os.path.isdir(WD):
+    for f in sorted(os.listdir(WD)):
+        if f.endswith(".npz"):
+            z = np.load(os.path.join(WD, f))
+            name = json.loads(str(z["meta"]))["name"]
+            weapons[name] = weapon(z)
+            print("Waffe", name, "(" + weapons[name]["base"] + ")", len(z["idx"]), "Dreiecke")
 BD = os.path.join(SRC, "bestien")
 if os.path.isdir(BD):
     for f in sorted(os.listdir(BD)):
@@ -114,5 +131,5 @@ for f in sorted(os.listdir(SRC)):
             e["pieces"][n]["tex"] = tex(z[pre + "_tex"])
     gen[f[:-4]] = e
     print("Figur", f[:-4], len(z["body_pos"]), "Ecken,", len(names), "Teile")
-n = P.write(OUT, {"v": 1, "gen": gen, "clips": clips, "pieces": pieces, "beasts": beasts})
-print(OUT, round(n / 1024), "KB,", len(clips), "gemeinsame Bewegungen,", len(pieces), "Ruestungsteile,", len(beasts), "Bestien")
+n = P.write(OUT, {"v": 1, "gen": gen, "clips": clips, "pieces": pieces, "beasts": beasts, "weapons": weapons})
+print(OUT, round(n / 1024), "KB,", len(clips), "gemeinsame Bewegungen,", len(pieces), "Ruestungsteile,", len(beasts), "Bestien,", len(weapons), "Waffen")
