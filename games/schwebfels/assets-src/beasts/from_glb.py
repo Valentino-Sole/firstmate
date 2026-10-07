@@ -203,7 +203,7 @@ def main():
             "length": float(np.ptp(P[:, 2])), "groups": [[0, 0, int(len(F)) * 3]], "mats": ["skin"], "matNames": ["skin"], "features": {},
             "bones": bones, "textured": True}
     col = np.tile(np.array([255, 0, 0, 255], np.uint8), (len(P), 1))
-    np.savez_compressed(a.out, pos=P.astype(np.float32), nrm=N.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32), col=col,
+    np.savez_compressed(a.out, **M.normal_extra(g, tex), pos=P.astype(np.float32), nrm=N.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32), col=col,
                         skinI=si, skinW=sw, tex=tex.astype(np.uint8), meta=json.dumps(meta))
     print("Bestie", a.family, len(P), "Ecken,", len(F), "Dreiecke,", len(bones), "Knochen", "(%d Ecken ohne Bone-Heat-Gewicht)" % miss if miss else "", a.out)
 

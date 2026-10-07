@@ -128,6 +128,16 @@
           const t = A.texture("beast." + k, g.beasts[k].tex, { srgb: true });
           if (t) waits.push(t.userData.ready);
         }
+        // Normalenkarten (Meshy mit enable_pbr) unter dem Schluessel der Farbtextur mit ".n"
+        const nmap = (key, e) => {
+          const t = e && e.ntex ? A.texture(key + ".n", e.ntex, { srgb: false }) : null;
+          if (t) waits.push(t.userData.ready);
+        };
+        for (const k in data.gen) if (data.gen[k].kind === "rig") nmap("rig." + k, data.gen[k]);
+        for (const k in data.rigPieces) nmap("rigpiece." + k, data.rigPieces[k]);
+        for (const k in data.genWeapons) nmap("weapon." + k, data.genWeapons[k]);
+        for (const k in data.genProps) nmap("prop." + k, data.genProps[k]);
+        for (const k in g.beasts || {}) nmap("beast." + k, g.beasts[k]);
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
       A.data = data;

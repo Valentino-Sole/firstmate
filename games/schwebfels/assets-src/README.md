@@ -127,6 +127,9 @@ Wichtige Regeln der Strecke:
   `gen_pack.py --no-auto` schaltet das ab, dann nur über `R.buildHero({ gen: "<figur>", ... })`.
 - Größe: Ziel 8.000 bis 12.000 Dreiecke je Held (`--tris`), Textur 1024 px (`--tex`), Bewegungen mit 30 Bildern pro
   Sekunde und ohne unbewegte Knochen. `build.mjs` bettet beide Pakete mit gzip ein.
+- Normalenkarten: `meshy_api.py` bestellt mit `enable_pbr` (laut Meshy-Preisliste ohne Aufpreis, abschaltbar mit
+  `--ohne-pbr`). Alle Werkzeuge übernehmen die Normalenkarte in halber Texturgröße (`ntex`, etwa 70 KB je Figur); im
+  Spiel bringt sie Falten, Kanten und Verzierungen ohne mehr Dreiecke. Licht und Render-Einstellungen bleiben gleich.
 - Meshy-Skelett: 24 Knochen ohne Finger (Hips, Spine02, Spine01, Spine, neck, Head, Schultern, Arme, Hände, Beine,
   Füße, Zehen). Waffen hängen an der Hand; ein Greifen der Finger gibt es nicht.
 - Rüstungsteile: `python fit_piece.py <aus>/teile/harnisch_eisen.npz <aus>/nordmann_f.npz harnisch.glb --slot brust

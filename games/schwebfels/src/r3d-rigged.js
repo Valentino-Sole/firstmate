@@ -102,9 +102,12 @@
     return (GGEO[ck] = g);
   }
   const GMAT = {};
-  function mat(key, ref, color, texKey) {
+  // nref: Normalenkarte aus Meshy (enable_pbr), bringt Falten, Naehte und Verzierungen ohne mehr Dreiecke
+  function mat(key, ref, color, texKey, nref) {
     if (GMAT[key]) return GMAT[key];
-    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture(texKey || "rig." + key, ref, { srgb: true }) : null });
+    const tk = texKey || "rig." + key;
+    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture(tk, ref, { srgb: true }) : null });
+    if (nref) m.normalMap = SB.assets.texture(tk + ".n", nref, { srgb: false });
     return (GMAT[key] = m);
   }
   function makeBones(E) {
@@ -417,7 +420,7 @@
       g.setIndex(new T.BufferAttribute(W.idx, 1));
       WGEO[name] = g;
     }
-    const m = new T.Mesh(WGEO[name], mat("weapon." + name, W.tex, null, "weapon." + name));
+    const m = new T.Mesh(WGEO[name], mat("weapon." + name, W.tex, null, "weapon." + name, W.ntex));
     m.castShadow = true;
     return m;
   }
@@ -452,7 +455,7 @@
       g.setIndex(new T.BufferAttribute(E.idx, 1));
       PGEOM[name] = g;
     }
-    const m = new T.Mesh(PGEOM[name], mat("prop." + name, E.tex, null, "prop." + name));
+    const m = new T.Mesh(PGEOM[name], mat("prop." + name, E.tex, null, "prop." + name, E.ntex));
     m.material.roughness = 0.85;
     m.castShadow = true;
     m.receiveShadow = true;
@@ -524,7 +527,7 @@
         g.setIndex(keep);
         g = g.toNonIndexed();
       }
-      const mesh = new T.Mesh(g, mat("piece." + name, Pc.tex, null, "rigpiece." + name));
+      const mesh = new T.Mesh(g, mat("piece." + name, Pc.tex, null, "rigpiece." + name, Pc.ntex));
       if (Pc.slot === "handschuhe") mesh.rotation.z = -Math.PI / 2;
       mesh.rotation.y = 0.3;
       return mesh;
@@ -751,7 +754,7 @@
     const gk = key + "|" + worn.concat(rp).join(",");
     const rpHide = rp.length && !GGEO[gk] ? pieceHide(rp, key, E) : null;
     const hide = masks.length || rpHide ? (t) => masks.some((mk) => (mk[t >> 3] >> (t & 7)) & 1) || (rpHide && rpHide(t)) : null;
-    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk), mat(key, E.tex));
+    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk), mat(key, E.tex, null, null, E.ntex));
     E.skel.parents.forEach((p, i) => p < 0 && mesh.add(bones[i]));
     mesh.updateMatrixWorld(true);
     mesh.bind(new T.Skeleton(bones));
@@ -768,7 +771,7 @@
     }
     for (const nm of rp) {
       const Pc = PIECES()[nm];
-      const pm = new T.SkinnedMesh(pieceGeo(nm, key, E), mat("piece." + nm, Pc.tex, null, "rigpiece." + nm));
+      const pm = new T.SkinnedMesh(pieceGeo(nm, key, E), mat("piece." + nm, Pc.tex, null, "rigpiece." + nm, Pc.ntex));
       pm.bind(mesh.skeleton, mesh.bindMatrix);
       pm.frustumCulled = false;
       pm.castShadow = true;

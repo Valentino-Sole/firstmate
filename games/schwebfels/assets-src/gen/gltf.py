@@ -117,6 +117,19 @@ class GLTF:
             src = next(iter(tex.get("extensions", {}).values()), {}).get("source")
         return src, fac, t.get("texCoord", 0)
 
+    def normal_tex(self, mat_index):
+        """Bildindex der Normalenkarte eines Materials oder None (Meshy liefert sie mit enable_pbr)."""
+        if mat_index is None:
+            return None
+        t = self.j["materials"][mat_index].get("normalTexture")
+        if not t:
+            return None
+        tex = self.j["textures"][t["index"]]
+        src = tex.get("source")
+        if src is None:
+            src = next(iter(tex.get("extensions", {}).values()), {}).get("source")
+        return src
+
     # ---------- Lage ----------
     def local(self, i, trs=None):
         n = self.nodes[i]

@@ -221,6 +221,7 @@ function buildPack(file, gameBones) {
       skinI: P.u8(F.si),
       skinW: P.u8(F.sw),
       tex: P.img(png(4, 4, [200, 120, 60]), "image/png"),
+      ntex: P.img(png(4, 4, [128, 128, 255]), "image/png"),
       skel: { names: NAMES, parents: PAR, rest: P.f32(POS.flat()) },
       map,
       j: P.f32(J),
@@ -422,6 +423,7 @@ const res = await page.evaluate(async () => {
   ok(!!P.clips, "Held ohne Bewegungsspieler");
   ok(P.clips && P.clips.cur && P.clips.cur.action === "idle" && P.clips.cur.act.getEffectiveWeight() === 1, "keine volle Ruhehaltung ab dem ersten Bild");
   ok(!!P.weapon && P.weapon.parent === P.B["hand.R"], "Waffe nicht an der rechten Hand");
+  ok(P.mesh.material.normalMap && P.mesh.material.normalMap.colorSpace !== "srgb", "Normalenkarte der Figur fehlt oder hat den falschen Farbraum");
   ok(!!P.helmet && P.B.head.children.includes(P.helmet), "Helm nicht am Kopf");
   ok(P.B["hand.R"].name === "RightHand" && P.B.chest.name === "Spine", "Spielgelenke falsch zugeordnet");
   // Ruestungsteil passend zum Harnisch: angelegt, Haut darunter ausgeblendet, Abstand zur Achse plausibel, Bild aus dem Teil

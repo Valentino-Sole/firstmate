@@ -157,7 +157,7 @@ def static_parts(path):
             uv = g.accessor(at[uvk]).astype(np.float64) if uvk in at else np.zeros((len(pos), 2))
             idx = g.accessor(prim["indices"])[:, 0].astype(np.int64) if "indices" in prim else np.arange(len(pos))
             wp = (np.c_[pos, np.ones(len(pos))] @ Wm.T)[:, :3]
-            parts.append(dict(pos=wp, uv=uv, idx=idx.reshape(-1, 3), img=img, fac=fac))
+            parts.append(dict(pos=wp, uv=uv, idx=idx.reshape(-1, 3), img=img, fac=fac, nimg=g.normal_tex(prim.get("material"))))
     if not parts:
         raise SystemExit("Keine Dreiecksnetze im Teil gefunden: " + path)
     return g, parts
@@ -395,7 +395,7 @@ def main():
     name = a.name or os.path.splitext(os.path.basename(a.piece))[0]
     pmeta = {"name": name, "slot": a.slot, "forms": [f for f in a.forms.split(",") if f], "bones": [names[b] for b in used],
              "nt": NT, "na": NA, "t0": T0, "t1": T1, "ref": os.path.splitext(os.path.basename(a.body))[0], "occ": sorted(occ)}
-    np.savez_compressed(a.out, kind="piece", pos=fpos.astype(np.float32), uv=puv.astype(np.float32), idx=ptri.astype(np.int32),
+    np.savez_compressed(a.out, **M.normal_extra(g, tex), kind="piece", pos=fpos.astype(np.float32), uv=puv.astype(np.float32), idx=ptri.astype(np.int32),
                         bone=enc_b.astype(np.uint8), tto=enc[:, :, 1:].astype(np.float32), w=w2.astype(np.float32), tex=tex.astype(np.uint8),
                         occ=np.stack([occ[k] for k in sorted(occ)]) if occ else np.zeros((0, NT, NA), np.uint8), meta=json.dumps(pmeta, ensure_ascii=False))
     print("Teil", name, "(", a.slot, "):", len(fpos), "Ecken,", len(ptri), "Dreiecke,", len(used), "Knochen,", a.out)

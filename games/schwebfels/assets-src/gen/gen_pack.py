@@ -33,6 +33,13 @@ def tex(a, q=84):
     return P.img(b.getvalue(), "image/webp")
 
 
+def ntex(z, e):
+    """Normalenkarte (falls vorhanden) unter "ntex" ablegen; leicht verlustbehaftet, aber hoeher als die Farbe."""
+    if "ntex" in z.files:
+        e["ntex"] = tex(z["ntex"], 92)
+    return e
+
+
 def part(z, pre):
     return {"pos": P.q16(z[pre + "_pos"], 1 / 12000), "uv": P.q16(z[pre + "_uv"]), "idx": P.index(z[pre + "_idx"]),
             "skinI": P.arr(z[pre + "_si"], "u8"), "skinW": P.arr(z[pre + "_sw"], "u8")}
@@ -53,40 +60,41 @@ def rig(z, name, clips):
         clips[cm["name"]] = {"d": cm["d"], "fps": cm["fps"], "n": cm["frames"], "bones": cm["bones"], "hipsY": cm["hipsY"],
                              "hit": [cm["hitHand"], cm["hitBody"]], "loop": cm["loop"],
                              "q": P.q16(rot, 1 / 32767), "hips": P.q16(z["clip%d_hips" % k])}
-    print("Figur", name, len(z["pos"]), "Ecken,", len(z["idx"]), "Dreiecke,", len(meta["names"]), "Knochen,", len(meta["clips"]), "Bewegungen")
-    return e
+    print("Figur", name, len(z["pos"]), "Ecken,", len(z["idx"]), "Dreiecke,", len(meta["names"]), "Knochen,", len(meta["clips"]), "Bewegungen",
+          "mit Normalenkarte" if "ntex" in z.files else "")
+    return ntex(z, e)
 
 
 def piece(z):
     """Ruestungsteil aus fit_piece.py: knochenbezogen, passt sich im Spiel jedem Koerper mit gleichen Knochen an."""
     meta = json.loads(str(z["meta"]))
     occ = z["occ"]
-    return {"slot": meta["slot"], "forms": meta["forms"], "bones": meta["bones"], "grid": [meta["nt"], meta["na"], meta["t0"], meta["t1"]], "ref": meta["ref"],
+    return ntex(z, {"slot": meta["slot"], "forms": meta["forms"], "bones": meta["bones"], "grid": [meta["nt"], meta["na"], meta["t0"], meta["t1"]], "ref": meta["ref"],
             "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "bone": P.arr(z["bone"], "u8"), "tto": P.q16(z["tto"]),
             "w": P.arr(np.round(z["w"][:, 0] * 255), "u8"), "tex": tex(z["tex"]),
-            "occ": {n: P.arr(np.packbits(occ[i].astype(np.uint8).ravel(), bitorder="little"), "u8") for i, n in enumerate(meta["occ"])}}
+            "occ": {n: P.arr(np.packbits(occ[i].astype(np.uint8).ravel(), bitorder="little"), "u8") for i, n in enumerate(meta["occ"])}})
 
 
 def beast(z):
     """Bestie aus beasts/from_glb.py: gleiches Format wie die Bestien in schwebfels.pack, dazu die Textur."""
     meta = json.loads(str(z["meta"]))
     n = z["nrm"] / np.maximum(1e-9, np.linalg.norm(z["nrm"], axis=1, keepdims=True))
-    return {"pos": P.q16(z["pos"], 1 / 12000), "nrm": P.arr(np.clip(np.round(n * 127), -127, 127).astype(np.int8), "i8"), "uv": P.q16(z["uv"]),
-            "idx": P.index(z["idx"]), "col": P.arr(z["col"], "u8"), "skinI": P.arr(z["skinI"], "u8"), "skinW": P.arr(z["skinW"], "u8"),
-            "tex": tex(z["tex"]), "meta": meta}
+    return ntex(z, {"pos": P.q16(z["pos"], 1 / 12000), "nrm": P.arr(np.clip(np.round(n * 127), -127, 127).astype(np.int8), "i8"), "uv": P.q16(z["uv"]),
+                    "idx": P.index(z["idx"]), "col": P.arr(z["col"], "u8"), "skinI": P.arr(z["skinI"], "u8"), "skinW": P.arr(z["skinW"], "u8"),
+                    "tex": tex(z["tex"]), "meta": meta})
 
 
 def weapon(z):
     """Waffe oder Schild aus weapon.py: feste Form mit Griffpunkt im Ursprung, ersetzt im Spiel die gebaute Waffe."""
     meta = json.loads(str(z["meta"]))
-    return {"pos": P.q16(z["pos"]), "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "tex": tex(z["tex"]),
-            "base": meta["base"], "forms": meta["forms"], "rarity": meta["rarity"]}
+    return ntex(z, {"pos": P.q16(z["pos"]), "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "tex": tex(z["tex"]),
+                    "base": meta["base"], "forms": meta["forms"], "rarity": meta["rarity"]})
 
 
 def prop(z):
     """Requisit aus prop.py: feste Form fuer die Kampfumgebung eines Reiches (Baum, Deko, Wahrzeichen)."""
     meta = json.loads(str(z["meta"]))
-    return {"pos": P.q16(z["pos"]), "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "tex": tex(z["tex"]), "realm": meta["realm"], "role": meta["role"]}
+    return ntex(z, {"pos": P.q16(z["pos"]), "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "tex": tex(z["tex"]), "realm": meta["realm"], "role": meta["role"]})
 
 
 gen = {}

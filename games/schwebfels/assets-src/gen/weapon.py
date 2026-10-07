@@ -167,7 +167,7 @@ def main():
     lo, hi = P.min(0), P.max(0)
     meta = {"name": name, "base": a.base, "forms": [x for x in a.forms.split(",") if x], "rarity": [x for x in a.seltenheit.split(",") if x],
             "min": [float(v) for v in lo], "max": [float(v) for v in hi], "grip": float(gf)}
-    np.savez_compressed(a.out, kind="weapon", pos=P.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32),
+    np.savez_compressed(a.out, **M.normal_extra(g, tex), kind="weapon", pos=P.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32),
                         tex=tex.astype(np.uint8), meta=json.dumps(meta, ensure_ascii=False))
     print("Waffe %s (%s): %d Dreiecke (vorher %d), Laenge %.2f m, Griff bei %.0f %% vom Ende, Bereich X %.2f..%.2f Y %.2f..%.2f, Textur %d px"
           % (name, a.base, len(F), tris_in, hi[1] - lo[1], gf * 100, lo[0], hi[0], lo[1], hi[1], tex.shape[1]))

@@ -69,6 +69,7 @@
     if (MC[key]) return MC[key];
     const tint = new T.Color("#ffffff").lerp(new T.Color(m.color || "#ffffff"), 0.45);
     const mat = new T.MeshStandardMaterial({ color: tint, map: SB.assets.texture("beast." + fam, B.tex, { srgb: true }), roughness: 0.8, metalness: 0 });
+    if (B.ntex) mat.normalMap = SB.assets.texture("beast." + fam + ".n", B.ntex, { srgb: false });
     return (MC[key] = mat);
   }
 

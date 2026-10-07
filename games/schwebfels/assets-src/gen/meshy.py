@@ -220,7 +220,7 @@ def rest_mesh(g, joints):
                 wp = (hom @ Mn.T)[:, :3]
                 gj = np.full((n, 1), jidx[anc])
                 jw = np.ones((n, 1))
-            out.append(dict(pos=wp, uv=uv, idx=idx.reshape(-1, 3), ji=gj, jw=jw, img=img, fac=fac))
+            out.append(dict(pos=wp, uv=uv, idx=idx.reshape(-1, 3), ji=gj, jw=jw, img=img, fac=fac, nimg=g.normal_tex(prim.get("material"))))
     if not out:
         raise SystemExit("Keine Dreiecksnetze gefunden.")
     return out
@@ -328,6 +328,8 @@ def decimate(pos, uv, tri, ji, jw, target):
 
 # ---------- Textur ----------
 def atlas(g, parts, size):
+    """Texturatlas der Grundfarbe (Rueckgabe). Haben Teile eine Normalenkarte, liegt der passende Atlas in
+    g.atlas_normal (gleiche Felder, flache Normale fuer Teile ohne Karte), sonst ist g.atlas_normal None."""
     from PIL import Image
     keys = []
     for p in parts:
@@ -354,6 +356,21 @@ def atlas(g, parts, size):
                 im = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
             tile = im
         canvas.paste(tile, ((t % grid) * cell, (t // grid) * cell))
+    # Normalenkarten in dieselben Felder (je Feld die Karte des ersten Teils mit diesem Feld)
+    g.atlas_normal = None
+    if any(p.get("nimg") is not None for p in parts):
+        ncan = Image.new("RGB", canvas.size, (128, 128, 255))
+        done = set()
+        for p in parts:
+            t = p["tile"]
+            if t in done or p.get("nimg") is None:
+                continue
+            done.add(t)
+            data, _ = g.image_bytes(p["nimg"])
+            c = canvas.size[0] // grid if n > 1 else canvas.size[0]
+            im = Image.open(io.BytesIO(data)).convert("RGB").resize((c, c), Image.LANCZOS)
+            ncan.paste(im, ((t % grid) * c, (t // grid) * c))
+        g.atlas_normal = np.asarray(ncan)
     for p in parts:
         t = p["tile"]
         uv = p["uv"]
@@ -364,6 +381,16 @@ def atlas(g, parts, size):
             uv = np.c_[((t % grid) + fu[:, 0]) / grid, ((t // grid) + fu[:, 1]) / grid]
         p["uv_game"] = np.c_[uv[:, 0], 1.0 - uv[:, 1]]  # Spiel: V nach oben (wie Blender und three.js mit flipY)
     return np.asarray(canvas)
+
+
+def normal_extra(g, tex):
+    """Normalenkarte zum Speichern ({"ntex": Bild} oder leer), halb so gross wie die Farbtextur (mindestens 256 px):
+    im Spiel sind die Figuren klein, die Feinheiten der Oberflaeche reichen so und das Paket bleibt klein."""
+    from PIL import Image
+    if getattr(g, "atlas_normal", None) is None:
+        return {}
+    s = max(256, tex.shape[1] // 2)
+    return {"ntex": np.asarray(Image.fromarray(g.atlas_normal).resize((s, s), Image.LANCZOS)).astype(np.uint8)}
 
 
 # ---------- Bewegungen ----------
@@ -758,6 +785,7 @@ def main():
     arrs = dict(kind="rig", pos=pos.astype(np.float32), uv=uv.astype(np.float32), idx=tri.astype(np.int32), skin_i=order.astype(np.uint8),
                 skin_w=w8.astype(np.uint8), tex=tex.astype(np.uint8), rest=TP.astype(np.float32),
                 joints=np.array([J[gb] for gb in game_bones], np.float32), meta=json.dumps(meta, ensure_ascii=False))
+    arrs.update(normal_extra(g, tex))
     for k, cl in enumerate(uniq):
         arrs["clip%d_rot" % k] = cl["rot"]
         arrs["clip%d_hips" % k] = cl["hips"]

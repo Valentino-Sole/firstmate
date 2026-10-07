@@ -60,7 +60,7 @@ def main():
     name = a.name or os.path.splitext(os.path.basename(a.out))[0]
     lo, hi = P.min(0), P.max(0)
     meta = {"name": name, "realm": a.realm, "role": a.rolle, "min": [float(v) for v in lo], "max": [float(v) for v in hi]}
-    np.savez_compressed(a.out, kind="prop", pos=P.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32),
+    np.savez_compressed(a.out, **M.normal_extra(g, tex), kind="prop", pos=P.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32),
                         tex=tex.astype(np.uint8), meta=json.dumps(meta, ensure_ascii=False))
     print("Requisit %s (%s, %s): %d Dreiecke (vorher %d), Hoehe %.2f m, Breite %.2f m, Textur %d px"
           % (name, a.realm, a.rolle, len(F), tris_in, hi[1] - lo[1], max(hi[0] - lo[0], hi[2] - lo[2]), tex.shape[1]))

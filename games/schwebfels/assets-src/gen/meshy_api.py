@@ -157,9 +157,9 @@ def data_uri(path):
     return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
 
 
-def request_3d(bild, polys, pose, prompt):
+def request_3d(bild, polys, pose, prompt, pbr=True):
     body = {"image_url": "(Bild " + os.path.basename(bild) + ")", "ai_model": "latest", "topology": "triangle", "should_remesh": True,
-            "target_polycount": polys, "should_texture": True, "enable_pbr": False, "texture_resolution": "2k",
+            "target_polycount": polys, "should_texture": True, "enable_pbr": pbr, "texture_resolution": "2k",
             "remove_lighting": True, "image_enhancement": True, "target_formats": ["glb"]}
     if pose:
         body["pose_mode"] = pose
@@ -193,7 +193,7 @@ def cmd_figur(a):
     st = S.state
     cost = (0 if st.get("image_to_3d", {}).get("ok") else PRICE["image-to-3d"]) + (0 if st.get("rigging", {}).get("ok") else PRICE["rigging"])
     guard(a.budget, cost, "Figur %s (Bild zu 3D und Rigging)" % a.name)
-    body = request_3d(a.bild, a.polys, a.pose, a.prompt)
+    body = request_3d(a.bild, a.polys, a.pose, a.prompt, not a.ohne_pbr)
     if a.trocken:
         print("Trockenlauf, nichts gesendet:\n POST image-to-3d", json.dumps(body, ensure_ascii=False), "\n POST rigging", json.dumps({"input_task_id": "<aus Schritt 1>", "height_meters": a.hoehe}))
         return
@@ -222,7 +222,7 @@ def cmd_teil(a):
     S = Store(a.out, a.name)
     cost = 0 if S.state.get("image_to_3d", {}).get("ok") else PRICE["image-to-3d"]
     guard(a.budget, cost, "Teil %s (Bild zu 3D)" % a.name)
-    body = request_3d(a.bild, a.polys, None, a.prompt)
+    body = request_3d(a.bild, a.polys, None, a.prompt, not a.ohne_pbr)
     if a.trocken:
         print("Trockenlauf, nichts gesendet:\n POST image-to-3d", json.dumps(body, ensure_ascii=False))
         return
@@ -299,6 +299,7 @@ def main():
     p.add_argument("--polys", type=int, default=15000)
     p.add_argument("--pose", default="t-pose", choices=["t-pose", "a-pose"], help="T-Haltung passt zum Meshy-Skelett")
     p.add_argument("--prompt")
+    p.add_argument("--ohne-pbr", action="store_true", help="ohne Normalenkarte (Standard: mit, gleicher Preis laut Meshy-Preisliste)")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
     p = sub.add_parser("teil")
@@ -306,6 +307,7 @@ def main():
     p.add_argument("bild")
     p.add_argument("--polys", type=int, default=5000)
     p.add_argument("--prompt")
+    p.add_argument("--ohne-pbr", action="store_true", help="ohne Normalenkarte (Standard: mit, gleicher Preis laut Meshy-Preisliste)")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
     p = sub.add_parser("bewegungen")
