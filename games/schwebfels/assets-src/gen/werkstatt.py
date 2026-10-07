@@ -92,9 +92,13 @@ def record(name, art, bild, ansichten=(), **params):
     json.dump(W, open(p, "w"), indent=1, ensure_ascii=False)
     try:
         from PIL import Image
-        im = Image.open(bild).convert("RGB")
-        im.thumbnail((1024, 1024))
-        im.save(os.path.join(d, "konzept.png"))
+        for i in range(len(ansichten) + 1, 4):  # Ansichten einer frueheren Bestellung mit mehr Bildern
+            if os.path.exists(os.path.join(d, "ansicht_%d.png" % i)):
+                os.remove(os.path.join(d, "ansicht_%d.png" % i))
+        for i, src in enumerate([bild] + list(ansichten)):
+            im = Image.open(src).convert("RGB")
+            im.thumbnail((1024, 1024))
+            im.save(os.path.join(d, "konzept.png" if i == 0 else "ansicht_%d.png" % i))
     except Exception as e:  # Bericht ohne Konzeptbild ist besser als ein Abbruch der Bestellung
         print("Konzeptbild nicht uebernommen:", e)
 
@@ -508,7 +512,8 @@ def cmd_bericht(a):
         parts.append("<h2>%s <small>%s</small></h2>" % (esc(m["name"]), ART.get(m["art"], m["art"])))
         pics = []
         has_cmp = os.path.exists(os.path.join(m["dir"], "vergleich.png"))  # zeigt das Konzeptbild schon links
-        for fn, label in (("konzept.png", "Konzept"), ("vorschau.png", "Meshy-Vorschau"), ("vergleich.png", "Konzept und Spielbilder")):
+        views = [("ansicht_%d.png" % i, "Weitere Ansicht %d" % i) for i in (1, 2, 3)]
+        for fn, label in [("konzept.png", "Konzept")] + views + [("vorschau.png", "Meshy-Vorschau"), ("vergleich.png", "Konzept und Spielbilder")]:
             if fn == "konzept.png" and has_cmp:
                 continue
             p = os.path.join(m["dir"], fn)
