@@ -381,7 +381,7 @@
     let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
     h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
     const gest = UI.gestalten(s.race, s.gender);
-    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act");
+    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act", { race: s.race, gender: s.gender, cls: s.cls, realm: s.realm });
     else {
       h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
       if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);

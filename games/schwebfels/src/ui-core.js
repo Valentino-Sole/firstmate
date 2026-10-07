@@ -61,12 +61,16 @@
     const RG = SB.R3D && SB.R3D.rigged;
     return RG && RG.variants ? RG.variants(race, gender).slice(0, D.HAIR_STYLES.length) : [];
   };
-  UI.gestaltHtml = function (L, n, act) {
+  // desc (Volk, Geschlecht, Klasse): mit 3D zeigt jede Wahl ein kleines Portrait der Figur
+  UI.gestaltHtml = function (L, n, act, desc) {
     const cur = Math.abs(L.hairStyle | 0) % n;
     let h = "<h4>Gestalt</h4>";
     if (n > 1) {
       h += '<div class="choices">';
-      for (let i = 0; i < n; i++) h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">Gestalt ' + (i + 1) + "</button>";
+      for (let i = 0; i < n; i++) {
+        const pic = desc && UI.use3d ? UI.portrait(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
+        h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">' + (pic.indexOf("<img") === 0 ? pic : "") + "Gestalt " + (i + 1) + "</button>";
+      }
       h += "</div>";
     }
     return h + '<p class="muted small">Diese Figur ist fertig modelliert: Haut, Haare und Gesicht gehören zu ihrer Gestalt.</p>';

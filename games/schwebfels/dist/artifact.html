@@ -16765,12 +16765,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const RG = SB.R3D && SB.R3D.rigged;
     return RG && RG.variants ? RG.variants(race, gender).slice(0, D.HAIR_STYLES.length) : [];
   };
-  UI.gestaltHtml = function (L, n, act) {
+  // desc (Volk, Geschlecht, Klasse): mit 3D zeigt jede Wahl ein kleines Portrait der Figur
+  UI.gestaltHtml = function (L, n, act, desc) {
     const cur = Math.abs(L.hairStyle | 0) % n;
     let h = "<h4>Gestalt</h4>";
     if (n > 1) {
       h += '<div class="choices">';
-      for (let i = 0; i < n; i++) h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">Gestalt ' + (i + 1) + "</button>";
+      for (let i = 0; i < n; i++) {
+        const pic = desc && UI.use3d ? UI.portrait(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
+        h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">' + (pic.indexOf("<img") === 0 ? pic : "") + "Gestalt " + (i + 1) + "</button>";
+      }
       h += "</div>";
     }
     return h + '<p class="muted small">Diese Figur ist fertig modelliert: Haut, Haare und Gesicht gehören zu ihrer Gestalt.</p>';
@@ -17859,7 +17863,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
     h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
     const gest = UI.gestalten(s.race, s.gender);
-    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act");
+    if (gest.length) h += UI.gestaltHtml(L, gest.length, "data-act", { race: s.race, gender: s.gender, cls: s.cls, realm: s.realm });
     else {
       h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
       if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
@@ -18912,7 +18916,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
       '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
-      (gest.length ? UI.gestaltHtml(L, gest.length, "data-cact") :
+      (gest.length ? UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) :
         "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
         (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
         "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
