@@ -28,6 +28,9 @@ node tests/talents.mjs
 
 # Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium)
 node build.mjs && node tests/e2e.mjs screens
+
+# Figuren mit eigenem Skelett (Meshy-Strecke) mit einer eigenen Prüffigur
+node tests/rigged.mjs
 ```
 
 Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` auf eine JSON-Datei `{ "url": "lokaler/pfad" }` zeigen; die Anfragen werden dann aus diesen Dateien bedient.

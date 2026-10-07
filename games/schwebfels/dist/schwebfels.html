@@ -7419,7 +7419,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const D = SB.data;
     const raceId = D.RACES[desc.race] ? desc.race : OLD_RACE[desc.race] || "albier";
     // Figur mit eigenem Skelett (Meshy-Strecke), die fuer dieses Volk und Geschlecht hinterlegt ist
-    const auto = RG && !desc.noGen ? RG.auto(raceId, desc.gender) : null;
+    const auto = RG && !desc.noGen ? RG.auto(raceId, desc.gender, desc.look && desc.look.hairStyle) : null;
     if (auto) return RG.build(desc, auto);
     const race = D.RACES[raceId];
     const clsId = D.CLASSES[desc.cls] ? desc.cls : OLD_CLS[desc.cls] || "schildritter";
@@ -7600,15 +7600,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   const GEN = () => (SB.assets && SB.assets.data && SB.assets.data.gen) || {};
   const CLIPS = () => (SB.assets && SB.assets.data && SB.assets.data.clips) || {};
   RG.is = (key) => !!(GEN()[key] && GEN()[key].kind === "rig");
-  // Figur, die im Spiel automatisch fuer dieses Volk und Geschlecht steht (gen_pack.py ohne --no-auto)
-  RG.auto = function (race, gender) {
+  // Figur, die im Spiel automatisch fuer dieses Volk und Geschlecht steht (gen_pack.py ohne --no-auto). Gibt es
+  // mehrere, waehlt die Frisur aus dem Aussehen zwischen ihnen (so sehen auch Inselbewohner verschieden aus).
+  RG.auto = function (race, gender, variant) {
     const g = gender === "w" ? "f" : "m";
     const G0 = GEN();
-    for (const k in G0) {
-      const u = G0[k].use;
-      if (u && G0[k].kind === "rig" && u.race === race && u.gender === g) return k;
-    }
-    return null;
+    const all = Object.keys(G0)
+      .filter((k) => G0[k].use && G0[k].kind === "rig" && G0[k].use.race === race && G0[k].use.gender === g)
+      .sort();
+    return all.length ? all[Math.abs(variant | 0) % all.length] : null;
   };
 
   /* ---------- Bewegungswahl ---------- */

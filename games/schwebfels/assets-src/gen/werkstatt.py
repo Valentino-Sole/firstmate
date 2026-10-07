@@ -13,6 +13,8 @@ Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schlu
       wie die anderen Bestien, die Monsterarten aus --archs zeigen dann dieses Tier
   python werkstatt.py paket
       Figurenpaket bauen und eine Spielvorschau (vorschau/schwebfels.html) mit allen Figuren und Teilen erzeugen
+  python werkstatt.py bilder nordmann_f --konzept tafel02.png [--klasse sturmhuene] [--waffe axt]
+      Spielbilder der Figur (Ruhe, Gehen, Angriff) neben dem Konzeptbild: meshy/<figur>/vergleich.png
   python werkstatt.py kosten
       Kostenschaetzung ohne Schluessel
 
@@ -65,6 +67,8 @@ def cmd_figur(a):
     d = os.path.join(ROOT, a.name)
     os.makedirs(BUILD, exist_ok=True)
     anims = sorted(f for f in os.listdir(d) if f.startswith("bewegungen_") and f.endswith(".glb")) if owner == a.name else []
+    if owner == a.name and os.path.exists(os.path.join(d, "gang.glb")):
+        anims.append("gang.glb")  # kostenloser Gang aus dem Rigging (Ersatz, falls ein Bibliotheksgang fehlt)
     args = [PY, os.path.join(HERE, "meshy.py"), os.path.join(BUILD, a.name + ".npz"), os.path.join(d, "rigged.glb"), "--race", a.race, "--gender", a.gender]
     for f in anims:
         args += ["--anim", os.path.join(d, f)]
@@ -110,6 +114,38 @@ def cmd_paket(a):
     print("Ins Spiel uebernehmen (nach Freigabe): cp", pack, os.path.join(GAME, "assets", "gen.pack"), "&& node build.mjs")
 
 
+def cmd_bilder(a):
+    from PIL import Image, ImageDraw
+    page = os.path.join(ROOT, "vorschau", "schwebfels.html")
+    if not os.path.exists(page):
+        cmd_paket(a)
+    out = os.path.join(ROOT, a.name)
+    os.makedirs(out, exist_ok=True)
+    desc = {"gen": a.name, "cls": a.klasse, "gear": {"waffe": {"base": a.waffe, "rarity": "selten", "style": 1}}}
+    shots = []
+    # die Vorschau startet die Bewegung nach 0,3 s mit 2,5 s Dauer; der Schlag trifft also bei 2,8 s
+    for pose, at, label in (("", "1.6", "Ruhe"), ("walk", "1.4", "Gehen"), ("attack", "2.75", "Angriff")):
+        f = os.path.join(out, "spiel_%s.png" % (pose or "ruhe"))
+        run("node", os.path.join(GAME, "tests", "preview.mjs"), f, json.dumps(desc), "held", "420", "560", pose, at, env=dict(os.environ, PAGE=page))
+        shots.append((f, label))
+    ims = []
+    if a.konzept:
+        k = Image.open(a.konzept).convert("RGB")
+        ims.append((k.resize((int(k.width * 560 / k.height), 560)), "Konzept"))
+    ims += [(Image.open(f).convert("RGB"), label) for f, label in shots]
+    W = sum(im.width for im, _ in ims) + 10 * (len(ims) - 1)
+    canvas = Image.new("RGB", (W, 590), (27, 24, 32))
+    d = ImageDraw.Draw(canvas)
+    x = 0
+    for im, label in ims:
+        canvas.paste(im, (x, 0))
+        d.text((x + 8, 566), label, fill=(230, 220, 200))
+        x += im.width + 10
+    path = os.path.join(out, "vergleich.png")
+    canvas.save(path)
+    print("Vergleichsbild:", path)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -140,6 +176,11 @@ def main():
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
     sub.add_parser("paket")
+    p = sub.add_parser("bilder")
+    p.add_argument("name")
+    p.add_argument("--konzept")
+    p.add_argument("--klasse", default="sturmhuene")
+    p.add_argument("--waffe", default="schwert")
     sub.add_parser("kosten")
     a = ap.parse_args()
     if a.cmd == "figur":
@@ -150,6 +191,8 @@ def main():
         cmd_bestie(a)
     elif a.cmd == "paket":
         cmd_paket(a)
+    elif a.cmd == "bilder":
+        cmd_bilder(a)
     else:
         api("kosten")
 

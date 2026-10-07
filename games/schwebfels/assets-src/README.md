@@ -72,6 +72,7 @@ python werkstatt.py teil harnisch_eisen brust.png --slot brust --forms harnisch 
 python werkstatt.py teil handschuh_leder handschuh.png --slot handschuhe --ref nordmann_f --paar --budget 30
 python werkstatt.py bestie wolf tafel19.png --archs wolf --hoehe 1.15 --budget 30
 python werkstatt.py paket                       # Vorschau: assets-src/gen/meshy/vorschau/schwebfels.html
+python werkstatt.py bilder nordmann_f --konzept tafel02.png --waffe axt   # Spielbilder neben dem Konzeptbild
 ```
 
 Die einzelnen Schritte von Hand:
@@ -95,7 +96,8 @@ Wichtige Regeln der Strecke:
   Bewegung auf jede Figur mit gleichen Knochennamen; der Hüftweg wird auf die Hüfthöhe der Figur umgerechnet.
   Bewegungen also nur einmal bei Meshy kaufen; weitere Figuren mit `--no-clips` einlesen.
 - `--as-meshy` baut für fremde Testmodelle (etwa Mixamo-Figuren) das 24-Knochen-Skelett von Meshy nach.
-- Figuren mit `--race` und `--gender` ersetzen im Spiel automatisch den Körper dieses Volkes (auch bei Inselbewohnern);
+- Figuren mit `--race` und `--gender` ersetzen im Spiel automatisch den Körper dieses Volkes (auch bei Inselbewohnern).
+  Mehrere Figuren für dasselbe Volk und Geschlecht sind erlaubt; die Frisur im Aussehen wählt zwischen ihnen;
   `gen_pack.py --no-auto` schaltet das ab, dann nur über `R.buildHero({ gen: "<figur>", ... })`.
 - Größe: Ziel 8.000 bis 12.000 Dreiecke je Held (`--tris`), Textur 1024 px (`--tex`), Bewegungen mit 30 Bildern pro
   Sekunde und ohne unbewegte Knochen. `build.mjs` bettet beide Pakete mit gzip ein.

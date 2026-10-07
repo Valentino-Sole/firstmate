@@ -132,7 +132,24 @@ def data_uri(path):
     mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}.get(ext)
     if not mime:
         raise SystemExit("Meshy nimmt nur .png, .jpg oder .jpeg: " + path)
-    return "data:%s;base64,%s" % (mime, base64.b64encode(open(path, "rb").read()).decode("ascii"))
+    data = open(path, "rb").read()
+    # sehr grosse Konzeptbilder verkleinern (laengste Seite 2048 Pixel), damit die Anfrage handlich bleibt
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(io.BytesIO(data))
+        if max(im.size) > 2048 or len(data) > 6 * 1024 * 1024:
+            im.thumbnail((2048, 2048))
+            b = io.BytesIO()
+            if mime == "image/png":
+                im.save(b, "PNG", optimize=True)
+            else:
+                im.convert("RGB").save(b, "JPEG", quality=92)
+            data = b.getvalue()
+            print("  Bild verkleinert auf", im.size, round(len(data) / 1024), "KB")
+    except ImportError:
+        pass
+    return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
 
 
 def request_3d(bild, polys, pose, prompt):

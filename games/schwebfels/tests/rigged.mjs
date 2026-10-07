@@ -231,6 +231,8 @@ function buildPack(file, gameBones) {
       use: { race: "nordmann", gender: "m" },
     },
   };
+  // zweite Figur fuer dasselbe Volk: die Frisur waehlt zwischen beiden
+  gen.probe2 = Object.assign({}, gen.probe, { tex: P.img(png(4, 4, [90, 160, 90]), "image/png") });
   // Ruestungsteil wie aus fit_piece.py: Ring um den mittleren Wirbel, 3 cm ueber der Koerperoberflaeche
   const G = [12, 24, -0.25, 1.25];
   const rows = 5;
@@ -356,6 +358,7 @@ const res = await page.evaluate(async () => {
     return snap;
   };
   ok(R.rigged.auto("nordmann", "m") === "probe", "automatische Wahl fuer nordmann.m fehlt");
+  ok(R.rigged.auto("nordmann", "m", 1) === "probe2" && R.rigged.auto("nordmann", "m", 2) === "probe", "Frisur waehlt nicht zwischen mehreren Figuren");
   ok(!R.rigged.auto("nordmann", "w"), "nordmann.w darf keine erzeugte Figur bekommen");
   const gear = { waffe: { base: "schwert", rarity: "selten", style: 1 }, nebenhand: { base: "schild", rarity: "selten", style: 0 }, helm: { base: "helm", rarity: "selten", style: 0 } };
   const m = R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear });

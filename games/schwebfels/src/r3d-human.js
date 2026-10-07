@@ -538,7 +538,7 @@
     const D = SB.data;
     const raceId = D.RACES[desc.race] ? desc.race : OLD_RACE[desc.race] || "albier";
     // Figur mit eigenem Skelett (Meshy-Strecke), die fuer dieses Volk und Geschlecht hinterlegt ist
-    const auto = RG && !desc.noGen ? RG.auto(raceId, desc.gender) : null;
+    const auto = RG && !desc.noGen ? RG.auto(raceId, desc.gender, desc.look && desc.look.hairStyle) : null;
     if (auto) return RG.build(desc, auto);
     const race = D.RACES[raceId];
     const clsId = D.CLASSES[desc.cls] ? desc.cls : OLD_CLS[desc.cls] || "schildritter";

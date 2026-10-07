@@ -15,15 +15,15 @@
   const GEN = () => (SB.assets && SB.assets.data && SB.assets.data.gen) || {};
   const CLIPS = () => (SB.assets && SB.assets.data && SB.assets.data.clips) || {};
   RG.is = (key) => !!(GEN()[key] && GEN()[key].kind === "rig");
-  // Figur, die im Spiel automatisch fuer dieses Volk und Geschlecht steht (gen_pack.py ohne --no-auto)
-  RG.auto = function (race, gender) {
+  // Figur, die im Spiel automatisch fuer dieses Volk und Geschlecht steht (gen_pack.py ohne --no-auto). Gibt es
+  // mehrere, waehlt die Frisur aus dem Aussehen zwischen ihnen (so sehen auch Inselbewohner verschieden aus).
+  RG.auto = function (race, gender, variant) {
     const g = gender === "w" ? "f" : "m";
     const G0 = GEN();
-    for (const k in G0) {
-      const u = G0[k].use;
-      if (u && G0[k].kind === "rig" && u.race === race && u.gender === g) return k;
-    }
-    return null;
+    const all = Object.keys(G0)
+      .filter((k) => G0[k].use && G0[k].kind === "rig" && G0[k].use.race === race && G0[k].use.gender === g)
+      .sort();
+    return all.length ? all[Math.abs(variant | 0) % all.length] : null;
   };
 
   /* ---------- Bewegungswahl ---------- */
