@@ -364,7 +364,45 @@
       }
     }
 
+    // Der eigene Held steht gross im Vordergrund (rechts unten, neben einem offenen Fenster), als 3D-Figur mit den
+    // neuen Koerpern; ziehen dreht ihn, ein Klick oeffnet den Charakterbogen
+    let heroBox = null, heroView = null;
+    function setHero(desc) {
+      const R = SB.R3D;
+      if (!desc || !R || !R.ready || !R.ready() || !(SB.ui && SB.ui.use3d)) return;
+      try {
+        if (!heroBox) {
+          heroBox = document.createElement("div");
+          heroBox.className = "ph-hero";
+          heroBox.title = "Dein Held";
+          let down = null;
+          heroBox.addEventListener("pointerdown", (ev) => {
+            ev.stopPropagation();
+            down = [ev.clientX, ev.clientY];
+          });
+          heroBox.addEventListener("pointerup", (ev) => {
+            if (down && Math.abs(ev.clientX - down[0]) + Math.abs(ev.clientY - down[1]) < 6 && opts.onPick) opts.onPick("held");
+            down = null;
+          });
+          root.appendChild(heroBox);
+          heroView = R.createHeroView(heroBox, { distance: 7.6, lookY: 1.1 });
+        }
+        heroView.set(desc);
+      } catch (e) {
+        console.warn("Held auf der gemalten Insel nicht verfuegbar", e);
+      }
+    }
+    function placeHero() {
+      if (!heroBox) return;
+      const hw = Math.round(Math.max(120, Math.min(230, (safe.b - safe.t) * 0.32)));
+      const hh = Math.round(hw * 1.45);
+      heroBox.style.width = hw + "px";
+      heroBox.style.height = hh + "px";
+      heroBox.style.transform = "translate(" + Math.round(safe.r - inset - hw - 10) + "px," + Math.round(safe.b - hh - 4) + "px)";
+    }
+
     function place() {
+      placeHero();
       world.style.transform = "translate(" + view.x.toFixed(1) + "px," + view.y.toFixed(1) + "px) scale(" + view.s.toFixed(4) + ")";
       for (const id in labels) {
         const s = spots[id];
@@ -419,7 +457,7 @@
       return best;
     }
     root.addEventListener("pointerdown", (ev) => {
-      if (ev.target.closest(".hub-label")) return;
+      if (ev.target.closest(".hub-label") || ev.target.closest(".ph-hero")) return;
       root.setPointerCapture(ev.pointerId);
       drag = { x: ev.clientX, y: ev.clientY, fx: goal.fx, fy: goal.fy, moved: 0 };
     });
@@ -457,7 +495,7 @@
 
     return {
       painted: true,
-      setHero() {},
+      setHero,
       realm: () => realm,
       setHome(tier, realmId) {
         if (realmId && realmId !== realm && imgOf(realmId)) {
@@ -472,7 +510,9 @@
         applyDay();
       },
       dayInfo: () => info,
-      cheer() {},
+      cheer() {
+        if (heroView) heroView.play("victory", 1.2);
+      },
       setBadges(map) {
         for (const id in labels) {
           const b = labels[id].querySelector(".hl-badge");
@@ -503,6 +543,7 @@
         cancelAnimationFrame(raf);
         ro.disconnect();
         window.removeEventListener("resize", resize);
+        if (heroView) heroView.dispose();
         root.remove();
       },
     };

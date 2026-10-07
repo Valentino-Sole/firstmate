@@ -76,6 +76,9 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .painted-hub .ph-world img, .painted-hub .ph-world canvas, .painted-hub .ph-shade { position: absolute; inset: 0; width: 1536px; height: 1024px; pointer-events: none; }
 .painted-hub .ph-shade { background: linear-gradient(#24356f, #3a4c8c); mix-blend-mode: multiply; opacity: 0; transition: opacity 2s; }
 
+.painted-hub .ph-hero { position: absolute; left: 0; top: 0; z-index: 2; cursor: pointer; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55)); }
+.painted-hub .ph-hero .r3d-canvas { display: block; }
+
 /* Beschriftungen auf der Insel */
 .hub-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .hub-label {
