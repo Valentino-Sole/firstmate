@@ -127,6 +127,7 @@
   }
 
   // Kopfmass fuer feste Kopfteile (Helme): wie R.gear.fitOf, aber aus dem Netz der Figur
+  const HFIT = {};
   function headFit(E) {
     const H = SB.assets.data.humans;
     const ji = (n) => H.bones.findIndex((b) => b[0] === n);
@@ -389,8 +390,7 @@
     const ck = name + "|" + size;
     if (ICON[ck] !== undefined) return ICON[ck];
     const Pc = PIECES()[name];
-    const Pr = PIECES()[name];
-    const key = Pr && GEN()[Pr.ref] && GEN()[Pr.ref].kind === "rig" ? Pr.ref : Object.keys(GEN()).find((k) => GEN()[k].kind === "rig");
+    const key = Pc && GEN()[Pc.ref] && GEN()[Pc.ref].kind === "rig" ? Pc.ref : Object.keys(GEN()).find((k) => GEN()[k].kind === "rig");
     if (!Pc || !key || !R.ready()) return (ICON[ck] = null);
     T = R.T();
     try {
@@ -449,10 +449,26 @@
 
   /* ---------- Abspielen ---------- */
   const CC = {};
+  // Clipname ohne Gross- und Sonderzeichen vergleichen ("Right Hand Sword Slash" = "Right_Hand_Sword_Slash")
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  let NSRC = null;
+  let NIDX = null;
+  function clipData(name) {
+    const all = CLIPS();
+    if (all[name]) return all[name];
+    if (NSRC !== all) {
+      NSRC = all;
+      NIDX = {};
+      for (const k in all) if (!NIDX[norm(k)]) NIDX[norm(k)] = k;
+    }
+    const k = NIDX[norm(name)];
+    return k ? all[k] : null;
+  }
+  RG.hasClip = (name) => !!clipData(name);
   function clipFor(key, E, name, boneSet) {
     const ck = key + "|" + name;
     if (CC[ck] !== undefined) return CC[ck];
-    const C = CLIPS()[name];
+    const C = clipData(name);
     if (!C || !C.bones.some((b) => boneSet.has(b))) return (CC[ck] = null);
     const n = C.n;
     const nb = C.bones.length;
@@ -505,45 +521,57 @@
     const c = this.pick(action);
     if (!c) return this.settle(this.m.hold || "idle");
     const kind = KIND[action] || "impact";
-    const act = this.mixer.clipAction(c.clip);
-    const same = this.cur && this.cur.act === act;
-    // ein frueher benutzter Clip darf nicht schon waehrend der Wartezeit weiterlaufen
-    if (same) act.reset();
-    else act.stop();
-    act.setLoop(kind === "loop" ? T.LoopRepeat : T.LoopOnce, Infinity);
-    act.clampWhenFinished = kind !== "loop";
     let rate = this.m.speed || 1;
+    let t0 = 0;
     let wait = 0;
     if (kind === "impact") {
       // Ausholen beschleunigen oder kuerzen, bei sehr kurzem Ausholen spaeter beginnen
       const hit = c.hit[BODY_HIT[action] ? 1 : 0];
       rate = Math.min(1.7, Math.max(0.6, hit / Math.max(dur, 0.05)));
-      act.time = Math.max(0, hit - rate * dur);
-      wait = Math.max(0, dur - (hit - act.time) / rate);
+      t0 = Math.max(0, hit - rate * dur);
+      wait = Math.max(0, dur - (hit - t0) / rate);
     } else if (action === "walk") rate *= 1.15;
-    act.timeScale = rate;
-    this.pending = null;
-    if (wait > 0.02 && !same) this.pending = { at: this.clock + wait, act, action, kind, c };
-    else this.go({ action, act, kind, c });
+    const p = { action, kind, c, rate, t0 };
+    // bis zum Start laeuft die bisherige Bewegung weiter (ein gleicher Schlag haelt so seine Endhaltung)
+    this.pending = wait > 0.02 ? Object.assign(p, { at: this.clock + wait }) : null;
+    if (!this.pending) this.go(p);
   };
   Player.prototype.go = function (p) {
-    this.fade(p.act, p.kind === "impact" ? 0.1 : 0.2);
-    this.cur = { action: p.action, act: p.act, kind: p.kind, c: p.c };
+    let act = this.mixer.clipAction(p.c.clip);
+    // derselbe Clip noch einmal (zwei Schlaege nacheinander): zweite Spur, damit die Ueberblendung nicht durch die
+    // Grundhaltung des Skeletts laeuft
+    if (this.cur && this.cur.act === act) act = this.mixer.clipAction(p.c.alt || (p.c.alt = p.c.clip.clone()));
+    act.reset();
+    act.setLoop(p.kind === "loop" ? T.LoopRepeat : T.LoopOnce, Infinity);
+    act.clampWhenFinished = p.kind !== "loop";
+    act.timeScale = p.rate;
+    act.time = p.t0;
+    this.fade(act, p.kind === "impact" ? 0.1 : 0.2);
+    this.cur = { action: p.action, act, kind: p.kind, c: p.c };
   };
   // Ruhe, Halten oder Dauerzustand (Sitzen, Gehen, Schmieden): laufende Bewegung natuerlich ausklingen lassen
   Player.prototype.settle = function (action) {
     this.pending = null;
-    if (this.cur && this.cur.action === action && this.cur.kind !== "impact" && this.cur.kind !== "free") return;
-    if (this.cur && action === "defeat") return;
-    if (this.cur) this.cur.act.timeScale = this.m.speed || 1;
+    const cur = this.cur;
+    if (cur && cur.action === action && cur.kind !== "impact" && cur.kind !== "free") return;
+    if (cur && action === "defeat") return;
+    if (cur) cur.act.timeScale = this.m.speed || 1;
+    // Schlag, Treffer oder Ausweichen schwingen nach dem Spielmoment noch kurz aus (hoechstens 0,6 s), dann Ruhe
+    if (cur && (cur.kind === "impact" || cur.kind === "free") && cur.action !== action) {
+      if (cur.endAt == null) cur.endAt = this.clock;
+      const left = (cur.c.clip.duration - cur.act.time) / Math.max(cur.act.timeScale, 0.01);
+      if (cur.act.isRunning() && left > 0.3 && this.clock - cur.endAt < 0.6) return;
+    }
     const c = this.pick(action);
     if (!c) {
-      if (this.cur) this.cur.act.fadeOut(0.3);
+      if (cur) cur.act.fadeOut(0.3);
       this.cur = null;
       return;
     }
-    const act = this.mixer.clipAction(c.clip);
-    if (!this.cur || this.cur.act !== act) act.reset();
+    let act = this.mixer.clipAction(c.clip);
+    // gleicher Clip als neuer Zustand (etwa Ersatzclip): zweite Spur, sonst blendet er aus der Grundhaltung ein
+    if (cur && cur.act === act) act = this.mixer.clipAction(c.alt || (c.alt = c.clip.clone()));
+    act.reset();
     act.setLoop(T.LoopRepeat, Infinity);
     act.clampWhenFinished = false;
     act.timeScale = this.m.speed || 1;
@@ -605,9 +633,11 @@
     // Ruestungsteile aus dem gemeinsamen Teil: ausdruecklich genannt oder passend zur getragenen Ausruestung
     const culture = desc.realm || C.realm;
     const rp = [...new Set((desc.genGear || []).filter((p) => PIECES()[p]).concat(desc.noRigPieces ? [] : RG.piecesFor(gear, culture)))];
-    const rpHide = rp.length ? pieceHide(rp, key, E) : null;
+    // Koerpernetz ohne verdeckte Haut, je Kombination einmal berechnet
+    const gk = key + "|" + worn.concat(rp).join(",");
+    const rpHide = rp.length && !GGEO[gk] ? pieceHide(rp, key, E) : null;
     const hide = masks.length || rpHide ? (t) => masks.some((mk) => (mk[t >> 3] >> (t & 7)) & 1) || (rpHide && rpHide(t)) : null;
-    const mesh = new T.SkinnedMesh(geo(key, E, hide, key + "|" + worn.concat(rp).join(",")), mat(key, E.tex));
+    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk), mat(key, E.tex));
     E.skel.parents.forEach((p, i) => p < 0 && mesh.add(bones[i]));
     mesh.updateMatrixWorld(true);
     mesh.bind(new T.Skeleton(bones));
@@ -636,7 +666,7 @@
     const rig = { J: E.j, by: B };
     const pk = "rig:" + key;
     const parts = { root, body, mesh, rig, B, prof: { j: E.j, top: E.top, sockets: E.sockets }, pk, gen: true };
-    if (R.gear && R.gear.setFit) R.gear.setFit(pk, headFit(E));
+    if (R.gear && R.gear.setFit) R.gear.setFit(pk, HFIT[key] || (HFIT[key] = headFit(E)));
     // ein getragener Helm als Ruestungsteil ersetzt den gebauten Helm
     const rigid = rp.some((nm) => PIECES()[nm].slot === "helm") ? Object.assign({}, gear, { helm: null }) : gear;
     if (R.gear && R.gear.attachRigid) R.gear.attachRigid(parts, rigid, culture);

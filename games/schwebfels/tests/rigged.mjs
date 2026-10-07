@@ -372,18 +372,30 @@ const res = await page.evaluate(async () => {
   const step = async (m, a, d) => {
     let done = false;
     let snap = null;
+    let minW = 9;
+    const mx = m.parts.clips.mixer;
     m.play(a, d).then(() => (done = true));
     for (let f = 0; f < 600 && !done; f++) {
       const c = m.parts.clips.cur;
       if (c && c.action === a) snap = { clip: c.c.name, t: c.act.time, rate: c.act.timeScale, hit: c.c.hit };
       m.update(1 / 60);
+      // Summe der Gewichte: unter 1 wuerde die Figur kurz zur T-Haltung des Skeletts hin blenden
+      let w = 0;
+      for (let i = 0; i < mx._nActiveActions; i++) w += mx._actions[i].getEffectiveWeight();
+      minW = Math.min(minW, w);
       await Promise.resolve();
     }
+    if (snap) snap.minW = minW;
     return snap;
   };
   ok(R.rigged.auto("nordmann", "m") === "probe", "automatische Wahl fuer nordmann.m fehlt");
   ok(R.rigged.auto("nordmann", "m", 1) === "probe2" && R.rigged.auto("nordmann", "m", 2) === "probe", "Frisur waehlt nicht zwischen mehreren Figuren");
   ok(!R.rigged.auto("nordmann", "w"), "nordmann.w darf keine erzeugte Figur bekommen");
+  ok(R.rigged.hasClip("right hand sword slash") && !R.rigged.hasClip("Tanz"), "Clipnamen ohne Gross- und Sonderzeichen werden nicht gefunden");
+  const t0 = performance.now();
+  for (let i = 0; i < 10; i++) R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear: { ruestung: { base: "harnisch", rarity: "selten", style: 0 }, waffe: { base: "axt", rarity: "selten", style: 0 } } });
+  const per = (performance.now() - t0) / 10;
+  ok(per < 60, "Figur bauen dauert " + per.toFixed(1) + " ms");
   const gear = { waffe: { base: "schwert", rarity: "selten", style: 1 }, nebenhand: { base: "schild", rarity: "selten", style: 0 }, helm: { base: "helm", rarity: "selten", style: 0 } };
   const m = R.buildHero({ race: "nordmann", gender: "m", cls: "sturmhuene", gear });
   const P = m.parts;
@@ -433,6 +445,7 @@ const res = await page.evaluate(async () => {
       fails.push("keine Bewegung fuer " + a);
       continue;
     }
+    ok(s.minW > 0.98, a + ": Bewegung blendet zur Grundhaltung (Gewicht " + s.minW.toFixed(2) + ")");
     if (a !== "victory") {
       const want = s.hit[a === "hit" || a === "evade" ? 1 : 0];
       ok(Math.abs(s.t - want) <= 2.5 * s.rate / 60, a + ": Schlag bei " + s.t.toFixed(3) + " statt " + want);
@@ -485,11 +498,12 @@ const res = await page.evaluate(async () => {
   const b = R.createBattle(el, { setting: "quest", realm: "midgard", left: { kind: "hero", race: "nordmann", cls: "sturmhuene", realm: "midgard", gender: "m", gear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: "midgard" }, hp: [hero.maxHp, foe.maxHp], dayTime: 0.4 });
   const evs = sim.events || sim.log || [];
   for (let i = 0; i < Math.min(evs.length, 6); i++) await b.play(evs[i]);
-  return { fails, timing: timing.map((x) => x.a + ":" + (x.s ? x.s.clip + "@" + x.s.t.toFixed(2) : "-")), lit, wide };
+  return { fails, timing: timing.map((x) => x.a + ":" + (x.s ? x.s.clip + "@" + x.s.t.toFixed(2) : "-")), lit, wide, per };
 });
 await browser.close();
 const all = creator.concat(res.fails, errors);
 console.log("Bewegungen:", res.timing.join(", "));
+console.log("Figur bauen:", res.per.toFixed(1), "ms");
 if (all.length) {
   console.log("FEHLER:\n- " + all.join("\n- "));
   process.exit(1);

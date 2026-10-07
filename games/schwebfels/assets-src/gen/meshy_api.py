@@ -251,6 +251,9 @@ def cmd_bewegungen(a):
             raise SystemExit("Bewegungen fehlgeschlagen: " + json.dumps(t.get("task_error", {}), ensure_ascii=False))
         n += 1
         download(t["result"]["animation_glb_url"], os.path.join(S.dir, "bewegungen_%d.glb" % n))
+        # bestellte Namen neben der Datei: meshy.py ordnet damit die Bewegungen in der Datei zu
+        with open(os.path.join(S.dir, "bewegungen_%d.json" % n), "w") as fh:
+            json.dump({"bewegungen": [{"id": c[0], "name": c[1]} for c in b]}, fh, ensure_ascii=False, indent=1)
         S.state.setdefault("bewegungen_ids", []).extend(c[0] for c in b)
         S.save()
     print("Fertig:", S.dir)

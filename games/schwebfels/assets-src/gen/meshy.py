@@ -372,9 +372,45 @@ def anim_name(raw, k):
     return clean(parts[0] if parts else (raw or "clip%d" % k))
 
 
-def clips_of(g, joints, tgt_of, tgt_names, tgt_parents, A, s, c, fps, hips_t, hand_t, body_t, hipsY, corr):
+def canon_names(g, path, log):
+    """Namen der Bewegungen in einer Meshy-Datei auf die bestellten Bibliotheksnamen bringen. meshy_api.py legt dafuer
+    neben jede Bewegungsdatei eine gleichnamige .json mit den bestellten Bewegungen. Die Namen in der Datei werden
+    ohne Gross- und Sonderzeichen verglichen (genau gleich, sonst enthalten, der laengste Treffer gewinnt); bleiben
+    gleich viele Bewegungen und Namen uebrig, entscheidet die Reihenfolge. Das Spiel waehlt die Clips ueber diese
+    Namen (src/r3d-rigged.js), ein fremder Name wuerde sonst nie gespielt."""
+    raw = [anim_name(a.get("name"), k) for k, a in enumerate(g.j.get("animations", []))]
+    side = os.path.splitext(path)[0] + ".json"
+    if not os.path.exists(side):
+        return raw
+    exp = [e["name"] for e in json.load(open(side)).get("bewegungen", [])]
+    norm = lambda x: re.sub(r"[^a-z0-9]", "", x.lower())  # noqa: E731
+    out = list(raw)
+    used = set()
+    open_ = []
+    for k, r in enumerate(raw):
+        n = norm(r)
+        hits = [e for e in exp if e not in used and norm(e) == n] or [e for e in exp if e not in used and norm(e) and norm(e) in n]
+        if hits:
+            out[k] = max(hits, key=len)
+            used.add(out[k])
+        else:
+            open_.append(k)
+    rest = [e for e in exp if e not in used]
+    if open_ and len(open_) == len(rest):
+        for k, e in zip(open_, rest):
+            out[k] = e
+        log["warnungen"].append("%s: Namen nach Reihenfolge zugeordnet: %s" % (os.path.basename(path), ", ".join("%s=%s" % (raw[k], out[k]) for k in open_)))
+    elif open_ or rest:
+        log["warnungen"].append("%s: ohne Zuordnung: Datei %s, bestellt %s" % (os.path.basename(path), [raw[k] for k in open_], rest))
+    for k in range(len(raw)):
+        if raw[k] != out[k]:
+            print("Bewegung umbenannt:", raw[k], "->", out[k])
+    return out
+
+
+def clips_of(g, joints, tgt_of, tgt_names, tgt_parents, A, s, c, fps, hips_t, hand_t, body_t, hipsY, corr, names=None):
     """Bewegungen der Datei g auf das weltausgerichtete Zielskelett umrechnen.
-    tgt_of[k] = Quellgelenk (Knotenindex in g) fuer Zielknochen k."""
+    tgt_of[k] = Quellgelenk (Knotenindex in g) fuer Zielknochen k; names ersetzt die Namen aus der Datei."""
     out = []
     anims = g.j.get("animations", [])
     if not anims:
@@ -384,7 +420,7 @@ def clips_of(g, joints, tgt_of, tgt_names, tgt_parents, A, s, c, fps, hips_t, ha
         rest_rot[n] = G.rot_of(g.world(n))
     nb = len(tgt_names)
     for ai, a in enumerate(anims):
-        name = anim_name(a.get("name"), ai)
+        name = names[ai] if names else anim_name(a.get("name"), ai)
         ch = g.channels(ai)
         if not ch:
             continue
@@ -706,7 +742,7 @@ def main():
             if any(x is None for x in a_tgt):
                 a_tgt = [x if x is not None else by_name[hipn] for x in a_tgt]
             clips += clips_of(ga, aj, a_tgt, names, parents, A, sa, ca, a.fps, tmap["hips"], [tmap["hand.L"], tmap["hand.R"]],
-                              [tmap["chest"], tmap["head"]], TP[tmap["hips"]][1], corr)
+                              [tmap["chest"], tmap["head"]], TP[tmap["hips"]][1], corr, canon_names(ga, f, log))
     seen = set()
     uniq = []
     for cl in clips:

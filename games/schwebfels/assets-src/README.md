@@ -95,6 +95,9 @@ Wichtige Regeln der Strecke:
 - Alle Skelette werden auf Weltausrichtung und T-Haltung gebracht (Meshy-Figuren stehen schon so). Darum passt jede
   Bewegung auf jede Figur mit gleichen Knochennamen; der Hüftweg wird auf die Hüfthöhe der Figur umgerechnet.
   Bewegungen also nur einmal bei Meshy kaufen; weitere Figuren mit `--no-clips` einlesen.
+- Namen der Bewegungen: `meshy_api.py` legt neben jede Bewegungsdatei eine gleichnamige `.json` mit den bestellten
+  Bibliotheksnamen; `meshy.py` ordnet die Bewegungen der Datei darüber zu (Vergleich ohne Groß- und Sonderzeichen,
+  sonst nach Reihenfolge, Warnung im Protokoll). Das Spiel wählt Clips über diese Namen.
 - `--as-meshy` baut für fremde Testmodelle (etwa Mixamo-Figuren) das 24-Knochen-Skelett von Meshy nach.
 - Figuren mit `--race` und `--gender` ersetzen im Spiel automatisch den Körper dieses Volkes (auch bei Inselbewohnern).
   Mehrere Figuren für dasselbe Volk und Geschlecht sind erlaubt. Heldenerschaffung und Spiegel zeigen für solche
