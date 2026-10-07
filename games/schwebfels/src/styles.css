@@ -300,6 +300,7 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .sheet .col { display: grid; gap: 8px; }
 .heroview { position: relative; height: 360px; border-radius: 4px; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #3a3448 0%, #140f18 70%); border: 1px solid var(--gold-dim); }
 .heroview.small { height: 320px; }
+.heroview.fp-stage { height: min(50vh, 460px); min-height: 280px; margin: 6px 0 4px; position: sticky; top: 0; z-index: 2; }
 .heroview .r3d-canvas { display: block; cursor: grab; }
 .heroview .hv-caption { position: absolute; left: 0; right: 0; top: 6px; text-align: center; pointer-events: none; }
 .heroview .hv-caption b { font-family: var(--font-display); font-size: 24px; font-weight: 400; color: var(--gold-hi); text-shadow: 0 2px 0 #000; }
@@ -616,6 +617,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   #create .ctitle p { display: none; }
   .sheet { grid-template-columns: 60px 1fr 60px; gap: 6px; }
   .heroview { height: 300px; }
+  .heroview.fp-stage { height: 42vh; }
   .grid6 { grid-template-columns: repeat(4, 1fr); }
   .fx-banner { font-size: 28px; }
   .realmcards { grid-template-columns: 1fr; }

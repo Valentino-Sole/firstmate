@@ -308,6 +308,7 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .sheet .col { display: grid; gap: 8px; }
 .heroview { position: relative; height: 360px; border-radius: 4px; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #3a3448 0%, #140f18 70%); border: 1px solid var(--gold-dim); }
 .heroview.small { height: 320px; }
+.heroview.fp-stage { height: min(50vh, 460px); min-height: 280px; margin: 6px 0 4px; position: sticky; top: 0; z-index: 2; }
 .heroview .r3d-canvas { display: block; cursor: grab; }
 .heroview .hv-caption { position: absolute; left: 0; right: 0; top: 6px; text-align: center; pointer-events: none; }
 .heroview .hv-caption b { font-family: var(--font-display); font-size: 24px; font-weight: 400; color: var(--gold-hi); text-shadow: 0 2px 0 #000; }
@@ -624,6 +625,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   #create .ctitle p { display: none; }
   .sheet { grid-template-columns: 60px 1fr 60px; gap: 6px; }
   .heroview { height: 300px; }
+  .heroview.fp-stage { height: 42vh; }
   .grid6 { grid-template-columns: repeat(4, 1fr); }
   .fx-banner { font-size: 28px; }
   .realmcards { grid-template-columns: 1fr; }
@@ -4943,6 +4945,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         for (const k in g.beasts || {}) nmap("beast." + k, g.beasts[k]);
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
+      data.gen = data.gen || {};
       A.data = data;
     } catch (e) {
       A.error = e;
@@ -4950,6 +4953,43 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     done(A.data);
     return A.data;
+  };
+
+  /* Erzeugte Figuren je Reich: eigene Datei gen-<reich>.js neben der Seite (setzt globalThis.SB_GEN_<REICH> als
+     Base64), erst bei Bedarf geladen, damit die Spielseite klein bleibt. Ein Skript-Tag funktioniert auch bei
+     file:// (Vorschau und Tests), wo fetch nicht erlaubt ist. */
+  const GEN_LOAD = {};
+  A.loadGen = function (realm) {
+    if (GEN_LOAD[realm]) return GEN_LOAD[realm];
+    const key = "SB_GEN_" + realm.toUpperCase();
+    const take = () => {
+      const s = globalThis[key];
+      if (!s) return false;
+      Object.assign(A.data.gen, parse(b64(s)).gen || {});
+      globalThis[key] = null;
+      return true;
+    };
+    GEN_LOAD[realm] = A.ready.then(
+      () =>
+        new Promise((ok, fail) => {
+          if (!A.data) return fail(new Error("Modellpaket fehlt"));
+          if (take()) return ok(A.data.gen);
+          const el = document.createElement("script");
+          el.src = "gen-" + realm + ".js";
+          el.onload = () => {
+            try {
+              if (take()) ok(A.data.gen);
+              else fail(new Error("Figurendaten leer"));
+            } catch (e) {
+              fail(e);
+            }
+          };
+          el.onerror = () => fail(new Error("Figurendaten nicht gefunden"));
+          document.head.appendChild(el);
+        })
+    );
+    GEN_LOAD[realm].catch(() => (GEN_LOAD[realm] = null));
+    return GEN_LOAD[realm];
   };
 
   /* Bilder aus dem Paket als Textur (laedt im Hintergrund nach) */
@@ -4965,14 +5005,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     tex.anisotropy = 4;
     const img = new Image();
     const url = URL.createObjectURL(new Blob([ref.bytes], { type: ref.mime }));
-    tex.userData.ready = new Promise((res) => {
+    // ready: erfuellt, sobald das Bild dekodiert ist (Standbilder wie Portraets warten darauf)
+    tex.userData.ready = new Promise((done) => {
       img.onload = () => {
         tex.image = img;
         tex.needsUpdate = true;
         URL.revokeObjectURL(url);
-        res();
+        done(tex);
       };
-      img.onerror = () => res();
+      img.onerror = () => done(tex);
     });
     img.src = url;
     return (TEXC[key] = tex);
@@ -7369,6 +7410,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
      alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
   const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
   HU.hasGen = (key) => !!GEN()[key];
+  // Texturen der erzeugten Koerper vorab dekodieren; erst danach gelten sie als bereit (sonst dunkle Portraets)
+  const GREADY = {};
+  HU.genReady = (key) => GREADY[key] === true;
+  HU.preloadGen = function () {
+    T = R.T();
+    return Promise.all(
+      Object.keys(GEN()).map((k) => {
+        if (GREADY[k]) return null;
+        const G0 = GEN()[k];
+        const m = genMat(k, G0.tex, null, G0.nrm);
+        const waits = [m.map, m.normalMap].filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
+        return Promise.all(waits).then(() => (GREADY[k] = true));
+      })
+    );
+  };
   const GGEO = {};
   function genGeo(src, ck, hide) {
     if (GGEO[ck]) return GGEO[ck];
@@ -7388,9 +7444,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return (GGEO[ck] = g);
   }
   const GMAT = {};
-  function genMat(key, ref, color) {
+  function genMat(key, ref, color, nrm) {
     if (GMAT[key]) return GMAT[key];
-    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture("gen." + key, ref, { srgb: true }) : null });
+    const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.78, metalness: 0, map: ref ? SB.assets.texture("gen." + key, ref, { srgb: true }) : null });
+    if (nrm) {
+      // Feinheiten des hochaufgeloesten Originals (Falten, Naehte, Haarstraehnen) als Normalenbild
+      m.normalMap = SB.assets.texture("gen." + key + ".n", nrm, { srgb: false });
+      m.normalScale = new T.Vector2(1, 1);
+    }
     return (GMAT[key] = m);
   }
   function buildGen(desc) {
@@ -7406,7 +7467,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const worn = (desc.genGear || []).filter((p) => G0.pieces[p]);
     const masks = worn.map((p) => G0.pieces[p].mask).filter(Boolean);
     const hide = masks.length ? (t) => masks.some((m) => (m[t >> 3] >> (t & 7)) & 1) : null;
-    const mesh = new T.SkinnedMesh(genGeo(G0, desc.gen + "|" + worn.join(","), hide), genMat(desc.gen, G0.tex));
+    const mesh = new T.SkinnedMesh(genGeo(G0, desc.gen + "|" + worn.join(","), hide), genMat(desc.gen, G0.tex, null, G0.nrm));
     mesh.add(rig.bones[0]);
     mesh.updateMatrixWorld(true);
     mesh.bind(new T.Skeleton(rig.bones));
@@ -7414,7 +7475,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     mesh.castShadow = true;
     body.add(mesh);
     const prof = { j: G0.j, top: G0.top, sockets: G0.sockets };
-    const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true };
+    // erzeugte Haende sind schon locker gebeugt: freie Hand nur wenig weiter schliessen, mit Waffe ganz (attachRigid)
+    const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true, gripL: 0.12, gripR: 0.12 };
     for (const p of worn) {
       const src = G0.pieces[p];
       const m = new T.SkinnedMesh(genGeo(src, desc.gen + "." + p, null), genMat(desc.gen + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
@@ -7587,8 +7649,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     rot(B["shin.R"], knR, 0, 0, RP.shinR);
     rot(B["foot.L"], -(hipL + knL) * 0.7, 0, 0);
     rot(B["foot.R"], -(hipR + knR) * 0.7, 0, 0);
-    curl(B, "L", gripL, P.prof.sockets.gripL.axis);
-    curl(B, "R", gripR, P.prof.sockets.gripR.axis);
+    curl(B, "L", gripL, P.prof.sockets.gripL);
+    curl(B, "R", gripR, P.prof.sockets.gripR);
     if (P.focus) {
       // Fokus schwebt und dreht sich langsam
       P.focus.position.copy(P.focus.userData.hover);
@@ -7599,21 +7661,31 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   const AX = {};
-  function curl(B, side, k, axis) {
-    if (!AX[side]) AX[side] = new T.Vector3();
-    const a = AX[side].set(axis[0], axis[1], axis[2]).normalize();
+  const AT = {};
+  const V3s = (v, a) => v.set(a[0], a[1], a[2]).normalize();
+  function curl(B, side, k, sock) {
+    if (!AX[side]) {
+      AX[side] = new T.Vector3();
+      AT[side] = new T.Vector3();
+    }
+    const a = V3s(AX[side], sock.curl || sock.axis);
     const sgn = side === "L" ? -1 : 1;
     B["fing1." + side].quaternion.setFromAxisAngle(a, sgn * k * 1.25);
     B["fing2." + side].quaternion.setFromAxisAngle(a, sgn * k * 1.45);
-    B["thumb1." + side].quaternion.setFromAxisAngle(a, sgn * k * 0.35);
-    B["thumb2." + side].quaternion.setFromAxisAngle(a, sgn * k * 0.6);
+    // erzeugte Figuren: Daumen legt sich zur Handflaeche, Handgelenk kippt beim Greifen zur Daumenseite
+    const th = sock.thumb ? V3s(AT[side], sock.thumb) : a;
+    const ta = sock.thumbA || [0.35, 0.6];
+    const kt = sock.thumbA ? k * k : k; // Daumen legt sich erst beim festen Griff um
+    B["thumb1." + side].quaternion.setFromAxisAngle(th, sgn * kt * ta[0]);
+    B["thumb2." + side].quaternion.setFromAxisAngle(th, sgn * kt * ta[1]);
+    if (sock.wrist) B["hand." + side].quaternion.setFromAxisAngle(V3s(AT[side], sock.wrist), k * 0.6);
   }
 })();
 
 </script>
 <script>/* src/r3d-rigged.js */
 /* Helden von Schwebfels - Figuren mit eigenem Skelett und abgespielten Bewegungen (Meshy-Strecke).
-   Die Figuren kommen aus assets-src/gen/meshy.py ueber assets/gen.pack (Art "rig"). Jeder Knochen hat keine eigene
+   Die Figuren kommen aus assets-src/gen/meshy_import.py ueber assets/gen.pack (Art "rig"). Jeder Knochen hat keine eigene
    Ruhedrehung, deshalb passen die gemeinsamen Bewegungen ("clips") auf jede Figur mit gleichen Knochennamen; der
    Hueftweg wird auf die Huefthoehe der Figur umgerechnet.
    Die Spielbewegungen (idle, walk, attack, cast, shoot, hit, block, evade, victory, defeat, special, sit, drink,
@@ -17300,7 +17372,24 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
+  const withGen = (d) => {
+    if (!UI.S || UI.S.settings.genFigures === false || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
+    return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
+  };
+  UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper
+  UI.loadGenFigures = function (realm) {
+    if (!UI.use3d || !UI.S || UI.S.settings.genFigures === false) return;
+    SB.assets
+      .loadGen(realm)
+      .then(() => SB.R3D.human.preloadGen())
+      .then(
+        () => UI.S && UI.refresh(),
+        (e) => console.warn("Neue Figuren nicht geladen", e)
+      );
+  };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
   UI.foeRealm = function (m) {
     const S = UI.S;
@@ -17311,7 +17400,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   UI.fighterDesc = function (f) {
     if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
-    return { kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear };
+    return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
@@ -17782,7 +17871,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     P.dataset.id = id;
     UI.renderPanel(true);
     if (UI.hub) {
-      UI.hub.focus(id === "einstellungen" || id === "held" ? null : id);
+      UI.hub.focus(id === "einstellungen" || id === "held" || id === "figurenprobe" ? null : id);
       const wide = innerWidth > 860;
       UI.hub.setInset(wide ? P.offsetWidth + 24 : 0);
       if (!wide) UI.hub.pause();
@@ -19072,10 +19161,128 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
+      const gf = s.settings.genFigures !== false;
+      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
+      h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
       h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
   };
+  /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
+  const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
+  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
+  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
+  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["victory", "Jubel"]];
+  const FP_AXE = { base: "axt", variant: 0, rarity: "selten", vis: { f: "axt.0", c: "midgard", o: 0, v: 1 } };
+  const fpDesc = () => {
+    const [race, sex] = FP.fig.split("-");
+    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: "sturmhuene", realm: "midgard", gear: FP.weapon ? { waffe: FP_AXE } : {} };
+  };
+  function fpCamera() {
+    const v = FP.view;
+    if (!v || !v.model) return;
+    const box = new (SB.R3D.T().Box3)().setFromObject(v.model.obj);
+    // Bildausschnitt nach Figurengroesse: ganz (etwa 85 % der Hoehe) oder nah (Kopf und Oberkoerper)
+    const top = Math.max(1, box.max.y);
+    if (FP.near) {
+      v.camera.position.set(0, top * 0.86, top * 0.95 + 0.45);
+      v.camera.lookAt(0, top * 0.8, 0);
+    } else {
+      v.camera.position.set(0, top * 0.58, Math.max(3.4, top * 2.3));
+      v.camera.lookAt(0, top * 0.5, 0);
+    }
+  }
+  function fpShow() {
+    if (!FP.view) return;
+    FP.view.set(fpDesc());
+    fpCamera();
+    fpPlay();
+  }
+  function fpPlay() {
+    clearInterval(FP.timer);
+    FP.timer = 0;
+    if (!FP.view || !FP.pose) return;
+    const go = () => FP.view && FP.view.play(FP.pose, 2.4);
+    go();
+    FP.timer = setInterval(go, 2600);
+  }
+  P.figurenprobe = {
+    title: "Figurenprobe Midgard",
+    role: "Qualitätstest der neuen Heldenfiguren",
+    portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
+    render() {
+      const gen = (SB.assets.data && SB.assets.data.gen) || {};
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
+      const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
+      h += stage + '<div class="section-title">Volk</div><div class="row">';
+      for (const r of FP_ORDER) {
+        for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
+          const k = r + "-" + sx;
+          h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !gen[k] ? " disabled" : "") + ">" + FP_NAME[r] + " " + nm + "</button>";
+        }
+      }
+      h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
+      h += '<span class="spacer"></span><button class="tab' + (FP.weapon ? " on" : "") + '" data-act="fpWeapon">Axt ' + (FP.weapon ? "an" : "aus") + '</button><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
+      return h;
+    },
+    after(root) {
+      const slot = root.querySelector("#fpStage");
+      if (!slot || !UI.use3d) return;
+      if (!FP.el) {
+        FP.el = document.createElement("div");
+        FP.el.style.cssText = "position:absolute;inset:0";
+      }
+      slot.appendChild(FP.el);
+      if (FP.state === "ok") {
+        if (!FP.view) {
+          FP.view = SB.R3D.createHeroView(FP.el);
+          fpShow();
+        }
+        return;
+      }
+      if (FP.state === "laden") return;
+      FP.state = "laden";
+      SB.assets.loadGen("midgard").then(
+        () => {
+          FP.state = "ok";
+          if (UI.panelId === "figurenprobe") UI.renderPanel();
+        },
+        () => {
+          FP.state = "fehler";
+          if (UI.panelId === "figurenprobe") UI.renderPanel();
+        }
+      );
+    },
+    close() {
+      clearInterval(FP.timer);
+      FP.timer = 0;
+      if (FP.view) FP.view.dispose();
+      FP.view = null;
+      FP.el = null;
+    },
+  };
+  A.fpFig = (el) => {
+    FP.fig = el.dataset.k;
+    UI.renderPanel();
+    fpShow();
+  };
+  A.fpPose = (el) => {
+    FP.pose = el.dataset.p;
+    UI.renderPanel();
+    fpPlay();
+  };
+  A.fpWeapon = () => {
+    FP.weapon = !FP.weapon;
+    UI.renderPanel();
+    fpShow();
+  };
+  A.fpNear = () => {
+    FP.near = !FP.near;
+    UI.renderPanel();
+    fpCamera();
+  };
+
   A.quality = (el) => {
     S().settings.quality = el.dataset.q;
     UI.saveNow();
@@ -19096,6 +19303,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     UI.renderPanel();
     UI.renderTop();
     UI.updateMusic();
+  };
+  A.genFigures = () => {
+    const S_ = S();
+    S_.settings.genFigures = S_.settings.genFigures === false;
+    UI.save();
+    if (S_.settings.genFigures) UI.loadGenFigures("midgard");
+    UI.refresh();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;
@@ -19658,6 +19872,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     M.makeHub(S);
     E.tick(S);
     UI.refresh();
+    // Probe der neuen Figuren: bisher gibt es sie fuer Midgard
+    if (S.realm === "midgard") UI.loadGenFigures("midgard");
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
     UI.saveNow();

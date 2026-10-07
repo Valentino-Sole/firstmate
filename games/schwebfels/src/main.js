@@ -61,6 +61,8 @@
     M.makeHub(S);
     E.tick(S);
     UI.refresh();
+    // Probe der neuen Figuren: bisher gibt es sie fuer Midgard
+    if (S.realm === "midgard") UI.loadGenFigures("midgard");
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
     UI.saveNow();

@@ -18,7 +18,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import meshy as M  # noqa: E402
+import meshy_import as M  # noqa: E402
 import fit_piece as FP  # noqa: E402
 
 # Zielhoehe und groesste Breite je Rolle (Meter, wie die gebauten Requisiten der Kampfbuehne); breite Modelle (ein

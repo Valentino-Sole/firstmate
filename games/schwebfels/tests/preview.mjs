@@ -44,6 +44,8 @@ const info = await page.evaluate(
     document.body.appendChild(el);
     const R = SB.R3D;
     const t0 = performance.now();
+    // erzeugte Figuren liegen in einer eigenen Datei je Reich (dist/gen-<reich>.js) und werden erst geladen
+    if ((desc.hero && desc.hero.gen) || desc.gen) await SB.assets.loadGen(desc.genRealm || "midgard");
     if (desc.only) {
       R.gear.debugOnly = desc.only;
       R.gear.debugHideBody = !!desc.hideBody;
@@ -69,6 +71,24 @@ const info = await page.evaluate(
           upd(dt);
           m.obj.rotation.y = desc.rotY;
         };
+      }
+      if (desc.camBone) {
+        // Nahaufnahme, die einem Knochen folgt: [knochen, versatz x, y, z, sichtwinkel]
+        const [bn, ox, oy, oz, fov] = desc.camBone;
+        const m = v.model;
+        const upd = m.update.bind(m);
+        const p = v.camera.position.clone();
+        m.update = (dt) => {
+          upd(dt);
+          m.obj.updateMatrixWorld(true);
+          m.parts.B[bn].getWorldPosition(p);
+          v.camera.position.set(p.x + ox, p.y + oy, p.z + oz);
+          v.camera.lookAt(p);
+        };
+        if (fov) {
+          v.camera.fov = fov;
+          v.camera.updateProjectionMatrix();
+        }
       }
       if (pose) setTimeout(() => v.play(pose, 2.5), 300);
     } else if (mode === "bestie") {

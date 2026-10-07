@@ -2,7 +2,7 @@
 
 Liest genau das, was die Modellstrecke braucht: Knoten mit Lage, Skins, Netze, Materialien mit Grundfarbe,
 eingebettete Bilder und Animationen. Draco- oder meshopt-komprimierte Dateien vorher mit Blender entpacken
-(meshy.py erledigt das selbst).
+(meshy_import.py erledigt das selbst).
 """
 import base64
 import json

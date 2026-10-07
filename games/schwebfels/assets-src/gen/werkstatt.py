@@ -129,7 +129,7 @@ def cmd_figur(a):
     anims = sorted(f for f in os.listdir(d) if f.startswith("bewegungen_") and f.endswith(".glb")) if owner == a.name else []
     if owner == a.name and os.path.exists(os.path.join(d, "gang.glb")):
         anims.append("gang.glb")  # kostenloser Gang aus dem Rigging (Ersatz, falls ein Bibliotheksgang fehlt)
-    args = [PY, os.path.join(HERE, "meshy.py"), os.path.join(BUILD, a.name + ".npz"), os.path.join(d, "rigged.glb"), "--race", a.race, "--gender", a.gender]
+    args = [PY, os.path.join(HERE, "meshy_import.py"), os.path.join(BUILD, a.name + ".npz"), os.path.join(d, "rigged.glb"), "--race", a.race, "--gender", a.gender]
     for f in anims:
         args += ["--anim", os.path.join(d, f)]
     if owner != a.name:

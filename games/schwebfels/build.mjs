@@ -1,14 +1,18 @@
 // Baut aus index.html und src/ zwei Einzeldateien:
 //   dist/schwebfels.html  vollstaendige Seite zum Oeffnen im Browser
 //   dist/artifact.html    Seiteninhalt ohne html/head/body-Huelle (fuer claude.ai Artifacts)
+//   dist/gen-<reich>.js   erzeugte Figuren je Reich zum Nachladen (nur wenn assets/gen-<reich>.pack vorliegt;
+//                         beim Veroeffentlichen als Zusatzdatei mit gleichem Namen neben die Seite legen)
 // Aufruf: node build.mjs
 //   GEN_PACK=<datei>  anderes Paket mit erzeugten Figuren einbetten (Standard: assets/gen.pack, falls vorhanden)
 //   INSELN_DIR=<ordner>  Inselbilder <reich>.webp (albion, midgard, hibernia) fuer die gemalten Heimatinseln
 //                     (Standard: assets/inseln, falls vorhanden); ohne Bilder bleibt die 3D-Insel
 //   SPLIT=1           Modellpakete nicht in die Seite, sondern als eigene Dateien daneben (dist/packs/*.js); fuer ein
 //                     Artifact mit mehreren Dateien, wenn die Seite sonst ueber 16 MB kaeme (jede Datei hoechstens 16 MB)
+//   assets/gen-<reich>.pack  erzeugte Figuren je Reich (Meshy-Strecke des Hauptzweigs): werden zu <dist>/gen-<reich>.js,
+//                     die das Spiel erst bei Bedarf nachlaedt; beim Veroeffentlichen als Zusatzdatei gleichen Namens mitgeben
 // Die Modellpakete werden mit gzip verkleinert eingebettet; src/r3d-assets.js entpackt sie im Browser.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -54,6 +58,16 @@ try {
   console.log("Erzeugte Figuren eingebettet:", path.relative(dir, gen));
 } catch (e) {
   /* ohne erzeugte Figuren */
+}
+// Erzeugte Figuren aus der Bild-zu-3D-Strecke (assets/gen-<reich>.pack, aus assets-src/gen/ gebaut): je Reich eine
+// eigene Datei dist/gen-<reich>.js, die das Spiel erst bei Bedarf nachlaedt (die Seite bleibt unter 16 MB)
+const genFiles = [];
+for (const f of readdirSync(path.join(dir, "assets"))) {
+  const m = /^gen-([a-z]+)\.pack$/.exec(f);
+  if (!m) continue;
+  const js = "globalThis.SB_GEN_" + m[1].toUpperCase() + '="' + readFileSync(path.join(dir, "assets", f)).toString("base64") + '";\n';
+  writeFileSync(path.join(out, "gen-" + m[1] + ".js"), js);
+  genFiles.push(path.relative(dir, path.join(out, "gen-" + m[1] + ".js")) + " " + (js.length / 1024).toFixed(0) + " KB (eigene Datei, beim Veroeffentlichen als gen-" + m[1] + ".js unter files angeben)");
 }
 // Gemalte Heimatinseln (src/hub-painted.js): Bilder als Data-URI, mit SPLIT als eigene Datei
 {
@@ -105,3 +119,4 @@ for (const [f, n] of packFiles) {
   console.log(path.relative(dir, path.join(out, f)), (n / 1024).toFixed(0), "KB (eigene Datei, beim Veroeffentlichen unter files angeben)");
   if (n > 15e6) console.warn("Achtung: " + f + " ist " + (n / 1e6).toFixed(1) + " MB gross, die Grenze je Datei liegt bei 16 MB.");
 }
+for (const g of genFiles) console.log(g);

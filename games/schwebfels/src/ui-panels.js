@@ -1028,10 +1028,128 @@
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
+      const gf = s.settings.genFigures !== false;
+      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
+      h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
       h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
   };
+  /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
+  const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
+  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
+  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
+  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["victory", "Jubel"]];
+  const FP_AXE = { base: "axt", variant: 0, rarity: "selten", vis: { f: "axt.0", c: "midgard", o: 0, v: 1 } };
+  const fpDesc = () => {
+    const [race, sex] = FP.fig.split("-");
+    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: "sturmhuene", realm: "midgard", gear: FP.weapon ? { waffe: FP_AXE } : {} };
+  };
+  function fpCamera() {
+    const v = FP.view;
+    if (!v || !v.model) return;
+    const box = new (SB.R3D.T().Box3)().setFromObject(v.model.obj);
+    // Bildausschnitt nach Figurengroesse: ganz (etwa 85 % der Hoehe) oder nah (Kopf und Oberkoerper)
+    const top = Math.max(1, box.max.y);
+    if (FP.near) {
+      v.camera.position.set(0, top * 0.86, top * 0.95 + 0.45);
+      v.camera.lookAt(0, top * 0.8, 0);
+    } else {
+      v.camera.position.set(0, top * 0.58, Math.max(3.4, top * 2.3));
+      v.camera.lookAt(0, top * 0.5, 0);
+    }
+  }
+  function fpShow() {
+    if (!FP.view) return;
+    FP.view.set(fpDesc());
+    fpCamera();
+    fpPlay();
+  }
+  function fpPlay() {
+    clearInterval(FP.timer);
+    FP.timer = 0;
+    if (!FP.view || !FP.pose) return;
+    const go = () => FP.view && FP.view.play(FP.pose, 2.4);
+    go();
+    FP.timer = setInterval(go, 2600);
+  }
+  P.figurenprobe = {
+    title: "Figurenprobe Midgard",
+    role: "Qualitätstest der neuen Heldenfiguren",
+    portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
+    render() {
+      const gen = (SB.assets.data && SB.assets.data.gen) || {};
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
+      const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
+      h += stage + '<div class="section-title">Volk</div><div class="row">';
+      for (const r of FP_ORDER) {
+        for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
+          const k = r + "-" + sx;
+          h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !gen[k] ? " disabled" : "") + ">" + FP_NAME[r] + " " + nm + "</button>";
+        }
+      }
+      h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
+      h += '<span class="spacer"></span><button class="tab' + (FP.weapon ? " on" : "") + '" data-act="fpWeapon">Axt ' + (FP.weapon ? "an" : "aus") + '</button><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
+      return h;
+    },
+    after(root) {
+      const slot = root.querySelector("#fpStage");
+      if (!slot || !UI.use3d) return;
+      if (!FP.el) {
+        FP.el = document.createElement("div");
+        FP.el.style.cssText = "position:absolute;inset:0";
+      }
+      slot.appendChild(FP.el);
+      if (FP.state === "ok") {
+        if (!FP.view) {
+          FP.view = SB.R3D.createHeroView(FP.el);
+          fpShow();
+        }
+        return;
+      }
+      if (FP.state === "laden") return;
+      FP.state = "laden";
+      SB.assets.loadGen("midgard").then(
+        () => {
+          FP.state = "ok";
+          if (UI.panelId === "figurenprobe") UI.renderPanel();
+        },
+        () => {
+          FP.state = "fehler";
+          if (UI.panelId === "figurenprobe") UI.renderPanel();
+        }
+      );
+    },
+    close() {
+      clearInterval(FP.timer);
+      FP.timer = 0;
+      if (FP.view) FP.view.dispose();
+      FP.view = null;
+      FP.el = null;
+    },
+  };
+  A.fpFig = (el) => {
+    FP.fig = el.dataset.k;
+    UI.renderPanel();
+    fpShow();
+  };
+  A.fpPose = (el) => {
+    FP.pose = el.dataset.p;
+    UI.renderPanel();
+    fpPlay();
+  };
+  A.fpWeapon = () => {
+    FP.weapon = !FP.weapon;
+    UI.renderPanel();
+    fpShow();
+  };
+  A.fpNear = () => {
+    FP.near = !FP.near;
+    UI.renderPanel();
+    fpCamera();
+  };
+
   A.quality = (el) => {
     S().settings.quality = el.dataset.q;
     UI.saveNow();
@@ -1052,6 +1170,13 @@
     UI.renderPanel();
     UI.renderTop();
     UI.updateMusic();
+  };
+  A.genFigures = () => {
+    const S_ = S();
+    S_.settings.genFigures = S_.settings.genFigures === false;
+    UI.save();
+    if (S_.settings.genFigures) UI.loadGenFigures("midgard");
+    UI.refresh();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;

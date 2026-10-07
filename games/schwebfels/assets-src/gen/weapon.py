@@ -24,7 +24,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import meshy as M  # noqa: E402
+import meshy_import as M  # noqa: E402
 import fit_piece as FP  # noqa: E402
 
 # Grundart: (Verfahren, Laenge, Griffpunkt als Anteil der Laenge vom Ende, Seite des Kopfes auf X)

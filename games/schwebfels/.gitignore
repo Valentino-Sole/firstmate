@@ -6,3 +6,6 @@ assets-src/gen/meshy/
 assets-src/gen/konzepte/
 # Inselbilder des Kapitaens (gemalte Heimatinseln); bis zu seiner Freigabe nicht im Repository
 assets/inseln/
+# erzeugte Figuren (Bild-zu-3D) erst nach Abnahme durch den Kapitaen ins Repository
+assets/gen-*.pack
+dist/gen-*.js

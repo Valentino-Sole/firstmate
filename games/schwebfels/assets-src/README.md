@@ -43,15 +43,24 @@ Feste Ausrüstung (Waffen, Schilde, Schmuck, Kopfschmuck) entsteht im Spiel selb
 
 ## Erzeugte Figuren (Meshy-Strecke)
 
-Figuren aus den Konzeptbildern des Kapitäns entstehen bei Meshy (Bild zu 3D, Rigging, Bewegungen aus der
-Meshy-Bibliothek), werden hier ins Spielformat gebracht und als eigenes Paket `assets/gen.pack` neben `schwebfels.pack`
-eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) statt der Formeln der alten Figuren.
+Figuren aus den Konzeptbildern des Kapitäns entstehen bei Meshy (Abrechnung in Credits, jeder Auftrag meldet die
+abgebuchten Credits als `consumed_credits`). Es gibt zwei Wege, beide sind zusammengeführt:
+
+- **Hauptweg (Midgard-Figuren im Spiel):** Bild zu 3D, Spielfassung mit `bake_lowpoly.py`, Meshy-Skelett, dann
+  `build_figure.py` auf das Spielskelett; die Figuren bewegen sich mit den Bewegungen des Spiels. Je Reich ein Paket
+  `assets/gen-<reich>.pack`, `build.mjs` macht daraus `dist/gen-<reich>.js`, das Spiel lädt es erst bei Bedarf
+  (`SB.assets.loadGen`), damit die Seite unter 16 MB bleibt. Werkzeuge: `meshy.py`, `bake_lowpoly.py`, `build_figure.py`,
+  `crop_templates.py`, Ablaufplan `gen/PLAN-MIDGARD.md`.
+- **Meshy-Skelett-Weg:** Figuren behalten Meshys Skelett und spielen Meshys Bewegungen ab (`src/r3d-rigged.js`), dazu
+  passende Rüstungsteile, Waffen, Bestien, Requisiten der Kampfumgebung und die Werkstatt mit Bericht. Paket
+  `assets/gen.pack`, in die Seite eingebettet; ohne Paket ist dieser Weg im Spiel aus. Werkzeuge: `werkstatt.py`,
+  `meshy_api.py`, `meshy_import.py` und die übrigen unten.
 
 | Datei | Inhalt |
 |---|---|
 | `gen/werkstatt.py` | Alles in einem Schritt: Figur oder Rüstungsteil bestellen, umrechnen, Paket und Spielvorschau bauen |
 | `gen/meshy_api.py` | Bestellen bei Meshy: Bild zu 3D (Figur oder Teil), Rigging, Bewegungen; Budgetgrenze, Trockenlauf, Credit-Protokoll (`credits.jsonl`); Schlüssel nur aus `MESHY_API_KEY` |
-| `gen/meshy.py` | Geriggte GLB samt Bewegungen ins Spielformat: Ausrichten, Zielhöhe, T-Haltung, Skelett ohne Ruhedrehungen, Gewichte, Reduzieren, Texturatlas, Zuordnung der Spielgelenke, Haltepunkte, Bewegungen mit Schlagmarken |
+| `gen/meshy_import.py` | Geriggte GLB samt Bewegungen ins Spielformat: Ausrichten, Zielhöhe, T-Haltung, Skelett ohne Ruhedrehungen, Gewichte, Reduzieren, Texturatlas, Zuordnung der Spielgelenke, Haltepunkte, Bewegungen mit Schlagmarken |
 | `gen/gltf.py` | Kleiner glTF-Leser (Knoten, Skins, Netze, Materialien, Bilder, Animationen) |
 | `gen/fit_piece.py` | Rüstungsteil (einzeln erzeugte GLB) an einen Referenzkörper anpassen und knochenbezogen speichern; im Spiel legt es sich über Querschnittsprofile an jeden Körper mit gleichem Skelett an, die Haut darunter wird ausgeblendet |
 | `gen/weapon.py` | Waffe oder Schild (einzeln erzeugte GLB) in die Lage der gebauten Waffen bringen: Hauptachse, Griffende, Griffpunkt, Schneide; Länge wie die gebaute Waffe gleicher Grundart |
@@ -61,11 +70,33 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/zuschnitt.py` | Konzepttafel mit mehreren Gegenständen in einzelne Bilder schneiden (ein Modell je Bild für Meshy), mit nummerierter Übersicht; mindestens 512 Pixel, `--freistellen` setzt auf weißen Grund (beides Empfehlungen von Meshy), `--box` für Handschnitt, `--probe` prüft sich selbst |
 | `gen/pruefung_bestellung.py` | Prüfung der Bestellungen gegen den Prüfserver (ohne Blender, ohne Credits): Abbruch beim Warten auf Figur und Bewegungen ohne doppeltes Bezahlen, mehrere Ansichten, Rigging-Rückfall |
 | `gen/pruefserver.py` | Prüfserver, der wie die Meshy-API antwortet (Probelauf der Werkstatt ohne Credits) |
-| `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |
+| `gen/gen_pack.py` | npz-Dateien zu einem Paket: `assets/gen.pack` (Meshy-Skelett-Weg, Bewegungen einmal im gemeinsamen Teil `clips`) oder `assets/gen-<reich>.pack` (Hauptweg) |
 | `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
 | `beasts/from_glb.py` | Tier aus einer GLB (z. B. Meshy Bild zu 3D) mit Vierbeiner-Skelett und Rollen für das Bestiensystem des Spiels |
 | `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
 | `gen/packbones.py` | Knochenliste und Körperhöhen aus `assets/schwebfels.pack` lesen |
+| `gen/meshy.py` | Meshy-Schnittstelle: Bild zu Bild, Bild zu 3D, Skelett; lädt Ergebnisse sofort herunter und protokolliert die Credits je Auftrag (`credits.jsonl`, `report`) |
+| `gen/bake_lowpoly.py` | Spielfassung eines Originals: verschweißen, auf etwa 30.000 Flächen verkleinern, neue Texturaufteilung (Kopf mit mehr Bildfläche), Farbe und Oberflächendetails vom Original aufbacken |
+| `gen/decimate_glb.py` | Verkleinern unter Schutz der Texturnähte (abgelöst durch `bake_lowpoly.py`, bleibt für Vergleiche) |
+| `gen/build_figure.py` | Erzeugte Figur (GLB) ins Spielformat: Skelett der Vorlage auf die 29 Spielknochen (Namen wie Mixamo oder Meshy) oder Bone Heat, Höhe nach Körperprofil oder `--height`, Haltepunkte. Finger und Daumen werden entlang der Netzverbindungen vom Handgelenk aus getrennt (Fingerspitzen, Daumen nach rechter oder linker Hand), Gelenke an die echten Knöchel gelegt und die Handgewichte aufgeteilt; der Griffpunkt liegt in der Mitte der geschlossenen Faust. `FINGER_DEBUG=<ordner>` speichert die Handerkennung zum Prüfen |
+| `gen/crop_templates.py` | Vorlagen aus den Konzepttafeln schneiden |
+| `gen/PLAN-MIDGARD.md` | Ablaufplan des Qualitätstests mit allen Meshy-Aufträgen |
+
+### Hauptweg: Einbau der Midgard-Figuren
+
+```sh
+python gen/probe.py CesiumMan.glb ../assets/schwebfels.pack <aus>/probe.npz <aus>/probe.glb <aus>/probe.json 2.12
+python gen/gen_pack.py <aus> ../assets/gen-midgard.pack
+```
+
+Im Spiel: `R.buildHero({ gen: "<figur>", genGear: ["<teil>", ...], ... })` baut den erzeugten Körper mit eigener Textur
+und eigenen Gelenken, gleiche Bewegungen wie alle Helden; Teile in `genGear` blenden die Haut darunter aus.
+Erzeugte Hände schließen sich beim Greifen zur Faust (Haltepunkt mit `curl`, `thumb`, `thumbA`, `wrist`): Finger um die
+Knöchellinie, Daumen über die Finger, Handgelenk kippt die Waffe leicht nach oben. Die freie Hand bleibt locker.
+Nahaufnahme zum Prüfen: `tests/preview.mjs` mit `"camBone": ["hand.R", x, y, z, sichtwinkel]` folgt einem Knochen.
+`assets/gen-*.pack` und `dist/gen-*.js` gehören erst ins Repository, wenn der Qualitätstest den Kapitän überzeugt hat (bis dahin in `.gitignore`).
+
+### Meshy-Skelett-Weg: Werkstatt, Teile, Waffen, Bestien
 
 Der ganze Qualitätstest läuft in einem Schritt über die Plandatei `gen/qualitaetstest.json` (Konzeptbilder nach
 `gen/konzepte/`, je Bild ein Modell): `python werkstatt.py plan qualitaetstest.json --trocken` zeigt die Kosten ohne
@@ -128,10 +159,10 @@ cd assets-src/gen
 python meshy_api.py kosten                     # Schätzung ohne Schlüssel
 python meshy_api.py figur nordmann_f tafel02.png --hoehe 1.95 --budget 40
 python meshy_api.py bewegungen nordmann_f --budget 60      # einmal, gilt für alle Figuren
-python meshy.py <aus>/nordmann_f.npz meshy/nordmann_f/rigged.glb --race nordmann --gender f \
+python meshy_import.py <aus>/nordmann_f.npz meshy/nordmann_f/rigged.glb --race nordmann --gender f \
     --anim meshy/nordmann_f/bewegungen_1.glb --anim meshy/nordmann_f/bewegungen_2.glb
 python meshy_api.py figur kreidezwerg_m tafel01.png --hoehe 1.45 --budget 40
-python meshy.py <aus>/kreidezwerg_m.npz meshy/kreidezwerg_m/rigged.glb --race kreidezwerg --gender m --no-clips
+python meshy_import.py <aus>/kreidezwerg_m.npz meshy/kreidezwerg_m/rigged.glb --race kreidezwerg --gender m --no-clips
 python gen_pack.py <aus> ../../assets/gen.pack
 cd ../.. && node build.mjs                     # oder GEN_PACK=<datei> node build.mjs zum Ausprobieren
 ```
@@ -141,7 +172,7 @@ Wichtige Regeln der Strecke:
   Bewegung auf jede Figur mit gleichen Knochennamen; der Hüftweg wird auf die Hüfthöhe der Figur umgerechnet.
   Bewegungen also nur einmal bei Meshy kaufen; weitere Figuren mit `--no-clips` einlesen.
 - Namen der Bewegungen: `meshy_api.py` legt neben jede Bewegungsdatei eine gleichnamige `.json` mit den bestellten
-  Bibliotheksnamen; `meshy.py` ordnet die Bewegungen der Datei darüber zu (Vergleich ohne Groß- und Sonderzeichen,
+  Bibliotheksnamen; `meshy_import.py` ordnet die Bewegungen der Datei darüber zu (Vergleich ohne Groß- und Sonderzeichen,
   sonst nach Reihenfolge, Warnung im Protokoll). Das Spiel wählt Clips über diese Namen.
 - `--as-meshy` baut für fremde Testmodelle (etwa Mixamo-Figuren) das 24-Knochen-Skelett von Meshy nach.
 - Figuren mit `--race` und `--gender` ersetzen im Spiel automatisch den Körper dieses Volkes (auch bei Inselbewohnern).

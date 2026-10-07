@@ -3,9 +3,9 @@
 Aufruf: python gen_pack.py <ordner mit npz> <ausgabe.pack> [--no-auto]
 Jede npz-Datei ist eine Figur (Name = Dateiname). Zwei Arten:
  - aus probe.py: Koerper mit Textur auf dem Spielskelett (29 Knochen), Haltepunkte, Kleidungsteile samt Hautmaske
- - aus meshy.py (Art "rig"): Koerper mit eigenem Skelett (z. B. Meshy), Zuordnung der Spielgelenke, Haltepunkte und
+ - aus meshy_import.py (Art "rig"): Koerper mit eigenem Skelett (z. B. Meshy), Zuordnung der Spielgelenke, Haltepunkte und
    Bewegungen. Bewegungen landen einmal im gemeinsamen Teil "clips" und gelten fuer jede Figur mit gleichen Knochennamen.
-   Figuren mit Volk und Geschlecht (meshy.py --race/--gender) ersetzen im Spiel automatisch den Koerper dieses Volkes,
+   Figuren mit Volk und Geschlecht (meshy_import.py --race/--gender) ersetzen im Spiel automatisch den Koerper dieses Volkes,
    ausser mit --no-auto.
 Unterordner: "teile" (fit_piece.py), "bestien" (beasts/from_glb.py), "waffen" (weapon.py), "requisiten" (prop.py).
 build.mjs bettet das Paket neben schwebfels.pack ein.
@@ -144,6 +144,8 @@ for f in sorted(os.listdir(SRC)):
         continue
     e = part(z, "body")
     e.update({"j": P.arr(z["joints"], "f32"), "top": float(z["top"]), "sockets": json.loads(str(z["sockets"])), "tex": tex(z["tex"]), "pieces": {}})
+    if "nrm" in z.files:
+        e["nrm"] = tex(z["nrm"], 90)
     names = json.loads(str(z["pieces"])) if "pieces" in z.files else (["brust"] if "gar_pos" in z.files else [])
     for n in names:
         pre = "gar" if n == "brust" and "gar_pos" in z.files else "p_" + n

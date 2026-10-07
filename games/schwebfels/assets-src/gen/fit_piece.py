@@ -5,7 +5,7 @@ Aufruf:
                       [--name harnisch_eisen] [--forms harnisch.0,harnisch] [--rot 0,0,90] [--pad 0.02]
                       [--tris 4000] [--tex 512] [--paar] [--flip] [--offset 0.012]
 
-Der Referenzkoerper ist eine npz-Datei aus meshy.py (Art "rig"). Schritte:
+Der Referenzkoerper ist eine npz-Datei aus meshy_import.py (Art "rig"). Schritte:
  1. Teil laden (alle Netze, Textur als Atlas), optional drehen (--rot in Grad um X, Y, Z) und reduzieren
  2. Auf den Koerperbereich des Platzes ausrichten (Brust: Huefte bis Schultern, Handschuhe: Hand und halber
     Unterarm, Stiefel: Fuss und halbes Schienbein, Helm: Kopf, Hose: Huefte und Beine); --paar spiegelt ein einzelnes
@@ -27,7 +27,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import meshy as M  # noqa: E402
+import meshy_import as M  # noqa: E402
 
 NT, NA = 12, 24          # Felder entlang des Knochens und um ihn herum
 T0, T1 = -0.25, 1.25     # betrachteter Bereich entlang des Knochens (0 = Gelenk, 1 = Folgegelenk)

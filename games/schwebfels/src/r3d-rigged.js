@@ -1,5 +1,5 @@
 /* Helden von Schwebfels - Figuren mit eigenem Skelett und abgespielten Bewegungen (Meshy-Strecke).
-   Die Figuren kommen aus assets-src/gen/meshy.py ueber assets/gen.pack (Art "rig"). Jeder Knochen hat keine eigene
+   Die Figuren kommen aus assets-src/gen/meshy_import.py ueber assets/gen.pack (Art "rig"). Jeder Knochen hat keine eigene
    Ruhedrehung, deshalb passen die gemeinsamen Bewegungen ("clips") auf jede Figur mit gleichen Knochennamen; der
    Hueftweg wird auf die Huefthoehe der Figur umgerechnet.
    Die Spielbewegungen (idle, walk, attack, cast, shoot, hit, block, evade, victory, defeat, special, sit, drink,

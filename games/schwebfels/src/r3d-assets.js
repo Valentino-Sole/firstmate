@@ -140,6 +140,7 @@
         for (const k in g.beasts || {}) nmap("beast." + k, g.beasts[k]);
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
+      data.gen = data.gen || {};
       A.data = data;
     } catch (e) {
       A.error = e;
@@ -147,6 +148,43 @@
     }
     done(A.data);
     return A.data;
+  };
+
+  /* Erzeugte Figuren je Reich: eigene Datei gen-<reich>.js neben der Seite (setzt globalThis.SB_GEN_<REICH> als
+     Base64), erst bei Bedarf geladen, damit die Spielseite klein bleibt. Ein Skript-Tag funktioniert auch bei
+     file:// (Vorschau und Tests), wo fetch nicht erlaubt ist. */
+  const GEN_LOAD = {};
+  A.loadGen = function (realm) {
+    if (GEN_LOAD[realm]) return GEN_LOAD[realm];
+    const key = "SB_GEN_" + realm.toUpperCase();
+    const take = () => {
+      const s = globalThis[key];
+      if (!s) return false;
+      Object.assign(A.data.gen, parse(b64(s)).gen || {});
+      globalThis[key] = null;
+      return true;
+    };
+    GEN_LOAD[realm] = A.ready.then(
+      () =>
+        new Promise((ok, fail) => {
+          if (!A.data) return fail(new Error("Modellpaket fehlt"));
+          if (take()) return ok(A.data.gen);
+          const el = document.createElement("script");
+          el.src = "gen-" + realm + ".js";
+          el.onload = () => {
+            try {
+              if (take()) ok(A.data.gen);
+              else fail(new Error("Figurendaten leer"));
+            } catch (e) {
+              fail(e);
+            }
+          };
+          el.onerror = () => fail(new Error("Figurendaten nicht gefunden"));
+          document.head.appendChild(el);
+        })
+    );
+    GEN_LOAD[realm].catch(() => (GEN_LOAD[realm] = null));
+    return GEN_LOAD[realm];
   };
 
   /* Bilder aus dem Paket als Textur (laedt im Hintergrund nach) */
@@ -162,14 +200,15 @@
     tex.anisotropy = 4;
     const img = new Image();
     const url = URL.createObjectURL(new Blob([ref.bytes], { type: ref.mime }));
-    tex.userData.ready = new Promise((res) => {
+    // ready: erfuellt, sobald das Bild dekodiert ist (Standbilder wie Portraets warten darauf)
+    tex.userData.ready = new Promise((done) => {
       img.onload = () => {
         tex.image = img;
         tex.needsUpdate = true;
         URL.revokeObjectURL(url);
-        res();
+        done(tex);
       };
-      img.onerror = () => res();
+      img.onerror = () => done(tex);
     });
     img.src = url;
     return (TEXC[key] = tex);
