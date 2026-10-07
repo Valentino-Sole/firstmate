@@ -11,7 +11,8 @@ Aufrufe (Ausgabeordner mit --out, Standard: ./meshy):
                                     [--prompt "Texturhinweis"] [--trocken]
       Bild zu 3D (mit Textur), danach Rigging; laedt model.glb, rigged.glb sowie Gang und Lauf herunter
   python meshy_api.py teil <name> <bild.png|jpg> [--polys 5000] [--budget 30] [--trocken]
-      Ruestungsteil: nur Bild zu 3D (ohne Rigging), danach fit_piece.py
+      Einzelnes Modell ohne Rigging (Ruestungsteil, Waffe, Bestie, Requisit): nur Bild zu 3D; danach fit_piece.py,
+      weapon.py, from_glb.py oder prop.py
   python meshy_api.py bewegungen <name> [--clips standard|mehr|<id,id,...>] [--budget 90] [--trocken]
       Bewegungen aus der Meshy-Bibliothek auf das Skelett dieser Figur (je Anfrage bis zu 10, 3 Credits je Bewegung).
       Weil alle Meshy-Figuren dasselbe Skelett haben, reicht das einmal; meshy.py teilt die Bewegungen mit allen Figuren.
@@ -225,10 +226,10 @@ def cmd_figur(a):
 
 
 def cmd_teil(a):
-    """Ruestungsteil: nur Bild zu 3D (kein Rigging); danach fit_piece.py."""
+    """Einzelnes Modell ohne Skelett (Ruestungsteil, Waffe, Bestie, Requisit): nur Bild zu 3D, kein Rigging."""
     S = Store(a.out, a.name)
     cost = 0 if S.state.get("image_to_3d", {}).get("ok") else PRICE["image-to-3d"]
-    guard(a.budget, cost, "Teil %s (Bild zu 3D)" % a.name)
+    guard(a.budget, cost, "Modell %s (Bild zu 3D)" % a.name)
     body = request_3d(a.bild, a.polys, None, a.prompt, not a.ohne_pbr)
     if a.trocken:
         print("Trockenlauf, nichts gesendet:\n POST image-to-3d", json.dumps(body, ensure_ascii=False))
