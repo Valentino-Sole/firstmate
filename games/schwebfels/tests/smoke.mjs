@@ -61,6 +61,7 @@ const res = await page.evaluate(async () => {
     let home = null;
     tryit("Heim " + tier, () => { home = R.createHome(box(), {}); home.update({ tier, furn, realm: "midgard", hero: { kind: "hero", race: "nordmann", gender: "m", cls: "sturmhuene", realm: "midgard" } }); n++; });
     if (!home) continue;
+    if (!home._view) { home.dispose(); continue; } // aeltere Fassung (PAGE=...) ohne Pruefhaken: nur bauen
     await frames();
     const { scene, camera, hero } = home._view();
     const T = globalThis.THREE;
