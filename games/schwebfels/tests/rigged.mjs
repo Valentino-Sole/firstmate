@@ -319,7 +319,16 @@ function buildPack(file, gameBones) {
   const weapons = {
     pruefschwert: { pos: P.q16(wp), uv: P.q16(new Array((wp.length / 3) * 2).fill(0.5)), idx: P.u16(wi), tex: P.img(png(4, 4, [200, 60, 60]), "image/png"), base: "schwert", forms: [], rarity: [] },
   };
-  P.write(file, { v: 1, gen, clips, pieces, beasts, weapons });
+  // Requisiten wie aus prop.py: Baum und Wahrzeichen fuer Midgard
+  const box = (w, h, d) => {
+    const v = [];
+    for (const [x, y, z] of [[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1], [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]]) v.push((x * w) / 2, y * h, (z * d) / 2);
+    return v;
+  };
+  const boxIdx = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+  const prop = (w, h, d, realm, role, col) => ({ pos: P.q16(box(w, h, d)), uv: P.q16(new Array(16).fill(0.5)), idx: P.u16(boxIdx), tex: P.img(png(4, 4, col), "image/png"), realm, role });
+  const props = { pruefbaum: prop(1.2, 4.6, 1.2, "midgard", "baum", [40, 90, 50]), pruefstein: prop(1.0, 3.2, 0.5, "midgard", "wahrzeichen", [120, 120, 130]) };
+  P.write(file, { v: 1, gen, clips, pieces, beasts, weapons, props });
 }
 
 /* ---------- Bauen und im Browser pruefen ---------- */
@@ -515,6 +524,21 @@ const res = await page.evaluate(async () => {
   const sim = E.simulate(hero, foe, 7);
   const b = R.createBattle(el, { setting: "quest", realm: "midgard", left: { kind: "hero", race: "nordmann", cls: "sturmhuene", realm: "midgard", gender: "m", gear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: "midgard" }, hp: [hero.maxHp, foe.maxHp], dayTime: 0.4 });
   const evs = sim.events || sim.log || [];
+  // Kampfumgebung: erzeugte Requisiten in Midgard, gebaute in Albion
+  const genProps = (sc) => {
+    const n = {};
+    sc.traverse((o) => o.userData.genProp && (n[o.userData.genProp] = (n[o.userData.genProp] || 0) + 1));
+    return n;
+  };
+  const gp = genProps(b._scene);
+  ok(gp.pruefbaum >= 3 && gp.pruefstein === 1, "Kampfumgebung nutzt die erzeugten Requisiten nicht: " + JSON.stringify(gp));
+  const el2 = document.createElement("div");
+  el2.style.cssText = "position:fixed;left:0;top:0;width:200px;height:150px";
+  document.body.appendChild(el2);
+  const b2 = R.createBattle(el2, { setting: "quest", realm: "albion", left: { kind: "hero", race: "nordmann", cls: "sturmhuene", realm: "albion", gender: "m", gear }, right: { kind: "monster", arch: mon.arch, color: mon.color, accent: mon.accent, realm: "albion" }, hp: [10, 10], dayTime: 0.4 });
+  ok(!Object.keys(genProps(b2._scene)).length, "Albion darf keine Midgard-Requisiten zeigen");
+  if (b2.dispose) b2.dispose();
+  el2.remove();
   for (let i = 0; i < Math.min(evs.length, 6); i++) await b.play(evs[i]);
   return { fails, timing: timing.map((x) => x.a + ":" + (x.s ? x.s.clip + "@" + x.s.t.toFixed(2) : "-")), lit, wide, per };
 });

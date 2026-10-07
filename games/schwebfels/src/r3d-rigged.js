@@ -429,6 +429,37 @@
     return g;
   };
 
+  /* ---------- Requisiten der Kampfumgebung (assets-src/gen/prop.py) ----------
+     Je Reich Baeume, Dekorationen und ein Wahrzeichen; die Kampfbuehne nimmt sie statt der gebauten. */
+  const PROPS = () => (SB.assets && SB.assets.data && SB.assets.data.genProps) || {};
+  RG.propsFor = function (realm) {
+    const L = PROPS();
+    const out = { baum: [], deko: [], wahrzeichen: [] };
+    for (const nm of Object.keys(L).sort()) if (L[nm].realm === realm && out[L[nm].role]) out[L[nm].role].push(nm);
+    return out.baum.length || out.deko.length || out.wahrzeichen.length ? out : null;
+  };
+  const PGEOM = {};
+  RG.prop = function (name) {
+    T = R.T();
+    const E = PROPS()[name];
+    if (!PGEOM[name]) {
+      const g = new T.BufferGeometry();
+      g.setAttribute("position", new T.BufferAttribute(E.pos, 3));
+      g.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(E.pos, E.idx), 3));
+      g.setAttribute("uv", new T.BufferAttribute(E.uv, 2));
+      g.setIndex(new T.BufferAttribute(E.idx, 1));
+      PGEOM[name] = g;
+    }
+    const m = new T.Mesh(PGEOM[name], mat("prop." + name, E.tex, null, "prop." + name));
+    m.material.roughness = 0.85;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    const g = new T.Group();
+    g.add(m);
+    g.userData.genProp = name;
+    return g;
+  };
+
   /* Gegenstandsbild aus dem 3D-Modell selbst (passt so genau zum angelegten Modell). Ruestungsteile liegen dafuer in
      Ruhelage auf der ersten Figur mit eigenem Skelett, Waffen schraeg im Bild; jedes Bild wird einmal erzeugt. */
   const ICON = {};

@@ -2610,13 +2610,29 @@
         scene.add(s);
       }
     } else {
+      // erzeugte Requisiten des Reiches (Meshy-Strecke, src/r3d-rigged.js) statt der gebauten, ein Wahrzeichen hinten in
+      // der Mitte zwischen den Kaempfern; je Dekomodell hoechstens zwei Stueck, damit sich nichts sichtbar wiederholt
+      const GP = TH && R.rigged && R.rigged.propsFor ? R.rigged.propsFor(TH.id) : null;
+      const gen = (list, s) => {
+        const o = R.rigged.prop(list[Math.floor(rng() * list.length) % list.length]);
+        o.scale.setScalar(s);
+        o.rotation.y = rng() * PI * 2;
+        return o;
+      };
+      if (GP && GP.wahrzeichen.length) {
+        const w = R.rigged.prop(GP.wahrzeichen[0]);
+        w.position.set(0, 0, -5.6);
+        w.rotation.y = 0.2;
+        scene.add(w);
+      }
       for (let i = 0; i < 7; i++) {
-        const tr = TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
+        if (GP && GP.wahrzeichen.length && i === 3) continue;
+        const tr = GP && GP.baum.length ? gen(GP.baum, 0.8 + rng() * 0.3) : TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
         tr.position.set(-7 + i * 2.3 + rng(), 0, -4 - rng() * 2);
         scene.add(tr);
       }
-      for (let i = 0; i < 6; i++) {
-        const s = TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
+      for (let i = 0; i < (GP && GP.deko.length ? Math.min(6, 2 * GP.deko.length) : 6); i++) {
+        const s = GP && GP.deko.length ? gen(GP.deko, 0.8 + rng() * 0.4) : TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
         s.position.set(-6 + rng() * 12, 0.05, -1.5 - rng() * 2.5);
         scene.add(s);
       }
@@ -3173,6 +3189,7 @@
 
     const api = {
       _F: F,
+      _scene: scene,
       play,
       setSpeed(s) {
         speed = s;

@@ -15,6 +15,9 @@ Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schlu
       Bild zu 3D fuer eine Waffe oder einen Schild (ein Gegenstand je Bild, Tafeln vorher zuschneiden), danach in die
       Lage der gebauten Waffen bringen (weapon.py); ersetzt im Spiel die gebaute Waffe dieser Grundart (--forms,
       --seltenheit grenzen ein; --umdrehen, falls Griff und Spitze vertauscht sind)
+  python werkstatt.py requisit runenstein tafel_midgard_stein.png --realm midgard --rolle wahrzeichen --budget 30
+      Bild zu 3D fuer ein Requisit der Kampfumgebung (Rolle baum, deko oder wahrzeichen); im Kampf ersetzen die
+      Requisiten eines Reiches die gebauten Baeume und Dekorationen (prop.py)
   python werkstatt.py paket
       Figurenpaket bauen und eine Spielvorschau (vorschau/schwebfels.html) mit allen Figuren und Teilen erzeugen
   python werkstatt.py bilder nordmann_f [--konzept tafel02.png] [--klasse sturmhuene] [--waffe axt] [--figur nordmann_f]
@@ -158,6 +161,21 @@ def cmd_waffe(a):
     run(*args)
 
 
+def cmd_requisit(a):
+    extra = ["--trocken"] if a.trocken else []
+    if not a.trocken:
+        record(a.name, "requisit", a.bild, reich=a.realm, rolle=a.rolle, hoehe=a.hoehe, drehung=a.turn or None)
+    api("teil", a.name, a.bild, "--polys", "5000", *(["--budget", a.budget] if a.budget else []), *extra)
+    if a.trocken:
+        return
+    os.makedirs(os.path.join(BUILD, "requisiten"), exist_ok=True)
+    args = [PY, os.path.join(HERE, "prop.py"), os.path.join(BUILD, "requisiten", a.name + ".npz"), os.path.join(ROOT, a.name, "model.glb"),
+            "--realm", a.realm, "--rolle", a.rolle, "--name", a.name, "--turn", a.turn or 0]
+    if a.hoehe is not None:
+        args += ["--hoehe", a.hoehe]
+    run(*args)
+
+
 def cmd_paket(a):
     pack = os.path.join(BUILD, "gen.pack")
     run(PY, os.path.join(HERE, "gen_pack.py"), BUILD, pack)
@@ -191,14 +209,22 @@ def cmd_bilder(a):
         own = {"base": E.get("grundart", a.waffe), "rarity": "selten", "style": 1, "gen": a.name}
         gear = {"waffe": weapon, "nebenhand": own} if own["base"] == "schild" else {"waffe": own}
         desc = {"gen": fig, "cls": a.klasse, "gear": gear}
+    elif art == "requisit":
+        mode = "kampf"
+        desc = {"hero": {"gen": fig, "race": "nordmann", "gender": "m", "cls": a.klasse, "realm": E.get("reich", "midgard"), "gear": {"waffe": weapon}}, "events": 0}
     else:
         mode = "bestie"
         desc = {"foe": {"arch": (E.get("monsterarten") or "wolf").split(",")[0], "color": "#7a7470", "accent": "#ffcf5a"}}
-    if art != "bestie" and not desc.get("gen"):
+    if art not in ("bestie", "requisit") and not desc.get("gen"):
         raise SystemExit("Keine Figur fuer die Bilder: zuerst eine Figur umrechnen oder --figur angeben")
     shots = []
+    if mode == "kampf":
+        # Requisiten: die Kampfbuehne ihres Reiches
+        f = os.path.join(out, "spiel_kampf.png")
+        run("node", os.path.join(GAME, "tests", "preview.mjs"), f, json.dumps(desc), mode, "840", "560", env=dict(os.environ, PAGE=page))
+        shots.append((f, "Kampfumgebung"))
     # die Vorschau startet die Bewegung nach 0,3 s mit 2,5 s Dauer; der Schlag trifft also bei 2,8 s
-    for pose, at, label in (("", "1.6", "Ruhe"), ("walk", "1.4", "Gehen"), ("attack", "2.75", "Angriff")):
+    for pose, at, label in (("", "1.6", "Ruhe"), ("walk", "1.4", "Gehen"), ("attack", "2.75", "Angriff")) if mode != "kampf" else ():
         f = os.path.join(out, "spiel_%s.png" % (pose or "ruhe"))
         run("node", os.path.join(GAME, "tests", "preview.mjs"), f, json.dumps(desc), mode, "420", "560", pose, at, env=dict(os.environ, PAGE=page))
         shots.append((f, label))
@@ -231,14 +257,14 @@ def cmd_notiz(a):
     print("Notiz gespeichert:", a.name)
 
 
-NPZ = {"figur": "%s.npz", "teil": "teile/%s.npz", "bestie": "bestien/%s.npz", "waffe": "waffen/%s.npz"}
-ART = {"figur": "Figur", "teil": "Rüstungsteil", "bestie": "Bestie", "waffe": "Waffe"}
+NPZ = {"figur": "%s.npz", "teil": "teile/%s.npz", "bestie": "bestien/%s.npz", "waffe": "waffen/%s.npz", "requisit": "requisiten/%s.npz"}
+ART = {"figur": "Figur", "teil": "Rüstungsteil", "bestie": "Bestie", "waffe": "Waffe", "requisit": "Requisit"}
 # Beschriftungen im Bericht (der Bericht ist fuer den Kapitaen, deshalb mit Umlauten)
 LABEL = {"dreiecke": "Dreiecke", "textur": "Textur", "ecken": "Ecken", "knochen": "Knochen", "bewegungen": "Bewegungen", "hoehe": "Höhe",
          "reduziert": "Reduziert", "t_haltung": "T-Haltung", "platz": "Platz", "passt_zu": "Passt zu", "referenz": "Angepasst an",
          "monsterarten": "Monsterarten", "grundart": "Grundart", "laenge": "Länge", "griff": "Griffpunkt", "volk": "Volk",
          "geschlecht": "Geschlecht", "formen": "Formen", "drehung": "Drehung", "spiegeln": "Gespiegelt", "paar": "Als Paar gespiegelt",
-         "seltenheit": "Seltenheit", "umdrehen": "Griff und Spitze getauscht"}
+         "seltenheit": "Seltenheit", "umdrehen": "Griff und Spitze getauscht", "reich": "Reich", "rolle": "Rolle"}
 lab = lambda k: LABEL.get(k, k.replace("_", " ").capitalize())  # noqa: E731
 
 
@@ -271,6 +297,10 @@ def model_facts(art, name):
     elif art == "bestie":
         f["knochen"] = len(meta.get("bones", []))
         f["monsterarten"] = ", ".join(meta.get("archs", [])) or "-"
+    elif art == "requisit":
+        f["reich"] = meta.get("realm")
+        f["rolle"] = meta.get("role")
+        f["hoehe"] = "%.2f m" % (meta["max"][1] - meta["min"][1]) if "max" in meta else "-"
     elif art == "waffe":
         f["grundart"] = meta.get("base")
         f["laenge"] = "%.2f m" % (meta["max"][1] - meta["min"][1]) if "max" in meta else "-"
@@ -304,6 +334,8 @@ def cmd_bericht(a):
             continue
         W = json.load(open(os.path.join(d, "werkstatt.json"))) if os.path.exists(os.path.join(d, "werkstatt.json")) else {}
         A = json.load(open(os.path.join(d, "auftraege.json"))) if os.path.exists(os.path.join(d, "auftraege.json")) else {}
+        if not W and not A:
+            continue  # leerer Ordner, etwa von einem Trockenlauf
         art = W.get("art") or ("figur" if "rigging" in A else "teil")
         cr = [r for r in log if r.get("figur") == name]
         models.append({"name": name, "art": art, "W": W, "dir": d, "facts": model_facts(art, name), "credits": cr,
@@ -330,7 +362,7 @@ def cmd_bericht(a):
         parts.append("<h2>%s <small>%s</small></h2>" % (esc(m["name"]), ART.get(m["art"], m["art"])))
         pics = []
         has_cmp = os.path.exists(os.path.join(m["dir"], "vergleich.png"))  # zeigt das Konzeptbild schon links
-        for fn, label in (("konzept.png", "Konzept"), ("vorschau.png", "Meshy-Vorschau"), ("vergleich.png", "Konzept und Spiel (Ruhe, Gehen, Angriff)")):
+        for fn, label in (("konzept.png", "Konzept"), ("vorschau.png", "Meshy-Vorschau"), ("vergleich.png", "Konzept und Spielbilder")):
             if fn == "konzept.png" and has_cmp:
                 continue
             p = os.path.join(m["dir"], fn)
@@ -406,6 +438,15 @@ def main():
     p.add_argument("--laenge", type=float)
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
+    p = sub.add_parser("requisit")
+    p.add_argument("name")
+    p.add_argument("bild")
+    p.add_argument("--realm", required=True, choices=["albion", "midgard", "hibernia"])
+    p.add_argument("--rolle", required=True, choices=["baum", "deko", "wahrzeichen"])
+    p.add_argument("--hoehe", type=float)
+    p.add_argument("--turn", type=float, default=0.0)
+    p.add_argument("--budget", type=int)
+    p.add_argument("--trocken", action="store_true")
     sub.add_parser("paket")
     p = sub.add_parser("bilder")
     p.add_argument("name")
@@ -427,6 +468,8 @@ def main():
         cmd_bestie(a)
     elif a.cmd == "waffe":
         cmd_waffe(a)
+    elif a.cmd == "requisit":
+        cmd_requisit(a)
     elif a.cmd == "paket":
         cmd_paket(a)
     elif a.cmd == "bilder":

@@ -7,7 +7,7 @@ Jede npz-Datei ist eine Figur (Name = Dateiname). Zwei Arten:
    Bewegungen. Bewegungen landen einmal im gemeinsamen Teil "clips" und gelten fuer jede Figur mit gleichen Knochennamen.
    Figuren mit Volk und Geschlecht (meshy.py --race/--gender) ersetzen im Spiel automatisch den Koerper dieses Volkes,
    ausser mit --no-auto.
-Unterordner: "teile" (fit_piece.py), "bestien" (beasts/from_glb.py), "waffen" (weapon.py).
+Unterordner: "teile" (fit_piece.py), "bestien" (beasts/from_glb.py), "waffen" (weapon.py), "requisiten" (prop.py).
 build.mjs bettet das Paket neben schwebfels.pack ein.
 """
 import io
@@ -83,11 +83,26 @@ def weapon(z):
             "base": meta["base"], "forms": meta["forms"], "rarity": meta["rarity"]}
 
 
+def prop(z):
+    """Requisit aus prop.py: feste Form fuer die Kampfumgebung eines Reiches (Baum, Deko, Wahrzeichen)."""
+    meta = json.loads(str(z["meta"]))
+    return {"pos": P.q16(z["pos"]), "uv": P.q16(z["uv"]), "idx": P.index(z["idx"]), "tex": tex(z["tex"]), "realm": meta["realm"], "role": meta["role"]}
+
+
 gen = {}
 clips = {}
 pieces = {}
 beasts = {}
 weapons = {}
+props = {}
+RD = os.path.join(SRC, "requisiten")
+if os.path.isdir(RD):
+    for f in sorted(os.listdir(RD)):
+        if f.endswith(".npz"):
+            z = np.load(os.path.join(RD, f))
+            name = json.loads(str(z["meta"]))["name"]
+            props[name] = prop(z)
+            print("Requisit", name, "(" + props[name]["realm"] + ", " + props[name]["role"] + ")", len(z["idx"]), "Dreiecke")
 WD = os.path.join(SRC, "waffen")
 if os.path.isdir(WD):
     for f in sorted(os.listdir(WD)):
@@ -131,5 +146,6 @@ for f in sorted(os.listdir(SRC)):
             e["pieces"][n]["tex"] = tex(z[pre + "_tex"])
     gen[f[:-4]] = e
     print("Figur", f[:-4], len(z["body_pos"]), "Ecken,", len(names), "Teile")
-n = P.write(OUT, {"v": 1, "gen": gen, "clips": clips, "pieces": pieces, "beasts": beasts, "weapons": weapons})
-print(OUT, round(n / 1024), "KB,", len(clips), "gemeinsame Bewegungen,", len(pieces), "Ruestungsteile,", len(beasts), "Bestien,", len(weapons), "Waffen")
+n = P.write(OUT, {"v": 1, "gen": gen, "clips": clips, "pieces": pieces, "beasts": beasts, "weapons": weapons, "props": props})
+print(OUT, round(n / 1024), "KB,", len(clips), "gemeinsame Bewegungen,", len(pieces), "Ruestungsteile,", len(beasts), "Bestien,", len(weapons), "Waffen,",
+      len(props), "Requisiten")

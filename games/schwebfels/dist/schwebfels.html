@@ -4895,6 +4895,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         data.clips = g.clips || {};
         data.rigPieces = g.pieces || {};
         data.genWeapons = g.weapons || {};
+        data.genProps = g.props || {};
         // erzeugte Bestien (beasts/from_glb.py) neben die gebauten; gleiche Familie ersetzt die gebaute
         data.beasts = Object.assign({}, data.beasts || {}, g.beasts || {});
         globalThis.SB_GENPACK = null;
@@ -4907,6 +4908,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         }
         for (const k in data.rigPieces) {
           const t = A.texture("rigpiece." + k, data.rigPieces[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.genProps) {
+          const t = A.texture("prop." + k, data.genProps[k].tex, { srgb: true });
           if (t) waits.push(t.userData.ready);
         }
         for (const k in data.genWeapons) {
@@ -8016,6 +8021,37 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const g = new T.Group();
     g.add(weaponMesh(nm));
     g.userData.genWeapon = nm;
+    return g;
+  };
+
+  /* ---------- Requisiten der Kampfumgebung (assets-src/gen/prop.py) ----------
+     Je Reich Baeume, Dekorationen und ein Wahrzeichen; die Kampfbuehne nimmt sie statt der gebauten. */
+  const PROPS = () => (SB.assets && SB.assets.data && SB.assets.data.genProps) || {};
+  RG.propsFor = function (realm) {
+    const L = PROPS();
+    const out = { baum: [], deko: [], wahrzeichen: [] };
+    for (const nm of Object.keys(L).sort()) if (L[nm].realm === realm && out[L[nm].role]) out[L[nm].role].push(nm);
+    return out.baum.length || out.deko.length || out.wahrzeichen.length ? out : null;
+  };
+  const PGEOM = {};
+  RG.prop = function (name) {
+    T = R.T();
+    const E = PROPS()[name];
+    if (!PGEOM[name]) {
+      const g = new T.BufferGeometry();
+      g.setAttribute("position", new T.BufferAttribute(E.pos, 3));
+      g.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(E.pos, E.idx), 3));
+      g.setAttribute("uv", new T.BufferAttribute(E.uv, 2));
+      g.setIndex(new T.BufferAttribute(E.idx, 1));
+      PGEOM[name] = g;
+    }
+    const m = new T.Mesh(PGEOM[name], mat("prop." + name, E.tex, null, "prop." + name));
+    m.material.roughness = 0.85;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    const g = new T.Group();
+    g.add(m);
+    g.userData.genProp = name;
     return g;
   };
 
@@ -15021,13 +15057,29 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         scene.add(s);
       }
     } else {
+      // erzeugte Requisiten des Reiches (Meshy-Strecke, src/r3d-rigged.js) statt der gebauten, ein Wahrzeichen hinten in
+      // der Mitte zwischen den Kaempfern; je Dekomodell hoechstens zwei Stueck, damit sich nichts sichtbar wiederholt
+      const GP = TH && R.rigged && R.rigged.propsFor ? R.rigged.propsFor(TH.id) : null;
+      const gen = (list, s) => {
+        const o = R.rigged.prop(list[Math.floor(rng() * list.length) % list.length]);
+        o.scale.setScalar(s);
+        o.rotation.y = rng() * PI * 2;
+        return o;
+      };
+      if (GP && GP.wahrzeichen.length) {
+        const w = R.rigged.prop(GP.wahrzeichen[0]);
+        w.position.set(0, 0, -5.6);
+        w.rotation.y = 0.2;
+        scene.add(w);
+      }
       for (let i = 0; i < 7; i++) {
-        const tr = TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
+        if (GP && GP.wahrzeichen.length && i === 3) continue;
+        const tr = GP && GP.baum.length ? gen(GP.baum, 0.8 + rng() * 0.3) : TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
         tr.position.set(-7 + i * 2.3 + rng(), 0, -4 - rng() * 2);
         scene.add(tr);
       }
-      for (let i = 0; i < 6; i++) {
-        const s = TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
+      for (let i = 0; i < (GP && GP.deko.length ? Math.min(6, 2 * GP.deko.length) : 6); i++) {
+        const s = GP && GP.deko.length ? gen(GP.deko, 0.8 + rng() * 0.4) : TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
         s.position.set(-6 + rng() * 12, 0.05, -1.5 - rng() * 2.5);
         scene.add(s);
       }
@@ -15584,6 +15636,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
     const api = {
       _F: F,
+      _scene: scene,
       play,
       setSpeed(s) {
         speed = s;
