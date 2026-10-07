@@ -4,7 +4,8 @@
   "Vorher ohne Kosten pruefen: python werkstatt.py plan qualitaetstest.json --trocken (zeigt Kosten, bestellt nichts).",
   "Bilder in assets-src/gen/konzepte/ ablegen (nicht im Repository). Jedes Bild zeigt genau ein Modell; Tafeln mit mehreren Teilen vorher zuschneiden.",
   "Fuer wechselbare Brustpanzer die Figur in schlichter Grundkleidung zeigen (Meshy liefert Kleidung aus einem Guss).",
-  "Liegt die Schaetzung ueber dem Budget, wird nichts bestellt. Ein erneuter Aufruf setzt fort, Fertiges wird nicht neu bezahlt.",
+  "Liegt die Schaetzung ueber dem Budget, wird nichts bestellt. Ein erneuter Aufruf setzt fort: Fertiges und begonnene Auftraege (etwa nach einem Abbruch beim Warten) werden nicht neu bezahlt.",
+  "Zeigt eine Tafel dasselbe Modell von mehreren Seiten, die weiteren Ansichten mit \"ansichten\": [\"konzepte/..._seite.png\", \"konzepte/..._ruecken.png\"] angeben (hoechstens 3, gleicher Preis); \"bild\" bleibt die Vorderansicht.",
   "Meshy bewahrt Auftraege nur 3 Tage auf: einen begonnenen Lauf innerhalb von 3 Tagen abschliessen (Rigging und Bewegungen bauen auf den Auftraegen auf).",
   "Brustpanzer: harnisch.0 ist der Brustharnisch, harnisch.1 der Plattenpanzer; der erste gilt auch fuer die uebrigen Harnische.",
   "Teile und Waffen lassen sich mit \"seltenheit\" (etwa \"episch,legendaer\") auf Seltenheiten beschraenken, zum Beispiel fuer die fuenf Stufen von Tafel 10; das passende Teil geht dann vor."

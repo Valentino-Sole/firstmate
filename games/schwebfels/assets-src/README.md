@@ -58,6 +58,7 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/prop.py` | Requisit der Kampfumgebung (Baum, Deko, Wahrzeichen) aus einer GLB: auf den Boden gestellt, mittig, Zielhöhe je Rolle |
 | `gen/qualitaetstest.json` | Plan des Qualitätstests: Figuren, zwei Brustpanzer, Handschuhe, Stiefel, Helm, Waffe, Bestie, Requisiten, Budget |
 | `gen/pruefung.py` | Prüfung von `weapon.py` und `prop.py` mit absichtlich schwierigen Prüfmodellen aus Blender (schräges Schwert, Axt kopfüber, Schild zur Seite, Stab mit riesiger Kugel, breiter Baum und Fels) |
+| `gen/pruefung_bestellung.py` | Prüfung der Bestellungen gegen den Prüfserver (ohne Blender, ohne Credits): Abbruch beim Warten auf Figur und Bewegungen ohne doppeltes Bezahlen, mehrere Ansichten, Rigging-Rückfall |
 | `gen/pruefserver.py` | Prüfserver, der wie die Meshy-API antwortet (Probelauf der Werkstatt ohne Credits) |
 | `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |
 | `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
@@ -84,6 +85,7 @@ Am einfachsten über die Werkstatt (bestellen, umrechnen, Paket und Spielvorscha
 cd assets-src/gen
 python werkstatt.py kosten
 python werkstatt.py figur nordmann_f tafel02.png --race nordmann --gender f --budget 100   # erste Figur: mit Bewegungen
+python werkstatt.py figur nordmann_f vorn.png --ansichten seite.png,ruecken.png ...   # bis zu 4 Ansichten, gleicher Preis
 python werkstatt.py figur kreidezwerg_m tafel01.png --race kreidezwerg --gender m --budget 40
 python werkstatt.py teil harnisch_eisen brust.png --slot brust --forms harnisch --ref nordmann_f --budget 30
 python werkstatt.py teil handschuh_leder handschuh.png --slot handschuhe --ref nordmann_f --paar --budget 30
@@ -98,6 +100,20 @@ python werkstatt.py bericht                     # meshy/bericht.html: Bilder, Ke
 
 Die Werkstatt merkt sich je Modell Art, Konzeptbild und Einstellungen (`meshy/<name>/werkstatt.json`); der Bericht
 fasst alles für den Kapitän zusammen, die Credits stammen aus Meshys Antworten (`credits.jsonl`).
+
+Bezahlt wird jeder Auftrag nur einmal: `meshy_api.py` schreibt die Auftragsnummer in `meshy/<name>/auftraege.json`,
+bevor es auf Meshy wartet. Bricht ein Lauf ab (Netz, Sitzungsende, fehlgeschlagener Download), fragt der nächste
+Aufruf denselben Auftrag kostenlos erneut ab; neu bestellt wird nur, was Meshy als fehlgeschlagen meldet (das
+erstattet Meshy) oder nicht mehr kennt (Aufbewahrung 3 Tage). Downloads landen erst vollständig unter ihrem Namen.
+Mit dem Prüfserver nachgestellt (Abbruch beim Warten auf Bild zu 3D und auf Bewegungen): Figur mit Bewegungen kostet
+95 Credits wie geplant; das alte Werkzeug hätte das abgebrochene Modell ein zweites Mal bezahlt.
+
+Mehrere Ansichten: Zeigt eine Tafel dasselbe Modell von vorn, von der Seite und von hinten, nimmt jeder Bestellbefehl
+die weiteren Bilder mit `--ansichten` (im Plan `"ansichten": [...]`). Meshy erzeugt dann über „Mehrere Bilder zu 3D“
+(bis zu 4 Bilder, das erste ist die Vorderansicht, gleicher Preis wie ein Bild); Rückseite und Proportionen müssen
+nicht mehr erraten werden. Ob das Rigging einen Auftrag aus mehreren Bildern direkt annimmt, sagt die Doku nicht
+(Remesh etwa nimmt ihn laut Doku nicht); lehnt Meshy ab, schickt `meshy_api.py` dasselbe Modell als Datei zum
+Rigging (laut Doku erlaubt, kein Aufpreis). Beides mit dem Prüfserver durchgespielt.
 
 Die einzelnen Schritte von Hand:
 

@@ -4,7 +4,9 @@ Alles landet unter assets-src/gen/meshy/ (nicht im Repository): Downloads je Fig
 Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schluessel kommt aus MESHY_API_KEY.
 
   python werkstatt.py figur nordmann_f tafel02.png --race nordmann --gender f --budget 100
-      Bild zu 3D und Rigging; bei der ersten Figur auch die gemeinsamen Bewegungen (20 Stueck); danach umrechnen
+      Bild zu 3D und Rigging; bei der ersten Figur auch die gemeinsamen Bewegungen (20 Stueck); danach umrechnen.
+      Alle Bestellbefehle nehmen --ansichten seite.png,ruecken.png: bis zu 3 weitere Ansichten desselben Modells
+      (gleicher Preis, meist bessere Rueckseiten und Proportionen; die Vorderansicht ist immer das erste Bild)
   python werkstatt.py teil harnisch_eisen tafel10.png --slot brust --forms harnisch --ref nordmann_f --budget 30
       Bild zu 3D fuer ein Ruestungsteil, danach auf die Referenzfigur anpassen (--paar fuer einen einzelnen
       Handschuh oder Stiefel, --rot 0,0,90 zum Drehen)
@@ -62,13 +64,31 @@ def api(*args):
     run(PY, os.path.join(HERE, "meshy_api.py"), "--out", ROOT, *args)
 
 
-def record(name, art, bild, **params):
+def views(a):
+    """Weitere Ansichten (Seite, Ruecken) desselben Modells; Meshy nimmt mit der Vorderansicht bis zu vier Bilder."""
+    v = [x.strip() for x in (getattr(a, "ansichten", None) or "").split(",") if x.strip()]
+    if len(v) > 3:
+        raise SystemExit("Hoechstens 3 weitere Ansichten (Meshy nimmt bis zu 4 Bilder je Modell).")
+    for x in v:
+        if not os.path.exists(x):
+            raise SystemExit("Ansicht nicht gefunden: " + x)
+    return v
+
+
+def views_arg(a):
+    v = views(a)
+    return ["--ansichten", ",".join(os.path.abspath(x) for x in v)] if v else []
+
+
+def record(name, art, bild, ansichten=(), **params):
     """Art, Konzeptbild und Einstellungen eines Modells fuer den Bericht festhalten (meshy/<name>/werkstatt.json)."""
     d = os.path.join(ROOT, name)
     os.makedirs(d, exist_ok=True)
     p = os.path.join(d, "werkstatt.json")
     W = json.load(open(p)) if os.path.exists(p) else {"notizen": []}
     W.update({"art": art, "bild": os.path.basename(bild), "einstellungen": {k: v for k, v in params.items() if v not in (None, "", False)}})
+    if ansichten:
+        W["einstellungen"]["ansichten"] = ", ".join(os.path.basename(x) for x in ansichten)
     json.dump(W, open(p, "w"), indent=1, ensure_ascii=False)
     try:
         from PIL import Image
@@ -88,9 +108,9 @@ def cmd_figur(a):
     height = packbones.top(os.path.join(GAME, "assets", "schwebfels.pack"), a.race + "." + a.gender)
     extra = ["--trocken"] if a.trocken else []
     if not a.trocken:
-        record(a.name, "figur", a.bild, volk=a.race, geschlecht=a.gender, hoehe=round(height, 2))
+        record(a.name, "figur", a.bild, views(a), volk=a.race, geschlecht=a.gender, hoehe=round(height, 2))
     budget = a.budget
-    api("figur", a.name, a.bild, "--hoehe", "%.2f" % height, *(["--budget", budget] if budget else []), *extra)
+    api("figur", a.name, a.bild, "--hoehe", "%.2f" % height, *views_arg(a), *(["--budget", budget] if budget else []), *extra)
     owner = shared_clips()
     if owner is None or owner == a.name:
         rest = None if budget is None else budget - 35
@@ -119,9 +139,9 @@ def cmd_teil(a):
     if not a.trocken and not os.path.exists(ref):
         raise SystemExit("Referenzfigur fehlt: zuerst 'werkstatt.py figur %s ...' (nichts bestellt)" % a.ref)
     if not a.trocken:
-        record(a.name, "teil", a.bild, platz=a.slot, formen=a.forms, seltenheit=a.seltenheit, referenz=a.ref, drehung=None if a.rot == "auto" else a.rot,
+        record(a.name, "teil", a.bild, views(a), platz=a.slot, formen=a.forms, seltenheit=a.seltenheit, referenz=a.ref, drehung=None if a.rot == "auto" else a.rot,
                spiegeln=a.flip, paar=a.paar)
-    api("teil", a.name, a.bild, *(["--budget", a.budget] if a.budget else []), *extra)
+    api("teil", a.name, a.bild, *views_arg(a), *(["--budget", a.budget] if a.budget else []), *extra)
     if a.trocken:
         return
     os.makedirs(os.path.join(BUILD, "teile"), exist_ok=True)
@@ -137,8 +157,8 @@ def cmd_teil(a):
 def cmd_bestie(a):
     extra = ["--trocken"] if a.trocken else []
     if not a.trocken:
-        record(a.name, "bestie", a.bild, monsterarten=a.archs, hoehe=a.hoehe, drehung=None if a.turn == "0" else a.turn)
-    api("teil", a.name, a.bild, "--polys", "9000", *(["--budget", a.budget] if a.budget else []), *extra)
+        record(a.name, "bestie", a.bild, views(a), monsterarten=a.archs, hoehe=a.hoehe, drehung=None if a.turn == "0" else a.turn)
+    api("teil", a.name, a.bild, "--polys", "9000", *views_arg(a), *(["--budget", a.budget] if a.budget else []), *extra)
     if a.trocken:
         return
     os.makedirs(os.path.join(BUILD, "bestien"), exist_ok=True)
@@ -149,8 +169,8 @@ def cmd_bestie(a):
 def cmd_waffe(a):
     extra = ["--trocken"] if a.trocken else []
     if not a.trocken:
-        record(a.name, "waffe", a.bild, grundart=a.base, formen=a.forms, seltenheit=a.seltenheit, umdrehen=a.umdrehen, griff=a.griff, laenge=a.laenge)
-    api("teil", a.name, a.bild, "--polys", "4000", *(["--budget", a.budget] if a.budget else []), *extra)
+        record(a.name, "waffe", a.bild, views(a), grundart=a.base, formen=a.forms, seltenheit=a.seltenheit, umdrehen=a.umdrehen, griff=a.griff, laenge=a.laenge)
+    api("teil", a.name, a.bild, "--polys", "4000", *views_arg(a), *(["--budget", a.budget] if a.budget else []), *extra)
     if a.trocken:
         return
     os.makedirs(os.path.join(BUILD, "waffen"), exist_ok=True)
@@ -168,8 +188,8 @@ def cmd_waffe(a):
 def cmd_requisit(a):
     extra = ["--trocken"] if a.trocken else []
     if not a.trocken:
-        record(a.name, "requisit", a.bild, reich=a.realm, rolle=a.rolle, hoehe=a.hoehe, drehung=a.turn or None)
-    api("teil", a.name, a.bild, "--polys", "5000", *(["--budget", a.budget] if a.budget else []), *extra)
+        record(a.name, "requisit", a.bild, views(a), reich=a.realm, rolle=a.rolle, hoehe=a.hoehe, drehung=a.turn or None)
+    api("teil", a.name, a.bild, "--polys", "5000", *views_arg(a), *(["--budget", a.budget] if a.budget else []), *extra)
     if a.trocken:
         return
     os.makedirs(os.path.join(BUILD, "requisiten"), exist_ok=True)
@@ -305,6 +325,13 @@ def cmd_plan(a):
     for r in rows:
         print("  %-48s %4d" % (r[0], r[1]))
     missing = [r[2] for r in rows if r[1] and r[2] and not os.path.exists(img(r[2]))]
+    for it in figs + teile + waffen + bestien + requisiten:
+        if order_ok(it["name"], "image_to_3d"):
+            continue
+        v = it.get("ansichten", [])
+        missing += [x + " (Ansicht von " + it["name"] + ")" for x in v if not os.path.exists(img(x))]
+        if len(v) > 3:
+            missing.append("%s: hoechstens 3 weitere Ansichten (Meshy nimmt bis zu 4 Bilder je Modell)" % it["name"])
     refs = {f["name"] for f in figs} | {f[:-4] for f in (os.listdir(BUILD) if os.path.isdir(BUILD) else []) if f.endswith(".npz")}
     badref = ["%s (Referenz %s)" % (t["name"], t["ref"]) for t in teile if t["ref"] not in refs]
     if missing or badref:
@@ -327,19 +354,20 @@ def cmd_plan(a):
         except (SystemExit, subprocess.CalledProcessError, OSError) as e:
             fails.append("%s: %s" % (label, e))
             print("FEHLER", label, e, flush=True)
+    va = lambda it: ",".join(img(x) for x in it.get("ansichten", []))  # noqa: E731
     for f in figs:
-        step("Figur " + f["name"], cmd_figur, N(name=f["name"], bild=img(f["bild"]), race=f["race"], gender=f["gender"], budget=left(), trocken=False))
+        step("Figur " + f["name"], cmd_figur, N(name=f["name"], bild=img(f["bild"]), ansichten=va(f), race=f["race"], gender=f["gender"], budget=left(), trocken=False))
     for t in teile:
-        step("Teil " + t["name"], cmd_teil, N(name=t["name"], bild=img(t["bild"]), slot=t["slot"], forms=t.get("forms", ""), seltenheit=t.get("seltenheit", ""), ref=t["ref"],
+        step("Teil " + t["name"], cmd_teil, N(name=t["name"], bild=img(t["bild"]), ansichten=va(t), slot=t["slot"], forms=t.get("forms", ""), seltenheit=t.get("seltenheit", ""), ref=t["ref"],
                                               rot=t.get("rot", "auto"), flip=t.get("flip", False), paar=t.get("paar", False), budget=left(), trocken=False))
     for w in waffen:
-        step("Waffe " + w["name"], cmd_waffe, N(name=w["name"], bild=img(w["bild"]), base=w["base"], forms=w.get("forms", ""), seltenheit=w.get("seltenheit", ""),
+        step("Waffe " + w["name"], cmd_waffe, N(name=w["name"], bild=img(w["bild"]), ansichten=va(w), base=w["base"], forms=w.get("forms", ""), seltenheit=w.get("seltenheit", ""),
                                                umdrehen=w.get("umdrehen", False), griff=w.get("griff"), laenge=w.get("laenge"), budget=left(), trocken=False))
     for b in bestien:
-        step("Bestie " + b["name"], cmd_bestie, N(name=b["name"], bild=img(b["bild"]), archs=b["archs"], hoehe=str(b.get("hoehe", 1.15)),
+        step("Bestie " + b["name"], cmd_bestie, N(name=b["name"], bild=img(b["bild"]), ansichten=va(b), archs=b["archs"], hoehe=str(b.get("hoehe", 1.15)),
                                                  turn=str(b.get("turn", 0)), budget=left(), trocken=False))
     for r in requisiten:
-        step("Requisit " + r["name"], cmd_requisit, N(name=r["name"], bild=img(r["bild"]), realm=r["realm"], rolle=r["rolle"], hoehe=r.get("hoehe"),
+        step("Requisit " + r["name"], cmd_requisit, N(name=r["name"], bild=img(r["bild"]), ansichten=va(r), realm=r["realm"], rolle=r["rolle"], hoehe=r.get("hoehe"),
                                                      turn=r.get("turn", 0.0), budget=left(), trocken=False))
     step("Paket", cmd_paket, N())
     fig0 = figs[0]["name"] if figs else None
@@ -522,6 +550,7 @@ def main():
     p = sub.add_parser("figur")
     p.add_argument("name")
     p.add_argument("bild")
+    p.add_argument("--ansichten", help="weitere Ansichten desselben Modells (Seite, Ruecken), durch Komma getrennt, hoechstens 3")
     p.add_argument("--race", required=True)
     p.add_argument("--gender", required=True, choices=["f", "m"])
     p.add_argument("--budget", type=int)
@@ -529,6 +558,7 @@ def main():
     p = sub.add_parser("teil")
     p.add_argument("name")
     p.add_argument("bild")
+    p.add_argument("--ansichten", help="weitere Ansichten desselben Modells (Seite, Ruecken), durch Komma getrennt, hoechstens 3")
     p.add_argument("--slot", required=True, choices=["brust", "handschuhe", "stiefel", "helm", "hose"])
     p.add_argument("--forms", default="")
     p.add_argument("--seltenheit", default="")
@@ -541,6 +571,7 @@ def main():
     p = sub.add_parser("bestie")
     p.add_argument("name")
     p.add_argument("bild")
+    p.add_argument("--ansichten", help="weitere Ansichten desselben Modells (Seite, Ruecken), durch Komma getrennt, hoechstens 3")
     p.add_argument("--archs", required=True)
     p.add_argument("--hoehe", default="1.15")
     p.add_argument("--turn", default="0")
@@ -549,6 +580,7 @@ def main():
     p = sub.add_parser("waffe")
     p.add_argument("name")
     p.add_argument("bild")
+    p.add_argument("--ansichten", help="weitere Ansichten desselben Modells (Seite, Ruecken), durch Komma getrennt, hoechstens 3")
     p.add_argument("--base", required=True)
     p.add_argument("--forms", default="")
     p.add_argument("--seltenheit", default="")
@@ -560,6 +592,7 @@ def main():
     p = sub.add_parser("requisit")
     p.add_argument("name")
     p.add_argument("bild")
+    p.add_argument("--ansichten", help="weitere Ansichten desselben Modells (Seite, Ruecken), durch Komma getrennt, hoechstens 3")
     p.add_argument("--realm", required=True, choices=["albion", "midgard", "hibernia"])
     p.add_argument("--rolle", required=True, choices=["baum", "deko", "wahrzeichen"])
     p.add_argument("--hoehe", type=float)

@@ -29,6 +29,7 @@ node tests/e2e.mjs screens           # Browser-Durchlauf mit Bildschirmfotos (Pl
 node tests/rigged.mjs                # Figuren mit eigenem Skelett, Rüstungsteile, erzeugte Bestien, Heimatinseln
 node tests/smoke.mjs                 # Rauchtest: alle Völker, Klassen, Monster, Gegenstände und Szenen ohne stille Fehler
 python assets-src/gen/pruefung.py    # Werkzeuge für Waffen und Requisiten (braucht Blender als Python-Modul)
+python assets-src/gen/pruefung_bestellung.py   # Meshy-Bestellungen gegen den Prüfserver: Abbrüche, Ansichten, Rigging
 ```
 
 - Der Browser-Durchlauf braucht three.js und Schriften vom CDN. Kommt der Testbrowser nicht ans Netz, lädt man die Dateien einmal herunter und zeigt mit `CDN_CACHE=<map.json>` darauf (Format in `README.md`).
@@ -71,6 +72,8 @@ python assets-src/gen/pruefung.py    # Werkzeuge für Waffen und Requisiten (bra
   - Geprüft mit echten Meshy-Dateien (öffentliche Sammlung von Meshy-Modellen auf Hugging Face, nur lokal, nicht im Spiel): Axt, Schwert, Hammer, Stab und Schild liegen wie die gebauten Waffen in der Hand; Brustpanzer, Helm und Stiefel sitzen; Fels, Baum, Holzstapel und ein Fuchs als Wolf in der Kampfumgebung. Daraus: Breitenbegrenzung für Waffen und Requisiten, Schilde richten ihre Vorderseite selbst aus, Stiefel- oder Handschuhpaare verlieren Verbindungen zwischen links und rechts.
   - Aussehen: Für Völker mit fertig modellierten Figuren zeigen Heldenerschaffung und Spiegel nur die Wahl der Gestalt (Haut, Haare und Gesicht gehören zum Modell); ohne solche Figuren bleibt alles wie bisher.
   - Werkstatt (`assets-src/gen/werkstatt.py`): Figur, Rüstungsteil oder Bestie in einem Befehl bestellen, umrechnen, ins Paket legen und eine Spielvorschau bauen.
+  - Kein Auftrag wird doppelt bezahlt: Auftragsnummern stehen vor dem Warten fest, ein Abbruch (Netz, Sitzungsende, Download) wird beim nächsten Aufruf kostenlos fortgesetzt (vorher hätte ein abgebrochenes Modell ein zweites Mal gekostet; mit dem Prüfserver nachgestellt).
+  - Mehrere Ansichten: Jeder Bestellbefehl und der Plan nehmen bis zu drei weitere Ansichten desselben Modells (`--ansichten`, im Plan `"ansichten"`); Meshy erzeugt dann aus bis zu vier Bildern, gleicher Preis. Lehnt das Rigging einen solchen Auftrag ab, geht das Modell als Datei zum Rigging.
   - Geprüft mit freien Testmodellen aus dem three.js- und Khronos-Repository (nicht im Spiel): Umrechnung exakt (unter 1 mm), Bewegungen eines Modells laufen auf anderen, Rüstungsteile auf zwei sehr verschiedenen Körpern, Bestie im Kampf, Insel und Browser-Durchlauf ohne Fehler. `tests/rigged.mjs` prüft das alles mit einer eigenen Prüffigur ohne fremde Modelle.
 - Gegen die offizielle Meshy-API-Doku geprüft (7. Oktober 2026): alle Bestellfelder (`remove_lighting` nur bei meshy-6, deshalb weggelassen), alle 20 Bewegungsnummern gehören zu den erwarteten Namen der Bibliothek, Bewegungen kommen in der bestellten Reihenfolge mit Bibliotheksnamen, fehlgeschlagene Aufträge kosten nichts.
 - Echtes Meshy-Skelett (aus Meshys Bibliotheksvorschau): 24 Knochen ohne Finger, alle ohne Ruhedrehung in T-Haltung. Bewegungen deshalb nur einmal kaufen (20 Stück, 60 Credits) und mit allen Figuren teilen.
