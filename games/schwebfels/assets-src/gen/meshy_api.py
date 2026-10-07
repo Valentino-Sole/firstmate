@@ -28,6 +28,11 @@ import urllib.error
 import urllib.request
 
 API = "https://api.meshy.ai/openapi/v1/"
+# Nur fuer Proben mit einem Pruefserver auf diesem Rechner (der Schluessel geht nie an fremde Adressen)
+if os.environ.get("MESHY_API_BASE"):
+    if not os.environ["MESHY_API_BASE"].startswith(("http://127.0.0.1:", "http://localhost:")):
+        raise SystemExit("MESHY_API_BASE darf nur auf einen Pruefserver auf diesem Rechner zeigen.")
+    API = os.environ["MESHY_API_BASE"].rstrip("/") + "/"
 # Bewegungen aus der Meshy-Bibliothek (Nummer, Name), geprueft gegen https://docs.meshy.ai/en/api/animation-library
 CLIPS = {
     "standard": [

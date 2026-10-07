@@ -20,6 +20,7 @@ gen_pack.py nimmt die Teile aus dem Unterordner "teile" des npz-Ordners in den g
 import argparse
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -40,10 +41,14 @@ REGION = {
 
 
 # ---------- Knochenrahmen und Querschnittsprofile (gleiches Verfahren wie in src/r3d-rigged.js) ----------
-def frames(rest, parents):
-    """Je Knochen: Gelenk P, Achse a, Laenge L, Querachsen u und v."""
+def frames(rest, parents, names=None):
+    """Je Knochen: Gelenk P, Achse a, Laenge L, Querachsen u und v. Endknochen ohne eigene Kinder ("HeadTop_End",
+    "LeftToe_End") zaehlen nicht als Fortsetzung, sonst haengt die Laenge davon ab, ob ein Modell sie mitbringt
+    (gleiche Regel in src/r3d-rigged.js)."""
     n = len(parents)
     kids = [[c for c in range(n) if parents[c] == i] for i in range(n)]
+    if names:
+        kids = [[c for c in k if kids[c] or not re.search(r"end$", names[c], re.I)] for k in kids]
     out = []
     for i in range(n):
         P = rest[i]
@@ -88,9 +93,9 @@ def bins(t, th):
     return ti, ai
 
 
-def profiles(pos, skin_i, skin_w, rest, parents):
+def profiles(pos, skin_i, skin_w, rest, parents, names=None):
     """Groesster Abstand der Koerperoberflaeche von der Knochenachse je Feld, Luecken aufgefuellt."""
-    Fr = frames(rest, parents)
+    Fr = frames(rest, parents, names)
     nb = len(parents)
     W = np.zeros((len(pos), nb))
     for k in range(4):
@@ -278,7 +283,7 @@ def main():
     bW = np.zeros((len(bpos), nb))
     for k in range(4):
         np.add.at(bW, (np.arange(len(bpos)), si[:, k]), sw[:, k] / 255.0)
-    Fr = frames(rest, parents)
+    Fr = frames(rest, parents, names)
 
     # Teil laden, drehen, Textur, Reduzieren
     g, parts = static_parts(a.piece)
@@ -324,7 +329,8 @@ def main():
 
     def place(P, reg):
         lo, hi = P.min(0), P.max(0)
-        rlo, rhi = reg.min(0) - a.pad, reg.max(0) + a.pad
+        # Ausmass des Koerperbereichs ohne Ausreisser (einzelne Ecken mit Gewicht nahe der Koerpermitte)
+        rlo, rhi = np.percentile(reg, 2, axis=0) - a.pad, np.percentile(reg, 98, axis=0) + a.pad
         s = (rhi - rlo) / np.maximum(hi - lo, 1e-6)
         return (P - (lo + hi) / 2) * s + (rlo + rhi) / 2
 
@@ -342,12 +348,24 @@ def main():
 
     # Anpassen und Gewichte
     fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset)
+    if paired:
+        # jeder Handschuh und Stiefel folgt nur den Knochen seiner Seite; sonst ziehen Gewichte vom anderen Bein die
+        # Innenseite beim Gehen quer hinueber
+        side = np.r_[np.ones(n0), -np.ones(len(fpos) - n0)] if single else np.sign(fpos[:, 0] + 1e-9)
+        other = side[:, None] * rest[None, :, 0] < -0.02
+        fW = np.where(other, 0.0, fW)
+        empty = fW.sum(1) < 1e-6
+        if empty.any():
+            own = [tmap[r] for r in roles if not r.endswith((".L", ".R"))] or [tmap[roles[0]]]
+            for i in np.nonzero(empty)[0]:
+                cand = [tmap[r] for r in roles if r.endswith(".L" if side[i] > 0 else ".R")] or own
+                fW[i, min(cand, key=lambda b: np.linalg.norm(rest[b] - fpos[i]))] = 1.0
     order = np.argsort(-fW, axis=1)[:, :2]
     w2 = np.take_along_axis(fW, order, axis=1)
     w2 = np.where(w2.sum(1, keepdims=True) > 1e-6, w2 / np.maximum(w2.sum(1, keepdims=True), 1e-9), np.array([1.0, 0.0]))
 
     # Knochenbezogene Beschreibung gegen das Profil des Referenzkoerpers
-    prof = profiles(bpos, si, z["skin_w"].astype(np.float64), rest, parents)
+    prof = profiles(bpos, si, z["skin_w"].astype(np.float64), rest, parents, names)
     enc = np.zeros((len(fpos), 2, 4))
     for k in range(2):
         for b in np.unique(order[:, k]):

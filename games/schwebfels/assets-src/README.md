@@ -56,11 +56,23 @@ eingebettet. Im Spiel spielen sie echte Bewegungen ab (`src/r3d-rigged.js`) stat
 | `gen/fit_piece.py` | Rüstungsteil (einzeln erzeugte GLB) an einen Referenzkörper anpassen und knochenbezogen speichern; im Spiel legt es sich über Querschnittsprofile an jeden Körper mit gleichem Skelett an, die Haut darunter wird ausgeblendet |
 | `gen/weapon.py` | Waffe oder Schild (einzeln erzeugte GLB) in die Lage der gebauten Waffen bringen: Hauptachse, Griffende, Griffpunkt, Schneide; Länge wie die gebaute Waffe gleicher Grundart |
 | `gen/prop.py` | Requisit der Kampfumgebung (Baum, Deko, Wahrzeichen) aus einer GLB: auf den Boden gestellt, mittig, Zielhöhe je Rolle |
+| `gen/qualitaetstest.json` | Plan des Qualitätstests: Figuren, zwei Brustpanzer, Handschuhe, Stiefel, Helm, Waffe, Bestie, Requisiten, Budget |
+| `gen/pruefserver.py` | Prüfserver, der wie die Meshy-API antwortet (Probelauf der Werkstatt ohne Credits) |
 | `gen/gen_pack.py` | npz-Dateien zu `assets/gen.pack`; Bewegungen landen einmal im gemeinsamen Teil `clips` |
 | `gen/probe.py` | Älterer Technikcheck: fremdes Modell auf das 29-Knochen-Spielskelett umrüsten (Bone Heat), Kleidungsteil anpassen |
 | `beasts/from_glb.py` | Tier aus einer GLB (z. B. Meshy Bild zu 3D) mit Vierbeiner-Skelett und Rollen für das Bestiensystem des Spiels |
 | `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
 | `gen/packbones.py` | Knochenliste und Körperhöhen aus `assets/schwebfels.pack` lesen |
+
+Der ganze Qualitätstest läuft in einem Schritt über die Plandatei `gen/qualitaetstest.json` (Konzeptbilder nach
+`gen/konzepte/`, je Bild ein Modell): `python werkstatt.py plan qualitaetstest.json --trocken` zeigt die Kosten ohne
+Bestellung; ohne `--trocken` wird bestellt, umgerechnet, das Paket gebaut, Spielbilder und Bericht erzeugt. Liegt die
+Schätzung über dem Budget der Plandatei, wird nichts bestellt; ein erneuter Aufruf setzt fort, ohne Fertiges erneut zu
+bezahlen. Das Guthaben laut Meshy wird vor und nach dem Lauf festgehalten.
+
+Probelauf ohne Credits und ohne Netz: `python pruefserver.py 18765 zuordnung.json` antwortet wie die Meshy-API mit
+vorhandenen Testmodellen (Format im Kopf der Datei); dann `MESHY_API_BASE=http://127.0.0.1:18765/ MESHY_API_KEY=pruefung
+WERKSTATT_DIR=<ordner> python werkstatt.py plan <plan.json>`.
 
 Am einfachsten über die Werkstatt (bestellen, umrechnen, Paket und Spielvorschau in einem Schritt, alles unter
 `assets-src/gen/meshy/`, das nicht ins Repository gehört):

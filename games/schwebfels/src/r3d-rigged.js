@@ -180,6 +180,8 @@
       let e = null;
       for (let c = 0; c < n; c++) {
         if (S.parents[c] !== i) continue;
+        // Endknochen ohne eigene Kinder ("HeadTop_End") zaehlen nicht als Fortsetzung (wie fit_piece.frames)
+        if (/end$/i.test(S.names[c]) && S.parents.indexOf(c) < 0) continue;
         const d = P(c).sub(p);
         const ln = d.length();
         if (ln < 1e-4) continue;

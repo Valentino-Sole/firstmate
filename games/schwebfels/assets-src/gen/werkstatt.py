@@ -23,6 +23,9 @@ Figurenpaket build/gen.pack und eine Vorschau des Spiels in vorschau/. Der Schlu
   python werkstatt.py bilder nordmann_f [--konzept tafel02.png] [--klasse sturmhuene] [--waffe axt] [--figur nordmann_f]
       Spielbilder (Ruhe, Gehen, Angriff) neben dem Konzeptbild: meshy/<name>/vergleich.png; geht fuer Figuren,
       Ruestungsteile und Waffen (an einer Figur) und Bestien
+  python werkstatt.py plan qualitaetstest.json [--trocken]
+      Ganzer Qualitaetstest in einem Lauf: Kosten vorab gegen das Budget der Plandatei (bei Ueberschreitung wird nichts
+      bestellt), dann alle Bestellungen, Umrechnung, Paket, Spielbilder und Bericht; ein erneuter Aufruf setzt fort
   python werkstatt.py bericht
       Bericht fuer den Kapitaen: je Modell Konzeptbild, Meshy-Vorschau und Spielbilder, Dreiecke, Textur, Nacharbeit
       (Einstellungen und Notizen) und die tatsaechlich verbrauchten Credits: meshy/bericht.html (eine Datei)
@@ -112,14 +115,14 @@ def cmd_figur(a):
 
 def cmd_teil(a):
     extra = ["--trocken"] if a.trocken else []
+    ref = os.path.join(BUILD, a.ref + ".npz")
+    if not a.trocken and not os.path.exists(ref):
+        raise SystemExit("Referenzfigur fehlt: zuerst 'werkstatt.py figur %s ...' (nichts bestellt)" % a.ref)
     if not a.trocken:
         record(a.name, "teil", a.bild, platz=a.slot, formen=a.forms, referenz=a.ref, drehung=None if a.rot == "auto" else a.rot, spiegeln=a.flip, paar=a.paar)
     api("teil", a.name, a.bild, *(["--budget", a.budget] if a.budget else []), *extra)
     if a.trocken:
         return
-    ref = os.path.join(BUILD, a.ref + ".npz")
-    if not os.path.exists(ref):
-        raise SystemExit("Referenzfigur fehlt: zuerst 'werkstatt.py figur %s ...'" % a.ref)
     os.makedirs(os.path.join(BUILD, "teile"), exist_ok=True)
     args = [PY, os.path.join(HERE, "fit_piece.py"), os.path.join(BUILD, "teile", a.name + ".npz"), ref, os.path.join(ROOT, a.name, "model.glb"),
             "--slot", a.slot, "--name", a.name, "--forms", a.forms, "--rot", a.rot]
@@ -247,6 +250,111 @@ def cmd_bilder(a):
     print("Vergleichsbild:", path)
 
 
+def spent():
+    p = os.path.join(ROOT, "credits.jsonl")
+    return sum((json.loads(x).get("credits") or 0) for x in open(p) if x.strip()) if os.path.exists(p) else 0
+
+
+def order_ok(name, step):
+    p = os.path.join(ROOT, name, "auftraege.json")
+    return bool(os.path.exists(p) and json.load(open(p)).get(step, {}).get("ok"))
+
+
+def balance(MA, phase):
+    """Guthaben laut Meshy festhalten (unabhaengige Gegenprobe zu den Credits je Auftrag)."""
+    try:
+        b = MA.call("GET", "balance").get("balance")
+    except SystemExit as e:
+        print("Guthaben nicht abrufbar:", e)
+        return None
+    with open(os.path.join(ROOT, "guthaben.jsonl"), "a") as fh:
+        fh.write(json.dumps({"zeit": time.strftime("%Y-%m-%d %H:%M:%S"), "phase": phase, "guthaben": b}) + "\n")
+    print("Guthaben", phase + ":", b)
+    return b
+
+
+def cmd_plan(a):
+    """Ganzer Qualitaetstest aus einer Plandatei: Kosten vorab gegen das Budget, dann bestellen, umrechnen, Paket,
+    Spielbilder und Bericht. Bereits fertige Bestellungen werden nicht erneut bezahlt (erneuter Aufruf setzt fort)."""
+    from argparse import Namespace as N
+    import meshy_api as MA
+    plan = json.load(open(a.plan))
+    here = os.path.dirname(os.path.abspath(a.plan))
+    img = lambda x: x if os.path.isabs(x) else os.path.join(here, x)  # noqa: E731
+    budget = a.budget if a.budget is not None else plan.get("budget")
+    if budget is None:
+        raise SystemExit("Kein Budget: in der Plandatei 'budget' setzen oder --budget angeben")
+    figs, teile, waffen = plan.get("figuren", []), plan.get("teile", []), plan.get("waffen", [])
+    bestien, requisiten = plan.get("bestien", []), plan.get("requisiten", [])
+    P3, PR, PA = MA.PRICE["image-to-3d"], MA.PRICE["rigging"], MA.PRICE["animation"]
+    rows = []
+    for f in figs:
+        rows.append(("Figur " + f["name"], (0 if order_ok(f["name"], "image_to_3d") else P3) + (0 if order_ok(f["name"], "rigging") else PR), f["bild"]))
+    owner = shared_clips() or (figs[0]["name"] if figs else None)
+    if owner and figs:
+        st = os.path.join(ROOT, owner, "auftraege.json")
+        have = set(json.load(open(st)).get("bewegungen_ids", [])) if os.path.exists(st) else set()
+        n = len([c for c in MA.CLIPS["standard"] if c[0] not in have])
+        rows.append(("Bewegungen (%d, gemeinsam fuer alle Figuren)" % n, n * PA, None))
+    for kind, items in (("Teil", teile), ("Waffe", waffen), ("Bestie", bestien), ("Requisit", requisiten)):
+        for it in items:
+            rows.append(("%s %s" % (kind, it["name"]), 0 if order_ok(it["name"], "image_to_3d") else P3, it["bild"]))
+    total = sum(r[1] for r in rows)
+    print("Plan %s: geschaetzt %d Credits, Budget %d, bisher verbraucht %d" % (os.path.basename(a.plan), total, budget, spent()))
+    for r in rows:
+        print("  %-48s %4d" % (r[0], r[1]))
+    missing = [r[2] for r in rows if r[1] and r[2] and not os.path.exists(img(r[2]))]
+    refs = {f["name"] for f in figs} | {f[:-4] for f in (os.listdir(BUILD) if os.path.isdir(BUILD) else []) if f.endswith(".npz")}
+    badref = ["%s (Referenz %s)" % (t["name"], t["ref"]) for t in teile if t["ref"] not in refs]
+    if missing or badref:
+        raise SystemExit("Plan unvollstaendig, nichts bestellt:%s%s" % (
+            "".join("\n  Bild fehlt: " + m for m in missing), "".join("\n  Teil ohne Figur: " + b for b in badref)))
+    if total > budget:
+        raise SystemExit("Abbruch vor jeder Bestellung: Schaetzung %d Credits liegt ueber dem Budget %d." % (total, budget))
+    if a.trocken:
+        print("Trockenlauf: nichts bestellt.")
+        return
+    os.makedirs(ROOT, exist_ok=True)
+    balance(MA, "vor dem Lauf")
+    start = spent()
+    left = lambda: budget - (spent() - start)  # noqa: E731
+    fails = []
+
+    def step(label, fn, ns):
+        try:
+            fn(ns)
+        except (SystemExit, subprocess.CalledProcessError, OSError) as e:
+            fails.append("%s: %s" % (label, e))
+            print("FEHLER", label, e, flush=True)
+    for f in figs:
+        step("Figur " + f["name"], cmd_figur, N(name=f["name"], bild=img(f["bild"]), race=f["race"], gender=f["gender"], budget=left(), trocken=False))
+    for t in teile:
+        step("Teil " + t["name"], cmd_teil, N(name=t["name"], bild=img(t["bild"]), slot=t["slot"], forms=t.get("forms", ""), ref=t["ref"],
+                                              rot=t.get("rot", "auto"), flip=t.get("flip", False), paar=t.get("paar", False), budget=left(), trocken=False))
+    for w in waffen:
+        step("Waffe " + w["name"], cmd_waffe, N(name=w["name"], bild=img(w["bild"]), base=w["base"], forms=w.get("forms", ""), seltenheit=w.get("seltenheit", ""),
+                                               umdrehen=w.get("umdrehen", False), griff=w.get("griff"), laenge=w.get("laenge"), budget=left(), trocken=False))
+    for b in bestien:
+        step("Bestie " + b["name"], cmd_bestie, N(name=b["name"], bild=img(b["bild"]), archs=b["archs"], hoehe=str(b.get("hoehe", 1.15)),
+                                                 turn=str(b.get("turn", 0)), budget=left(), trocken=False))
+    for r in requisiten:
+        step("Requisit " + r["name"], cmd_requisit, N(name=r["name"], bild=img(r["bild"]), realm=r["realm"], rolle=r["rolle"], hoehe=r.get("hoehe"),
+                                                     turn=r.get("turn", 0.0), budget=left(), trocken=False))
+    step("Paket", cmd_paket, N())
+    fig0 = figs[0]["name"] if figs else None
+    for f in figs:
+        step("Bilder " + f["name"], cmd_bilder, N(name=f["name"], konzept=None, klasse=f.get("klasse", "sturmhuene"), waffe=f.get("waffe", "schwert"), figur=None))
+    for it in teile + waffen + bestien + requisiten:
+        step("Bilder " + it["name"], cmd_bilder, N(name=it["name"], konzept=None, klasse="sturmhuene", waffe="schwert", figur=it.get("ref", fig0)))
+    balance(MA, "nach dem Lauf")
+    cmd_bericht(N())
+    print("Verbraucht in diesem Lauf: %d Credits (Budget %d)" % (spent() - start, budget))
+    if fails:
+        print("Nicht alles gelungen (erneuter Aufruf setzt fort, Fertiges wird nicht neu bezahlt):")
+        for f in fails:
+            print("  -", f)
+
+
 def cmd_notiz(a):
     p = os.path.join(ROOT, a.name, "werkstatt.json")
     if not os.path.exists(p):
@@ -350,6 +458,15 @@ def cmd_bericht(a):
              "tatsächlich verbrauchten Meshy-Credits.</p>" % time.strftime("%d.%m.%Y %H:%M"),
              "<h2>Überblick</h2><table><tr><th>Modell</th><th>Art</th><th>Dreiecke</th><th>Textur</th><th>Credits</th></tr>%s"
              "<tr class=sum><td colspan=4>Summe aller Aufträge (mit den gemeinsamen Bewegungen)</td><td>%d</td></tr></table>" % ("".join(rows), total)]
+    gp = os.path.join(ROOT, "guthaben.jsonl")
+    if os.path.exists(gp):
+        G = [json.loads(x) for x in open(gp) if x.strip()]
+        pairs = [(G[i], G[i + 1]) for i in range(len(G) - 1) if G[i]["phase"] == "vor dem Lauf" and G[i + 1]["phase"] == "nach dem Lauf"]
+        if pairs:
+            parts.append("<h2>Guthaben laut Meshy</h2><table><tr><th>Lauf</th><th>vorher</th><th>nachher</th><th>verbraucht</th></tr>%s</table>" % "".join(
+                "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (esc(v["zeit"]), v["guthaben"], n["guthaben"],
+                                                                          (v["guthaben"] - n["guthaben"]) if None not in (v["guthaben"], n["guthaben"]) else "-")
+                for v, n in pairs))
     pack = os.path.join(BUILD, "gen.pack")
     page = os.path.join(ROOT, "vorschau", "schwebfels.html")
     if os.path.exists(pack) or os.path.exists(page):
@@ -454,6 +571,10 @@ def main():
     p.add_argument("--klasse", default="sturmhuene")
     p.add_argument("--waffe", default="schwert")
     p.add_argument("--figur", help="Figur, die Ruestungsteile oder Waffen zeigt (Standard: erste umgerechnete Figur)")
+    p = sub.add_parser("plan")
+    p.add_argument("plan")
+    p.add_argument("--budget", type=int)
+    p.add_argument("--trocken", action="store_true")
     sub.add_parser("bericht")
     p = sub.add_parser("notiz")
     p.add_argument("name")
@@ -474,6 +595,8 @@ def main():
         cmd_paket(a)
     elif a.cmd == "bilder":
         cmd_bilder(a)
+    elif a.cmd == "plan":
+        cmd_plan(a)
     elif a.cmd == "bericht":
         cmd_bericht(a)
     elif a.cmd == "notiz":
