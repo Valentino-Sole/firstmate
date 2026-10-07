@@ -53,6 +53,10 @@ in Blender auf das Spielskelett bringen und als eigenes Paket `assets/gen.pack` 
 | `gen/inspect_glb.py` | Inhalt einer GLB-Datei auflisten (Netze, Dreiecke, Bilder, Knochen) |
 | `gen/packbones.py` | Knochenliste aus `assets/schwebfels.pack` lesen, kein Zwischenordner nötig |
 | `gen/gen_pack.py` | npz-Dateien der Figuren zu `assets/gen.pack` zusammenfassen |
+| `gen/meshy.py` | Meshy-Schnittstelle: Bild zu Bild, Bild zu 3D, Skelett; lädt Ergebnisse sofort herunter und protokolliert die Credits je Auftrag (`credits.jsonl`, `report`) |
+| `gen/build_figure.py` | Erzeugte Figur (GLB) ins Spielformat: Skelett der Vorlage auf die 29 Spielknochen (Namen wie Mixamo oder Meshy, fehlende Finger geschätzt) oder Bone Heat, Höhe nach Körperprofil, Haltepunkte |
+| `gen/crop_templates.py` | Vorlagen aus den Konzepttafeln schneiden |
+| `gen/PLAN-MIDGARD.md` | Ablaufplan des Qualitätstests mit allen Meshy-Aufträgen |
 
 ```sh
 python gen/probe.py CesiumMan.glb ../assets/schwebfels.pack <aus>/probe.npz <aus>/probe.glb <aus>/probe.json 2.12
