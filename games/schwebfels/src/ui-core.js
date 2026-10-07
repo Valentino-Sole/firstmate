@@ -34,7 +34,24 @@
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
+  const withGen = (d) => {
+    if (!UI.S || UI.S.settings.genFigures === false || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
+    return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
+  };
+  UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper
+  UI.loadGenFigures = function (realm) {
+    if (!UI.use3d || !UI.S || UI.S.settings.genFigures === false) return;
+    SB.assets
+      .loadGen(realm)
+      .then(() => SB.R3D.human.preloadGen())
+      .then(
+        () => UI.S && UI.refresh(),
+        (e) => console.warn("Neue Figuren nicht geladen", e)
+      );
+  };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
   UI.foeRealm = function (m) {
     const S = UI.S;
@@ -45,7 +62,7 @@
   };
   UI.fighterDesc = function (f) {
     if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
-    return { kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear };
+    return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {

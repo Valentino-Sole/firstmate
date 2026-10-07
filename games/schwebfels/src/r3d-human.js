@@ -459,6 +459,21 @@
      alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
   const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
   HU.hasGen = (key) => !!GEN()[key];
+  // Texturen der erzeugten Koerper vorab dekodieren; erst danach gelten sie als bereit (sonst dunkle Portraets)
+  const GREADY = {};
+  HU.genReady = (key) => GREADY[key] === true;
+  HU.preloadGen = function () {
+    T = R.T();
+    return Promise.all(
+      Object.keys(GEN()).map((k) => {
+        if (GREADY[k]) return null;
+        const G0 = GEN()[k];
+        const m = genMat(k, G0.tex, null, G0.nrm);
+        const waits = [m.map, m.normalMap].filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
+        return Promise.all(waits).then(() => (GREADY[k] = true));
+      })
+    );
+  };
   const GGEO = {};
   function genGeo(src, ck, hide) {
     if (GGEO[ck]) return GGEO[ck];

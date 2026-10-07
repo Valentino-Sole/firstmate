@@ -1020,7 +1020,9 @@
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
-      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern. Die Daten werden erst beim Öffnen geladen (etwa 14 MB).</p><div class="row"><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
+      const gf = s.settings.genFigures !== false;
+      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
+      h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
       h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
@@ -1153,6 +1155,13 @@
     UI.renderPanel();
     UI.renderTop();
     UI.updateMusic();
+  };
+  A.genFigures = () => {
+    const S_ = S();
+    S_.settings.genFigures = S_.settings.genFigures === false;
+    UI.save();
+    if (S_.settings.genFigures) UI.loadGenFigures("midgard");
+    UI.refresh();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;

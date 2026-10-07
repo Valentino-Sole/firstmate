@@ -4932,11 +4932,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     tex.anisotropy = 4;
     const img = new Image();
     const url = URL.createObjectURL(new Blob([ref.bytes], { type: ref.mime }));
-    img.onload = () => {
-      tex.image = img;
-      tex.needsUpdate = true;
-      URL.revokeObjectURL(url);
-    };
+    // ready: erfuellt, sobald das Bild dekodiert ist (Standbilder wie Portraets warten darauf)
+    tex.userData.ready = new Promise((done) => {
+      img.onload = () => {
+        tex.image = img;
+        tex.needsUpdate = true;
+        URL.revokeObjectURL(url);
+        done(tex);
+      };
+      img.onerror = () => done(tex);
+    });
     img.src = url;
     return (TEXC[key] = tex);
   };
@@ -7332,6 +7337,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
      alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
   const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
   HU.hasGen = (key) => !!GEN()[key];
+  // Texturen der erzeugten Koerper vorab dekodieren; erst danach gelten sie als bereit (sonst dunkle Portraets)
+  const GREADY = {};
+  HU.genReady = (key) => GREADY[key] === true;
+  HU.preloadGen = function () {
+    T = R.T();
+    return Promise.all(
+      Object.keys(GEN()).map((k) => {
+        if (GREADY[k]) return null;
+        const G0 = GEN()[k];
+        const m = genMat(k, G0.tex, null, G0.nrm);
+        const waits = [m.map, m.normalMap].filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
+        return Promise.all(waits).then(() => (GREADY[k] = true));
+      })
+    );
+  };
   const GGEO = {};
   function genGeo(src, ck, hide) {
     if (GGEO[ck]) return GGEO[ck];
@@ -15871,7 +15891,24 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  UI.heroDesc = (S) => ({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
+  const withGen = (d) => {
+    if (!UI.S || UI.S.settings.genFigures === false || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
+    return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
+  };
+  UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
+  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper
+  UI.loadGenFigures = function (realm) {
+    if (!UI.use3d || !UI.S || UI.S.settings.genFigures === false) return;
+    SB.assets
+      .loadGen(realm)
+      .then(() => SB.R3D.human.preloadGen())
+      .then(
+        () => UI.S && UI.refresh(),
+        (e) => console.warn("Neue Figuren nicht geladen", e)
+      );
+  };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
   UI.foeRealm = function (m) {
     const S = UI.S;
@@ -15882,7 +15919,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   UI.fighterDesc = function (f) {
     if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
-    return { kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear };
+    return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
@@ -17615,7 +17652,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
-      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern. Die Daten werden erst beim Öffnen geladen (etwa 14 MB).</p><div class="row"><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
+      const gf = s.settings.genFigures !== false;
+      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
+      h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
       h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
@@ -17748,6 +17787,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     UI.renderPanel();
     UI.renderTop();
     UI.updateMusic();
+  };
+  A.genFigures = () => {
+    const S_ = S();
+    S_.settings.genFigures = S_.settings.genFigures === false;
+    UI.save();
+    if (S_.settings.genFigures) UI.loadGenFigures("midgard");
+    UI.refresh();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;
@@ -18290,6 +18336,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (!UI.hub) stage.innerHTML = '<div class="stage-fallback"><div class="fb-grid"></div></div>';
     E.tick(S);
     UI.refresh();
+    // Probe der neuen Figuren: bisher gibt es sie fuer Midgard
+    if (S.realm === "midgard") UI.loadGenFigures("midgard");
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
     UI.saveNow();

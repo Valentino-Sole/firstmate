@@ -146,11 +146,16 @@
     tex.anisotropy = 4;
     const img = new Image();
     const url = URL.createObjectURL(new Blob([ref.bytes], { type: ref.mime }));
-    img.onload = () => {
-      tex.image = img;
-      tex.needsUpdate = true;
-      URL.revokeObjectURL(url);
-    };
+    // ready: erfuellt, sobald das Bild dekodiert ist (Standbilder wie Portraets warten darauf)
+    tex.userData.ready = new Promise((done) => {
+      img.onload = () => {
+        tex.image = img;
+        tex.needsUpdate = true;
+        URL.revokeObjectURL(url);
+        done(tex);
+      };
+      img.onerror = () => done(tex);
+    });
     img.src = url;
     return (TEXC[key] = tex);
   };
