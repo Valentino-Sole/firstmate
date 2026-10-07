@@ -5,6 +5,7 @@
   "Bilder in assets-src/gen/konzepte/ ablegen (nicht im Repository). Jedes Bild zeigt genau ein Modell; Tafeln mit mehreren Teilen vorher zuschneiden.",
   "Fuer wechselbare Brustpanzer die Figur in schlichter Grundkleidung zeigen (Meshy liefert Kleidung aus einem Guss).",
   "Liegt die Schaetzung ueber dem Budget, wird nichts bestellt. Ein erneuter Aufruf setzt fort, Fertiges wird nicht neu bezahlt.",
+  "Meshy bewahrt Auftraege nur 3 Tage auf: einen begonnenen Lauf innerhalb von 3 Tagen abschliessen (Rigging und Bewegungen bauen auf den Auftraegen auf).",
   "Brustpanzer: harnisch.0 ist der Brustharnisch, harnisch.1 der Plattenpanzer; der erste gilt auch fuer die uebrigen Harnische."
  ],
  "budget": 400,

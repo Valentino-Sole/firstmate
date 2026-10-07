@@ -68,7 +68,9 @@ Der ganze Qualitätstest läuft in einem Schritt über die Plandatei `gen/qualit
 `gen/konzepte/`, je Bild ein Modell): `python werkstatt.py plan qualitaetstest.json --trocken` zeigt die Kosten ohne
 Bestellung; ohne `--trocken` wird bestellt, umgerechnet, das Paket gebaut, Spielbilder und Bericht erzeugt. Liegt die
 Schätzung über dem Budget der Plandatei, wird nichts bestellt; ein erneuter Aufruf setzt fort, ohne Fertiges erneut zu
-bezahlen. Das Guthaben laut Meshy wird vor und nach dem Lauf festgehalten.
+bezahlen. Das Guthaben laut Meshy wird vor und nach dem Lauf festgehalten. Meshy bewahrt Aufträge nur 3 Tage auf;
+ein begonnener Lauf sollte in dieser Zeit fertig werden (heruntergeladen wird sofort). Preise laut Meshy-Preisliste
+(Oktober 2026): Bild zu 3D mit 2K-Textur 30 Credits, Rigging 5, jede Bewegung 3.
 
 Probelauf ohne Credits und ohne Netz: `python pruefserver.py 18765 zuordnung.json` antwortet wie die Meshy-API mit
 vorhandenen Testmodellen (Format im Kopf der Datei); dann `MESHY_API_BASE=http://127.0.0.1:18765/ MESHY_API_KEY=pruefung
