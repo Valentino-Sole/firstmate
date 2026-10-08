@@ -103,6 +103,22 @@
     const all = Promise.all([...new Set((archs || []).filter(Boolean))].map(UI.loadMonsterArch));
     return ms ? Promise.race([all, new Promise((r) => setTimeout(r, ms))]) : all;
   };
+  // Gemalte Kampfkulissen der drei Reiche (kulissen.js neben der Seite, etwa 1,4 MB): einmal im Hintergrund laden;
+  // ohne Datei kaempfen alle auf der gebauten Insel
+  let KUL_LOAD = null;
+  UI.loadKulissen = function () {
+    if (!UI.use3d) return Promise.resolve(false);
+    if (globalThis.SB_KULISSEN) return Promise.resolve(true);
+    if (!KUL_LOAD)
+      KUL_LOAD = new Promise((ok) => {
+        const el = document.createElement("script");
+        el.src = "kulissen.js";
+        el.onload = () => ok(!!globalThis.SB_KULISSEN);
+        el.onerror = () => ok(false);
+        document.head.appendChild(el);
+      });
+    return KUL_LOAD;
+  };
   // Familien der Gegner in den aktuellen Auftraegen der Taverne
   UI.offerArchs = function () {
     const S = UI.S;
@@ -115,6 +131,7 @@
   };
   UI.loadGenFigures = function (realm) {
     UI.loadMonsters(UI.offerArchs());
+    UI.loadKulissen();
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {

@@ -11,10 +11,12 @@
   const $ = UI.$;
 
   /* ================= Kampf ================= */
-  // Monsterfiguren der Gegner vorher nachladen (hoechstens einige Sekunden, sonst die gebaute Figur)
+  // Monsterfiguren der Gegner und die gemalte Kulisse vorher nachladen (hoechstens einige Sekunden, sonst die gebaute
+  // Figur und Insel)
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
-    return UI.loadMonsters(archs, 6000).then(() => runBattle(fight, opts));
+    const kul = Promise.race([UI.loadKulissen(), new Promise((r) => setTimeout(r, 6000))]);
+    return Promise.all([UI.loadMonsters(archs, 6000), kul]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
     return new Promise((resolve) => {

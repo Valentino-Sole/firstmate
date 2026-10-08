@@ -8,6 +8,7 @@
 // - Besuch auf Albion und Hibernia mit Weg zurueck (nur mit Inselbildern)
 // - die eingebetteten Midgard-Koerper tragen den eigenen Helden auch ohne Zusatzdatei (nur mit Figurenpaket)
 // - alle Tavernenmonster mit eigener Figur aus gen-mon<familie>.js (nur wenn die Dateien neben der Seite liegen)
+// - Auftraege und Chronik kaempfen vor der gemalten Kulisse des Reiches (nur mit kulissen.js neben der Seite)
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync } from "node:fs";
@@ -122,6 +123,29 @@ if (hasMon) {
   check(r.out.eiskobold === "skelett", "Eiskobold hat keine eigene Figur mit Bewegungen");
   console.log("Monsterfiguren:", Object.values(r.out).filter((v) => v === "skelett").length, "mit Skelett,", Object.values(r.out).filter((v) => v.startsWith("bestie")).length, "Bestien,", r.ready, "Familien geladen");
 } else console.log("ohne gen-mon*.js: Monsterfiguren nicht geprüft");
+// Gemalte Kampfkulissen (kulissen.js neben der Seite): Auftraege jedes Reiches kaempfen vor dem Gemaelde statt auf der
+// gebauten Insel, die Arena bleibt gebaut
+const hasKul = existsSync(path.join(path.dirname(page0), "kulissen.js"));
+if (hasKul) {
+  const r = await p.evaluate(async () => {
+    const ok = await SB.ui.loadKulissen();
+    const out = {};
+    for (const [realm, setting] of [["albion", "quest"], ["midgard", "story"], ["hibernia", "quest"], ["midgard", "arena"]]) {
+      const el = document.createElement("div");
+      el.style.cssText = "position:fixed;left:0;top:0;width:640px;height:360px";
+      document.body.appendChild(el);
+      const b = SB.R3D.createBattle(el, { setting, realm, left: SB.ui.heroDesc(SB.ui.S), right: SB.ui.monDesc(SB.engine.monById("eiskobold")), hp: [10, 10] });
+      await new Promise((r) => setTimeout(r, 700));
+      out[realm + "-" + setting] = !!(b._scene.background && b._scene.background.isTexture);
+      b.dispose();
+      el.remove();
+    }
+    return { ok, out };
+  });
+  check(r.ok, "Kampfkulissen laden nicht");
+  for (const k of ["albion-quest", "midgard-story", "hibernia-quest"]) check(r.out[k], "Kampf " + k + " zeigt die gemalte Kulisse nicht");
+  check(!r.out["midgard-arena"], "Arena zeigt eine Reichskulisse");
+} else console.log("ohne kulissen.js: Kampfkulissen nicht geprüft");
 
 // 3. danach nicht mehr von selbst
 await p.evaluate(() => SB.ui.closePanel());
@@ -136,4 +160,4 @@ if (fails.length) {
   console.log("FEHLER:\n- " + fails.join("\n- "));
   process.exit(1);
 }
-console.log("OK: Neu prüfen, gemalte Heimatinsel" + (hasIsles ? ", Besuch der Inseln" : "") + (hasKern ? ", eingebettete Figuren" : "") + (hasMon ? ", Monsterfiguren" : ""));
+console.log("OK: Neu prüfen, gemalte Heimatinsel" + (hasIsles ? ", Besuch der Inseln" : "") + (hasKern ? ", eingebettete Figuren" : "") + (hasMon ? ", Monsterfiguren" : "") + (hasKul ? ", Kampfkulissen" : ""));

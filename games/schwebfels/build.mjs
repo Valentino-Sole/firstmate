@@ -7,6 +7,8 @@
 //   GEN_PACK=<datei>  anderes Paket mit erzeugten Figuren einbetten (Standard: assets/gen.pack, falls vorhanden)
 //   INSELN_DIR=<ordner>  Inselbilder <reich>.webp (albion, midgard, hibernia) fuer die gemalten Heimatinseln
 //                     (Standard: assets/inseln, falls vorhanden); ohne Bilder bleibt die 3D-Insel
+//   KULISSEN_DIR=<ordner>  Kampfkulissen <reich>.webp (albion, midgard, hibernia), werden zu kulissen.js neben der Seite
+//                     (Standard: assets/kulissen, falls vorhanden); ohne Bilder bleibt die gebaute Kampfinsel
 //   SPLIT=1           Modellpakete nicht in die Seite, sondern als eigene Dateien daneben (dist/packs/*.js); fuer ein
 //                     Artifact mit mehreren Dateien, wenn die Seite sonst ueber 16 MB kaeme (jede Datei hoechstens 16 MB)
 //   assets/gen-<reich>.pack  erzeugte Figuren je Reich (Meshy-Strecke des Hauptzweigs): werden zu <dist>/gen-<reich>.js,
@@ -147,6 +149,24 @@ if (Object.keys(kern).length) {
       packJs += '<script src="packs/inseln.js"></script>';
     } else packJs += "<script>" + js + "</script>";
     console.log("Inselbilder eingebettet:", Object.keys(isl).join(", "));
+  }
+}
+// Gemalte Kampfkulissen (Kampfkulissen v07, src/r3d-scenes.js): Bilder <reich>.webp als eigene Datei kulissen.js
+// neben der Seite (zusammen gut 1,4 MB, die Seite bliebe sonst nicht unter 16 MB); das Spiel laedt sie im Hintergrund
+{
+  const kul = {};
+  const src = process.env.KULISSEN_DIR ? path.resolve(process.env.KULISSEN_DIR) : path.join(dir, "assets/kulissen");
+  for (const r of ["albion", "midgard", "hibernia"]) {
+    try {
+      kul[r] = "data:image/webp;base64," + readFileSync(path.join(src, r + ".webp")).toString("base64");
+    } catch (e) {
+      /* ohne Bild bleibt die gebaute Kampfinsel */
+    }
+  }
+  if (Object.keys(kul).length) {
+    const js = "globalThis.SB_KULISSEN=" + JSON.stringify(kul) + ";";
+    writeFileSync(path.join(out, "kulissen.js"), js);
+    genFiles.push(path.relative(dir, path.join(out, "kulissen.js")) + " " + (js.length / 1024).toFixed(0) + " KB (Kampfkulissen " + Object.keys(kul).join(", ") + ", beim Veroeffentlichen als kulissen.js unter files angeben)");
   }
 }
 const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");

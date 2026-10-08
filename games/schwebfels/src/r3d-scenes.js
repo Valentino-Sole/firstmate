@@ -2497,6 +2497,87 @@
     dungeon: { t: 0.0, grass: "#2e2a36", grass2: "#3a3444", dirt: "#2a2630", rock: "#2a2633", props: "cave" },
     story: { t: 0.92, grass: "#34483a", grass2: "#44503a", dirt: "#4a4438", rock: "#55524c", props: "stones" },
   };
+  /* ---------- Gemalte Kampfkulisse (Kampfkulissen v07) ----------
+     Das Bild liegt als Hintergrund hinter den 3D-Figuren und wird in jedem Bild so eingepasst, dass die Fuesse der
+     Kaempfer dort stehen, wo die Tafel sie vorsieht (Held bei 27 %, Gegner bei 72 % der Breite, Boden bei 79 % der
+     Hoehe); so geht es bei Kamerafahrt und Wackeln mit. Es deckt immer die ganze Kampfflaeche, notfalls (Hochformat)
+     weicht die Fusslinie etwas ab. Licht je Reich nach der Bildbeleuchtung. */
+  const KUL_FEET = { a: 0.27, b: 0.72, y: 0.79 };
+  const KUL_LIGHT = {
+    // Kreidehoehen: warme Abendsonne von links hinten, kuehle Schatten
+    albion: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd49a", sunI: 2.6, sunP: [-7, 8, 2], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1 },
+    // Runenpass: kuehles Daemmerlicht und Nordlicht, rechts ein kleines Feuer
+    midgard: { sky: "#d4e2ff", ground: "#4a5570", hemi: 1.25, sun: "#dfe9ff", sunI: 2.0, sunP: [-4, 9, 5], front: "#f2f6ff", frontI: 1.15, warm: ["#ff9a3d", [6.5, 1.4, -1.5], 9], fog: "#4a5a7a", nightDim: 0.8 },
+    // Mondhain: silbernes Mondlicht von hinten, warmes Laternenlicht von vorn
+    hibernia: { sky: "#cdd6ff", ground: "#3c3a2c", hemi: 1.15, sun: "#d4dcff", sunI: 2.0, sunP: [3, 9, -4], front: "#ffe2b8", frontI: 1.25, fog: "#2c3550", nightDim: 0.5 },
+  };
+  function backdrop(scene, url, night) {
+    const st = { tex: null, iw: 1, ih: 1 };
+    scene.background = col("#141822");
+    const img = new Image();
+    img.onload = () => {
+      st.iw = img.naturalWidth;
+      st.ih = img.naturalHeight;
+      let tex;
+      if (night > 0.02) {
+        // Nacht dunkelt das Bild ab wie die gemalte Heimatinsel
+        const c = document.createElement("canvas");
+        c.width = st.iw;
+        c.height = st.ih;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        const k = 1 - 0.32 * night;
+        g.globalCompositeOperation = "multiply";
+        g.fillStyle = "rgb(" + Math.round(255 * k * 0.92) + "," + Math.round(255 * k * 0.95) + "," + Math.round(255 * Math.min(1, k + 0.06)) + ")";
+        g.fillRect(0, 0, st.iw, st.ih);
+        tex = new T.CanvasTexture(c);
+      } else {
+        tex = new T.Texture(img);
+        tex.needsUpdate = true;
+      }
+      tex.colorSpace = T.SRGBColorSpace;
+      st.tex = tex;
+      scene.background = tex;
+    };
+    img.src = url;
+    const A = new T.Vector3();
+    const B = new T.Vector3();
+    st.fit = (camera, sep, w, h) => {
+      const tex = st.tex;
+      if (!tex) return;
+      A.set(-sep, 0, 0.4).project(camera);
+      B.set(sep, 0, 0.4).project(camera);
+      // Bildschirmpixel, y von unten
+      const ax = (A.x * 0.5 + 0.5) * w;
+      const bx = (B.x * 0.5 + 0.5) * w;
+      const fy = (A.y * 0.5 + 0.5) * h;
+      const sc = Math.max((bx - ax) / ((KUL_FEET.b - KUL_FEET.a) * st.iw), w / st.iw, h / st.ih);
+      const W = st.iw * sc;
+      const H = st.ih * sc;
+      const x0 = Math.min(0, Math.max(w - W, (ax + bx) / 2 - ((KUL_FEET.a + KUL_FEET.b) / 2) * W));
+      const y0 = Math.min(0, Math.max(h - H, fy - (1 - KUL_FEET.y) * H));
+      tex.repeat.set(w / W, h / H);
+      tex.offset.set(-x0 / W, -y0 / H);
+    };
+    return st;
+  }
+  // weicher Schatten unter den Figuren auf dem Gemaelde (das Bild hat keine Schatten der Kaempfer)
+  let softShadow = null;
+  function softShadowMat() {
+    if (softShadow) return softShadow;
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const g = c.getContext("2d");
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, "rgba(0,0,0,0.85)");
+    gr.addColorStop(0.35, "rgba(0,0,0,0.62)");
+    gr.addColorStop(0.7, "rgba(0,0,0,0.25)");
+    gr.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    return (softShadow = new T.MeshBasicMaterial({ map: new T.CanvasTexture(c), transparent: true, depthWrite: false, toneMapped: false }));
+  }
+
   R.createBattle = function (el, opts) {
     init();
     opts = opts || {};
@@ -2507,8 +2588,13 @@
     const setting = SETTINGS[opts.setting] ? opts.setting : "quest";
     const S = SETTINGS[setting];
     const rng = R.rng(setting.length * 17 + 3);
-    const sky = skyDome();
-    scene.add(sky);
+    // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
+    const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
+    // Gemalte Kampfkulisse des Reiches (Kampfkulissen v07 des Kapitaens, kulissen.js neben der Seite): Bildhintergrund
+    // mit den 3D-Figuren davor; ohne Bild die gebaute Insel
+    const KUL = TH && globalThis.SB_KULISSEN ? globalThis.SB_KULISSEN[TH.id] : null;
+    const sky = KUL ? null : skyDome();
+    if (sky) scene.add(sky);
     scene.fog = new T.Fog("#22283a", 22, 90);
     const hemi = new T.HemisphereLight("#d8e2ee", "#3a3028", 1);
     scene.add(hemi);
@@ -2520,8 +2606,6 @@
     scene.add(front);
     const N = nightMats();
     const info = R.dayInfo(setting === "dungeon" ? 0.02 : opts.dayTime != null ? opts.dayTime : S.t);
-    // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
-    const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
     const P = palette(info, TH ? TH.sky : null);
     if (setting === "dungeon") {
       const tint = col(opts.tint || "#8f7cff");
@@ -2532,6 +2616,24 @@
       hemi.intensity = 0.55;
       sun.color.copy(tint.clone().lerp(col("#ffffff"), 0.4));
       sun.intensity = 0.9;
+    } else if (KUL) {
+      // Licht passend zum Gemaelde (Richtung und Farbe der Bildbeleuchtung), nachts etwas gedaempft
+      const L = KUL_LIGHT[TH.id] || KUL_LIGHT.albion;
+      const dim = 1 - 0.25 * info.night * L.nightDim;
+      scene.fog.color.set(L.fog);
+      hemi.color.set(L.sky);
+      hemi.groundColor.set(L.ground);
+      hemi.intensity = L.hemi * dim;
+      sun.color.set(L.sun);
+      sun.intensity = L.sunI * dim;
+      sun.position.set(...L.sunP);
+      front.color.set(L.front);
+      front.intensity = L.frontI;
+      if (L.warm) {
+        const wl = new T.PointLight(L.warm[0], L.warm[2], 14, 1.6);
+        wl.position.set(...L.warm[1]);
+        scene.add(wl);
+      }
     } else {
       sky.userData.recolor(P.top, P.bot, col("#0a0d18").lerp(P.fog, 0.4));
       scene.fog.color.copy(P.fog);
@@ -2542,22 +2644,30 @@
       sun.intensity = P.sunI + 0.3;
     }
     N.win.emissiveIntensity = 0.3 + info.night;
-    const stars = starField(rng, 500);
-    stars.material.opacity = setting === "dungeon" ? 0 : Math.max(0, info.night - 0.2);
-    scene.add(stars);
-    const aur = aurora();
-    scene.add(aur);
-    if (setting !== "dungeon") {
-      const sea = cloudSea(-16, 260);
-      sea.material.color.copy(P.bot);
-      scene.add(sea);
-    }
-    const GD = TH ? TH.ground : S;
-    const stage = island(8, 7, rng, { grass: GD.grass, grass2: GD.grass2, dirt: GD.dirt, rock: GD.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : TH ? TH.ground.vineGlow : "#7fffc8" });
-    scene.add(stage);
     const flickers = [];
     const extras = [];
-    if (S.props === "arena") {
+    let stars = null;
+    let aur = null;
+    let bg = null;
+    if (KUL) bg = backdrop(scene, KUL, info.night * (KUL_LIGHT[TH.id] || KUL_LIGHT.albion).nightDim);
+    else {
+      stars = starField(rng, 500);
+      stars.material.opacity = setting === "dungeon" ? 0 : Math.max(0, info.night - 0.2);
+      scene.add(stars);
+      aur = aurora();
+      scene.add(aur);
+      if (setting !== "dungeon") {
+        const sea = cloudSea(-16, 260);
+        sea.material.color.copy(P.bot);
+        scene.add(sea);
+      }
+      const GD = TH ? TH.ground : S;
+      const stage = island(8, 7, rng, { grass: GD.grass, grass2: GD.grass2, dirt: GD.dirt, rock: GD.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : TH ? TH.ground.vineGlow : "#7fffc8" });
+      scene.add(stage);
+    }
+    if (KUL) {
+      // das Gemaelde bringt Baeume, Steine und Landmarken selbst mit
+    } else if (S.props === "arena") {
       const wall = new T.CylinderGeometry(9, 9.4, 2.6, 40, 1, true, PI * 0.42, PI * 1.16);
       scene.add(mesh(wall, tiled("stone", "#6a645a", 8, 1, { side: T.DoubleSide, flatShading: true }), { p: [0, 1.3, 0] }));
       const realms = ["albion", "midgard", "hibernia"];
@@ -2648,10 +2758,11 @@
       weather.scale.setScalar(0.6);
       scene.add(weather);
     }
-    const flies = fireflies(rng, 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a");
-    scene.add(flies);
-    const wisps = mistWisps(rng, 8, 9, 0.2);
-    scene.add(wisps);
+    // Gluehwuermchen und Nebelfetzen gehoeren zur gebauten Insel (im Mondhain leuchten wenige)
+    const flies = !KUL || TH.id === "hibernia" ? fireflies(rng, KUL ? 18 : 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a") : null;
+    if (flies) scene.add(flies);
+    const wisps = KUL ? null : mistWisps(rng, 8, 9, 0.2);
+    if (wisps) scene.add(wisps);
 
     // Kaempfer
     const overlay = document.createElement("div");
@@ -2672,7 +2783,7 @@
         m.obj.scale.multiplyScalar(s);
         m.headY *= s;
       }
-      const sh = new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
+      const sh = KUL ? new T.Mesh(new T.CircleGeometry(1, 24), softShadowMat()) : new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
       sh.rotation.x = -PI / 2;
       sh.position.set(home.x, 0.03, home.z);
       sh.scale.setScalar(desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9);
@@ -2688,7 +2799,7 @@
     let shake = 0;
     let zoom = 0;
     const camBase = new T.Vector3(0, 2.7, 9.0);
-    const lookY = 1.45;
+    let lookY = 1.45;
     const tweens = [];
     function resize() {
       w = Math.max(1, el.clientWidth);
@@ -2702,6 +2813,15 @@
       const tanH = Math.tan((camera.fov * PI) / 360) * camera.aspect;
       camBase.z = Math.max(9.0, halfW / tanH);
       camBase.y = 2.7 + (camBase.z - 9) * 0.1;
+      if (KUL && !portrait) {
+        // Kulisse: Kaempfer stehen wie auf der Tafel (27 % und 72 % der Breite), damit das ganze Gemaelde zu sehen ist,
+        // und die Kamera neigt sich so, dass die Fuesse auf der Bodenlinie der Tafel (79 % der Hoehe) stehen
+        camBase.z = Math.max(camBase.z, 0.4 + sep / ((KUL_FEET.b - KUL_FEET.a) * tanH));
+        camBase.y = 2.7 + (camBase.z - 9) * 0.1;
+        const tanV = Math.tan((camera.fov * PI) / 360);
+        const pitch = Math.atan(camBase.y / (camBase.z - 0.4)) - Math.atan((2 * KUL_FEET.y - 1) * tanV);
+        lookY = camBase.y - camBase.z * Math.tan(pitch);
+      }
       camera.updateProjectionMatrix();
     }
     const ro = new ResizeObserver(resize);
@@ -2745,10 +2865,10 @@
       scene.traverse((o) => {
         if (o.userData.flick) o.scale.y = 1 + Math.sin(t * 13 + o.userData.flick) * 0.15;
       });
-      flies.userData.update(t, setting === "dungeon" ? 0.9 : 0.3 + 0.6 * info.night);
+      if (flies) flies.userData.update(t, setting === "dungeon" ? 0.9 : 0.3 + 0.6 * info.night);
       if (weather) weather.userData.update(dt, t, info);
-      wisps.userData.update(dt, scene.fog.color, 0.12);
-      aur.userData.update(t, setting === "dungeon" ? 0 : smooth(0.5, 0.95, info.night) * 0.7);
+      if (wisps) wisps.userData.update(dt, scene.fog.color, 0.12);
+      if (aur) aur.userData.update(t, setting === "dungeon" ? 0 : smooth(0.5, 0.95, info.night) * 0.7);
       camera.position.copy(camBase);
       camera.position.z -= zoom * 1.6;
       camera.position.y -= zoom * 0.3;
@@ -2759,6 +2879,7 @@
         camera.position.y += (Math.random() - 0.5) * 0.28;
       }
       camera.lookAt(0, lookY, 0);
+      if (bg) bg.fit(camera, sep, w, h);
       renderer.render(scene, camera);
     }
     raf = requestAnimationFrame(frame);

@@ -6,6 +6,8 @@ assets-src/gen/meshy/
 assets-src/gen/konzepte/
 # Inselbilder des Kapitaens (gemalte Heimatinseln); bis zu seiner Freigabe nicht im Repository
 assets/inseln/
+# Kampfkulissen des Kapitaens (Kampfkulissen v07); bis zu seiner Freigabe nicht im Repository
+assets/kulissen/
 # erzeugte Figuren (Bild-zu-3D) erst nach Abnahme durch den Kapitaen ins Repository
 assets/gen-*.pack
 assets/gen.pack
