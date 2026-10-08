@@ -12527,21 +12527,30 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   }
   R.buildMonster = function (m) {
     if (!T) init();
-    // Monsterkonzept v06: eigene Meshy-Figur mit Skelett fuer genau dieses Monster (Monster-ID als visual)
+    // Monsterkonzept v06: eigene Meshy-Figur fuer genau dieses Monster (Monster-ID oder Name als visual); ohne eigene
+    // die geliehene Figur eines Monsters derselben Familie (look, UI.monLook)
+    const own = (k) => !!k && ((R.rigged && R.rigged.is && R.rigged.is(k)) || (R.beasts && R.beasts.hasOwn && R.beasts.hasOwn(k)));
+    if (!own(m.visual) && own(m.look)) m = Object.assign({}, m, { visual: m.look, borrowed: true });
+    let gen = null;
     if (m.visual && R.rigged && R.rigged.is && R.rigged.is(m.visual)) {
       try {
-        return R.rigged.buildMonster(m, m.visual);
+        gen = R.rigged.buildMonster(m, m.visual);
       } catch (e) {
         console.warn("Monsterfigur nicht moeglich, alte Figur", e);
       }
     }
     // Version 5: modellierte Bestie, falls fuer diese Familie vorhanden
-    if (R.beasts && R.beasts.has && R.beasts.has(m.arch, m.visual)) {
+    if (!gen && R.beasts && R.beasts.has && R.beasts.has(m.arch, m.visual)) {
       try {
-        return R.beasts.build(m);
+        gen = R.beasts.build(m);
       } catch (e) {
         console.warn("Modellierte Bestie nicht moeglich, alte Figur", e);
       }
+    }
+    if (gen) {
+      // Bosse leuchten wie die gebauten in ihrer Akzentfarbe
+      if (m.boss && gen.obj) gen.obj.add(R.haloSprite(m.accent || "#ff5a3d", Math.max(2.4, (gen.height || 2) * 1.3), 0.16, [0, (gen.height || 2) * 0.45, 0]));
+      return gen;
     }
     const root = grp();
     const P = {};
@@ -12725,6 +12734,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   }
   BE.familyOf = (arch, visual) => (visual && pack()[visual] ? visual : genFamily(arch) || (FAMILY[arch] && pack()[FAMILY[arch]] ? FAMILY[arch] : null));
   BE.has = (arch, visual) => !!BE.familyOf(arch, visual);
+  // eigenes Modell unter genau diesem Schluessel (Monster-ID oder Name eines Endbosses)
+  BE.hasOwn = (key) => !!(key && pack()[key]);
   // erzeugte Bestie (Meshy, mit Textur) statt einer gebauten Familie
   BE.isGen = (arch, visual) => {
     const f = BE.familyOf(arch, visual);
@@ -12773,10 +12784,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   // erzeugte Bestie mit eigener Textur: leicht in der Farbe des Gegners getoent, damit Varianten unterscheidbar bleiben
   function texMat(fam, B, m) {
     // eigenes Modell genau dieses Monsters (Monsterkonzept): Farben wie im Konzept, sonst leicht in Gegnerfarbe getoent
-    const own = !!m.visual && fam === m.visual;
-    const key = "tex|" + fam + "|" + (own ? "" : m.color || "");
+    // eine geliehene Figur (Gegner ohne eigene, UI.monLook) nur leicht, damit sie ihr Konzept behaelt
+    const own = !!m.visual && fam === m.visual && !m.borrowed;
+    const amt = own ? 0 : m.borrowed ? 0.3 : 0.45;
+    const key = "tex|" + fam + "|" + (own ? "" : (m.color || "") + amt);
     if (MC[key]) return MC[key];
-    const tint = own ? new T.Color("#ffffff") : new T.Color("#ffffff").lerp(new T.Color(m.color || "#ffffff"), 0.45);
+    const tint = new T.Color("#ffffff").lerp(new T.Color(m.color || "#ffffff"), amt);
     const mat = new T.MeshStandardMaterial({ color: tint, map: SB.assets.texture("beast." + fam, B.tex, { srgb: true }), roughness: 0.8, metalness: 0 });
     if (B.ntex) mat.normalMap = SB.assets.texture("beast." + fam + ".n", B.ntex, { srgb: false });
     return (MC[key] = mat);
@@ -18637,7 +18650,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
   const MON_LOAD = {};
   UI.monReady = {};
-  const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1 };
+  const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1, steinkreis: 1, mondtor: 1, tiefen: 1 };
   UI.loadMonsterArch = function (arch) {
     if (!UI.use3d || !arch) return Promise.resolve(false);
     if (MON_LOAD[arch]) return MON_LOAD[arch];
@@ -18741,12 +18754,43 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (m && m.id && /^(nacht-|story-)/.test(m.id)) return S ? S.realm : null;
     return null;
   };
+  // Gegner ohne Eintrag in D.MONSTERS (Chronik, Verliese, Nachtjagd) tragen ebenfalls eine Meshy-Figur: eine eigene
+  // unter dem Schluessel ihres Namens (Endbosse, etwa "derwurmimeis"), sonst die naechstliegende Figur ihrer Familie,
+  // zuerst nach dem Namen ("Der Dornenhirte" -> dornenhirte), dann nach Farbe und Akzent
+  const slug = (s) => String(s || "").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]/g, "");
+  const rgb = (c) => {
+    const n = parseInt(String(c || "#808080").slice(1, 7), 16) || 0;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const LOOK = {};
+  UI.monLook = function (f) {
+    if (!f || (f.id && SB.engine.monById(f.id))) return null;
+    const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
+    if (key in LOOK) return LOOK[key];
+    const fam = SB.data.MONSTERS.filter((m) => m.arch === f.arch);
+    const nm = slug(f.name);
+    let best = fam.filter((m) => nm.indexOf(slug(m.name)) >= 0).sort((a, b) => slug(b.name).length - slug(a.name).length)[0];
+    if (!best) {
+      const c = rgb(f.color);
+      const a = rgb(f.accent);
+      const d = (m) => {
+        const x = rgb(m.color);
+        const y = rgb(m.accent);
+        let s = 0;
+        for (let i = 0; i < 3; i++) s += (c[i] - x[i]) ** 2 + 0.35 * (a[i] - y[i]) ** 2;
+        return s;
+      };
+      best = fam.slice().sort((p, q) => d(p) - d(q))[0];
+    }
+    return (LOOK[key] = best ? best.id : null);
+  };
+  // visual: eigene Figur (Monster-ID oder Name), look: geliehene Figur, falls es keine eigene gibt
+  const monVisual = (f) => (f.id && SB.engine.monById(f.id) ? f.id : slug(f.name) || f.id);
   UI.fighterDesc = function (f) {
-    // visual: Monster-ID, damit ein Monster mit eigener Figur aus dem Figurenpaket diese bekommt (sonst die Familie)
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: f.id, mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: monVisual(f), look: UI.monLook(f), mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: m.id, mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: monVisual(m), look: UI.monLook(m), mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
     const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';
@@ -19930,8 +19974,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       else if (s.story.next > now) h += '<div class="say">Du musst dich nach deiner Niederlage erst sammeln: <b class="num" data-until="' + s.story.next + '"></b></div>';
       const hero = E.heroFighter(s, now);
       h += '<div class="chapters">';
+      const archs = [];
       for (const ch of E.storyChapters(s)) {
         const foes = ch.foes.map((f) => (f.mon ? Object.assign({}, E.monById(f.mon), { boss: f.boss, final: f.final }) : f));
+        if (ch.done || ch.available) for (const f of foes) archs.push(f.arch);
         let status = "";
         if (ch.done) status = '<span class="tag">Abgeschlossen</span>';
         else if (ch.available) {
@@ -19945,6 +19991,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           '<div class="foot">' + status + "</div></div>";
       }
       h += "</div>";
+      // Figuren der sichtbaren Gegner nachladen (die Bilder erneuern sich danach)
+      UI.loadMonsters(archs);
       return h;
     },
   };
@@ -20049,6 +20097,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const busy = E.busy(s, now);
       const hero = E.heroFighter(s, now);
       const foes = E.nightHuntPreview(s, now);
+      UI.loadMonsters(foes.map((f) => f.arch));
       const c = estimate(hero, foes, "nacht" + s.daily.day + s.daily.nightHunts);
       h +=
         '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
@@ -20154,12 +20203,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           pic = I.ui("tiefen");
           info = '<div class="muted small">Öffnet sich ab Stufe ' + dg.unlock + (d > 0 ? " und nach dem ersten Boss des vorigen Dungeons" : "") + ".</div>";
         } else if (st.done) {
+          UI.loadMonsters([dg.bosses[7].arch]);
           pic = UI.portrait(UI.monDesc(dg.bosses[7], true, true), 128);
           info = '<div class="small delta-up">Gesäubert! Alle acht Bosse besiegt.</div>';
         } else {
           const b = E.bossFor(d, st.cleared);
           const foe = E.monsterFighter(b.mon, b.L, b.power, { boss: true, final: b.final });
           const c = estimate(hero, [foe], b.mon.id);
+          UI.loadMonsters([b.mon.arch]);
           pic = UI.portrait(UI.monDesc(b.mon, true, b.final), 128);
           info = '<div class="small">Boss ' + (st.cleared + 1) + "/8: <b>" + esc(b.mon.name) + "</b> · Stufe " + b.L + "</div>" + chanceTxt(c);
           btn = '<button class="btn" data-act="dungeonFight" data-d="' + d + '"' + (busy || s.dungeons.next > now ? " disabled" : "") + ">Angreifen</button>";
