@@ -8885,6 +8885,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     fahlerschemen: { cls: "runenwirker", dual: true },
     irrlichtschemen: { cls: "runenwirker", dual: true },
     leerenschemen: { cls: "runenwirker", dual: true },
+    // Endbosse mit eigener Figur (Schluessel aus dem Namen, UI.monLook); alle mit leeren Haenden
+    derschattenkanzler: { cls: "runenwirker", dual: true },
+    derungeschriebene: { cls: "runenwirker", dual: true },
+    dienachtkoenigin: { cls: "runenwirker", dual: true, gender: "w" },
+    dieertrunkeneglocke: { cls: "runenwirker", dual: true },
+    laternenkoenigewiglicht: { cls: "runenwirker", dual: true },
+    dermoderkoenig: { cls: "sturmhuene", dual: true },
+    diewurzeldertiefe: { cls: "sturmhuene", dual: true },
+    dergrossekolben: { cls: "sturmhuene", dual: true },
+    dergrossebovist: { cls: "sturmhuene", dual: true },
   };
   RG.buildMonster = function (m, key) {
     const st = RG.MONSTER[key] || {};
@@ -18763,6 +18773,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   };
   const LOOK = {};
+  UI.monKey = slug;
   UI.monLook = function (f) {
     if (!f || (f.id && SB.engine.monById(f.id))) return null;
     const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
@@ -20636,16 +20647,37 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const order = ["ghul", "goblin", "kultist", "golem", "troll", "todesritter", "baum", "pilz", "schemen", "schlund", "wolf", "spinne", "krebs", "fledermaus", "drache"];
     return SB.data.MONSTERS.slice().sort((a, b) => order.indexOf(a.arch) - order.indexOf(b.arch)).map((m) => [m.id, m.name, m.arch]);
   };
-  const fpMon = () => (FP.fig.indexOf("mon:") === 0 ? E.monById(FP.fig.slice(4)) : null);
+  // Endbosse aus Chronik und Verliesen (eigene Figur unter dem Schluessel ihres Namens, UI.monKey)
+  let FP_BOSSES = null;
+  const FP_BOSS = () => {
+    if (FP_BOSSES) return FP_BOSSES;
+    const out = [];
+    const seen = {};
+    const walk = (o) => {
+      if (!o || typeof o !== "object") return;
+      if (Array.isArray(o.foes)) for (const f of o.foes) if (f && f.final && f.name && !seen[f.name]) out.push((seen[f.name] = f));
+      for (const k in o) if (k !== "foes" && o[k] && typeof o[k] === "object") walk(o[k]);
+    };
+    walk(D);
+    for (const d of D.DUNGEONS) for (const b of d.bosses) if (b.final && !seen[b.name]) out.push((seen[b.name] = b));
+    return (FP_BOSSES = out);
+  };
+  const fpMon = () => (FP.fig.indexOf("mon:") === 0 ? E.monById(FP.fig.slice(4)) : FP.fig.indexOf("boss:") === 0 ? FP_BOSS().find((b) => UI.monKey(b.name) === FP.fig.slice(5)) : null);
   const fpMonReady = (id) => {
     const m = E.monById(id);
     const R = SB.R3D;
     return !!(m && ((R.rigged && R.rigged.is(id)) || (R.beasts && R.beasts.isGen && R.beasts.isGen(m.arch, id))));
   };
+  // waehlbar, sobald die eigene oder die geliehene Figur geladen ist
+  const fpBossReady = (b) => {
+    const R = SB.R3D;
+    const own = (k) => !!k && ((R.rigged && R.rigged.is(k)) || (R.beasts && R.beasts.hasOwn && R.beasts.hasOwn(k)));
+    return own(UI.monKey(b.name)) || own(UI.monLook(b));
+  };
   const fpWeapon = () => FP_WEAPONS.find((w) => w[0] === FP.weapon) || FP_WEAPONS[0];
   const fpDesc = () => {
     const mon = fpMon();
-    if (mon) return UI.monDesc(mon);
+    if (mon) return UI.monDesc(mon, !!mon.final, !!mon.final);
     const [race, sex] = FP.fig.split("-");
     const w = fpWeapon();
     const gear = w[0] ? { waffe: { base: w[0], variant: 0, rarity: "selten", vis: { f: w[0] + ".0", c: "midgard", o: 0, v: 1 } } } : {};
@@ -20708,6 +20740,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const k = "mon:" + id;
         h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !fpMonReady(id) ? " disabled" : "") + ">" + nm + "</button>";
       }
+      // Endbosse wie im Kampf: eigene Figur, sonst die geliehene eines Monsters ihrer Familie
+      h += '</div><div class="section-title">Endbosse aus Chronik und Verliesen</div><div class="row">';
+      for (const b of FP_BOSS()) {
+        const k = "boss:" + UI.monKey(b.name);
+        h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !fpBossReady(b) ? " disabled" : "") + ">" + esc(b.name) + "</button>";
+      }
       h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
       h += '</div><div class="section-title">Waffe</div><div class="row">' + FP_WEAPONS.map(([id, n]) => '<button class="tab' + (FP.weapon === id ? " on" : "") + '" data-act="fpWeapon" data-w="' + id + '"' + (fpMon() ? " disabled" : "") + ">" + n + "</button>").join("");
       h += '<span class="spacer"></span><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
@@ -20730,7 +20768,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
       if (FP.state === "laden") return;
       FP.state = "laden";
-      const mon = UI.loadMonsters(FP_MON().map((x) => x[2]));
+      const mon = UI.loadMonsters(FP_MON().map((x) => x[2]).concat(FP_BOSS().map((b) => b.arch)));
       SB.assets
         .loadGen("midgard")
         .then((g) => mon.then(() => g))
