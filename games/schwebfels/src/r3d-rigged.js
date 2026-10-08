@@ -1119,6 +1119,16 @@
     fahlerschemen: { cls: "runenwirker", dual: true },
     irrlichtschemen: { cls: "runenwirker", dual: true },
     leerenschemen: { cls: "runenwirker", dual: true },
+    // Endbosse mit eigener Figur (Schluessel aus dem Namen, UI.monLook); alle mit leeren Haenden
+    derschattenkanzler: { cls: "runenwirker", dual: true },
+    derungeschriebene: { cls: "runenwirker", dual: true },
+    dienachtkoenigin: { cls: "runenwirker", dual: true, gender: "w" },
+    dieertrunkeneglocke: { cls: "runenwirker", dual: true },
+    laternenkoenigewiglicht: { cls: "runenwirker", dual: true },
+    dermoderkoenig: { cls: "sturmhuene", dual: true },
+    diewurzeldertiefe: { cls: "sturmhuene", dual: true },
+    dergrossekolben: { cls: "sturmhuene", dual: true },
+    dergrossebovist: { cls: "nebelschleicher", dual: true },
   };
   RG.buildMonster = function (m, key) {
     const st = RG.MONSTER[key] || {};

@@ -180,6 +180,7 @@
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   };
   const LOOK = {};
+  UI.monKey = slug;
   UI.monLook = function (f) {
     if (!f || (f.id && SB.engine.monById(f.id))) return null;
     const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
