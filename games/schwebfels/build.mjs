@@ -149,6 +149,9 @@ if (Object.keys(kern).length) {
       packJs += '<script src="packs/inseln.js"></script>';
     } else packJs += "<script>" + js + "</script>";
     console.log("Inselbilder eingebettet:", Object.keys(isl).join(", "));
+  } else if (genFiles.length) {
+    // eine Fassung mit Meshy-Figuren ist zum Veroeffentlichen gedacht; ohne Inselbilder zeigt sie die alte 3D-Insel
+    console.warn("Hinweis: keine Inselbilder (INSELN_DIR), die Seite zeigt die 3D-Insel statt der gemalten Heimatinseln.");
   }
 }
 // Gemalte Kampfkulissen (Kampfkulissen v07, src/r3d-scenes.js): Bilder <reich>.webp als eigene Datei kulissen.js

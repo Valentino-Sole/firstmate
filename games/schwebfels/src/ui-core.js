@@ -245,13 +245,14 @@
 
   /* ---------- Speichern ---------- */
   let saveTimer = 0;
+  // ohne Helden nichts speichern (etwa „Neuer Held“, solange ein verzoegertes Speichern noch aussteht)
   UI.save = function () {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => SB.store.save(UI.S), 300);
+    saveTimer = setTimeout(() => UI.S && SB.store.save(UI.S), 300);
   };
   UI.saveNow = function () {
     clearTimeout(saveTimer);
-    SB.store.save(UI.S);
+    if (UI.S) SB.store.save(UI.S);
   };
 
   /* ---------- Formatierung ---------- */
