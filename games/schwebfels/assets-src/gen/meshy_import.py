@@ -560,6 +560,21 @@ def tpose(parents, TP, tmap):
         for c in kids[i]:
             out += subtree(c)
         return out
+    # gebeugter Oberkoerper (geduckte Kreaturen): Wirbelsaeule bis zum Hals senkrecht stellen, Kopf darueber
+    # (nur der lange Abschnitt bis zum Hals; der kurze Hals-Kopf-Abschnitt ist bei Kapuzen und Bart zu ungenau)
+    H0 = max(float(np.ptp(P[:, 1])), 1e-6)
+    for a, b in (() if os.environ.get("KEIN_AUFRICHTEN") else (("spine", "neck"),)):
+        i, j = tmap[a], tmap[b]
+        if i == j:
+            continue
+        v = P[j] - P[i]
+        if np.linalg.norm(v) < 0.08 * H0 or np.degrees(np.arccos(np.clip(v[1] / max(np.linalg.norm(v), 1e-9), -1, 1))) < 25:
+            continue
+        Rb = rot_between(v, np.array([0.0, 1.0, 0.0]))
+        for k in subtree(i):
+            C[k] = Rb @ C[k]
+            if k != i:
+                P[k] = P[i] + Rb @ (P[k] - P[i])
     for s_, x in (("L", 1.0), ("R", -1.0)):
         for a, b, d in (("upperarm", "forearm", [x, 0, 0]), ("forearm", "hand", [x, 0, 0]), ("thigh", "shin", [0, -1.0, 0]), ("shin", "foot", [0, -1.0, 0])):
             i, j = tmap[a + "." + s_], tmap[b + "." + s_]
@@ -721,7 +736,7 @@ def main():
     if len(set(names)) != len(names):
         raise SystemExit("Knochennamen sind nicht eindeutig: " + ", ".join(names))
     tmap, _ = roles(names, parents, TP)
-    moved = fix_knees(TP, tmap)
+    moved = [] if os.environ.get("KEIN_KNIE") else fix_knees(TP, tmap)
     if moved:
         print("Knie auf die Beinlinie geholt:", ", ".join("%s %.0f cm" % (sd, d * 100) for sd, d in moved))
         log["knie_korrigiert"] = moved

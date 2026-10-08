@@ -58,6 +58,8 @@
   P.taverne = {
     render() {
       const s = S();
+      // Monsterfiguren der angebotenen Auftraege im Hintergrund laden (Portraits erneuern sich danach)
+      UI.loadMonsters(UI.offerArchs());
       const now = E.now();
       const en = E.energy(s, now);
       const max = E.energyMax(s);
@@ -1100,7 +1102,11 @@
   // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
   const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
   // Monster mit neuer Figur aus dem Monsterkonzept (Monster-ID); nur waehlbar, wenn die Figur im Paket steckt
-  const FP_MON = [["grauwolf", "Wolf"], ["eiskobold", "Eiskobold"], ["moorschlund", "Moorschlund"]];
+  // alle Monster; waehlbar, sobald ihre Familie geladen ist und es eine eigene Figur gibt
+  const FP_MON = () => {
+    const order = ["ghul", "goblin", "kultist", "golem", "troll", "todesritter", "baum", "pilz", "schemen", "schlund", "wolf", "spinne", "krebs", "fledermaus", "drache"];
+    return SB.data.MONSTERS.slice().sort((a, b) => order.indexOf(a.arch) - order.indexOf(b.arch)).map((m) => [m.id, m.name, m.arch]);
+  };
   const fpMon = () => (FP.fig.indexOf("mon:") === 0 ? E.monById(FP.fig.slice(4)) : null);
   const fpMonReady = (id) => {
     const m = E.monById(id);
@@ -1168,7 +1174,8 @@
         }
       }
       h += '</div><div class="section-title">Monster aus deinem Monsterkonzept</div><div class="row">';
-      for (const [id, nm] of FP_MON) {
+      UI.loadMonsters(FP_MON().map((x) => x[2]));
+      for (const [id, nm] of FP_MON()) {
         const k = "mon:" + id;
         h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !fpMonReady(id) ? " disabled" : "") + ">" + nm + "</button>";
       }
@@ -1194,7 +1201,7 @@
       }
       if (FP.state === "laden") return;
       FP.state = "laden";
-      const mon = UI.loadMonsters();
+      const mon = UI.loadMonsters(FP_MON().map((x) => x[2]));
       SB.assets
         .loadGen("midgard")
         .then((g) => mon.then(() => g))

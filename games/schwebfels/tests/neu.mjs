@@ -7,7 +7,7 @@
 // - "Neu prüfen" oeffnet sich einmal von selbst (nicht bei frisch erschaffenen Helden) und zeigt Inseln und Figuren
 // - Besuch auf Albion und Hibernia mit Weg zurueck (nur mit Inselbildern)
 // - die eingebetteten Midgard-Koerper tragen den eigenen Helden auch ohne Zusatzdatei (nur mit Figurenpaket)
-// - Monster mit eigener Figur aus gen-monster.js (nur wenn die Datei neben der Seite liegt)
+// - alle Tavernenmonster mit eigener Figur aus gen-mon<familie>.js (nur wenn die Dateien neben der Seite liegen)
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync } from "node:fs";
@@ -100,23 +100,28 @@ if (hasKern) {
   }
   check(gen === "trollblut-mann", "eigener Held trägt die eingebettete neue Figur nicht: " + gen);
 } else console.log("ohne Figurenpaket: eingebettete Figuren nicht geprüft");
-// Monster mit eigener Figur (gen-monster.js neben der Seite): Eiskobold mit Skelett und Bewegungen, Moorschlund als Bestie
-const hasMon = existsSync(path.join(path.dirname(page0), "gen-monster.js"));
+// Monster mit eigener Figur (gen-mon<familie>.js neben der Seite): jedes der Tavernenmonster laedt seine Familie nach und
+// steht mit eigener Figur da, Menschenartige mit Skelett und Bewegungen, Tiere als Bestie mit eigenem Koerper
+const hasMon = existsSync(path.join(path.dirname(page0), "gen-mongoblin.js"));
 if (hasMon) {
   const r = await p.evaluate(async () => {
-    const ok = await SB.ui.loadMonsters();
-    const mk = (id) => SB.R3D.buildFighter(SB.ui.monDesc(SB.engine.monById(id)));
-    const k = mk("eiskobold");
-    const m = mk("moorschlund");
-    k.play("attack", 0.42);
-    for (let i = 0; i < 10; i++) k.update(1 / 30);
-    return { ok, kobold: !!(k.parts.clips && k.parts.clips.cur), schlund: m.parts.fam, faul: mk("faulschlund").parts.fam || "gebaut" };
+    const all = SB.data.MONSTERS;
+    const ok = await SB.ui.loadMonsters(all.map((m) => m.arch));
+    const out = {};
+    for (const mon of all) {
+      const f = SB.R3D.buildFighter(SB.ui.monDesc(mon));
+      f.play("attack", 0.42);
+      for (let i = 0; i < 10; i++) f.update(1 / 30);
+      out[mon.id] = f.parts.clips && f.parts.clips.cur ? "skelett" : f.parts.fam ? "bestie:" + f.parts.fam : "alt";
+    }
+    return { ok, out, ready: Object.keys(SB.ui.monReady || {}).length };
   });
-  check(r.ok, "Monsterdatei gen-monster.js lädt nicht");
-  check(r.kobold, "Eiskobold hat keine eigene Figur mit Bewegungen");
-  check(r.schlund === "moorschlund", "Moorschlund nimmt nicht seine eigene Figur: " + r.schlund);
-  check(r.faul !== "moorschlund", "Faulschlund nimmt die Figur des Moorschlunds");
-} else console.log("ohne gen-monster.js: Monsterfiguren nicht geprüft");
+  check(r.ok, "Monsterdateien laden nicht");
+  const bad = Object.entries(r.out).filter(([id, v]) => v === "alt" || (v.startsWith("bestie:") && v !== "bestie:" + id && !(id === "grauwolf" && v === "bestie:wolf")));
+  check(!bad.length, "Monster ohne eigene Figur: " + bad.map(([id, v]) => id + "=" + v).join(", "));
+  check(r.out.eiskobold === "skelett", "Eiskobold hat keine eigene Figur mit Bewegungen");
+  console.log("Monsterfiguren:", Object.values(r.out).filter((v) => v === "skelett").length, "mit Skelett,", Object.values(r.out).filter((v) => v.startsWith("bestie")).length, "Bestien,", r.ready, "Familien geladen");
+} else console.log("ohne gen-mon*.js: Monsterfiguren nicht geprüft");
 
 // 3. danach nicht mehr von selbst
 await p.evaluate(() => SB.ui.closePanel());

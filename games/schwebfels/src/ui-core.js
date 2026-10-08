@@ -62,23 +62,59 @@
     if (UI.S) UI.refresh();
     if (UI.panelId === "neu" || UI.panelId === "figurenprobe") UI.renderPanel();
   };
-  // Monster mit eigener Figur (gen-monster.js neben der Seite) fuer jedes Reich, im Hintergrund; ohne Datei bleiben
-  // die gebauten Monster
-  UI.loadMonsters = function () {
-    if (!UI.use3d) return Promise.resolve(false);
-    return SB.assets.ready
-      .then(() => SB.assets.loadGen("monster"))
+  // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
+  // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); ohne Datei bleiben die gebauten Monster.
+  // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
+  const MON_LOAD = {};
+  UI.monReady = {};
+  const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1 };
+  UI.loadMonsterArch = function (arch) {
+    if (!UI.use3d || !arch) return Promise.resolve(false);
+    if (MON_LOAD[arch]) return MON_LOAD[arch];
+    MON_LOAD[arch] = SB.assets.ready
+      .then(() => SB.assets.loadGen("mon" + arch))
       .then(() => SB.R3D.human.preloadGen())
+      .then(() => {
+        // Farb- und Reliefbilder der Bestien dieser Familie abwarten (sonst stuende sie im ersten Bild schwarz da)
+        const B = (SB.assets.data && SB.assets.data.beasts) || {};
+        const waits = [];
+        for (const k in B) {
+          const t = B[k].tex && SB.assets.texture("beast." + k, B[k].tex, { srgb: true });
+          const n = B[k].ntex && SB.assets.texture("beast." + k + ".n", B[k].ntex, { srgb: false });
+          for (const x of [t, n]) if (x && x.userData.ready) waits.push(x.userData.ready);
+        }
+        return Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 3000))]);
+      })
       .then(
-        () => true,
+        () => {
+          UI.monReady[arch] = true;
+          if (MON_PANELS[UI.panelId]) UI.renderPanel();
+          return true;
+        },
         (e) => {
-          if (!(e && e.missing)) console.warn("Monsterfiguren nicht geladen", e);
+          if (!(e && e.missing)) console.warn("Monsterfiguren " + arch + " nicht geladen", e);
           return false;
         }
       );
+    return MON_LOAD[arch];
+  };
+  // mehrere Familien; mit ms hoechstens so lange warten (danach kaempft notfalls die gebaute Figur)
+  UI.loadMonsters = function (archs, ms) {
+    const all = Promise.all([...new Set((archs || []).filter(Boolean))].map(UI.loadMonsterArch));
+    return ms ? Promise.race([all, new Promise((r) => setTimeout(r, ms))]) : all;
+  };
+  // Familien der Gegner in den aktuellen Auftraegen der Taverne
+  UI.offerArchs = function () {
+    const S = UI.S;
+    const out = [];
+    for (const o of (S && S.quest && S.quest.offers) || []) for (const w of o.waves || [{ monster: o.monster }]) {
+      const m = SB.engine.monById(w.monster);
+      if (m) out.push(m.arch);
+    }
+    return out;
   };
   UI.loadGenFigures = function (realm) {
-    UI.loadMonsters();
+    UI.loadMonsters(UI.offerArchs());
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {
@@ -120,10 +156,10 @@
   };
   UI.fighterDesc = function (f) {
     // visual: Monster-ID, damit ein Monster mit eigener Figur aus dem Figurenpaket diese bekommt (sonst die Familie)
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: f.id, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: f.id, mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: m.id, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: m.id, mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
     const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';

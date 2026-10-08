@@ -182,7 +182,7 @@
     const P = { beast: true, fam, body, mesh, B: by, bones, meta };
     const model = R.makeModel(root, P, "monster");
     model.arch = m.arch;
-    model.headY = (meta.headY || 1.4) * s;
+    model.headY = ((meta.headY || 1.4) + (meta.form === "flieger" ? HOVER : 0)) * s;
     model.height = (meta.height || 1.6) * s;
     model.ranged = SB.data.ARCH_TYPE[m.arch] === "verstand";
     model.projColor = m.accent || "#ff5a3d";
@@ -588,6 +588,23 @@
     if (P.hitSide == null) P.hitSide = Math.random() < 0.5 ? -1 : 1;
     if (name !== "hit" && name !== "block") P.hitSide = null;
     const Q = quadPose(name, u, t, P.hitSide || 1);
+    if (name === "defeat" && Qr.wings.length) {
+      // Drachen kippen nicht auf die Seite (ein Fluegel stuende in den Himmel, der andere im Boden), sondern sinken
+      // auf den Bauch: Beine knicken ein, Hals und Kopf legen sich ab, die Fluegel fallen schlaff herab
+      const e = ease(seg(u, 0, 0.75));
+      Q.rz = 0.12 * e;
+      Q.x = 0;
+      Q.y = -0.03 - 0.3 * (P.meta.height || 1.15) * e;
+      Q.hips = 0.02 + 0.06 * e;
+      Q.spine = 0.03 * e;
+      Q.neck = 0.24 + 0.45 * e;
+      Q.head = -0.2 + 0.2 * e;
+      Q.tail = 0.32 - 0.2 * e;
+      for (const k of LEGS) {
+        Q.legs[k].body = e;
+        Q.legs[k].flex = (k[0] === "F" ? -0.5 : 0.4) * e;
+      }
+    }
     const by = Qr.by;
     P.body.position.set(Q.x, Q.y, Q.z);
     P.body.rotation.set(Q.rx, Q.ry, Q.rz);
@@ -636,17 +653,241 @@
       const th = solveLeg(l, tip, a3);
       for (let i = 0; i < 3; i++) l.b[i].quaternion.setFromAxisAngle(XAX, th[i]);
     }
+    if (Qr.wings.length) poseWings(Qr.wings, wingBeat(name, u, t));
   }
   let XAX = null;
 
+  /* ---------- Fluegel (Drachen, Aasflatterer) ----------
+     Je Seite zwei Glieder. Schlag um die Laengsachse (Z): links hebt +, rechts -; Faltung der Spitze nach innen. */
+  function wingBeat(name, u, t) {
+    let amp = 0.12;
+    let f = 2.2;
+    let fold = 0.15;
+    let lift = 0;
+    if (name === "walk") (amp = 0.45), (f = 7), (fold = 0.05);
+    else if (name === "attack" || name === "special") {
+      const k = Math.sin(PI * u);
+      amp = 0.25 + 0.4 * k;
+      f = 6;
+      lift = 0.35 * k;
+      fold = 0.05;
+    } else if (name === "hit") (lift = -0.3 * Math.sin(PI * u)), (fold = 0.4 * Math.sin(PI * u));
+    else if (name === "evade") (amp = 0.6), (f = 9);
+    else if (name === "victory") (amp = 0.5), (f = 5), (lift = 0.3);
+    else if (name === "cast") (lift = 0.4 * Math.sin(PI * u)), (amp = 0.2);
+    else if (name === "defeat") (amp = 0.03 * (1 - u)), (lift = -0.5 * ease(u)), (fold = 0.9 * ease(u));
+    return { a: lift + amp * Math.sin(t * f), b: amp * 0.7 * Math.sin(t * f - 0.7) + fold, fold };
+  }
+  function poseWings(wings, w) {
+    for (const g of wings) {
+      g.b[0].quaternion.setFromEuler(EU.set(0, 0, g.sx * w.a));
+      if (g.b[1]) g.b[1].quaternion.setFromEuler(EU.set(0, -g.sx * w.fold * 0.6, g.sx * w.b));
+    }
+  }
+  function wingRig(bones) {
+    const out = [];
+    for (const sd of ["L", "R"]) {
+      const b = [1, 2].map((n) => bones.find((x) => x.name === "wing" + sd + n)).filter(Boolean);
+      if (b.length) out.push({ b, sx: sd === "L" ? 1 : -1 });
+    }
+    return out;
+  }
+
+  /* ---------- Spinnen und Krebse (Beine strahlenfoermig um den Rumpf, from_glb.py --form spinne/krebs) ----------
+     Jedes Bein hebt sich um die Achse quer zu seiner Richtung und schwingt um die Senkrechte; die Glieder darunter
+     beugen sich. Gang im Wechsel zweier Gruppen (L1, R2, L3, R4 gegen die anderen). Scheren (claw.*) heben sich zum
+     Angriff und zur Abwehr. */
+  const UP = { x: 0, y: 1, z: 0 };
+  function radialRig(bones, meta) {
+    const by = {};
+    for (const b of bones) by[b.name] = b;
+    const legs = [];
+    const head = (n) => meta.bones.find((b) => b[0] === n);
+    for (const b of bones) {
+      const r = b.userData.role || "";
+      if (!/^(rleg|claw)\./.test(r) || !/1$/.test(b.name)) continue;
+      const nm = b.name.slice(3, -1);
+      const chain = [1, 2, 3].map((i) => by["leg" + nm + i]).filter(Boolean);
+      const h1 = head("leg" + nm + "1");
+      const h3 = head("leg" + nm + "3");
+      const d = new T.Vector3(h3[3][0] - h1[2][0], 0, h3[3][2] - h1[2][2]).normalize();
+      const axis = new T.Vector3().crossVectors(d, new T.Vector3(0, 1, 0)).normalize();
+      const side = nm[0] === "L" ? 1 : -1;
+      const row = parseInt(nm.slice(1), 10) || 1;
+      legs.push({ chain, d, axis, claw: r.indexOf("claw") === 0, side, row, grp: (row + (side > 0 ? 0 : 1)) % 2, front: d.z });
+    }
+    const maxFront = Math.max(...legs.filter((l) => !l.claw).map((l) => l.front));
+    for (const l of legs) l.isFront = !l.claw && l.front > maxFront - 0.25;
+    return { by, legs, q: new T.Quaternion(), q2: new T.Quaternion(), yv: new T.Vector3(0, 1, 0) };
+  }
+  function poseRadial(m, name, u) {
+    const P = m.parts;
+    const R = P.radial;
+    const t = m.t;
+    if (name === "defeat" && !m.anim) u = 1;
+    const br = Math.sin(t * 2.1);
+    let x = 0, y = br * 0.008, z = 0, pitch = 0, roll = 0, yaw = Math.sin(t * 0.5) * 0.03;
+    let head = Math.sin(t * 1.7) * 0.05;
+    let gait = 0, raise = 0, splay = 0, curl = 0, clawUp = 0, clawOpen = Math.max(0, Math.sin(t * 1.3)) * 0.1, hop = 0;
+    switch (name) {
+      case "walk":
+        gait = 1;
+        y += Math.abs(Math.sin(t * 9)) * 0.02;
+        break;
+      case "attack":
+      case "special": {
+        const sp = name === "special";
+        const up = u < 0.35 ? ease(u / 0.35) : 1 - ease(seg(u, 0.35, 0.75));
+        const strike = Math.sin(PI * seg(u, 0.35, 0.7));
+        pitch = -0.45 * up + 0.2 * strike;
+        raise = 1.0 * up;
+        z = -0.06 * up + (sp ? 0.5 : 0.4) * strike;
+        y += 0.06 * up + (sp ? 0.18 * Math.sin(PI * seg(u, 0.3, 0.7)) : 0);
+        head = -0.3 * up + 0.35 * strike;
+        clawUp = 0.9 * up + 0.3 * strike;
+        clawOpen = 0.5 * up;
+        break;
+      }
+      case "hit": {
+        const k = u < 0.25 ? ease(u / 0.25) : 1 - ease(seg(u, 0.25, 1));
+        z = -0.14 * k;
+        pitch = 0.15 * k;
+        splay = 0.25 * k;
+        roll = 0.08 * k * Math.sin(t * 30);
+        break;
+      }
+      case "evade":
+        hop = Math.sin(PI * u);
+        y += 0.18 * hop;
+        z = -0.1 * hop;
+        break;
+      case "block":
+        pitch = -0.2 * Math.sin(PI * u);
+        clawUp = 0.7 * Math.sin(PI * u);
+        raise = 0.4 * Math.sin(PI * u);
+        break;
+      case "cast":
+      case "victory": {
+        const k = name === "victory" ? Math.min(1, u * 5, (1 - u) * 5) : Math.sin(PI * u);
+        pitch = -0.35 * k;
+        raise = 0.8 * k * (0.7 + 0.3 * Math.sin(t * 8));
+        clawUp = 0.8 * k * (0.7 + 0.3 * Math.sin(t * 8 + 1));
+        clawOpen = 0.4 * k;
+        break;
+      }
+      case "defeat": {
+        const e = ease(u);
+        y -= 0.25 * e;
+        roll = 0.25 * e;
+        curl = e;
+        pitch = 0.1 * e;
+        break;
+      }
+    }
+    P.body.position.set(x, y, z);
+    P.body.rotation.set(pitch, yaw, roll);
+    if (R.by.head) R.by.head.quaternion.setFromEuler(EU.set(head, Math.sin(t * 0.8) * 0.06, 0));
+    for (const l of R.legs) {
+      let lift = Math.sin(t * 1.1 + l.row * 1.7 + l.side) * 0.025;
+      let sw = 0;
+      let k2 = 0;
+      if (gait && !l.claw) {
+        const p = (t * 3.2 + l.grp * 0.5) % 1;
+        if (p < 0.5) {
+          const w = p / 0.5;
+          sw = 0.22 * (2 * w - 1);
+          lift += 0.32 * Math.sin(PI * w);
+          k2 = -0.25 * Math.sin(PI * w);
+        } else sw = 0.22 * (1 - 2 * (p - 0.5) / 0.5);
+      }
+      if (l.isFront) (lift += raise), (k2 -= 0.5 * raise);
+      if (l.claw) (lift += clawUp), (k2 -= 0.4 * clawUp + clawOpen);
+      lift += splay * 0.6 + hop * 0.35;
+      lift += curl * 0.5;
+      k2 -= curl * 1.3;
+      R.q.setFromAxisAngle(R.yv, sw * l.side);
+      R.q2.setFromAxisAngle(l.axis, lift);
+      l.chain[0].quaternion.copy(R.q).multiply(R.q2);
+      if (l.chain[1]) l.chain[1].quaternion.setFromAxisAngle(l.axis, k2);
+      if (l.chain[2]) l.chain[2].quaternion.setFromAxisAngle(l.axis, k2 * 0.5);
+    }
+  }
+
+  /* ---------- Fliegende Bestie (from_glb.py --form flieger) ----------
+     Schwebt ueber dem Boden, schlaegt mit den Fluegeln, stoesst zum Angriff herab und stuerzt bei der Niederlage. */
+  const HOVER = 0.9;
+  function poseFlyer(m, name, u) {
+    const P = m.parts;
+    const t = m.t;
+    if (name === "defeat" && !m.anim) u = 1;
+    let y = HOVER + Math.sin(t * 9 + PI / 2) * 0.06 + Math.sin(t * 1.3) * 0.05;
+    let z = 0, x = 0, pitch = 0.1, roll = Math.sin(t * 1.7) * 0.06;
+    switch (name) {
+      case "attack":
+      case "special": {
+        const dive = Math.sin(PI * seg(u, 0.2, 0.8));
+        const back = u < 0.2 ? ease(u / 0.2) : 0;
+        y += 0.25 * back - 0.55 * dive;
+        z = -0.15 * back + 0.75 * dive;
+        pitch = 0.1 - 0.2 * back + 0.6 * dive;
+        break;
+      }
+      case "hit": {
+        const k = Math.sin(PI * u);
+        z = -0.25 * k;
+        y += 0.1 * k;
+        roll += 0.6 * k;
+        pitch -= 0.4 * k;
+        break;
+      }
+      case "evade":
+        x = 0.35 * Math.sin(PI * u);
+        y += 0.3 * Math.sin(PI * u);
+        roll -= 0.5 * Math.sin(PI * u);
+        break;
+      case "victory":
+        y += 0.25 * Math.sin(PI * u);
+        roll += 0.3 * Math.sin(t * 3);
+        break;
+      case "defeat": {
+        // stuerzt ab und bleibt flach mit ausgebreiteten Fluegeln liegen (nicht hochkant auf einer Fluegelspitze)
+        const e = ease(u);
+        y = (HOVER + 0.1) * (1 - e);
+        roll = 0.15 * e;
+        pitch = 0.2 * e;
+        break;
+      }
+    }
+    P.body.position.set(x, y, z);
+    P.body.rotation.set(pitch, 0, roll);
+    const by = P.flyer.by;
+    if (by.head) by.head.quaternion.setFromEuler(EU.set(Math.sin(t * 1.9) * 0.08, Math.sin(t * 0.9) * 0.15, 0));
+    const w = wingBeat(name === "idle" ? "walk" : name, u, t);
+    if (name === "defeat") {
+      // am Boden liegen die Fluegel ausgebreitet, ein letztes Zucken
+      const e = ease(u);
+      w.a = 0.2 * Math.sin(t * 9) * (1 - e) - 0.05 * e;
+      w.b = 0.1 * e;
+      w.fold = 0.1 * e;
+    }
+    poseWings(P.flyer.wings, w);
+    for (const b of P.bones) if ((b.userData.role || "").indexOf("foot.") === 0) b.quaternion.setFromEuler(EU.set(0.3 + Math.sin(t * 2 + b.name.length) * 0.15, 0, 0));
+  }
+
   BE.pose = function (m, name, u) {
     const P = m.parts;
+    const form = P.meta.form;
     if (P.quad === undefined) {
-      P.quad = quadRig(P.bones, P.meta);
       if (!XAX) XAX = new T.Vector3(1, 0, 0);
       if (!EU) EU = new T.Euler();
+      P.quad = form === "spinne" || form === "krebs" || form === "flieger" ? null : quadRig(P.bones, P.meta);
+      if (P.quad) P.quad.wings = wingRig(P.bones);
+      if (form === "spinne" || form === "krebs") P.radial = radialRig(P.bones, P.meta);
+      if (form === "flieger") P.flyer = { by: Object.fromEntries(P.bones.map((b) => [b.name, b])), wings: wingRig(P.bones) };
     }
-    if (P.quad) poseQuad(m, name, u);
+    if (P.radial) poseRadial(m, name, u);
+    else if (P.flyer) poseFlyer(m, name, u);
+    else if (P.quad) poseQuad(m, name, u);
     else poseBasic(m, name, u);
   };
 })();

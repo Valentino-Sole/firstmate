@@ -109,6 +109,132 @@ def rig_for(P, H, tail=True):
     return bones
 
 
+def kmeans(X, k, it=40, seed=1):
+    rng = np.random.default_rng(seed)
+    C = X[rng.choice(len(X), k, replace=False)]
+    for _ in range(it):
+        d = ((X[:, None, :] - C[None]) ** 2).sum(2)
+        lab = d.argmin(1)
+        for j in range(k):
+            if (lab == j).any():
+                C[j] = X[lab == j].mean(0)
+    return C, lab
+
+
+def rig_radial(P, H, n, claws=0):
+    """Spinnen und Krebse: Rumpf (Hinterleib, Brust, Kopf vorn bei +Z) und n Beine, die vom Rumpf zu den Fuessen am
+    Boden laufen (Fuesse per k-Mittel aus den Bodenpunkten). Knie ist der hoechste Punkt des Beins (Spinnenbeine ragen
+    ueber den Rumpf), danach Unterschenkel und Fussglied. Die claws vordersten Beine heissen Scheren (Rolle claw.*)."""
+    L = np.ptp(P[:, 2])
+    feet = P[P[:, 1] < 0.07 * H]
+    if len(feet) < n * 5:
+        feet = P[P[:, 1] < 0.15 * H]
+    C, lab = kmeans(feet[:, [0, 2]].astype(np.float64), n)
+    body = P[P[:, 1] > 0.3 * H]
+    c = np.array([np.median(body[:, 0]), np.median(body[:, 2])])
+    z0, z1 = body[:, 2].min(), body[:, 2].max()
+    by = float(np.median(body[:, 1]))
+    # Rumpfradius: Knie nur ausserhalb davon suchen, sonst greift der hohe Hinterleib als Knie
+    rb = float(np.percentile(np.hypot(body[:, 0] - c[0], body[:, 2] - c[1]), 60))
+    bones = []
+
+    def add(name, parent, head, tail_, role):
+        bones.append([name, parent, [float(x) for x in head], [float(x) for x in tail_], role])
+        return len(bones) - 1
+    hips = add("hips", -1, (c[0], by, z0 + 0.25 * (z1 - z0)), (c[0], by, c[1]), "spine")
+    chest = add("chest", hips, (c[0], by, c[1]), (c[0], by, z1 - 0.12 * (z1 - z0)), "spine")
+    front = P[P[:, 2] > z1 - 0.15 * (z1 - z0)]
+    hy = float(np.median(front[:, 1])) if len(front) else by
+    add("head", chest, (c[0], hy, z1 - 0.12 * (z1 - z0)), (c[0], hy, z1), "head")
+    # Beine: nach Winkel ordnen, die vordersten claws Beine sind Scheren
+    ang = np.arctan2(C[:, 0] - c[0], C[:, 1] - c[1])
+    order = np.argsort(np.abs(ang))
+    claw_set = set(order[:claws].tolist())
+    names = {}
+    for side in (1, -1):
+        idx = [j for j in range(n) if np.sign(C[j, 0] - c[0]) == side or (C[j, 0] == c[0] and side == 1)]
+        idx.sort(key=lambda j: -C[j, 1])
+        for r, j in enumerate(idx):
+            names[j] = ("L" if side > 0 else "R") + str(r + 1)
+    for j in range(n):
+        f = np.array([C[j, 0], 0.01 * H, C[j, 1]])
+        dxz = C[j] - c
+        dist = float(np.linalg.norm(dxz))
+        d = dxz / max(dist, 1e-6)
+        rel = P[:, [0, 2]] - c
+        along = rel @ d
+        perp = np.abs(rel[:, 0] * d[1] - rel[:, 1] * d[0])
+        sec = (perp < 0.08 * L) & (along > max(0.25 * dist, min(rb, 0.6 * dist))) & (along < 0.75 * dist)
+        if sec.any():
+            q = P[sec]
+            kk = q[q[:, 1].argmax()]
+            knee = np.array([kk[0], kk[1], kk[2]])
+        else:
+            knee = np.array([c[0] + d[0] * 0.5 * dist, 0.7 * H, c[1] + d[1] * 0.5 * dist])
+        root = np.array([c[0] + d[0] * 0.18 * dist, by - 0.05 * H, c[1] + d[1] * 0.18 * dist])
+        ankle = np.array([c[0] + d[0] * 0.88 * dist, 0.2 * H, c[1] + d[1] * 0.88 * dist])
+        sec2 = (perp < 0.06 * L) & (along > 0.8 * dist) & (along < 0.95 * dist)
+        if sec2.any():
+            ankle[1] = float(np.median(P[sec2][:, 1]))
+        nm = names[j]
+        role = ("claw." if j in claw_set else "rleg.") + nm
+        par = chest
+        for i, (a, b) in enumerate(((root, knee), (knee, ankle), (ankle, f))):
+            par = add("leg%s%d" % (nm, i + 1), par, a, b, role)
+    return bones
+
+
+def rig_wings(P, H, bones, z_c, y_c):
+    """Fluegel an einen vorhandenen Rumpf haengen: je Seite zwei Glieder von der Schulter zur Fluegelmitte und zur
+    Spitze (weitester Punkt oberhalb des Rumpfs auf dieser Seite)."""
+    def add(name, parent, head, tail_, role):
+        bones.append([name, parent, [float(x) for x in head], [float(x) for x in tail_], role])
+        return len(bones) - 1
+    by = {b[0]: i for i, b in enumerate(bones)}
+    par0 = by.get("chest", by.get("spine", 0))
+    body = P[(P[:, 1] > 0.3 * H) & (np.abs(P[:, 2] - z_c) < 0.15 * np.ptp(P[:, 2]))]
+    hw = float(np.percentile(np.abs(body[:, 0]), 60)) if len(body) else 0.2
+    for sd, sx in (("L", 1), ("R", -1)):
+        w = P[(P[:, 0] * sx > hw * 1.4) & (P[:, 1] > y_c - 0.05 * H)]
+        if len(w) < 30:
+            continue
+        rr = np.hypot(w[:, 0], w[:, 1] - y_c)
+        tip = w[rr.argmax()]
+        root = np.array([sx * hw * 0.8, y_c + 0.05 * H, z_c])
+        mid = (root + tip) / 2
+        near = w[np.linalg.norm(w - mid, axis=1) < 0.15 * H]
+        if len(near):
+            mid = np.array([mid[0], float(near[:, 1].max()), mid[2]])
+        p = add("wing%s1" % sd, par0, root, mid, "wing." + sd)
+        add("wing%s2" % sd, p, mid, tip, "wing." + sd)
+    return bones
+
+
+def rig_flyer(P, H):
+    """Fliegende Bestie (Aasflatterer): Rumpf entlang Z, Kopf vorn, Fluegel seitlich, kurze Beine unten."""
+    z0, z1 = P[:, 2].min(), P[:, 2].max()
+    core = P[np.abs(P[:, 0]) < 0.12 * np.ptp(P[:, 0])]
+    cy = float(np.median(core[:, 1])) if len(core) else 0.5 * H
+    cz = float(np.median(core[:, 2])) if len(core) else 0.0
+    bones = []
+
+    def add(name, parent, head, tail_, role):
+        bones.append([name, parent, [float(x) for x in head], [float(x) for x in tail_], role])
+        return len(bones) - 1
+    hips = add("hips", -1, (0, cy - 0.1 * H, cz - 0.1 * (z1 - z0)), (0, cy, cz), "spine")
+    chest = add("chest", hips, (0, cy, cz), (0, cy + 0.05 * H, cz + 0.15 * (z1 - z0)), "spine")
+    fr = core[core[:, 2] > np.percentile(core[:, 2], 85)] if len(core) else P
+    hy = float(np.median(fr[:, 1]))
+    add("head", chest, (0, cy + 0.05 * H, cz + 0.15 * (z1 - z0)), (0, hy, z1), "head")
+    rig_wings(P, H, bones, cz, cy)
+    low = core[core[:, 1] < np.percentile(core[:, 1], 10)] if len(core) else P
+    for sd, sx in (("BL", 1), ("BR", -1)):
+        a = (sx * 0.04, cy - 0.12 * H, cz - 0.05 * (z1 - z0))
+        b = (sx * 0.05, float(low[:, 1].min()) + 0.02, float(np.median(low[:, 2])))
+        add("leg%s1" % sd, hips, a, b, "foot." + sd)
+    return bones
+
+
 def weights(P, F, bones):
     import bpy
     from mathutils import Vector
@@ -183,6 +309,9 @@ def main():
     ap.add_argument("--tris", type=int, default=9000)
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--kein-schwanz", action="store_true")
+    ap.add_argument("--form", default="vierbeiner", choices=["vierbeiner", "spinne", "krebs", "drache", "flieger"],
+                    help="Skelettform: vierbeiner (Wolf, Schlund), spinne (8 Beine), krebs (8 Beine und 2 Scheren), drache (Vierbeiner mit Fluegeln), flieger (Fledermaus)")
+    ap.add_argument("--beine", type=int, help="Zahl der Beine bei spinne und krebs (sonst 8 bzw. 10)")
     a = ap.parse_args()
     g, parts = load_parts(a.glb)
     tex = M.atlas(g, parts, a.tex)
@@ -200,11 +329,21 @@ def main():
     if len(F) > a.tris * 1.05:
         one = np.zeros((len(P), 1), np.int64)
         P, UV, F, _, _ = M.decimate(P, UV, F, one, np.ones((len(P), 1)), a.tris)
-    bones = rig_for(P, a.height, not a.kein_schwanz)
+    if a.form == "spinne":
+        bones = rig_radial(P, a.height, a.beine or 8)
+    elif a.form == "krebs":
+        bones = rig_radial(P, a.height, a.beine or 10, claws=2)
+    elif a.form == "flieger":
+        bones = rig_flyer(P, a.height)
+    else:
+        bones = rig_for(P, a.height, not a.kein_schwanz)
+        if a.form == "drache":
+            ch = [b for b in bones if b[0] == "chest"][0]
+            rig_wings(P, a.height, bones, ch[2][2], ch[2][1])
     si, sw, miss = weights(P, F, bones)
     N = smooth_normals(P, F)
     head = [b for b in bones if b[4] == "head"][0]
-    meta = {"family": a.family, "archs": [x for x in a.archs.split(",") if x], "height": float(P[:, 1].max()), "headY": float(head[2][1]),
+    meta = {"form": a.form, "family": a.family, "archs": [x for x in a.archs.split(",") if x], "height": float(P[:, 1].max()), "headY": float(head[2][1]),
             "length": float(np.ptp(P[:, 2])), "groups": [[0, 0, int(len(F)) * 3]], "mats": ["skin"], "matNames": ["skin"], "features": {},
             "bones": bones, "textured": True}
     col = np.tile(np.array([255, 0, 0, 255], np.uint8), (len(P), 1))

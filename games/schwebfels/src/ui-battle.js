@@ -11,7 +11,12 @@
   const $ = UI.$;
 
   /* ================= Kampf ================= */
+  // Monsterfiguren der Gegner vorher nachladen (hoechstens einige Sekunden, sonst die gebaute Figur)
   UI.runBattle = function (fight, opts) {
+    const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
+    return UI.loadMonsters(archs, 6000).then(() => runBattle(fight, opts));
+  };
+  function runBattle(fight, opts) {
     return new Promise((resolve) => {
       const S = UI.S;
       const root = $("#battle");
@@ -240,7 +245,7 @@
         };
       }
     });
-  };
+  }
 
   /* ================= Heldenerschaffung ================= */
   let view = null;

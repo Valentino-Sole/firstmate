@@ -202,12 +202,24 @@ Wichtige Regeln der Strecke:
   Der Kopf ist der vorderste Teil oberhalb der Pfoten (bei geduckten Tieren wie dem Schlund reichen die Krallen so weit
   nach vorn wie das Maul). Steht das Tier wie auf einer Konzepttafel schräg, `--turn` mit dem Winkel der Rumpfachse.
 - Monster mit eigener Figur je Monster (Monsterkonzept v06): Dateiname = Monster-ID aus `src/data.js` (etwa
-  `eiskobold.npz`, `bestien/moorschlund.npz` mit `--family moorschlund --archs ""`), gepackt mit
-  `gen_pack.py <ordner> ../../assets/gen-monster.pack --no-auto`. `build.mjs` macht daraus `gen-monster.js`, das Spiel
-  lädt es für jedes Reich im Hintergrund (`UI.loadMonsters`). Menschenartige kommen über `meshy_api.py figur` mit
-  Skelett und `meshy_import.py --no-clips` und kämpfen mit den Heldenbewegungen (Kampfstil und Waffenart je Monster in
-  `RG.MONSTER`, `src/r3d-rigged.js`; Waffe fest im Modell, `links` für linke Hand). `meshy_import.py` holt Knie, die
-  Meshy neben das Bein setzt (Umhang, Fell), vor dem Geraderichten auf die Linie Hüfte-Knöchel.
+  `eiskobold.npz`, `bestien/moorschlund.npz` mit `--family moorschlund --archs ""`). Je Monsterfamilie (`arch`) ein
+  Paket: `gen_pack.py <ordner-der-familie> ../../assets/gen-mon<familie>.pack --no-auto`. `build.mjs` macht daraus
+  `gen-mon<familie>.js`; das Spiel lädt eine Familie erst, wenn sie gebraucht wird (`UI.loadMonsterArch`: Aufträge der
+  Taverne, vor jedem Kampf, Figurenprobe) und wartet dabei auf Farb- und Reliefbild der Bestien, sonst stünden sie im
+  ersten Bild schwarz da. Menschenartige kommen über `meshy_api.py figur` mit Skelett und `meshy_import.py --no-clips`
+  und kämpfen mit den Heldenbewegungen (Kampfstil, Waffenart, Spielwaffe `gear`, Waffengröße `wscale` und Geschlecht je
+  Monster in `RG.MONSTER`, `src/r3d-rigged.js`; Waffe sonst fest im Modell, `links` für linke Hand; Golems, Trolle und
+  Baumhirten mit steifem Hals; Waffen wachsen mit der Größe des Monsters). Reparaturen in `meshy_import.py`: Knie,
+  die Meshy neben das Bein setzt (Umhang, Fell), kommen vor dem Geraderichten auf die Linie Hüfte-Knöchel
+  (`KEIN_KNIE=1` schaltet ab); ein stark vorgebeugter Rücken wird zwischen Rücken und Hals aufgerichtet (nur über 25
+  Grad, `KEIN_AUFRICHTEN=1` schaltet ab). Liefert Meshy ein falsches Skelett (Hüfte über dem Hals) oder scheitert das
+  Rigging („Pose estimation failed“), gibt `python auto_rig.py <model.glb> <rigged.glb>` (Blender) ein eigenes
+  24-Knochen-Skelett mit Meshys Knochennamen; danach wie ein Meshy-Rig weiter. Eine Waffe, an der das Rigging
+  scheitert, vorher abschneiden und die Spielwaffe über `gear` geben.
+  Tiere: `from_glb.py --form vierbeiner|spinne|krebs|drache|flieger` (Spinnen 8 Beine strahlenförmig, Krebse 8 Beine
+  und 2 Scheren, Drachen Vierbeiner mit Flügeln, Flieger mit Flügeln und kurzen Beinen; `--beine` ändert die Zahl).
+  Im Spiel bewegen sie sich mit `poseRadial`, `poseQuad` mit Flügelschlag und `poseFlyer` (`src/r3d-beasts.js`).
+  `--height` setzt die Größe (Drachen 1,7, Spinnen 1,3, sonst 1,15).
 - Waffen und Schilde: `python weapon.py <aus>/waffen/axt_bart.npz axt.glb --base axt` legt den Griffpunkt in den
   Ursprung, Klinge oder Schaft entlang +Y und Schneide oder Axtblatt entlang X, wie bei den gebauten Waffen. Das
   Griffende erkennt es an der breitesten Stelle (Parierstange nahe am Griff, Axt- oder Hammerkopf weit davon); sitzt

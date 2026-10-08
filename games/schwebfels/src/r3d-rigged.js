@@ -46,7 +46,8 @@
     const A = m.arch;
     switch (action) {
       case "idle":
-        return A === "magier" ? ["Idle", "Combat_Stance", "Idle_02"] : ["Combat_Stance", "Idle", "Idle_02"];
+        // Monster stehen ruhig (der Kampfstand der Helden ist ein Schwertstand und verdreht grosse Koerper)
+        return A === "magier" || m.monArch ? ["Idle", "Combat_Stance", "Idle_02"] : ["Combat_Stance", "Idle", "Idle_02"];
       case "walk":
         return ["Walk_Fight_Forward", "Casual_Walk", "Walking_Woman", "Walk", "Walking"];
       case "attack":
@@ -821,9 +822,10 @@
     return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
   }
 
-  let QH = null, QW = null, QU = null;
+  let QH = null, QW = null, QU = null, QI = null;
   function Player(model, mesh, key, E, gender) {
     if (!QH) {
+      QI = new T.Quaternion();
       QH = new T.Quaternion();
       QW = new T.Quaternion();
       QU = new T.Quaternion();
@@ -967,6 +969,8 @@
       this.pending = null;
     }
     this.mixer.update(dt);
+    // steife Knochen (Kopf und Hals grosser Monster): Bewegung der Heldenbewegungen nur zum kleinen Teil uebernehmen
+    if (this.stiff) for (const b of this.stiff) b.quaternion.slerp(QI, 0.85);
     this.fixStaff();
     // Sitzen: Huefte auf Bankhoehe wie bei den alten Figuren (Huefte 0,5 ueber dem Boden)
     const P = m.parts;
@@ -1065,6 +1069,7 @@
     const model = R.makeModel(root, parts, "hero");
     model.cls = clsId;
     model.arch = C.arch;
+    model.monArch = desc.monArch || null;
     model.realm = desc.realmDef ? null : desc.realm || C.realm;
     const wpn = gear.waffe;
     model.dual = !!(wpn && ["dolch", "sichel", "kurzschwert"].indexOf(wpn.base) >= 0);
@@ -1084,13 +1089,57 @@
      Steht die Monster-ID im Figurenpaket (meshy_import.py, gen_pack.py --no-auto), nimmt das Monster diese Figur statt
      der gebauten: Meshy-Skelett und dieselben aufgenommenen Bewegungen wie die Helden. Die Waffe ist Teil des Modells;
      RG.MONSTER legt je Monster Kampfstil (Klasse) und Waffenart fuer die Bewegungswahl fest. */
-  RG.MONSTER = { eiskobold: { cls: "nebelschleicher", weapon: "links" } };
+  // cls: Kampfstil der Bewegungswahl (Idle, Spezialangriff), weapon: Waffenart des Angriffs (links = Waffe in der
+  // linken Hand), dual: Krallen oder zwei Klingen (Kombination statt Einzelschlag)
+  RG.MONSTER = {
+    eiskobold: { cls: "nebelschleicher", weapon: "links" },
+    nachtgoblin: { cls: "nebelschleicher", weapon: "schwert" },
+    knochenlaeufer: { cls: "nebelschleicher", dual: true },
+    knochenfuerst: { cls: "runenwirker", weapon: "hammer" },
+    draugling: { cls: "sturmhuene", weapon: "axt", gear: "axt" },
+    draugrfuerst: { cls: "sturmhuene", weapon: "schwert", gear: "schwert" },
+    hohlkultist: { cls: "runenwirker", weapon: "hammer" },
+    blutkultist: { cls: "sturmhuene", weapon: "schwert", gear: "schwert" },
+    runenhexe: { cls: "runenwirker", weapon: "hammer", gender: "w" },
+    nebeldruide: { cls: "runenwirker", weapon: "hammer" },
+    lehmgolem: { cls: "sturmhuene", dual: true },
+    felsgolem: { cls: "sturmhuene", dual: true },
+    eisengolem: { cls: "sturmhuene", dual: true },
+    obsidiangolem: { cls: "sturmhuene", weapon: "axt" },
+    reifgolem: { cls: "sturmhuene", dual: true },
+    sumpftroll: { cls: "sturmhuene", weapon: "hammer" },
+    bergtroll: { cls: "sturmhuene", weapon: "hammer", gear: "hammer", wscale: 1.6 },
+    grabritter: { cls: "sturmhuene", weapon: "schwert", shield: true, gear: "schwert" },
+    todesritter: { cls: "sturmhuene", weapon: "schwert", gear: "schwert" },
+    dornenhirte: { cls: "sturmhuene", weapon: "hammer" },
+    moderhirte: { cls: "sturmhuene", weapon: "hammer" },
+    sporling: { cls: "nebelschleicher", dual: true },
+    sporenschrecken: { cls: "nebelschleicher", dual: true },
+    giftmorchel: { cls: "sturmhuene", weapon: "hammer" },
+    fahlerschemen: { cls: "runenwirker", dual: true },
+    irrlichtschemen: { cls: "runenwirker", dual: true },
+    leerenschemen: { cls: "runenwirker", dual: true },
+  };
   RG.buildMonster = function (m, key) {
     const st = RG.MONSTER[key] || {};
-    const model = RG.build({ cls: st.cls || "sturmhuene", gender: st.gender || "m", gear: {}, genGear: [], noRigPieces: true, realm: m.realm }, key);
+    // gear: Waffe aus dem Spiel in die Faust, wenn das Modell ohne Waffe kam (Meshy laesst sie in der A-Haltung oft weg)
+    const it = (b) => ({ base: b, variant: 0, rarity: m.boss ? "episch" : "selten", vis: { f: b + ".0", c: m.realm || "midgard", o: 0, v: 1 } });
+    const gear = st.gear ? { waffe: it(st.gear) } : {};
+    const model = RG.build({ cls: st.cls || "sturmhuene", gender: st.gender || "m", gear, genGear: [], noRigPieces: true, realm: m.realm, monArch: m.arch }, key);
     // Bewegungswahl wie mit dieser Waffe, ohne sichtbare angehaengte Waffe
-    model.weaponBase = st.weapon || "axt";
+    model.weaponBase = st.dual ? null : st.weapon || "axt";
+    model.dual = !!st.dual;
+    model.shield = !!st.shield;
     model.monArch = m.arch;
+    // Waffe aus dem Spiel an grossen Monstern (Troll, Ritter) im Verhaeltnis zur Groesse
+    const big = Math.max(1, model.height / 2.05);
+    // grosse Monster tragen groessere Waffen; wscale vergroessert eine Waffe, die zum Konzept zu klein wirkt (Steinhammer)
+    for (const w of [model.parts.weapon, model.parts.weapon2]) if (w && (big > 1.05 || st.wscale)) w.scale.multiplyScalar(big * (st.wscale || 1));
+    // grosse Koerper mit kleinem Kopf (Golem, Troll, Baumhirte): Kopf und Hals ruhig halten
+    if (st.stiff || { golem: 1, troll: 1, baum: 1 }[m.arch]) {
+      const sk = model.parts.mesh.skeleton.bones;
+      model.parts.clips.stiff = ["neck", "Head", "head_end", "headfront"].map((n) => sk.find((b) => b.name === n)).filter(Boolean);
+    }
     model.ranged = SB.data.ARCH_TYPE[m.arch] === "verstand";
     model.projColor = m.accent || model.projColor;
     if (m.boss) {
