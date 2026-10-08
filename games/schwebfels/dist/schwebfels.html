@@ -16138,6 +16138,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     midgard: { sky: "#d4e2ff", ground: "#4a5570", hemi: 1.25, sun: "#dfe9ff", sunI: 2.0, sunP: [-4, 9, 5], front: "#f2f6ff", frontI: 1.15, warm: ["#ff9a3d", [6.5, 1.4, -1.5], 9], fog: "#4a5a7a", nightDim: 0.8 },
     // Mondhain: silbernes Mondlicht von hinten, warmes Laternenlicht von vorn
     hibernia: { sky: "#cdd6ff", ground: "#3c3a2c", hemi: 1.15, sun: "#d4dcff", sunI: 2.0, sunP: [3, 9, -4], front: "#ffe2b8", frontI: 1.25, fog: "#2c3550", nightDim: 0.5 },
+    // Ring der Reiche: warme Nachmittagssonne von rechts, Feuerschalen an den Seiten
+    arena: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd8a0", sunI: 2.5, sunP: [6, 8, 3], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1 },
+    // Verliese liegen unter der Erde oder im Sturm: keine Nacht, Licht in der Farbe des Ortes
+    pilzgrotte: { sky: "#cfeec0", ground: "#2f3a24", hemi: 1.15, sun: "#d8ffc0", sunI: 1.7, sunP: [-3, 9, 4], front: "#f0ffe0", frontI: 1.15, warm: ["#ffc35a", [6, 1.6, -2], 6], fog: "#2c3a28", nightDim: 0 },
+    glockenstadt: { sky: "#cfdcf0", ground: "#3a4250", hemi: 1.2, sun: "#dfe8ff", sunI: 1.9, sunP: [4, 9, -3], front: "#eef2ff", frontI: 1.15, fog: "#5a6a80", nightDim: 0 },
+    rostwerk: { sky: "#ffd8b8", ground: "#3a2a20", hemi: 1.05, sun: "#ffc890", sunI: 1.8, sunP: [-5, 7, 3], front: "#fff0e0", frontI: 1.1, warm: ["#ff7a2a", [-6, 1.2, -1], 12], fog: "#3a2a20", nightDim: 0 },
+    frostspitzen: { sky: "#e0ecff", ground: "#5a6a80", hemi: 1.3, sun: "#f4f8ff", sunI: 2.3, sunP: [-4, 9, 4], front: "#f2f6ff", frontI: 1.1, fog: "#b8c8e0", nightDim: 0 },
+    laternengruft: { sky: "#ffe8c0", ground: "#3a3020", hemi: 1.1, sun: "#ffd890", sunI: 1.8, sunP: [0, 9, 2], front: "#ffe8c8", frontI: 1.2, fog: "#3a3020", nightDim: 0 },
+    sturmkern: { sky: "#d8d0ff", ground: "#2a2440", hemi: 1.15, sun: "#d8ccff", sunI: 2.0, sunP: [3, 9, 2], front: "#eee8ff", frontI: 1.15, fog: "#3a3060", nightDim: 0 },
   };
   function backdrop(scene, url, night) {
     const st = { tex: null, iw: 1, ih: 1 };
@@ -16218,9 +16227,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const rng = R.rng(setting.length * 17 + 3);
     // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
     const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
-    // Gemalte Kampfkulisse des Reiches (Kampfkulissen v07 des Kapitaens, kulissen.js neben der Seite): Bildhintergrund
-    // mit den 3D-Figuren davor; ohne Bild die gebaute Insel
-    const KUL = TH && globalThis.SB_KULISSEN ? globalThis.SB_KULISSEN[TH.id] : null;
+    // Gemalte Kampfkulisse (kulissen.js neben der Seite): fuer Auftraege und Chronik das Bild des Reiches (Kampfkulissen v07
+    // des Kapitaens), fuer die Arena und jedes Verlies ein eigenes; Bildhintergrund mit den 3D-Figuren davor, ohne Bild
+    // die gebaute Insel
+    const KK = TH ? TH.id : setting === "arena" ? "arena" : setting === "dungeon" ? opts.dungeon : null;
+    const KUL = KK && globalThis.SB_KULISSEN ? globalThis.SB_KULISSEN[KK] : null;
+    const KL = KUL_LIGHT[KK] || KUL_LIGHT.albion;
     const sky = KUL ? null : skyDome();
     if (sky) scene.add(sky);
     scene.fog = new T.Fog("#22283a", 22, 90);
@@ -16235,18 +16247,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const N = nightMats();
     const info = R.dayInfo(setting === "dungeon" ? 0.02 : opts.dayTime != null ? opts.dayTime : S.t);
     const P = palette(info, TH ? TH.sky : null);
-    if (setting === "dungeon") {
-      const tint = col(opts.tint || "#8f7cff");
-      sky.userData.recolor(col("#05040a"), tint.clone().multiplyScalar(0.18), col("#020205"));
-      scene.fog.color.copy(tint.clone().multiplyScalar(0.12));
-      hemi.color.copy(tint.clone().lerp(col("#ffffff"), 0.5));
-      hemi.groundColor.set("#0a0810");
-      hemi.intensity = 0.55;
-      sun.color.copy(tint.clone().lerp(col("#ffffff"), 0.4));
-      sun.intensity = 0.9;
-    } else if (KUL) {
+    if (KUL) {
       // Licht passend zum Gemaelde (Richtung und Farbe der Bildbeleuchtung), nachts etwas gedaempft
-      const L = KUL_LIGHT[TH.id] || KUL_LIGHT.albion;
+      const L = KL;
       const dim = 1 - 0.25 * info.night * L.nightDim;
       scene.fog.color.set(L.fog);
       hemi.color.set(L.sky);
@@ -16262,6 +16265,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         wl.position.set(...L.warm[1]);
         scene.add(wl);
       }
+    } else if (setting === "dungeon") {
+      const tint = col(opts.tint || "#8f7cff");
+      sky.userData.recolor(col("#05040a"), tint.clone().multiplyScalar(0.18), col("#020205"));
+      scene.fog.color.copy(tint.clone().multiplyScalar(0.12));
+      hemi.color.copy(tint.clone().lerp(col("#ffffff"), 0.5));
+      hemi.groundColor.set("#0a0810");
+      hemi.intensity = 0.55;
+      sun.color.copy(tint.clone().lerp(col("#ffffff"), 0.4));
+      sun.intensity = 0.9;
     } else {
       sky.userData.recolor(P.top, P.bot, col("#0a0d18").lerp(P.fog, 0.4));
       scene.fog.color.copy(P.fog);
@@ -16277,7 +16289,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     let stars = null;
     let aur = null;
     let bg = null;
-    if (KUL) bg = backdrop(scene, KUL, info.night * (KUL_LIGHT[TH.id] || KUL_LIGHT.albion).nightDim);
+    if (KUL) bg = backdrop(scene, KUL, info.night * KL.nightDim);
     else {
       stars = starField(rng, 500);
       stars.material.opacity = setting === "dungeon" ? 0 : Math.max(0, info.night - 0.2);
@@ -16387,7 +16399,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       scene.add(weather);
     }
     // Gluehwuermchen und Nebelfetzen gehoeren zur gebauten Insel (im Mondhain leuchten wenige)
-    const flies = !KUL || TH.id === "hibernia" ? fireflies(rng, KUL ? 18 : 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a") : null;
+    const flies = !KUL || KK === "hibernia" || KK === "pilzgrotte" ? fireflies(rng, KUL ? 18 : 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a") : null;
     if (flies) scene.add(flies);
     const wisps = KUL ? null : mistWisps(rng, 8, 9, 0.2);
     if (wisps) scene.add(wisps);
@@ -20252,7 +20264,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const rew = E.resolveDungeon(s, res.fight);
     UI.saveNow();
     SB.audio.play("roar");
-    await UI.runBattle(res.fight, { setting: "dungeon", tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: D.DUNGEONS[d].id, tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
     UI.refresh();
   };
 
@@ -20974,6 +20986,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           battle = SB.R3D.createBattle(stage, {
             setting: opts.setting,
             tint: opts.tint,
+            dungeon: opts.dungeon,
             dayTime: opts.dayTime != null ? opts.dayTime : SB.R3D.dayTime(S.settings.dayCycle || "zyklus"),
             realm: S.realm,
             left: UI.fighterDesc(hero),
