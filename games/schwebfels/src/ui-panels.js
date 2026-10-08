@@ -452,8 +452,10 @@
       else if (s.story.next > now) h += '<div class="say">Du musst dich nach deiner Niederlage erst sammeln: <b class="num" data-until="' + s.story.next + '"></b></div>';
       const hero = E.heroFighter(s, now);
       h += '<div class="chapters">';
+      const archs = [];
       for (const ch of E.storyChapters(s)) {
         const foes = ch.foes.map((f) => (f.mon ? Object.assign({}, E.monById(f.mon), { boss: f.boss, final: f.final }) : f));
+        if (ch.done || ch.available) for (const f of foes) archs.push(f.arch);
         let status = "";
         if (ch.done) status = '<span class="tag">Abgeschlossen</span>';
         else if (ch.available) {
@@ -467,6 +469,8 @@
           '<div class="foot">' + status + "</div></div>";
       }
       h += "</div>";
+      // Figuren der sichtbaren Gegner nachladen (die Bilder erneuern sich danach)
+      UI.loadMonsters(archs);
       return h;
     },
   };
@@ -571,6 +575,7 @@
       const busy = E.busy(s, now);
       const hero = E.heroFighter(s, now);
       const foes = E.nightHuntPreview(s, now);
+      UI.loadMonsters(foes.map((f) => f.arch));
       const c = estimate(hero, foes, "nacht" + s.daily.day + s.daily.nightHunts);
       h +=
         '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
@@ -676,12 +681,14 @@
           pic = I.ui("tiefen");
           info = '<div class="muted small">Öffnet sich ab Stufe ' + dg.unlock + (d > 0 ? " und nach dem ersten Boss des vorigen Dungeons" : "") + ".</div>";
         } else if (st.done) {
+          UI.loadMonsters([dg.bosses[7].arch]);
           pic = UI.portrait(UI.monDesc(dg.bosses[7], true, true), 128);
           info = '<div class="small delta-up">Gesäubert! Alle acht Bosse besiegt.</div>';
         } else {
           const b = E.bossFor(d, st.cleared);
           const foe = E.monsterFighter(b.mon, b.L, b.power, { boss: true, final: b.final });
           const c = estimate(hero, [foe], b.mon.id);
+          UI.loadMonsters([b.mon.arch]);
           pic = UI.portrait(UI.monDesc(b.mon, true, b.final), 128);
           info = '<div class="small">Boss ' + (st.cleared + 1) + "/8: <b>" + esc(b.mon.name) + "</b> · Stufe " + b.L + "</div>" + chanceTxt(c);
           btn = '<button class="btn" data-act="dungeonFight" data-d="' + d + '"' + (busy || s.dungeons.next > now ? " disabled" : "") + ">Angreifen</button>";

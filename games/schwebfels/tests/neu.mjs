@@ -115,13 +115,23 @@ if (hasMon) {
       for (let i = 0; i < 10; i++) f.update(1 / 30);
       out[mon.id] = f.parts.clips && f.parts.clips.cur ? "skelett" : f.parts.fam ? "bestie:" + f.parts.fam : "alt";
     }
-    return { ok, out, ready: Object.keys(SB.ui.monReady || {}).length };
+    // Gegner ohne eigenen Eintrag (Chronik, Verliese, Nachtjagd) leihen sich die Figur eines Monsters ihrer Familie
+    const others = [];
+    for (const d of SB.data.DUNGEONS) d.bosses.forEach((x) => others.push(Object.assign({ boss: true }, x)));
+    for (const r in SB.data.NIGHT_FOES) for (const x of SB.data.NIGHT_FOES[r]) others.push(x);
+    const old = [];
+    for (const f of others) {
+      const m = SB.R3D.buildFighter(SB.ui.monDesc(f, f.boss, f.final));
+      if (!(m.parts.clips || m.parts.fam) || !SB.ui.monLook(f)) old.push(f.name);
+    }
+    return { ok, out, ready: Object.keys(SB.ui.monReady || {}).length, others: others.length, old };
   });
+  check(!r.old.length, "Gegner mit alter Figur: " + r.old.join(", "));
   check(r.ok, "Monsterdateien laden nicht");
   const bad = Object.entries(r.out).filter(([id, v]) => v === "alt" || (v.startsWith("bestie:") && v !== "bestie:" + id && !(id === "grauwolf" && v === "bestie:wolf")));
   check(!bad.length, "Monster ohne eigene Figur: " + bad.map(([id, v]) => id + "=" + v).join(", "));
   check(r.out.eiskobold === "skelett", "Eiskobold hat keine eigene Figur mit Bewegungen");
-  console.log("Monsterfiguren:", Object.values(r.out).filter((v) => v === "skelett").length, "mit Skelett,", Object.values(r.out).filter((v) => v.startsWith("bestie")).length, "Bestien,", r.ready, "Familien geladen");
+  console.log("Monsterfiguren:", Object.values(r.out).filter((v) => v === "skelett").length, "mit Skelett,", Object.values(r.out).filter((v) => v.startsWith("bestie")).length, "Bestien,", r.ready, "Familien geladen,", r.others - r.old.length, "von", r.others, "Verlies- und Nachtgegnern mit Meshy-Figur");
 } else console.log("ohne gen-mon*.js: Monsterfiguren nicht geprüft");
 // Gemalte Kampfkulissen (kulissen.js neben der Seite): Auftraege jedes Reiches kaempfen vor dem Gemaelde statt auf der
 // gebauten Insel, die Arena bleibt gebaut

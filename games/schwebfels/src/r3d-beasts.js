@@ -23,6 +23,8 @@
   }
   BE.familyOf = (arch, visual) => (visual && pack()[visual] ? visual : genFamily(arch) || (FAMILY[arch] && pack()[FAMILY[arch]] ? FAMILY[arch] : null));
   BE.has = (arch, visual) => !!BE.familyOf(arch, visual);
+  // eigenes Modell unter genau diesem Schluessel (Monster-ID oder Name eines Endbosses)
+  BE.hasOwn = (key) => !!(key && pack()[key]);
   // erzeugte Bestie (Meshy, mit Textur) statt einer gebauten Familie
   BE.isGen = (arch, visual) => {
     const f = BE.familyOf(arch, visual);
@@ -71,10 +73,12 @@
   // erzeugte Bestie mit eigener Textur: leicht in der Farbe des Gegners getoent, damit Varianten unterscheidbar bleiben
   function texMat(fam, B, m) {
     // eigenes Modell genau dieses Monsters (Monsterkonzept): Farben wie im Konzept, sonst leicht in Gegnerfarbe getoent
-    const own = !!m.visual && fam === m.visual;
-    const key = "tex|" + fam + "|" + (own ? "" : m.color || "");
+    // eine geliehene Figur (Gegner ohne eigene, UI.monLook) nur leicht, damit sie ihr Konzept behaelt
+    const own = !!m.visual && fam === m.visual && !m.borrowed;
+    const amt = own ? 0 : m.borrowed ? 0.3 : 0.45;
+    const key = "tex|" + fam + "|" + (own ? "" : (m.color || "") + amt);
     if (MC[key]) return MC[key];
-    const tint = own ? new T.Color("#ffffff") : new T.Color("#ffffff").lerp(new T.Color(m.color || "#ffffff"), 0.45);
+    const tint = new T.Color("#ffffff").lerp(new T.Color(m.color || "#ffffff"), amt);
     const mat = new T.MeshStandardMaterial({ color: tint, map: SB.assets.texture("beast." + fam, B.tex, { srgb: true }), roughness: 0.8, metalness: 0 });
     if (B.ntex) mat.normalMap = SB.assets.texture("beast." + fam + ".n", B.ntex, { srgb: false });
     return (MC[key] = mat);

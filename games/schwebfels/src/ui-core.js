@@ -67,7 +67,7 @@
   // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
   const MON_LOAD = {};
   UI.monReady = {};
-  const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1 };
+  const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1, steinkreis: 1, mondtor: 1, tiefen: 1 };
   UI.loadMonsterArch = function (arch) {
     if (!UI.use3d || !arch) return Promise.resolve(false);
     if (MON_LOAD[arch]) return MON_LOAD[arch];
@@ -171,12 +171,43 @@
     if (m && m.id && /^(nacht-|story-)/.test(m.id)) return S ? S.realm : null;
     return null;
   };
+  // Gegner ohne Eintrag in D.MONSTERS (Chronik, Verliese, Nachtjagd) tragen ebenfalls eine Meshy-Figur: eine eigene
+  // unter dem Schluessel ihres Namens (Endbosse, etwa "derwurmimeis"), sonst die naechstliegende Figur ihrer Familie,
+  // zuerst nach dem Namen ("Der Dornenhirte" -> dornenhirte), dann nach Farbe und Akzent
+  const slug = (s) => String(s || "").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]/g, "");
+  const rgb = (c) => {
+    const n = parseInt(String(c || "#808080").slice(1, 7), 16) || 0;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const LOOK = {};
+  UI.monLook = function (f) {
+    if (!f || (f.id && SB.engine.monById(f.id))) return null;
+    const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
+    if (key in LOOK) return LOOK[key];
+    const fam = SB.data.MONSTERS.filter((m) => m.arch === f.arch);
+    const nm = slug(f.name);
+    let best = fam.filter((m) => nm.indexOf(slug(m.name)) >= 0).sort((a, b) => slug(b.name).length - slug(a.name).length)[0];
+    if (!best) {
+      const c = rgb(f.color);
+      const a = rgb(f.accent);
+      const d = (m) => {
+        const x = rgb(m.color);
+        const y = rgb(m.accent);
+        let s = 0;
+        for (let i = 0; i < 3; i++) s += (c[i] - x[i]) ** 2 + 0.35 * (a[i] - y[i]) ** 2;
+        return s;
+      };
+      best = fam.slice().sort((p, q) => d(p) - d(q))[0];
+    }
+    return (LOOK[key] = best ? best.id : null);
+  };
+  // visual: eigene Figur (Monster-ID oder Name), look: geliehene Figur, falls es keine eigene gibt
+  const monVisual = (f) => (f.id && SB.engine.monById(f.id) ? f.id : slug(f.name) || f.id);
   UI.fighterDesc = function (f) {
-    // visual: Monster-ID, damit ein Monster mit eigener Figur aus dem Figurenpaket diese bekommt (sonst die Familie)
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: f.id, mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: monVisual(f), look: UI.monLook(f), mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: m.id, mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: monVisual(m), look: UI.monLook(m), mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
     const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';
