@@ -62,6 +62,7 @@
           battle = SB.R3D.createBattle(stage, {
             setting: opts.setting,
             tint: opts.tint,
+            dungeon: opts.dungeon,
             dayTime: opts.dayTime != null ? opts.dayTime : SB.R3D.dayTime(S.settings.dayCycle || "zyklus"),
             realm: S.realm,
             left: UI.fighterDesc(hero),

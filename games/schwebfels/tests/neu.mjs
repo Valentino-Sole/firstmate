@@ -134,27 +134,28 @@ if (hasMon) {
   console.log("Monsterfiguren:", Object.values(r.out).filter((v) => v === "skelett").length, "mit Skelett,", Object.values(r.out).filter((v) => v.startsWith("bestie")).length, "Bestien,", r.ready, "Familien geladen,", r.others - r.old.length, "von", r.others, "Verlies- und Nachtgegnern mit Meshy-Figur");
 } else console.log("ohne gen-mon*.js: Monsterfiguren nicht geprüft");
 // Gemalte Kampfkulissen (kulissen.js neben der Seite): Auftraege jedes Reiches kaempfen vor dem Gemaelde statt auf der
-// gebauten Insel, die Arena bleibt gebaut
+// gebauten Insel, Arena und Verliese vor ihrem eigenen (falls in der Datei)
 const hasKul = existsSync(path.join(path.dirname(page0), "kulissen.js"));
 if (hasKul) {
   const r = await p.evaluate(async () => {
     const ok = await SB.ui.loadKulissen();
     const out = {};
-    for (const [realm, setting] of [["albion", "quest"], ["midgard", "story"], ["hibernia", "quest"], ["midgard", "arena"]]) {
+    for (const [realm, setting, dungeon] of [["albion", "quest"], ["midgard", "story"], ["hibernia", "quest"], ["midgard", "arena"], ["midgard", "dungeon", "rostwerk"]]) {
       const el = document.createElement("div");
       el.style.cssText = "position:fixed;left:0;top:0;width:640px;height:360px";
       document.body.appendChild(el);
-      const b = SB.R3D.createBattle(el, { setting, realm, left: SB.ui.heroDesc(SB.ui.S), right: SB.ui.monDesc(SB.engine.monById("eiskobold")), hp: [10, 10] });
+      const b = SB.R3D.createBattle(el, { setting, realm, dungeon, left: SB.ui.heroDesc(SB.ui.S), right: SB.ui.monDesc(SB.engine.monById("eiskobold")), hp: [10, 10] });
       await new Promise((r) => setTimeout(r, 700));
       out[realm + "-" + setting] = !!(b._scene.background && b._scene.background.isTexture);
       b.dispose();
       el.remove();
     }
-    return { ok, out };
+    return { ok, out, arena: !!globalThis.SB_KULISSEN.arena, rostwerk: !!globalThis.SB_KULISSEN.rostwerk };
   });
   check(r.ok, "Kampfkulissen laden nicht");
   for (const k of ["albion-quest", "midgard-story", "hibernia-quest"]) check(r.out[k], "Kampf " + k + " zeigt die gemalte Kulisse nicht");
-  check(!r.out["midgard-arena"], "Arena zeigt eine Reichskulisse");
+  check(r.out["midgard-arena"] === r.arena, "Arena zeigt " + (r.arena ? "ihre Kulisse nicht" : "eine Kulisse ohne eigenes Bild"));
+  check(r.out["midgard-dungeon"] === r.rostwerk, "Verlies zeigt " + (r.rostwerk ? "seine Kulisse nicht" : "eine Kulisse ohne eigenes Bild"));
 } else console.log("ohne kulissen.js: Kampfkulissen nicht geprüft");
 
 // 3. danach nicht mehr von selbst

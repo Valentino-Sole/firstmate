@@ -7,7 +7,7 @@
 //   GEN_PACK=<datei>  anderes Paket mit erzeugten Figuren einbetten (Standard: assets/gen.pack, falls vorhanden)
 //   INSELN_DIR=<ordner>  Inselbilder <reich>.webp (albion, midgard, hibernia) fuer die gemalten Heimatinseln
 //                     (Standard: assets/inseln, falls vorhanden); ohne Bilder bleibt die 3D-Insel
-//   KULISSEN_DIR=<ordner>  Kampfkulissen <reich>.webp (albion, midgard, hibernia), werden zu kulissen.js neben der Seite
+//   KULISSEN_DIR=<ordner>  Kampfkulissen <ort>.webp (albion, midgard, hibernia, arena, Verlies-IDs), werden zu kulissen.js neben der Seite
 //                     (Standard: assets/kulissen, falls vorhanden); ohne Bilder bleibt die gebaute Kampfinsel
 //   SPLIT=1           Modellpakete nicht in die Seite, sondern als eigene Dateien daneben (dist/packs/*.js); fuer ein
 //                     Artifact mit mehreren Dateien, wenn die Seite sonst ueber 16 MB kaeme (jede Datei hoechstens 16 MB)
@@ -156,7 +156,8 @@ if (Object.keys(kern).length) {
 {
   const kul = {};
   const src = process.env.KULISSEN_DIR ? path.resolve(process.env.KULISSEN_DIR) : path.join(dir, "assets/kulissen");
-  for (const r of ["albion", "midgard", "hibernia"]) {
+  // drei Reiche, Arena und je Verlies eins (Dateiname = Reich, "arena" oder Verlies-ID)
+  for (const r of ["albion", "midgard", "hibernia", "arena", "pilzgrotte", "glockenstadt", "rostwerk", "frostspitzen", "laternengruft", "sturmkern"]) {
     try {
       kul[r] = "data:image/webp;base64," + readFileSync(path.join(src, r + ".webp")).toString("base64");
     } catch (e) {

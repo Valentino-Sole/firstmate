@@ -712,7 +712,7 @@
     const rew = E.resolveDungeon(s, res.fight);
     UI.saveNow();
     SB.audio.play("roar");
-    await UI.runBattle(res.fight, { setting: "dungeon", tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: D.DUNGEONS[d].id, tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
     UI.refresh();
   };
 
