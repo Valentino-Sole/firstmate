@@ -1128,7 +1128,7 @@
     dermoderkoenig: { cls: "sturmhuene", dual: true },
     diewurzeldertiefe: { cls: "sturmhuene", dual: true },
     dergrossekolben: { cls: "sturmhuene", dual: true },
-    dergrossebovist: { cls: "nebelschleicher", dual: true },
+    dergrossebovist: { cls: "sturmhuene", dual: true },
   };
   RG.buildMonster = function (m, key) {
     const st = RG.MONSTER[key] || {};
