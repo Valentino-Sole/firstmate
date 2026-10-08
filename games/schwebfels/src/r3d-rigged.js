@@ -93,15 +93,16 @@
 
   /* ---------- Geometrie, Material, Skelett ---------- */
   const GGEO = {};
-  function geo(key, E, hide, ck) {
+  function geo(key, E, hide, ck, FG) {
     ck = ck || key;
     if (GGEO[ck]) return GGEO[ck];
     const g = new T.BufferGeometry();
     g.setAttribute("position", new T.BufferAttribute(E.pos, 3));
     g.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(E.pos, E.idx), 3));
     g.setAttribute("uv", new T.BufferAttribute(E.uv, 2));
-    g.setAttribute("skinIndex", new T.BufferAttribute(E.skinI, 4));
-    g.setAttribute("skinWeight", new T.BufferAttribute(E.skinW, 4, true));
+    const fs = fingerSkin(FG, E.pos, E.skinI, E.skinW, 255);
+    g.setAttribute("skinIndex", new T.BufferAttribute(fs ? fs.si : E.skinI, 4));
+    g.setAttribute("skinWeight", fs ? new T.BufferAttribute(fs.sw, 4) : new T.BufferAttribute(E.skinW, 4, true));
     let idx = E.idx;
     if (hide) {
       const out = [];
@@ -137,6 +138,193 @@
       bones[i].userData.p0 = bones[i].position.clone();
     });
     return bones;
+  }
+
+  /* ---------- Finger ----------
+     Meshy-Skelette haben keine Fingerknochen: die Haende bleiben in jeder Bewegung so offen wie im Modell, ein Griff
+     steckte mitten in der Hand. Je Hand entstehen hier zwei Fingerglieder aus der Lage der Ecken (Knoechel und
+     Mittelgelenk entlang der Hand). Mit Waffe schliessen sie sich um den Griff, und der Griff sitzt in der Faust.
+     RG.FIST: Beugung beider Glieder im festen Griff (Bogenmass, schon gebeugte Finger werden nur nachgebeugt) und Lage
+     von Knoechel und Mittelgelenk als Anteil der Handlaenge. */
+  RG.FIST = { a1: 1.35, a2: 1.45, k1: 0.5, k2: 0.73 };
+  const FING = {};
+  function fingers(key, E) {
+    if (FING[key] !== undefined) return FING[key];
+    const V = (a) => new T.Vector3(a[0], a[1], a[2]);
+    const S = E.skel;
+    const r = S.rest;
+    const pos = E.pos;
+    const out = {};
+    let next = S.names.length;
+    for (const sd of ["R", "L"]) {
+      const hb = E.map["hand." + sd];
+      const g = E.sockets && E.sockets["grip" + sd];
+      const arm = E.sockets && E.sockets["arm" + sd];
+      if (hb == null || !g || !arm || !arm.dorsal || E.map["fing1." + sd] !== hb) continue;
+      const H = new T.Vector3(r[hb * 3], r[hb * 3 + 1], r[hb * 3 + 2]);
+      const ax = V(g.axis).normalize();
+      const fa = V(g.along);
+      fa.addScaledVector(ax, -fa.dot(ax)).normalize();
+      const d0 = V(arm.dorsal);
+      d0.addScaledVector(ax, -d0.dot(ax)).normalize();
+      // Ecken der Hand (ueberwiegend am Handknochen)
+      const vs = [];
+      for (let i = 0; i < pos.length / 3; i++) {
+        let w = 0;
+        for (let k = 0; k < 4; k++) if (E.skinI[i * 4 + k] === hb) w += E.skinW[i * 4 + k];
+        if (w >= 128) vs.push(new T.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).sub(H));
+      }
+      if (vs.length < 30) continue;
+      let tmax = 0;
+      for (const q of vs) tmax = Math.max(tmax, q.dot(fa));
+      // Handrichtung: vom Handgelenk zur Mitte der Knoechel (haengende Haende zeigen schraeg nach unten)
+      const c = new T.Vector3();
+      let n = 0;
+      for (const q of vs) {
+        const t = q.dot(fa);
+        if (t > 0.38 * tmax && t < 0.56 * tmax) {
+          c.add(q);
+          n++;
+        }
+      }
+      const h = n ? c.divideScalar(n) : fa.clone();
+      h.addScaledVector(ax, -h.dot(ax)).normalize();
+      if (h.dot(fa) < 0.6) h.copy(fa);
+      const d = new T.Vector3().crossVectors(ax, h).normalize();
+      if (d.dot(d0) < 0) d.negate();
+      const ts = vs.map((q) => q.dot(h)).sort((a, b) => a - b);
+      const L = ts[Math.floor(ts.length * 0.98)];
+      const F = RG.FIST;
+      // Gelenk in der Mitte der Handdicke an dieser Stelle
+      const joint = (k) => {
+        let lo = 1e9;
+        let hi = -1e9;
+        for (const q of vs) {
+          if (Math.abs(q.dot(h) - k * L) > 0.05 * L) continue;
+          const nn = q.dot(d);
+          lo = Math.min(lo, nn);
+          hi = Math.max(hi, nn);
+        }
+        const p = H.clone().addScaledVector(h, k * L);
+        return hi > lo ? { p: p.addScaledVector(d, (lo + hi) / 2), th: hi - lo } : { p, th: 0.1 * L };
+      };
+      const j1 = joint(F.k1);
+      const j2 = joint(F.k2);
+      // vorhandene Beugung (zur Handflaeche positiv): Glied 1 gegen die Hand, Glied 2 gegen Glied 1
+      const ang = (v) => Math.atan2(-v.dot(d), v.dot(h));
+      const tip = new T.Vector3();
+      n = 0;
+      for (const q of vs) {
+        if (q.dot(h) > (F.k2 + 0.12) * L) {
+          tip.add(q);
+          n++;
+        }
+      }
+      const b1 = ang(j2.p.clone().sub(j1.p));
+      const b2 = n ? ang(tip.divideScalar(n).add(H).sub(j2.p)) - b1 : 0;
+      // Drehsinn: Fingerspitzen zur Handflaeche (weg vom Handruecken)
+      const sgn = new T.Vector3().crossVectors(ax, h).dot(d) > 0 ? -1 : 1;
+      out[sd] = {
+        hb,
+        i1: next,
+        i2: next + 1,
+        H,
+        h,
+        d,
+        ax,
+        sgn,
+        L,
+        k1: F.k1 * L,
+        k2: F.k2 * L,
+        b: 0.06 * L,
+        p1: j1.p,
+        p2: j2.p,
+        th: j1.th,
+        a1: Math.max(0.15, F.a1 - Math.max(0, b1)),
+        a2: Math.max(0.15, F.a2 - Math.max(0, b2)),
+      };
+      next += 2;
+    }
+    for (const sd in out) {
+      // Mitte der Faust bei vollem Griff: Gelenkpunkte und Spitze der gebeugten Finger umschliessen sie
+      const f = out[sd];
+      const q1 = new T.Quaternion().setFromAxisAngle(f.ax, f.sgn * f.a1);
+      const q2 = new T.Quaternion().setFromAxisAngle(f.ax, f.sgn * f.a2);
+      const p2 = f.p2.clone().sub(f.p1).applyQuaternion(q1).add(f.p1);
+      const tipD = f.h.clone().applyQuaternion(q2).applyQuaternion(q1);
+      const tip = p2.clone().addScaledVector(tipD, f.L - f.k2);
+      // Handflaeche unter dem Knoechel
+      const palm = f.p1.clone().addScaledVector(f.d, -f.th * 0.5).addScaledVector(f.h, -0.12 * f.L);
+      f.fist = palm.add(p2).add(tip).divideScalar(3);
+    }
+    return (FING[key] = Object.keys(out).length ? out : null);
+  }
+  // Gewichte der Handecken auf die Fingerglieder verteilen (Knochen wie in fingers, Gewichte als 0..1 oder 0..255)
+  function fingerSkin(FG, pos, si, sw, full) {
+    if (!FG) return null;
+    const n = pos.length / 3;
+    const SI = new Uint16Array(si.length);
+    const SW = new Float32Array(sw.length);
+    const q = new T.Vector3();
+    const sm = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+    const hands = new Set(Object.keys(FG).map((sd) => FG[sd].hb));
+    for (let i = 0; i < n; i++) {
+      let any = false;
+      for (let k = 0; k < 4; k++) if (sw[i * 4 + k] > 0 && hands.has(si[i * 4 + k])) any = true;
+      if (!any) {
+        // Ecke ohne Hand: Gewichte unveraendert uebernehmen
+        for (let k = 0; k < 4; k++) {
+          SI[i * 4 + k] = si[i * 4 + k];
+          SW[i * 4 + k] = sw[i * 4 + k] / full;
+        }
+        continue;
+      }
+      const acc = {};
+      for (let k = 0; k < 4; k++) {
+        const w = sw[i * 4 + k] / full;
+        if (w > 0) acc[si[i * 4 + k]] = (acc[si[i * 4 + k]] || 0) + w;
+      }
+      for (const sd in FG) {
+        const f = FG[sd];
+        const wh = acc[f.hb];
+        if (!wh) continue;
+        q.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).sub(f.H);
+        const t = q.dot(f.h);
+        const a1 = sm((t - f.k1 + f.b) / (2 * f.b));
+        if (!a1) continue;
+        const a2 = sm((t - f.k2 + f.b) / (2 * f.b));
+        acc[f.hb] = wh * (1 - a1);
+        acc[f.i1] = wh * a1 * (1 - a2);
+        acc[f.i2] = wh * a1 * a2;
+      }
+      const top = Object.keys(acc)
+        .map((b) => [+b, acc[b]])
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4);
+      const sum = top.reduce((s, x) => s + x[1], 0) || 1;
+      top.forEach(([b, w], k) => {
+        SI[i * 4 + k] = b;
+        SW[i * 4 + k] = w / sum;
+      });
+    }
+    return { si: SI, sw: SW };
+  }
+  // zwei Fingerglieder je Hand an das Skelett haengen (Reihenfolge wie in fingers)
+  function addFingers(FG, bones) {
+    for (const sd of ["R", "L"]) {
+      const f = FG && FG[sd];
+      if (!f) continue;
+      const b1 = new T.Bone();
+      const b2 = new T.Bone();
+      b1.name = "fingers1." + sd;
+      b2.name = "fingers2." + sd;
+      b1.position.copy(f.p1).sub(f.H);
+      b2.position.copy(f.p2).sub(f.p1);
+      bones[f.hb].add(b1);
+      b1.add(b2);
+      bones[f.i1] = b1;
+      bones[f.i2] = b2;
+    }
   }
 
   // Kopfmass fuer feste Kopfteile (Helme): wie R.gear.fitOf, aber aus dem Netz der Figur
@@ -335,8 +523,10 @@
     geo.setAttribute("position", new T.BufferAttribute(pos, 3));
     geo.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(pos, Pc.idx), 3));
     geo.setAttribute("uv", new T.BufferAttribute(Pc.uv, 2));
-    geo.setAttribute("skinIndex", new T.BufferAttribute(si, 4));
-    geo.setAttribute("skinWeight", new T.BufferAttribute(sw, 4));
+    // Handschuhe beugen sich mit den Fingern
+    const fs = fingerSkin(fingers(key, E), pos, si, sw, 1);
+    geo.setAttribute("skinIndex", new T.BufferAttribute(fs ? fs.si : si, 4));
+    geo.setAttribute("skinWeight", new T.BufferAttribute(fs ? fs.sw : sw, 4));
     geo.setIndex(new T.BufferAttribute(Pc.idx, 1));
     return (PGEO[ck] = geo);
   }
@@ -731,18 +921,33 @@
     this.cur = { action: "idle", act, kind: "loop", c };
     this.mixer.update(0);
   };
-  // Stab aufrichten: Weltlage zwischen Handdrehung und senkrecht (Richtung der Figur) mischen
+  // Stab aufrichten: Weltlage zwischen Handdrehung und senkrecht (Richtung der Figur) mischen. In der Faust dreht
+  // das Handgelenk den groessten Teil mit (RG.STAFF_WRIST), sonst liefe der Stab neben der Faust statt durch sie.
+  RG.STAFF_WRIST = 0.75;
+  let QP = null, QC = null;
   Player.prototype.fixStaff = function () {
     const W = this.m.parts.weapon;
     const k = W && RG.STAFF[this.m.weaponBase];
     if (!k || !W.parent) return;
+    if (!QP) {
+      QP = new T.Quaternion();
+      QC = new T.Quaternion();
+    }
     if (!W.userData.q0) W.userData.q0 = W.quaternion.clone();
-    W.parent.updateWorldMatrix(true, false);
-    const qh = W.parent.getWorldQuaternion(QH);
+    const hb = W.parent;
+    hb.updateWorldMatrix(true, false);
+    const qh = hb.getWorldQuaternion(QH);
     const qw = QW.copy(qh).multiply(W.userData.q0);
     this.m.obj.getWorldQuaternion(QU);
-    qw.slerp(QU, k);
-    W.quaternion.copy(qh.invert().multiply(qw));
+    const target = QU.slerp(qw, 1 - k);
+    if (this.m.parts.fistR && hb.parent) {
+      // Drehung in Weltlage von der jetzigen Stablage zur Ziellage, ein Teil davon ins Handgelenk
+      const c = QC.copy(target).multiply(qw.invert());
+      c.slerp(QP.identity(), 1 - RG.STAFF_WRIST);
+      qh.premultiply(c);
+      hb.quaternion.copy(hb.parent.getWorldQuaternion(QP).invert().multiply(qh));
+    }
+    W.quaternion.copy(qh.invert().multiply(target));
   };
   Player.prototype.tick = function (dt) {
     const m = this.m;
@@ -784,6 +989,8 @@
     const body = R.grp();
     root.add(body);
     const bones = makeBones(E);
+    const FG = fingers(key, E);
+    addFingers(FG, bones);
     const worn = (desc.genGear || []).filter((p) => E.pieces && E.pieces[p]);
     const masks = worn.map((p) => E.pieces[p].mask).filter(Boolean);
     // Ruestungsteile aus dem gemeinsamen Teil: ausdruecklich genannt oder passend zur getragenen Ausruestung
@@ -793,7 +1000,7 @@
     const gk = key + "|" + worn.concat(rp).join(",");
     const rpHide = rp.length && !GGEO[gk] ? pieceHide(rp, key, E) : null;
     const hide = masks.length || rpHide ? (t) => masks.some((mk) => (mk[t >> 3] >> (t & 7)) & 1) || (rpHide && rpHide(t)) : null;
-    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk), mat(key, E.tex, null, null, E.ntex));
+    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk, FG), mat(key, E.tex, null, null, E.ntex));
     E.skel.parents.forEach((p, i) => p < 0 && mesh.add(bones[i]));
     mesh.updateMatrixWorld(true);
     mesh.bind(new T.Skeleton(bones));
@@ -802,7 +1009,8 @@
     body.add(mesh);
     for (const p of worn) {
       const src = E.pieces[p];
-      const pm = new T.SkinnedMesh(geo(key + "." + p, src), mat(key + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
+      const pg = geo(key + "." + p, src, null, null, src.skinI ? FG : null);
+      const pm = new T.SkinnedMesh(pg, mat(key + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
       pm.bind(mesh.skeleton, mesh.bindMatrix);
       pm.frustumCulled = false;
       pm.castShadow = true;
@@ -838,6 +1046,18 @@
         // kleinere Figuren (Glutzwerg) etwas kleinere Klingen
         w.scale.multiplyScalar(1 + ((rev.scale || 1) - 1) * Math.max(0.5, Math.min(1, (E.top - 1.3) / 0.8)));
       }
+    }
+    // Faust um den Griff: Finger beugen sich (die Bewegungen bewegen keine Finger, die Lage bleibt), die Waffe
+    // wandert aus der Handmitte in die Faust
+    for (const sd in FG || {}) {
+      const f = FG[sd];
+      if (!parts["grip" + sd]) continue;
+      bones[f.i1].quaternion.setFromAxisAngle(f.ax, f.sgn * f.a1);
+      bones[f.i2].quaternion.setFromAxisAngle(f.ax, f.sgn * f.a2);
+      const sp = E.sockets["grip" + sd].p;
+      const dp = f.fist.clone().sub(new T.Vector3(sp[0], sp[1], sp[2]));
+      for (const w of [parts.weapon, parts.weapon2]) if (w && w.parent === bones[f.hb]) w.position.add(dp);
+      parts["fist" + sd] = 1;
     }
     parts.rigPieces = rp;
     const model = R.makeModel(root, parts, "hero");

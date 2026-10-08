@@ -1077,7 +1077,9 @@
       else h += "<li><b>Dein Held " + esc(s.name) + "</b> bekommt die neue Figur, sobald sie geladen ist.</li>";
       h += "<li><b>Gegner aus Midgard</b> (Nordmann und Trollblut) in der Arena und in der Rangliste.</li>";
       h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
-      h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li></ul>";
+      h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li>";
+      if (SB.R3D.beasts && SB.R3D.beasts.has && SB.R3D.beasts.has("wolf")) h += "<li><b>Wölfe</b> (Grauwolf, Frostwolf, Schattenwolf) im Kampf: neues Modell aus Meshy. Er lauert mit tiefem Kopf, galoppiert heran, springt zum Biss, zuckt bei Treffern zurück und heult beim Sieg.</li>";
+      h += "</ul>";
       h += '<div class="section-title">Noch nicht dabei</div><ul class="neu-list muted"><li>Rüstung, Helm und Umhang auf den neuen Figuren: kommt mit der Wechselausrüstung (nächster Schritt). Waffe und Schild sitzen schon in der Hand.</li><li>Neue Figuren für Albion und Hibernia: erst wenn du Midgard abgenommen hast.</li><li>Frostwicht und Glutzwerg als wählbare Völker: dafür brauche ich deine Entscheidung zu ihren Stärken.</li></ul>';
       return h;
     },
@@ -1142,7 +1144,7 @@
     portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
       const gen = (SB.assets.data && SB.assets.data.gen) || {};
-      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
       h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
