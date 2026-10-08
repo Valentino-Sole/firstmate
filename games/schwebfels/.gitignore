@@ -12,3 +12,4 @@ assets/kulissen/
 assets/gen-*.pack
 assets/gen.pack
 dist/gen-*.js
+dist/kulissen.js
