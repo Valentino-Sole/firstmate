@@ -8889,7 +8889,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     derschattenkanzler: { cls: "runenwirker", dual: true },
     derungeschriebene: { cls: "runenwirker", dual: true },
     dienachtkoenigin: { cls: "runenwirker", dual: true, gender: "w" },
-    dieertrunkeneglocke: { cls: "runenwirker", dual: true },
     laternenkoenigewiglicht: { cls: "runenwirker", dual: true },
     dermoderkoenig: { cls: "sturmhuene", dual: true },
     diewurzeldertiefe: { cls: "sturmhuene", dual: true },
@@ -12907,7 +12906,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const P = { beast: true, fam, body, mesh, B: by, bones, meta };
     const model = R.makeModel(root, P, "monster");
     model.arch = m.arch;
-    model.headY = ((meta.headY || 1.4) + (meta.form === "flieger" ? HOVER : 0)) * s;
+    model.headY = ((meta.headY || 1.4) + (meta.form === "flieger" ? HOVER : meta.form === "schweber" ? HOVER_LOW : 0)) * s;
     model.height = (meta.height || 1.6) * s;
     model.ranged = SB.data.ARCH_TYPE[m.arch] === "verstand";
     model.projColor = m.accent || "#ff5a3d";
@@ -13541,11 +13540,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   /* ---------- Fliegende Bestie (from_glb.py --form flieger) ----------
      Schwebt ueber dem Boden, schlaegt mit den Fluegeln, stoesst zum Angriff herab und stuerzt bei der Niederlage. */
   const HOVER = 0.9;
+  // Schwebende ohne Fluegel (from_glb.py --form schweber, etwa die Ertrunkene Glocke) gleiten knapp ueber dem Boden
+  const HOVER_LOW = 0.3;
   function poseFlyer(m, name, u) {
     const P = m.parts;
     const t = m.t;
     if (name === "defeat" && !m.anim) u = 1;
-    let y = HOVER + Math.sin(t * 9 + PI / 2) * 0.06 + Math.sin(t * 1.3) * 0.05;
+    const HV = P.meta.form === "schweber" ? HOVER_LOW : HOVER;
+    let y = HV + Math.sin(t * (HV < HOVER ? 2.2 : 9) + PI / 2) * 0.06 + Math.sin(t * 1.3) * 0.05;
     let z = 0, x = 0, pitch = 0.1, roll = Math.sin(t * 1.7) * 0.06;
     switch (name) {
       case "attack":
@@ -13577,9 +13579,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       case "defeat": {
         // stuerzt ab und bleibt flach mit ausgebreiteten Fluegeln liegen (nicht hochkant auf einer Fluegelspitze)
         const e = ease(u);
-        y = (HOVER + 0.1) * (1 - e);
+        y = (HV + 0.1) * (1 - e);
         roll = 0.15 * e;
         pitch = 0.2 * e;
+        // ohne Fluegel (Glocke): sinkt und kippt auf die Seite, etwas angehoben, damit der Rand nicht im Boden steckt
+        if (HV < HOVER) {
+          roll = 1.3 * e;
+          y += 0.35 * e * (P.meta.length || 1);
+        }
         break;
       }
     }
@@ -13605,10 +13612,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (P.quad === undefined) {
       if (!XAX) XAX = new T.Vector3(1, 0, 0);
       if (!EU) EU = new T.Euler();
-      P.quad = form === "spinne" || form === "krebs" || form === "flieger" ? null : quadRig(P.bones, P.meta);
+      P.quad = form === "spinne" || form === "krebs" || form === "flieger" || form === "schweber" ? null : quadRig(P.bones, P.meta);
       if (P.quad) P.quad.wings = wingRig(P.bones);
       if (form === "spinne" || form === "krebs") P.radial = radialRig(P.bones, P.meta);
-      if (form === "flieger") P.flyer = { by: Object.fromEntries(P.bones.map((b) => [b.name, b])), wings: wingRig(P.bones) };
+      if (form === "flieger" || form === "schweber") P.flyer = { by: Object.fromEntries(P.bones.map((b) => [b.name, b])), wings: wingRig(P.bones) };
     }
     if (P.radial) poseRadial(m, name, u);
     else if (P.flyer) poseFlyer(m, name, u);
@@ -18648,8 +18655,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const G = (UI.use3d && SB.assets.data && SB.assets.data.gen) || {};
     return !!G[race + "-" + (gender === "w" ? "frau" : "mann")];
   };
-  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite)
-  UI.GEN_REALMS = ["midgard"];
+  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite): Midgard (Frostwicht, Glutzwerg), Albion (Albier,
+  // Kreidezwerg) und Hibernia (Sidhe, Moorling); Nordmann und Trollblut stecken in der Seite
+  UI.GEN_REALMS = ["midgard", "albion", "hibernia"];
   const withGen = (d) => {
     if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
@@ -18665,19 +18673,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   const genChanged = () => {
     if (UI.onGen) UI.onGen();
     if (UI.S) UI.refresh();
-    if (UI.panelId === "neu" || UI.panelId === "figurenprobe") UI.renderPanel();
+    if (UI.panelId === "neu" || UI.panelId === "figurenprobe" || UI.panelId === "arena") UI.renderPanel();
   };
   // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
   // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); ohne Datei bleiben die gebauten Monster.
   // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
   const MON_LOAD = {};
+  // Familien, deren Figuren nicht in eine Datei passen (Grenze 16 MB): weitere Dateien gen-mon<familie>2.js
+  const MON_MORE = { drache: ["drache2"] };
   UI.monReady = {};
   const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1, steinkreis: 1, mondtor: 1, tiefen: 1 };
   UI.loadMonsterArch = function (arch) {
     if (!UI.use3d || !arch) return Promise.resolve(false);
     if (MON_LOAD[arch]) return MON_LOAD[arch];
     MON_LOAD[arch] = SB.assets.ready
-      .then(() => SB.assets.loadGen("mon" + arch))
+      .then(() => Promise.all([SB.assets.loadGen("mon" + arch)].concat((MON_MORE[arch] || []).map((x) => SB.assets.loadGen("mon" + x).catch(() => null)))))
       .then(() => SB.R3D.human.preloadGen())
       .then(() => {
         // Farb- und Reliefbilder der Bestien dieser Familie abwarten (sonst stuende sie im ersten Bild schwarz da)
@@ -18734,10 +18744,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     return out;
   };
+  // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet)
+  const GEN_FIG = {};
   UI.loadGenFigures = function (realm) {
     UI.loadMonsters(UI.offerArchs());
     UI.loadKulissen();
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    if (GEN_FIG[realm]) return GEN_FIG[realm];
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {
       if (!Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length) return false;
@@ -18749,7 +18762,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       });
     });
     UI.genStatus.datei = UI.genStatus.datei === "bereit" ? "bereit" : "laedt";
-    return kern
+    return (GEN_FIG[realm] = kern
       .then(() => SB.assets.loadGen(realm))
       .then(() => HU.preloadGen())
       .then(
@@ -18766,7 +18779,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           genChanged();
           return UI.genStatus.kern === "bereit" ? "bereit" : UI.genStatus.datei;
         }
-      );
+      ));
   };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
   UI.foeRealm = function (m) {
@@ -18844,13 +18857,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
   /* ---------- Speichern ---------- */
   let saveTimer = 0;
+  // ohne Helden nichts speichern (etwa „Neuer Held“, solange ein verzoegertes Speichern noch aussteht)
   UI.save = function () {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => SB.store.save(UI.S), 300);
+    saveTimer = setTimeout(() => UI.S && SB.store.save(UI.S), 300);
   };
   UI.saveNow = function () {
     clearTimeout(saveTimer);
-    SB.store.save(UI.S);
+    if (UI.S) SB.store.save(UI.S);
   };
 
   /* ---------- Formatierung ---------- */
@@ -20048,6 +20062,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (busy) h += busyNote();
       else if (s.arena.next > now) h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
       const rivals = E.arenaRivals(s, now, remote);
+      // Heldenkoerper der fremden Reiche nachladen (die Bilder erneuern sich danach einmal)
+      for (const rl of new Set(rivals.map((r) => r.realm).filter(Boolean))) UI.loadGenFigures(rl);
       const hero = E.heroFighter(s, now);
       h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div><div class="cards">';
       rivals.forEach((r) => {
@@ -20648,8 +20664,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
   /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
   const FP = { fig: "nordmann-frau", pose: "", weapon: "axt", near: false, state: "", view: null, el: null, timer: 0 };
-  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
-  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
+  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg", "albier", "kreidezwerg", "sidhe", "moorling"];
+  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg", albier: "Albier", kreidezwerg: "Kreidezwerg", sidhe: "Sidhe", moorling: "Moorling" };
   const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["special", "Spezialangriff"], ["hit", "Treffer"], ["block", "Parade"], ["evade", "Ausweichen"], ["victory", "Jubel"], ["defeat", "Niederlage"]];
   // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
   const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
@@ -20739,7 +20755,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
-      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
+      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Die Figurendateien der Reiche konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
       for (const r of FP_ORDER) {
         for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
           const k = r + "-" + sx;
@@ -20781,9 +20797,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (FP.state === "laden") return;
       FP.state = "laden";
       const mon = UI.loadMonsters(FP_MON().map((x) => x[2]).concat(FP_BOSS().map((b) => b.arch)));
-      SB.assets
-        .loadGen("midgard")
-        .then((g) => mon.then(() => g))
+      // Heldenkoerper aller drei Reiche; fehlt eine Datei, bleiben die uebrigen waehlbar
+      const realms = ["midgard", "albion", "hibernia"].map((r) => SB.assets.loadGen(r).then(() => true, () => false));
+      Promise.all(realms)
+        .then((ok) => {
+          if (!ok.some(Boolean)) throw new Error("keine Figurendatei");
+          return mon.then(() => SB.R3D.human.preloadGen());
+        })
         .then(
           () => {
             FP.state = "ok";
@@ -20932,8 +20952,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   // Figur und Insel)
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
-    const kul = Promise.race([UI.loadKulissen(), new Promise((r) => setTimeout(r, 6000))]);
-    return Promise.all([UI.loadMonsters(archs, 6000), kul]).then(() => runBattle(fight, opts));
+    const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, 6000))]);
+    // Heldenkoerper fremder Reiche (Arena): deren Figurendatei ebenfalls vorher laden
+    const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
+    return Promise.all([UI.loadMonsters(archs, 6000), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
     return new Promise((resolve) => {
