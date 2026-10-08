@@ -114,7 +114,7 @@ const genFiles = [];
 const kernRaces = (process.env.GEN_KERN ?? "nordmann,trollblut").split(",").map((x) => x.trim()).filter(Boolean);
 const kern = {};
 for (const f of readdirSync(path.join(dir, "assets"))) {
-  const m = /^gen-([a-z]+)\.pack$/.exec(f);
+  const m = /^gen-([a-z0-9]+)\.pack$/.exec(f);
   if (!m) continue;
   const buf = readFileSync(path.join(dir, "assets", f));
   const js = "globalThis.SB_GEN_" + m[1].toUpperCase() + '="' + buf.toString("base64") + '";\n';

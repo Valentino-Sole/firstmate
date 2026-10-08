@@ -212,17 +212,29 @@ Wichtige Regeln der Strecke:
   Baumhirten mit steifem Hals; Waffen wachsen mit der Größe des Monsters). Reparaturen in `meshy_import.py`: Knie,
   die Meshy neben das Bein setzt (Umhang, Fell), kommen vor dem Geraderichten auf die Linie Hüfte-Knöchel
   (`KEIN_KNIE=1` schaltet ab); ein stark vorgebeugter Rücken wird zwischen Rücken und Hals aufgerichtet (nur über 25
-  Grad, `KEIN_AUFRICHTEN=1` schaltet ab). Liefert Meshy ein falsches Skelett (Hüfte über dem Hals) oder scheitert das
+  Grad, `KEIN_AUFRICHTEN=1` schaltet ab). Hängt Meshy Aufbauten über den Schultern (Pilzhut, Laternen, Schornsteine
+  auf dem Rücken) an die Arme, legt `--schultern-loesen` dieses Armgewicht weich auf die Brust. Liefert Meshy ein falsches Skelett (Hüfte über dem Hals) oder scheitert das
   Rigging („Pose estimation failed“), gibt `python auto_rig.py <model.glb> <rigged.glb>` (Blender) ein eigenes
   24-Knochen-Skelett mit Meshys Knochennamen; danach wie ein Meshy-Rig weiter. Eine Waffe, an der das Rigging
   scheitert, vorher abschneiden und die Spielwaffe über `gear` geben.
-  Tiere: `from_glb.py --form vierbeiner|spinne|krebs|drache|flieger` (Spinnen 8 Beine strahlenförmig, Krebse 8 Beine
-  und 2 Scheren, Drachen Vierbeiner mit Flügeln, Flieger mit Flügeln und kurzen Beinen; `--beine` ändert die Zahl).
-  Im Spiel bewegen sie sich mit `poseRadial`, `poseQuad` mit Flügelschlag und `poseFlyer` (`src/r3d-beasts.js`).
+  Tiere: `from_glb.py --form vierbeiner|spinne|krebs|drache|flieger|schweber` (Spinnen 8 Beine strahlenförmig, Krebse
+  8 Beine und 2 Scheren, Drachen Vierbeiner mit Flügeln, Flieger mit Flügeln und kurzen Beinen, Schweber ohne Beine und
+  Flügel wie die Ertrunkene Glocke; `--beine` ändert die Zahl). Im Spiel bewegen sie sich mit `poseRadial`, `poseQuad`
+  mit Flügelschlag und `poseFlyer` (`src/r3d-beasts.js`; Schweber gleiten knapp über dem Boden und kippen bei der
+  Niederlage auf die Seite).
   `--height` setzt die Größe (Drachen 1,7, Spinnen 1,3, sonst 1,15).
   Gegner ohne Eintrag in `D.MONSTERS` (Chronik, Verliese, Nachtjagd) bekommen eine eigene Figur unter dem Schlüssel
   ihres Namens (klein, ohne Umlaute und Zeichen: „Der Wurm im Eis“ → `derwurmimeis.npz`) in der Familie ihres `arch`;
-  ohne eigene Figur leihen sie sich die eines Monsters ihrer Familie (`UI.monLook`).
+  ohne eigene Figur leihen sie sich die eines Monsters ihrer Familie (`UI.monLook`). Eine Familie darf auf mehrere
+  Dateien verteilt sein (16-MB-Grenze): `MON_MORE` in `src/ui-core.js` (Drachen: `gen-mondrache.js` und
+  `gen-mondrache2.js` mit den Endbossdrachen).
+- Heldenkörper der übrigen Reiche: je Reich eine Datei `assets/gen-<reich>.pack` (`gen_pack.py meshy/held/<reich>
+  ../../assets/gen-<reich>.pack --no-auto`, Körper als `<volk>-frau.npz` und `<volk>-mann.npz`), eingelesen mit
+  `meshy_import.py ... --race <volk> --gender f|m --tris 30000 --no-clips --arme-loesen`. `--arme-loesen` trennt Stoff,
+  den Meshy an Unterarm oder Hand gehängt hat (Schärpenenden, Gürtelbänder neben der herabhängenden Hand), wieder vom
+  Arm: Armgewicht, das nur über einen langen Umweg über die Oberfläche zum Unterarm führt, geht an Rumpf oder Bein; wo
+  Hand und Hüfte zu einem Netz verschmolzen sind, gehört jede Ecke ganz zum näheren Teil, und die Berührnaht fällt weg.
+  Nur für Heldenkörper gedacht; an Monstern mit wilden Formen reißt es die Netze auf.
 - Waffen und Schilde: `python weapon.py <aus>/waffen/axt_bart.npz axt.glb --base axt` legt den Griffpunkt in den
   Ursprung, Klinge oder Schaft entlang +Y und Schneide oder Axtblatt entlang X, wie bei den gebauten Waffen. Das
   Griffende erkennt es an der breitesten Stelle (Parierstange nahe am Griff, Axt- oder Hammerkopf weit davon); sitzt

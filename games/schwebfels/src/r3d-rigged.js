@@ -1123,7 +1123,6 @@
     derschattenkanzler: { cls: "runenwirker", dual: true },
     derungeschriebene: { cls: "runenwirker", dual: true },
     dienachtkoenigin: { cls: "runenwirker", dual: true, gender: "w" },
-    dieertrunkeneglocke: { cls: "runenwirker", dual: true },
     laternenkoenigewiglicht: { cls: "runenwirker", dual: true },
     dermoderkoenig: { cls: "sturmhuene", dual: true },
     diewurzeldertiefe: { cls: "sturmhuene", dual: true },

@@ -341,7 +341,8 @@ const hl = head.readUInt32LE(4);
 const gameBones = JSON.parse(head.subarray(8, 8 + hl).toString("utf8")).humans.bones.map((b) => b[0]);
 const tmp = mkdtempSync(path.join(os.tmpdir(), "sb-rig-"));
 buildPack(path.join(tmp, "probe.pack"), gameBones);
-execFileSync("node", [path.join(root, "build.mjs")], { env: { ...process.env, GEN_PACK: path.join(tmp, "probe.pack"), DIST: tmp }, stdio: "pipe" });
+// ohne Kampfkulissen: geprueft wird die gebaute Kampfbuehne mit Requisiten (die gemalten Kulissen prueft tests/neu.mjs)
+execFileSync("node", [path.join(root, "build.mjs")], { env: { ...process.env, GEN_PACK: path.join(tmp, "probe.pack"), DIST: tmp, KULISSEN_DIR: path.join(tmp, "keine-kulissen") }, stdio: "pipe" });
 
 const errors = [];
 const browser = await pw.chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });

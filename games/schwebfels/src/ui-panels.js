@@ -503,6 +503,8 @@
       if (busy) h += busyNote();
       else if (s.arena.next > now) h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
       const rivals = E.arenaRivals(s, now, remote);
+      // Heldenkoerper der fremden Reiche nachladen (die Bilder erneuern sich danach einmal)
+      for (const rl of new Set(rivals.map((r) => r.realm).filter(Boolean))) UI.loadGenFigures(rl);
       const hero = E.heroFighter(s, now);
       h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div><div class="cards">';
       rivals.forEach((r) => {
@@ -1103,8 +1105,8 @@
 
   /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
   const FP = { fig: "nordmann-frau", pose: "", weapon: "axt", near: false, state: "", view: null, el: null, timer: 0 };
-  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
-  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
+  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg", "albier", "kreidezwerg", "sidhe", "moorling"];
+  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg", albier: "Albier", kreidezwerg: "Kreidezwerg", sidhe: "Sidhe", moorling: "Moorling" };
   const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["special", "Spezialangriff"], ["hit", "Treffer"], ["block", "Parade"], ["evade", "Ausweichen"], ["victory", "Jubel"], ["defeat", "Niederlage"]];
   // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
   const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
@@ -1194,7 +1196,7 @@
       let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
-      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
+      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Die Figurendateien der Reiche konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
       for (const r of FP_ORDER) {
         for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
           const k = r + "-" + sx;
@@ -1236,9 +1238,13 @@
       if (FP.state === "laden") return;
       FP.state = "laden";
       const mon = UI.loadMonsters(FP_MON().map((x) => x[2]).concat(FP_BOSS().map((b) => b.arch)));
-      SB.assets
-        .loadGen("midgard")
-        .then((g) => mon.then(() => g))
+      // Heldenkoerper aller drei Reiche; fehlt eine Datei, bleiben die uebrigen waehlbar
+      const realms = ["midgard", "albion", "hibernia"].map((r) => SB.assets.loadGen(r).then(() => true, () => false));
+      Promise.all(realms)
+        .then((ok) => {
+          if (!ok.some(Boolean)) throw new Error("keine Figurendatei");
+          return mon.then(() => SB.R3D.human.preloadGen());
+        })
         .then(
           () => {
             FP.state = "ok";

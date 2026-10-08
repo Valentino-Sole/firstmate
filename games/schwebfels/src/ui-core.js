@@ -43,8 +43,9 @@
     const G = (UI.use3d && SB.assets.data && SB.assets.data.gen) || {};
     return !!G[race + "-" + (gender === "w" ? "frau" : "mann")];
   };
-  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite)
-  UI.GEN_REALMS = ["midgard"];
+  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite): Midgard (Frostwicht, Glutzwerg), Albion (Albier,
+  // Kreidezwerg) und Hibernia (Sidhe, Moorling); Nordmann und Trollblut stecken in der Seite
+  UI.GEN_REALMS = ["midgard", "albion", "hibernia"];
   const withGen = (d) => {
     if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
@@ -60,19 +61,21 @@
   const genChanged = () => {
     if (UI.onGen) UI.onGen();
     if (UI.S) UI.refresh();
-    if (UI.panelId === "neu" || UI.panelId === "figurenprobe") UI.renderPanel();
+    if (UI.panelId === "neu" || UI.panelId === "figurenprobe" || UI.panelId === "arena") UI.renderPanel();
   };
   // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
   // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); ohne Datei bleiben die gebauten Monster.
   // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
   const MON_LOAD = {};
+  // Familien, deren Figuren nicht in eine Datei passen (Grenze 16 MB): weitere Dateien gen-mon<familie>2.js
+  const MON_MORE = { drache: ["drache2"] };
   UI.monReady = {};
   const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1, steinkreis: 1, mondtor: 1, tiefen: 1 };
   UI.loadMonsterArch = function (arch) {
     if (!UI.use3d || !arch) return Promise.resolve(false);
     if (MON_LOAD[arch]) return MON_LOAD[arch];
     MON_LOAD[arch] = SB.assets.ready
-      .then(() => SB.assets.loadGen("mon" + arch))
+      .then(() => Promise.all([SB.assets.loadGen("mon" + arch)].concat((MON_MORE[arch] || []).map((x) => SB.assets.loadGen("mon" + x).catch(() => null)))))
       .then(() => SB.R3D.human.preloadGen())
       .then(() => {
         // Farb- und Reliefbilder der Bestien dieser Familie abwarten (sonst stuende sie im ersten Bild schwarz da)
@@ -129,10 +132,13 @@
     }
     return out;
   };
+  // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet)
+  const GEN_FIG = {};
   UI.loadGenFigures = function (realm) {
     UI.loadMonsters(UI.offerArchs());
     UI.loadKulissen();
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    if (GEN_FIG[realm]) return GEN_FIG[realm];
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {
       if (!Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length) return false;
@@ -144,7 +150,7 @@
       });
     });
     UI.genStatus.datei = UI.genStatus.datei === "bereit" ? "bereit" : "laedt";
-    return kern
+    return (GEN_FIG[realm] = kern
       .then(() => SB.assets.loadGen(realm))
       .then(() => HU.preloadGen())
       .then(
@@ -161,7 +167,7 @@
           genChanged();
           return UI.genStatus.kern === "bereit" ? "bereit" : UI.genStatus.datei;
         }
-      );
+      ));
   };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
   UI.foeRealm = function (m) {

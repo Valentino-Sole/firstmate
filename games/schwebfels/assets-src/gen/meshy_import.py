@@ -533,6 +533,110 @@ def fix_knees(TP, tmap):
     return moved
 
 
+def free_arms(pos, tri, Wd, TP, tmap, parents, height):
+    """Stoff, den Meshy an den Arm gehaengt hat (Schaerpenenden, Guertelbaender neben der herabhaengenden Hand), vom Arm
+    loesen; sonst zieht die gehobene Hand beim Jubeln einen Stoffstreifen mit hoch. Drei Schritte je Seite:
+    1. Ecken mit Armgewicht, die ueber die Oberflaeche nur auf einem langen Umweg (Arm hoch, ueber die Schulter, den
+       Rumpf hinab) vom Unterarm zu erreichen sind, geben ihr Armgewicht an den naechsten Rumpf- oder Oberschenkelknochen.
+    2. Wo Meshy Hand und Huefte zu einem Netz verschmolzen hat, gehoert jede Ecke ganz zum naeheren Teil: zur Hand oder
+       zum Koerper (gemessen an Handachse bzw. Rumpf- und Oberschenkelachse, nur unterhalb des Handgelenks); schwaches
+       Handgewicht neben Koerpergewicht geht immer an den Koerper.
+    3. Dreiecke, die danach eine reine Hand-Ecke mit einer armfreien Ecke verbinden, fallen weg (die Beruehrnaht),
+       sonst spannen sie sich zwischen gehobener Hand und Huefte auf.
+    Gibt die Zahl der geaenderten Ecken und die verbleibenden Dreiecke zurueck."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    from scipy.spatial import cKDTree
+
+    def segd(a, b, X=pos):
+        d = b - a
+        t = np.clip(((X - a) @ d) / max(float(d @ d), 1e-9), 0, 1)
+        return np.linalg.norm(X - (a + t[:, None] * d), axis=1), t
+    # gleiche Lage = gleiche Ecke (Meshy doppelt Ecken an UV-Naehten), Kanten aus den Dreiecken
+    _, wid = np.unique(np.round(pos / 1e-4).astype(np.int64), axis=0, return_inverse=True)
+    wid = wid.ravel()
+    nw = int(wid.max()) + 1
+    wpos = np.zeros((nw, 3))
+    wpos[wid] = pos
+    e = np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
+    e = wid[e]
+    e = e[e[:, 0] != e[:, 1]]
+    G = coo_matrix((np.linalg.norm(wpos[e[:, 0]] - wpos[e[:, 1]], axis=1) + 1e-6, (e[:, 0], e[:, 1])), shape=(nw, nw)).tocsr()
+    body = [(tmap["hips"], segd(TP[tmap["hips"]], TP[tmap["chest"]])[0])]
+    for s_ in SIDES:
+        body.append((tmap["thigh." + s_], segd(TP[tmap["thigh." + s_]], TP[tmap["shin." + s_]])[0]))
+    D = np.stack([d for _, d in body], 1)
+    near = np.array([bn for bn, _ in body])[np.argmin(D, 1)]
+    db = D.min(1)
+    k = height / 1.8
+    changed = np.zeros(len(pos), bool)
+    cut = np.zeros(len(tri), bool)
+    for s_ in SIDES:
+        ua, fa, ha = tmap["upperarm." + s_], tmap["forearm." + s_], tmap["hand." + s_]
+        hk = sorted({ha} | {i for i in range(len(parents)) if any(j == ha for j in ancestors(parents, i))})
+        cols = sorted({ua, fa} | set(hk))
+        # 1. Umweg ueber die Oberflaeche; Saat: Ecken dicht am mittleren Unterarm, die Meshy selbst dem Unterarm gab
+        aw = Wd[:, cols].sum(1)
+        d, t = segd(TP[fa], TP[ha])
+        seed = np.unique(wid[(np.argmax(Wd, 1) == fa) & (d < 0.06 * k) & (t > 0.2) & (t < 0.8)])
+        if len(seed) >= 3:
+            # getrennte Netzinseln (eigene Handschuhe, Armreifen) bleiben, wie Meshy sie gehaengt hat
+            dg = dijkstra(G, directed=False, indices=seed, min_only=True)[wid]
+            de = cKDTree(wpos[seed]).query(pos)[0]
+            m = (aw > 0) & np.isfinite(dg) & (dg - de > 0.3 * k)
+            idx = np.where(m)[0]
+            np.add.at(Wd, (idx, near[idx]), aw[idx])
+            Wd[np.ix_(idx, cols)] = 0
+            changed[idx] = True
+        # 2. Hand oder Koerper, unterhalb des Handgelenks (die Hand haengt in der Ruhelage)
+        dh, _ = segd(TP[ha], TP[ha] + (TP[ha] - TP[fa]) * 0.8)
+        hw = Wd[:, hk].sum(1)
+        own = np.zeros(Wd.shape[1], bool)
+        own[cols + [tmap["clavicle." + s_]]] = True
+        bw = Wd[:, ~own].sum(1)
+        low = pos[:, 1] < TP[ha][1]
+        to_body = np.where((hw > 0) & low & ((db < dh) | ((bw > 0) & (hw < 0.3))))[0]
+        np.add.at(Wd, (to_body, near[to_body]), hw[to_body])
+        Wd[np.ix_(to_body, hk)] = 0
+        to_hand = np.where((hw >= 0.3) & (bw > 0) & low & (db >= dh))[0]
+        np.add.at(Wd, (to_hand, np.full(len(to_hand), ha)), bw[to_hand])
+        Wd[np.ix_(to_hand, np.where(~own)[0])] = 0
+        changed[to_body] = changed[to_hand] = True
+        # 3. Naht zwischen Hand und armfreiem Koerper
+        pure_hand = Wd[:, hk].sum(1) > 0.5
+        armfree = Wd[:, cols].sum(1) == 0
+        cut |= pure_hand[tri].any(1) & armfree[tri].any(1)
+    return int(changed.sum()), tri[~cut]
+
+
+def free_shoulders(pos, Wd, TP, tmap, height):
+    """Armgewicht oberhalb der Schulter (Pilzhut, Laternen und Schornsteine auf dem Ruecken) geht an die Brust; sonst
+    reisst ein gehobener Arm den Aufbau mit hoch. Uebergang weich ueber 10 cm (bei 1,8 m Hoehe), damit nichts aufreisst.
+    Gibt die Zahl der geaenderten Ecken zurueck."""
+    k = height / 1.8
+    ch = tmap["chest"]
+    changed = np.zeros(len(pos), bool)
+    for s_ in SIDES:
+        cols = sorted({tmap["upperarm." + s_], tmap["forearm." + s_], tmap["hand." + s_]})
+        sy = TP[tmap["upperarm." + s_]][1]
+        f = np.clip((pos[:, 1] - (sy + 0.05 * k)) / (0.1 * k), 0, 1)
+        m = (f > 0) & (Wd[:, cols].sum(1) > 0)
+        if m.any():
+            idx = np.where(m)[0]
+            mv = Wd[np.ix_(idx, cols)] * f[idx, None]
+            Wd[np.ix_(idx, cols)] -= mv
+            Wd[idx, ch] += mv.sum(1)
+            changed[idx] = True
+    return int(changed.sum())
+
+
+def ancestors(parents, i):
+    j = parents[i]
+    while j >= 0:
+        yield j
+        j = parents[j]
+
+
 # ---------- T-Haltung ----------
 def rot_between(a, b):
     a = a / np.linalg.norm(a)
@@ -658,6 +762,8 @@ def main():
     ap.add_argument("--turn", type=float)
     ap.add_argument("--as-meshy", action="store_true")
     ap.add_argument("--no-clips", action="store_true")
+    ap.add_argument("--schultern-loesen", action="store_true", help="Armgewicht oberhalb der Schulter an die Brust (Huete, Aufbauten auf dem Ruecken)")
+    ap.add_argument("--arme-loesen", action="store_true", help="Stoff, den Meshy an Arm oder Hand gehaengt hat (Schaerpenenden neben der Hand), vom Arm loesen; fuer Heldenkoerper")
     ap.add_argument("--pack", default=PACK)
     a = ap.parse_args()
     log = {"quelle": os.path.basename(a.figure), "warnungen": []}
@@ -760,6 +866,15 @@ def main():
     Wd = np.zeros((len(pos), nbones))
     for k in range(nk):
         np.add.at(Wd, (np.arange(len(pos)), ji[:, k]), jw[:, k])
+    if a.schultern_loesen:
+        n = free_shoulders(pos, Wd, TP, tmap, height)
+        print("Ueber der Schulter an die Brust:", n, "Ecken")
+        log["schultern_geloest"] = n
+    if a.arme_loesen:
+        n, tri2 = free_arms(pos, tri, Wd, TP, tmap, parents, height)
+        print("Von der Hand geloest:", n, "Ecken,", len(tri) - len(tri2), "Dreiecke der Beruehrnaht entfernt")
+        log["arme_geloest"] = [n, len(tri) - len(tri2)]
+        tri = tri2
     order = np.argsort(-Wd, axis=1)[:, :4]
     w4 = np.take_along_axis(Wd, order, axis=1)
     w4 = w4 / np.maximum(w4.sum(1, keepdims=True), 1e-9)

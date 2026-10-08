@@ -15,8 +15,10 @@
   // Figur und Insel)
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
-    const kul = Promise.race([UI.loadKulissen(), new Promise((r) => setTimeout(r, 6000))]);
-    return Promise.all([UI.loadMonsters(archs, 6000), kul]).then(() => runBattle(fight, opts));
+    const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, 6000))]);
+    // Heldenkoerper fremder Reiche (Arena): deren Figurendatei ebenfalls vorher laden
+    const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
+    return Promise.all([UI.loadMonsters(archs, 6000), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
     return new Promise((resolve) => {

@@ -186,7 +186,7 @@
     const P = { beast: true, fam, body, mesh, B: by, bones, meta };
     const model = R.makeModel(root, P, "monster");
     model.arch = m.arch;
-    model.headY = ((meta.headY || 1.4) + (meta.form === "flieger" ? HOVER : 0)) * s;
+    model.headY = ((meta.headY || 1.4) + (meta.form === "flieger" ? HOVER : meta.form === "schweber" ? HOVER_LOW : 0)) * s;
     model.height = (meta.height || 1.6) * s;
     model.ranged = SB.data.ARCH_TYPE[m.arch] === "verstand";
     model.projColor = m.accent || "#ff5a3d";
@@ -820,11 +820,14 @@
   /* ---------- Fliegende Bestie (from_glb.py --form flieger) ----------
      Schwebt ueber dem Boden, schlaegt mit den Fluegeln, stoesst zum Angriff herab und stuerzt bei der Niederlage. */
   const HOVER = 0.9;
+  // Schwebende ohne Fluegel (from_glb.py --form schweber, etwa die Ertrunkene Glocke) gleiten knapp ueber dem Boden
+  const HOVER_LOW = 0.3;
   function poseFlyer(m, name, u) {
     const P = m.parts;
     const t = m.t;
     if (name === "defeat" && !m.anim) u = 1;
-    let y = HOVER + Math.sin(t * 9 + PI / 2) * 0.06 + Math.sin(t * 1.3) * 0.05;
+    const HV = P.meta.form === "schweber" ? HOVER_LOW : HOVER;
+    let y = HV + Math.sin(t * (HV < HOVER ? 2.2 : 9) + PI / 2) * 0.06 + Math.sin(t * 1.3) * 0.05;
     let z = 0, x = 0, pitch = 0.1, roll = Math.sin(t * 1.7) * 0.06;
     switch (name) {
       case "attack":
@@ -856,9 +859,14 @@
       case "defeat": {
         // stuerzt ab und bleibt flach mit ausgebreiteten Fluegeln liegen (nicht hochkant auf einer Fluegelspitze)
         const e = ease(u);
-        y = (HOVER + 0.1) * (1 - e);
+        y = (HV + 0.1) * (1 - e);
         roll = 0.15 * e;
         pitch = 0.2 * e;
+        // ohne Fluegel (Glocke): sinkt und kippt auf die Seite, etwas angehoben, damit der Rand nicht im Boden steckt
+        if (HV < HOVER) {
+          roll = 1.3 * e;
+          y += 0.35 * e * (P.meta.length || 1);
+        }
         break;
       }
     }
@@ -884,10 +892,10 @@
     if (P.quad === undefined) {
       if (!XAX) XAX = new T.Vector3(1, 0, 0);
       if (!EU) EU = new T.Euler();
-      P.quad = form === "spinne" || form === "krebs" || form === "flieger" ? null : quadRig(P.bones, P.meta);
+      P.quad = form === "spinne" || form === "krebs" || form === "flieger" || form === "schweber" ? null : quadRig(P.bones, P.meta);
       if (P.quad) P.quad.wings = wingRig(P.bones);
       if (form === "spinne" || form === "krebs") P.radial = radialRig(P.bones, P.meta);
-      if (form === "flieger") P.flyer = { by: Object.fromEntries(P.bones.map((b) => [b.name, b])), wings: wingRig(P.bones) };
+      if (form === "flieger" || form === "schweber") P.flyer = { by: Object.fromEntries(P.bones.map((b) => [b.name, b])), wings: wingRig(P.bones) };
     }
     if (P.radial) poseRadial(m, name, u);
     else if (P.flyer) poseFlyer(m, name, u);

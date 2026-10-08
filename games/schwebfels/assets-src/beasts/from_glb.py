@@ -235,6 +235,23 @@ def rig_flyer(P, H):
     return bones
 
 
+def rig_hover(P, H):
+    """Schwebendes Wesen ohne Beine und Fluegel (Ertrunkene Glocke): Rumpf und Kopf entlang der Hoehe; es gleitet im
+    Spiel knapp ueber dem Boden und neigt sich, Ketten und Geisterarme schwingen mit dem Rumpf."""
+    xs = P[:, 0]
+    core = P[np.abs(xs - np.median(xs)) < 0.2 * np.ptp(xs)]
+    cx, cz = float(np.median(core[:, 0])), float(np.median(core[:, 2]))
+    bones = []
+
+    def add(name, parent, head, tail_, role):
+        bones.append([name, parent, [float(x) for x in head], [float(x) for x in tail_], role])
+        return len(bones) - 1
+    hips = add("hips", -1, (cx, 0.05 * H, cz), (cx, 0.4 * H, cz), "spine")
+    chest = add("chest", hips, (cx, 0.4 * H, cz), (cx, 0.7 * H, cz), "spine")
+    add("head", chest, (cx, 0.7 * H, cz), (cx, H, cz + 0.05 * H), "head")
+    return bones
+
+
 def weights(P, F, bones):
     import bpy
     from mathutils import Vector
@@ -290,8 +307,13 @@ def weights(P, F, bones):
             t = np.clip(np.sum((p - H_) * d, 1) / np.maximum(np.sum(d * d, 1), 1e-9), 0, 1)
             W[i, np.argmin(np.linalg.norm(p - (H_ + d * t[:, None]), axis=1))] = 1.0
     W = W[inv]
+    # immer vier Einfluesse je Ecke (das Spiel liest vier), auch bei weniger Knochen (schweber hat drei)
+    nb = W.shape[1]
+    if nb < 4:
+        W = np.pad(W, ((0, 0), (0, 4 - nb)))
     order = np.argsort(-W, axis=1)[:, :4]
     w4 = np.take_along_axis(W, order, axis=1)
+    order[order >= nb] = 0
     w4 /= np.maximum(w4.sum(1, keepdims=True), 1e-9)
     w8 = np.round(w4 * 255).astype(np.int32)
     w8[:, 0] += 255 - w8.sum(1)
@@ -309,8 +331,8 @@ def main():
     ap.add_argument("--tris", type=int, default=9000)
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--kein-schwanz", action="store_true")
-    ap.add_argument("--form", default="vierbeiner", choices=["vierbeiner", "spinne", "krebs", "drache", "flieger"],
-                    help="Skelettform: vierbeiner (Wolf, Schlund), spinne (8 Beine), krebs (8 Beine und 2 Scheren), drache (Vierbeiner mit Fluegeln), flieger (Fledermaus)")
+    ap.add_argument("--form", default="vierbeiner", choices=["vierbeiner", "spinne", "krebs", "drache", "flieger", "schweber"],
+                    help="Skelettform: vierbeiner (Wolf, Schlund), spinne (8 Beine), krebs (8 Beine und 2 Scheren), drache (Vierbeiner mit Fluegeln), flieger (Fledermaus), schweber (ohne Beine und Fluegel)")
     ap.add_argument("--beine", type=int, help="Zahl der Beine bei spinne und krebs (sonst 8 bzw. 10)")
     a = ap.parse_args()
     g, parts = load_parts(a.glb)
@@ -333,6 +355,8 @@ def main():
         bones = rig_radial(P, a.height, a.beine or 8)
     elif a.form == "krebs":
         bones = rig_radial(P, a.height, a.beine or 10, claws=2)
+    elif a.form == "schweber":
+        bones = rig_hover(P, a.height)
     elif a.form == "flieger":
         bones = rig_flyer(P, a.height)
     else:
