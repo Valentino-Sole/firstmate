@@ -199,6 +199,15 @@ Wichtige Regeln der Strecke:
   Kopf, Schwanz, vier Beine mit je drei Gliedern, Gewichte per Bone Heat). Im Spiel bewegt es sich wie die anderen
   Bestien (`src/r3d-beasts.js`), behält seine Textur und wird je Gegner leicht in dessen Farbe getönt. `--archs wolf`
   legt fest, welche Monsterarten es darstellt; `gen_pack.py` nimmt alles aus dem Unterordner `bestien` auf.
+  Der Kopf ist der vorderste Teil oberhalb der Pfoten (bei geduckten Tieren wie dem Schlund reichen die Krallen so weit
+  nach vorn wie das Maul). Steht das Tier wie auf einer Konzepttafel schräg, `--turn` mit dem Winkel der Rumpfachse.
+- Monster mit eigener Figur je Monster (Monsterkonzept v06): Dateiname = Monster-ID aus `src/data.js` (etwa
+  `eiskobold.npz`, `bestien/moorschlund.npz` mit `--family moorschlund --archs ""`), gepackt mit
+  `gen_pack.py <ordner> ../../assets/gen-monster.pack --no-auto`. `build.mjs` macht daraus `gen-monster.js`, das Spiel
+  lädt es für jedes Reich im Hintergrund (`UI.loadMonsters`). Menschenartige kommen über `meshy_api.py figur` mit
+  Skelett und `meshy_import.py --no-clips` und kämpfen mit den Heldenbewegungen (Kampfstil und Waffenart je Monster in
+  `RG.MONSTER`, `src/r3d-rigged.js`; Waffe fest im Modell, `links` für linke Hand). `meshy_import.py` holt Knie, die
+  Meshy neben das Bein setzt (Umhang, Fell), vor dem Geraderichten auf die Linie Hüfte-Knöchel.
 - Waffen und Schilde: `python weapon.py <aus>/waffen/axt_bart.npz axt.glb --base axt` legt den Griffpunkt in den
   Ursprung, Klinge oder Schaft entlang +Y und Schneide oder Axtblatt entlang X, wie bei den gebauten Waffen. Das
   Griffende erkennt es an der breitesten Stelle (Parierstange nahe am Griff, Axt- oder Hammerkopf weit davon); sitzt

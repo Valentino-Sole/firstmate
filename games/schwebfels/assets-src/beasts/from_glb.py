@@ -76,13 +76,18 @@ def rig_for(P, H, tail=True):
     sp = [(0, hy, hipsZ), (0, (hy + cy) / 2, (hipsZ + chestZ) / 2), (0, cy, chestZ)]
     hips = add("hips", -1, sp[0], sp[1], "spine")
     spine = add("spine", hips, sp[1], sp[2], "spine")
-    # Hals und Kopf: vorderster Bereich
-    front = P[P[:, 2] > chestZ + 0.55 * (z1 - chestZ)]
+    # Hals und Kopf: vorderster Teil oberhalb der Pfoten (bei geduckten Tieren wie dem Schlund reichen die Krallen so
+    # weit nach vorn wie das Maul, und das Maul sitzt fast ueber den Vorderbeinen); Hals und Kopf zeigen immer nach vorn
+    up = P[P[:, 1] > 0.3 * H]
+    zt = up[:, 2].max() if len(up) else z1
+    front = up[up[:, 2] > zt - 0.12 * L] if len(up) else P[P[:, 2] > chestZ + 0.55 * (z1 - chestZ)]
     head_c = front.mean(0) if len(front) else np.array([0, cy, z1 - 0.1 * L])
-    neck_p = (0, (cy + head_c[1]) / 2 + 0.05 * H, chestZ + 0.35 * (z1 - chestZ))
+    neck_z = chestZ + 0.35 * (zt - chestZ)
+    head_z = max(head_c[2] - 0.05 * L, neck_z + 0.04 * L)
+    neck_p = (0, (cy + head_c[1]) / 2 + 0.05 * H, neck_z)
     chest = add("chest", spine, sp[2], neck_p, "spine")
-    neck = add("neck", chest, neck_p, (0, head_c[1], head_c[2] - 0.05 * L), "spine")
-    add("head", neck, (0, head_c[1], head_c[2] - 0.05 * L), (0, head_c[1], z1), "head")
+    neck = add("neck", chest, neck_p, (0, head_c[1], head_z), "spine")
+    add("head", neck, (0, head_c[1], head_z), (0, head_c[1], max(zt, head_z + 0.05 * L)), "head")
     if tail:
         back = P[(P[:, 2] < hipsZ - 0.12 * L) & (P[:, 1] > 0.2 * H)]
         if len(back) > 0.01 * len(P):

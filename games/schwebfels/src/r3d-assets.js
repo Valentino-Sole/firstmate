@@ -167,8 +167,17 @@
       const s = globalThis[key];
       if (!s) return false;
       // schon eingebettete Koerper behalten (gleiche Daten, Materialien und Geometrie sind dafuer schon gebaut)
-      const g = parse(b64(s)).gen || {};
+      const p = parse(b64(s));
+      const g = p.gen || {};
       for (const k in g) if (!A.data.gen[k]) A.data.gen[k] = g[k];
+      // Monster (gen-monster.js): erzeugte Bestien kommen zu den vorhandenen Familien; Texturen gleich laden, sonst
+      // stuende die Bestie im ersten Kampfbild schwarz da
+      for (const k in p.beasts || {}) {
+        if (A.data.beasts && A.data.beasts[k] && A.data.beasts[k].tex) continue;
+        A.data.beasts = Object.assign({}, A.data.beasts, { [k]: p.beasts[k] });
+        A.texture("beast." + k, p.beasts[k].tex, { srgb: true });
+        if (p.beasts[k].ntex) A.texture("beast." + k + ".n", p.beasts[k].ntex, { srgb: false });
+      }
       globalThis[key] = null;
       return true;
     };

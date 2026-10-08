@@ -1079,6 +1079,7 @@
       h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
       h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li>";
       if (SB.R3D.beasts && SB.R3D.beasts.has && SB.R3D.beasts.has("wolf")) h += "<li><b>Wölfe</b> (Grauwolf, Frostwolf, Schattenwolf) im Kampf: neues Modell aus Meshy nach deiner Tafel 19 (Bestiarium Wildnis), mit struppiger Mähne und eingeritzten Runen. Er lauert mit tiefem Kopf, galoppiert heran, springt zum Biss, zuckt bei Treffern zurück und heult beim Sieg.</li>";
+      if (SB.R3D.rigged && SB.R3D.rigged.is("eiskobold")) h += "<li><b>Monster-Probe aus deinem Monsterkonzept:</b> Eiskobold (Midgard) und Moorschlund (Albion, Hibernia) im Kampf und in der Figurenprobe. Der Eiskobold kämpft mit denselben aufgenommenen Bewegungen wie die Helden.</li>";
       h += "</ul>";
       h += '<div class="section-title">Noch nicht dabei</div><ul class="neu-list muted"><li>Rüstung, Helm und Umhang auf den neuen Figuren: kommt mit der Wechselausrüstung (nächster Schritt). Waffe und Schild sitzen schon in der Hand.</li><li>Neue Figuren für Albion und Hibernia: erst wenn du Midgard abgenommen hast.</li><li>Frostwicht und Glutzwerg als wählbare Völker: dafür brauche ich deine Entscheidung zu ihren Stärken.</li></ul>';
       return h;
@@ -1098,8 +1099,18 @@
   const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["special", "Spezialangriff"], ["hit", "Treffer"], ["block", "Parade"], ["evade", "Ausweichen"], ["victory", "Jubel"], ["defeat", "Niederlage"]];
   // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
   const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
+  // Monster mit neuer Figur aus dem Monsterkonzept (Monster-ID); nur waehlbar, wenn die Figur im Paket steckt
+  const FP_MON = [["grauwolf", "Wolf"], ["eiskobold", "Eiskobold"], ["moorschlund", "Moorschlund"]];
+  const fpMon = () => (FP.fig.indexOf("mon:") === 0 ? E.monById(FP.fig.slice(4)) : null);
+  const fpMonReady = (id) => {
+    const m = E.monById(id);
+    const R = SB.R3D;
+    return !!(m && ((R.rigged && R.rigged.is(id)) || (R.beasts && R.beasts.isGen && R.beasts.isGen(m.arch, id))));
+  };
   const fpWeapon = () => FP_WEAPONS.find((w) => w[0] === FP.weapon) || FP_WEAPONS[0];
   const fpDesc = () => {
+    const mon = fpMon();
+    if (mon) return UI.monDesc(mon);
     const [race, sex] = FP.fig.split("-");
     const w = fpWeapon();
     const gear = w[0] ? { waffe: { base: w[0], variant: 0, rarity: "selten", vis: { f: w[0] + ".0", c: "midgard", o: 0, v: 1 } } } : {};
@@ -1107,18 +1118,20 @@
     return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: w[2], realm: "midgard", gear };
   };
   // Angriff mit Bogen ist ein Schuss, mit dem Stab ein Zauber (wie im Kampf)
-  const fpAction = (pose) => (pose === "attack" && FP.weapon === "bogen" ? "shoot" : pose === "attack" && FP.weapon === "stab" ? "cast" : pose);
+  const fpAction = (pose) => (fpMon() ? pose : pose === "attack" && FP.weapon === "bogen" ? "shoot" : pose === "attack" && FP.weapon === "stab" ? "cast" : pose);
   function fpCamera() {
     const v = FP.view;
     if (!v || !v.model) return;
     const box = new (SB.R3D.T().Box3)().setFromObject(v.model.obj);
     // Bildausschnitt nach Figurengroesse: ganz (etwa 85 % der Hoehe) oder nah (Kopf und Oberkoerper)
     const top = Math.max(1, box.max.y);
+    // lange Tiere (Wolf, Schlund) ganz ins Bild
+    const len = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
     if (FP.near) {
       v.camera.position.set(0, top * 0.86, top * 0.95 + 0.45);
       v.camera.lookAt(0, top * 0.8, 0);
     } else {
-      v.camera.position.set(0, top * 0.58, Math.max(3.4, top * 2.3));
+      v.camera.position.set(0, top * 0.58, Math.max(3.4, top * 2.3, len * 1.9));
       v.camera.lookAt(0, top * 0.5, 0);
     }
   }
@@ -1139,7 +1152,7 @@
     FP.timer = setInterval(go, 2600);
   }
   P.figurenprobe = {
-    title: "Figurenprobe Midgard",
+    title: "Figurenprobe",
     role: "Qualitätstest der neuen Heldenfiguren",
     portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
@@ -1154,8 +1167,13 @@
           h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !gen[k] ? " disabled" : "") + ">" + FP_NAME[r] + " " + nm + "</button>";
         }
       }
+      h += '</div><div class="section-title">Monster aus deinem Monsterkonzept</div><div class="row">';
+      for (const [id, nm] of FP_MON) {
+        const k = "mon:" + id;
+        h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !fpMonReady(id) ? " disabled" : "") + ">" + nm + "</button>";
+      }
       h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
-      h += '</div><div class="section-title">Waffe</div><div class="row">' + FP_WEAPONS.map(([id, n]) => '<button class="tab' + (FP.weapon === id ? " on" : "") + '" data-act="fpWeapon" data-w="' + id + '">' + n + "</button>").join("");
+      h += '</div><div class="section-title">Waffe</div><div class="row">' + FP_WEAPONS.map(([id, n]) => '<button class="tab' + (FP.weapon === id ? " on" : "") + '" data-act="fpWeapon" data-w="' + id + '"' + (fpMon() ? " disabled" : "") + ">" + n + "</button>").join("");
       h += '<span class="spacer"></span><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
       return h;
     },
@@ -1176,18 +1194,22 @@
       }
       if (FP.state === "laden") return;
       FP.state = "laden";
-      SB.assets.loadGen("midgard").then(
-        () => {
-          FP.state = "ok";
-          if (UI.panelId === "figurenprobe") UI.renderPanel();
-        },
-        () => {
-          // ohne Zusatzdatei bleiben die Figuren, die in der Seite stecken (Nordmann und Trollblut)
-          FP.state = Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length ? "ok" : "fehler";
-          FP.partial = true;
-          if (UI.panelId === "figurenprobe") UI.renderPanel();
-        }
-      );
+      const mon = UI.loadMonsters();
+      SB.assets
+        .loadGen("midgard")
+        .then((g) => mon.then(() => g))
+        .then(
+          () => {
+            FP.state = "ok";
+            if (UI.panelId === "figurenprobe") UI.renderPanel();
+          },
+          () => {
+            // ohne Zusatzdatei bleiben die Figuren, die in der Seite stecken (Nordmann und Trollblut)
+            FP.state = Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length ? "ok" : "fehler";
+            FP.partial = true;
+            if (UI.panelId === "figurenprobe") UI.renderPanel();
+          }
+        );
     },
     close() {
       clearInterval(FP.timer);

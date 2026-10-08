@@ -37,6 +37,8 @@
     hammer: ["Heavy_Hammer_Swing", "Charged_Axe_Chop", "Attack"],
     speer: ["Thrust_Slash", "Attack"],
     stab: ["Left_Slash", "Attack"],
+    // Waffe fest im Modell in der linken Hand (Monster aus dem Monsterkonzept, etwa der Eiskobold)
+    links: ["Left_Slash", "Attack"],
   };
   const MELEE = ["Right_Hand_Sword_Slash", "Attack", "Punch"];
   RG.candidates = function (m, action, gender) {
@@ -1075,6 +1077,28 @@
     model.projColor = C.arch === "magier" ? (model.realm === "albion" ? "#ffd27a" : model.realm === "midgard" ? "#9fd8ff" : "#7fffb0") : C.arch === "jaeger" ? "#e9d8a6" : "#ffd25a";
     parts.clips = new Player(model, mesh, key, E, desc.gender);
     parts.clips.init();
+    return model;
+  };
+
+  /* ---------- Monster mit eigener Figur (Monsterkonzept v06) ----------
+     Steht die Monster-ID im Figurenpaket (meshy_import.py, gen_pack.py --no-auto), nimmt das Monster diese Figur statt
+     der gebauten: Meshy-Skelett und dieselben aufgenommenen Bewegungen wie die Helden. Die Waffe ist Teil des Modells;
+     RG.MONSTER legt je Monster Kampfstil (Klasse) und Waffenart fuer die Bewegungswahl fest. */
+  RG.MONSTER = { eiskobold: { cls: "nebelschleicher", weapon: "links" } };
+  RG.buildMonster = function (m, key) {
+    const st = RG.MONSTER[key] || {};
+    const model = RG.build({ cls: st.cls || "sturmhuene", gender: st.gender || "m", gear: {}, genGear: [], noRigPieces: true, realm: m.realm }, key);
+    // Bewegungswahl wie mit dieser Waffe, ohne sichtbare angehaengte Waffe
+    model.weaponBase = st.weapon || "axt";
+    model.monArch = m.arch;
+    model.ranged = SB.data.ARCH_TYPE[m.arch] === "verstand";
+    model.projColor = m.accent || model.projColor;
+    if (m.boss) {
+      const s = m.final ? 1.35 : 1.18;
+      model.parts.body.scale.setScalar(s);
+      model.height *= s;
+      model.headY *= s;
+    }
     return model;
   };
 })();

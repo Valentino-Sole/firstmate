@@ -829,6 +829,14 @@
   }
   R.buildMonster = function (m) {
     if (!T) init();
+    // Monsterkonzept v06: eigene Meshy-Figur mit Skelett fuer genau dieses Monster (Monster-ID als visual)
+    if (m.visual && R.rigged && R.rigged.is && R.rigged.is(m.visual)) {
+      try {
+        return R.rigged.buildMonster(m, m.visual);
+      } catch (e) {
+        console.warn("Monsterfigur nicht moeglich, alte Figur", e);
+      }
+    }
     // Version 5: modellierte Bestie, falls fuer diese Familie vorhanden
     if (R.beasts && R.beasts.has && R.beasts.has(m.arch, m.visual)) {
       try {

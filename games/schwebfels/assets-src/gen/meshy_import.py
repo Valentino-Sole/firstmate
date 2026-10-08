@@ -513,6 +513,26 @@ def clips_of(g, joints, tgt_of, tgt_names, tgt_parents, A, s, c, fps, hips_t, ha
     return out
 
 
+# ---------- Knie ----------
+def fix_knees(TP, tmap):
+    """Knie, die weit neben der Linie Huefte-Knoechel sitzen (Meshy setzt sie bei Umhaengen oder Fell manchmal hinter das
+    Bein), auf diese Linie holen. Sonst verbiegt das Geraderichten zur T-Haltung das Bein, und der Fuss steckt im Boden."""
+    moved = []
+    for s_ in ("L", "R"):
+        h, k, f = tmap["thigh." + s_], tmap["shin." + s_], tmap["foot." + s_]
+        if len({h, k, f}) < 3:
+            continue
+        H, K, F = TP[h], TP[k].copy(), TP[f]
+        d = F - H
+        L = float(np.linalg.norm(d))
+        t = float(np.clip(((K - H) @ d) / max(L * L, 1e-9), 0.3, 0.7))
+        on = H + d * t
+        if np.linalg.norm(K - on) > 0.2 * L:
+            TP[k] = on
+            moved.append((s_, round(float(np.linalg.norm(K - on)), 3)))
+    return moved
+
+
 # ---------- T-Haltung ----------
 def rot_between(a, b):
     a = a / np.linalg.norm(a)
@@ -701,6 +721,10 @@ def main():
     if len(set(names)) != len(names):
         raise SystemExit("Knochennamen sind nicht eindeutig: " + ", ".join(names))
     tmap, _ = roles(names, parents, TP)
+    moved = fix_knees(TP, tmap)
+    if moved:
+        print("Knie auf die Beinlinie geholt:", ", ".join("%s %.0f cm" % (sd, d * 100) for sd, d in moved))
+        log["knie_korrigiert"] = moved
     corr, TP_t = tpose(parents, TP, tmap)
     turned = float(max(np.degrees(np.arccos(np.clip((np.trace(m) - 1) / 2, -1, 1))) for m in corr))
     if turned > 1:

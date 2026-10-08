@@ -62,7 +62,23 @@
     if (UI.S) UI.refresh();
     if (UI.panelId === "neu" || UI.panelId === "figurenprobe") UI.renderPanel();
   };
+  // Monster mit eigener Figur (gen-monster.js neben der Seite) fuer jedes Reich, im Hintergrund; ohne Datei bleiben
+  // die gebauten Monster
+  UI.loadMonsters = function () {
+    if (!UI.use3d) return Promise.resolve(false);
+    return SB.assets.ready
+      .then(() => SB.assets.loadGen("monster"))
+      .then(() => SB.R3D.human.preloadGen())
+      .then(
+        () => true,
+        (e) => {
+          if (!(e && e.missing)) console.warn("Monsterfiguren nicht geladen", e);
+          return false;
+        }
+      );
+  };
   UI.loadGenFigures = function (realm) {
+    UI.loadMonsters();
     if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {
@@ -103,10 +119,11 @@
     return null;
   };
   UI.fighterDesc = function (f) {
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
+    // visual: Monster-ID, damit ein Monster mit eigener Figur aus dem Figurenpaket diese bekommt (sonst die Familie)
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: f.id, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: m.id, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
     const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';
