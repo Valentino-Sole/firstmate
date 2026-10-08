@@ -1078,7 +1078,7 @@
       h += "<li><b>Gegner aus Midgard</b> (Nordmann und Trollblut) in der Arena und in der Rangliste.</li>";
       h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
       h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li>";
-      if (SB.R3D.beasts && SB.R3D.beasts.has && SB.R3D.beasts.has("wolf")) h += "<li><b>Wölfe</b> (Grauwolf, Frostwolf, Schattenwolf) im Kampf: neues Modell aus Meshy. Er lauert mit tiefem Kopf, galoppiert heran, springt zum Biss, zuckt bei Treffern zurück und heult beim Sieg.</li>";
+      if (SB.R3D.beasts && SB.R3D.beasts.has && SB.R3D.beasts.has("wolf")) h += "<li><b>Wölfe</b> (Grauwolf, Frostwolf, Schattenwolf) im Kampf: neues Modell aus Meshy nach deiner Tafel 19 (Bestiarium Wildnis), mit struppiger Mähne und eingeritzten Runen. Er lauert mit tiefem Kopf, galoppiert heran, springt zum Biss, zuckt bei Treffern zurück und heult beim Sieg.</li>";
       h += "</ul>";
       h += '<div class="section-title">Noch nicht dabei</div><ul class="neu-list muted"><li>Rüstung, Helm und Umhang auf den neuen Figuren: kommt mit der Wechselausrüstung (nächster Schritt). Waffe und Schild sitzen schon in der Hand.</li><li>Neue Figuren für Albion und Hibernia: erst wenn du Midgard abgenommen hast.</li><li>Frostwicht und Glutzwerg als wählbare Völker: dafür brauche ich deine Entscheidung zu ihren Stärken.</li></ul>';
       return h;
