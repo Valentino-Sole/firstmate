@@ -7850,15 +7850,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
   /* ---------- Geometrie, Material, Skelett ---------- */
   const GGEO = {};
-  function geo(key, E, hide, ck) {
+  function geo(key, E, hide, ck, FG) {
     ck = ck || key;
     if (GGEO[ck]) return GGEO[ck];
     const g = new T.BufferGeometry();
     g.setAttribute("position", new T.BufferAttribute(E.pos, 3));
     g.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(E.pos, E.idx), 3));
     g.setAttribute("uv", new T.BufferAttribute(E.uv, 2));
-    g.setAttribute("skinIndex", new T.BufferAttribute(E.skinI, 4));
-    g.setAttribute("skinWeight", new T.BufferAttribute(E.skinW, 4, true));
+    const fs = fingerSkin(FG, E.pos, E.skinI, E.skinW, 255);
+    g.setAttribute("skinIndex", new T.BufferAttribute(fs ? fs.si : E.skinI, 4));
+    g.setAttribute("skinWeight", fs ? new T.BufferAttribute(fs.sw, 4) : new T.BufferAttribute(E.skinW, 4, true));
     let idx = E.idx;
     if (hide) {
       const out = [];
@@ -7894,6 +7895,193 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       bones[i].userData.p0 = bones[i].position.clone();
     });
     return bones;
+  }
+
+  /* ---------- Finger ----------
+     Meshy-Skelette haben keine Fingerknochen: die Haende bleiben in jeder Bewegung so offen wie im Modell, ein Griff
+     steckte mitten in der Hand. Je Hand entstehen hier zwei Fingerglieder aus der Lage der Ecken (Knoechel und
+     Mittelgelenk entlang der Hand). Mit Waffe schliessen sie sich um den Griff, und der Griff sitzt in der Faust.
+     RG.FIST: Beugung beider Glieder im festen Griff (Bogenmass, schon gebeugte Finger werden nur nachgebeugt) und Lage
+     von Knoechel und Mittelgelenk als Anteil der Handlaenge. */
+  RG.FIST = { a1: 1.35, a2: 1.45, k1: 0.5, k2: 0.73 };
+  const FING = {};
+  function fingers(key, E) {
+    if (FING[key] !== undefined) return FING[key];
+    const V = (a) => new T.Vector3(a[0], a[1], a[2]);
+    const S = E.skel;
+    const r = S.rest;
+    const pos = E.pos;
+    const out = {};
+    let next = S.names.length;
+    for (const sd of ["R", "L"]) {
+      const hb = E.map["hand." + sd];
+      const g = E.sockets && E.sockets["grip" + sd];
+      const arm = E.sockets && E.sockets["arm" + sd];
+      if (hb == null || !g || !arm || !arm.dorsal || E.map["fing1." + sd] !== hb) continue;
+      const H = new T.Vector3(r[hb * 3], r[hb * 3 + 1], r[hb * 3 + 2]);
+      const ax = V(g.axis).normalize();
+      const fa = V(g.along);
+      fa.addScaledVector(ax, -fa.dot(ax)).normalize();
+      const d0 = V(arm.dorsal);
+      d0.addScaledVector(ax, -d0.dot(ax)).normalize();
+      // Ecken der Hand (ueberwiegend am Handknochen)
+      const vs = [];
+      for (let i = 0; i < pos.length / 3; i++) {
+        let w = 0;
+        for (let k = 0; k < 4; k++) if (E.skinI[i * 4 + k] === hb) w += E.skinW[i * 4 + k];
+        if (w >= 128) vs.push(new T.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).sub(H));
+      }
+      if (vs.length < 30) continue;
+      let tmax = 0;
+      for (const q of vs) tmax = Math.max(tmax, q.dot(fa));
+      // Handrichtung: vom Handgelenk zur Mitte der Knoechel (haengende Haende zeigen schraeg nach unten)
+      const c = new T.Vector3();
+      let n = 0;
+      for (const q of vs) {
+        const t = q.dot(fa);
+        if (t > 0.38 * tmax && t < 0.56 * tmax) {
+          c.add(q);
+          n++;
+        }
+      }
+      const h = n ? c.divideScalar(n) : fa.clone();
+      h.addScaledVector(ax, -h.dot(ax)).normalize();
+      if (h.dot(fa) < 0.6) h.copy(fa);
+      const d = new T.Vector3().crossVectors(ax, h).normalize();
+      if (d.dot(d0) < 0) d.negate();
+      const ts = vs.map((q) => q.dot(h)).sort((a, b) => a - b);
+      const L = ts[Math.floor(ts.length * 0.98)];
+      const F = RG.FIST;
+      // Gelenk in der Mitte der Handdicke an dieser Stelle
+      const joint = (k) => {
+        let lo = 1e9;
+        let hi = -1e9;
+        for (const q of vs) {
+          if (Math.abs(q.dot(h) - k * L) > 0.05 * L) continue;
+          const nn = q.dot(d);
+          lo = Math.min(lo, nn);
+          hi = Math.max(hi, nn);
+        }
+        const p = H.clone().addScaledVector(h, k * L);
+        return hi > lo ? { p: p.addScaledVector(d, (lo + hi) / 2), th: hi - lo } : { p, th: 0.1 * L };
+      };
+      const j1 = joint(F.k1);
+      const j2 = joint(F.k2);
+      // vorhandene Beugung (zur Handflaeche positiv): Glied 1 gegen die Hand, Glied 2 gegen Glied 1
+      const ang = (v) => Math.atan2(-v.dot(d), v.dot(h));
+      const tip = new T.Vector3();
+      n = 0;
+      for (const q of vs) {
+        if (q.dot(h) > (F.k2 + 0.12) * L) {
+          tip.add(q);
+          n++;
+        }
+      }
+      const b1 = ang(j2.p.clone().sub(j1.p));
+      const b2 = n ? ang(tip.divideScalar(n).add(H).sub(j2.p)) - b1 : 0;
+      // Drehsinn: Fingerspitzen zur Handflaeche (weg vom Handruecken)
+      const sgn = new T.Vector3().crossVectors(ax, h).dot(d) > 0 ? -1 : 1;
+      out[sd] = {
+        hb,
+        i1: next,
+        i2: next + 1,
+        H,
+        h,
+        d,
+        ax,
+        sgn,
+        L,
+        k1: F.k1 * L,
+        k2: F.k2 * L,
+        b: 0.06 * L,
+        p1: j1.p,
+        p2: j2.p,
+        th: j1.th,
+        a1: Math.max(0.15, F.a1 - Math.max(0, b1)),
+        a2: Math.max(0.15, F.a2 - Math.max(0, b2)),
+      };
+      next += 2;
+    }
+    for (const sd in out) {
+      // Mitte der Faust bei vollem Griff: Gelenkpunkte und Spitze der gebeugten Finger umschliessen sie
+      const f = out[sd];
+      const q1 = new T.Quaternion().setFromAxisAngle(f.ax, f.sgn * f.a1);
+      const q2 = new T.Quaternion().setFromAxisAngle(f.ax, f.sgn * f.a2);
+      const p2 = f.p2.clone().sub(f.p1).applyQuaternion(q1).add(f.p1);
+      const tipD = f.h.clone().applyQuaternion(q2).applyQuaternion(q1);
+      const tip = p2.clone().addScaledVector(tipD, f.L - f.k2);
+      // Handflaeche unter dem Knoechel
+      const palm = f.p1.clone().addScaledVector(f.d, -f.th * 0.5).addScaledVector(f.h, -0.12 * f.L);
+      f.fist = palm.add(p2).add(tip).divideScalar(3);
+    }
+    return (FING[key] = Object.keys(out).length ? out : null);
+  }
+  // Gewichte der Handecken auf die Fingerglieder verteilen (Knochen wie in fingers, Gewichte als 0..1 oder 0..255)
+  function fingerSkin(FG, pos, si, sw, full) {
+    if (!FG) return null;
+    const n = pos.length / 3;
+    const SI = new Uint16Array(si.length);
+    const SW = new Float32Array(sw.length);
+    const q = new T.Vector3();
+    const sm = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+    const hands = new Set(Object.keys(FG).map((sd) => FG[sd].hb));
+    for (let i = 0; i < n; i++) {
+      let any = false;
+      for (let k = 0; k < 4; k++) if (sw[i * 4 + k] > 0 && hands.has(si[i * 4 + k])) any = true;
+      if (!any) {
+        // Ecke ohne Hand: Gewichte unveraendert uebernehmen
+        for (let k = 0; k < 4; k++) {
+          SI[i * 4 + k] = si[i * 4 + k];
+          SW[i * 4 + k] = sw[i * 4 + k] / full;
+        }
+        continue;
+      }
+      const acc = {};
+      for (let k = 0; k < 4; k++) {
+        const w = sw[i * 4 + k] / full;
+        if (w > 0) acc[si[i * 4 + k]] = (acc[si[i * 4 + k]] || 0) + w;
+      }
+      for (const sd in FG) {
+        const f = FG[sd];
+        const wh = acc[f.hb];
+        if (!wh) continue;
+        q.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).sub(f.H);
+        const t = q.dot(f.h);
+        const a1 = sm((t - f.k1 + f.b) / (2 * f.b));
+        if (!a1) continue;
+        const a2 = sm((t - f.k2 + f.b) / (2 * f.b));
+        acc[f.hb] = wh * (1 - a1);
+        acc[f.i1] = wh * a1 * (1 - a2);
+        acc[f.i2] = wh * a1 * a2;
+      }
+      const top = Object.keys(acc)
+        .map((b) => [+b, acc[b]])
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4);
+      const sum = top.reduce((s, x) => s + x[1], 0) || 1;
+      top.forEach(([b, w], k) => {
+        SI[i * 4 + k] = b;
+        SW[i * 4 + k] = w / sum;
+      });
+    }
+    return { si: SI, sw: SW };
+  }
+  // zwei Fingerglieder je Hand an das Skelett haengen (Reihenfolge wie in fingers)
+  function addFingers(FG, bones) {
+    for (const sd of ["R", "L"]) {
+      const f = FG && FG[sd];
+      if (!f) continue;
+      const b1 = new T.Bone();
+      const b2 = new T.Bone();
+      b1.name = "fingers1." + sd;
+      b2.name = "fingers2." + sd;
+      b1.position.copy(f.p1).sub(f.H);
+      b2.position.copy(f.p2).sub(f.p1);
+      bones[f.hb].add(b1);
+      b1.add(b2);
+      bones[f.i1] = b1;
+      bones[f.i2] = b2;
+    }
   }
 
   // Kopfmass fuer feste Kopfteile (Helme): wie R.gear.fitOf, aber aus dem Netz der Figur
@@ -8092,8 +8280,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     geo.setAttribute("position", new T.BufferAttribute(pos, 3));
     geo.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(pos, Pc.idx), 3));
     geo.setAttribute("uv", new T.BufferAttribute(Pc.uv, 2));
-    geo.setAttribute("skinIndex", new T.BufferAttribute(si, 4));
-    geo.setAttribute("skinWeight", new T.BufferAttribute(sw, 4));
+    // Handschuhe beugen sich mit den Fingern
+    const fs = fingerSkin(fingers(key, E), pos, si, sw, 1);
+    geo.setAttribute("skinIndex", new T.BufferAttribute(fs ? fs.si : si, 4));
+    geo.setAttribute("skinWeight", new T.BufferAttribute(fs ? fs.sw : sw, 4));
     geo.setIndex(new T.BufferAttribute(Pc.idx, 1));
     return (PGEO[ck] = geo);
   }
@@ -8488,18 +8678,33 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     this.cur = { action: "idle", act, kind: "loop", c };
     this.mixer.update(0);
   };
-  // Stab aufrichten: Weltlage zwischen Handdrehung und senkrecht (Richtung der Figur) mischen
+  // Stab aufrichten: Weltlage zwischen Handdrehung und senkrecht (Richtung der Figur) mischen. In der Faust dreht
+  // das Handgelenk den groessten Teil mit (RG.STAFF_WRIST), sonst liefe der Stab neben der Faust statt durch sie.
+  RG.STAFF_WRIST = 0.75;
+  let QP = null, QC = null;
   Player.prototype.fixStaff = function () {
     const W = this.m.parts.weapon;
     const k = W && RG.STAFF[this.m.weaponBase];
     if (!k || !W.parent) return;
+    if (!QP) {
+      QP = new T.Quaternion();
+      QC = new T.Quaternion();
+    }
     if (!W.userData.q0) W.userData.q0 = W.quaternion.clone();
-    W.parent.updateWorldMatrix(true, false);
-    const qh = W.parent.getWorldQuaternion(QH);
+    const hb = W.parent;
+    hb.updateWorldMatrix(true, false);
+    const qh = hb.getWorldQuaternion(QH);
     const qw = QW.copy(qh).multiply(W.userData.q0);
     this.m.obj.getWorldQuaternion(QU);
-    qw.slerp(QU, k);
-    W.quaternion.copy(qh.invert().multiply(qw));
+    const target = QU.slerp(qw, 1 - k);
+    if (this.m.parts.fistR && hb.parent) {
+      // Drehung in Weltlage von der jetzigen Stablage zur Ziellage, ein Teil davon ins Handgelenk
+      const c = QC.copy(target).multiply(qw.invert());
+      c.slerp(QP.identity(), 1 - RG.STAFF_WRIST);
+      qh.premultiply(c);
+      hb.quaternion.copy(hb.parent.getWorldQuaternion(QP).invert().multiply(qh));
+    }
+    W.quaternion.copy(qh.invert().multiply(target));
   };
   Player.prototype.tick = function (dt) {
     const m = this.m;
@@ -8541,6 +8746,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const body = R.grp();
     root.add(body);
     const bones = makeBones(E);
+    const FG = fingers(key, E);
+    addFingers(FG, bones);
     const worn = (desc.genGear || []).filter((p) => E.pieces && E.pieces[p]);
     const masks = worn.map((p) => E.pieces[p].mask).filter(Boolean);
     // Ruestungsteile aus dem gemeinsamen Teil: ausdruecklich genannt oder passend zur getragenen Ausruestung
@@ -8550,7 +8757,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const gk = key + "|" + worn.concat(rp).join(",");
     const rpHide = rp.length && !GGEO[gk] ? pieceHide(rp, key, E) : null;
     const hide = masks.length || rpHide ? (t) => masks.some((mk) => (mk[t >> 3] >> (t & 7)) & 1) || (rpHide && rpHide(t)) : null;
-    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk), mat(key, E.tex, null, null, E.ntex));
+    const mesh = new T.SkinnedMesh(geo(key, E, hide, gk, FG), mat(key, E.tex, null, null, E.ntex));
     E.skel.parents.forEach((p, i) => p < 0 && mesh.add(bones[i]));
     mesh.updateMatrixWorld(true);
     mesh.bind(new T.Skeleton(bones));
@@ -8559,7 +8766,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     body.add(mesh);
     for (const p of worn) {
       const src = E.pieces[p];
-      const pm = new T.SkinnedMesh(geo(key + "." + p, src), mat(key + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
+      const pg = geo(key + "." + p, src, null, null, src.skinI ? FG : null);
+      const pm = new T.SkinnedMesh(pg, mat(key + "." + p, src.tex, src.tex ? null : src.color || "#6b4a32"));
       pm.bind(mesh.skeleton, mesh.bindMatrix);
       pm.frustumCulled = false;
       pm.castShadow = true;
@@ -8595,6 +8803,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         // kleinere Figuren (Glutzwerg) etwas kleinere Klingen
         w.scale.multiplyScalar(1 + ((rev.scale || 1) - 1) * Math.max(0.5, Math.min(1, (E.top - 1.3) / 0.8)));
       }
+    }
+    // Faust um den Griff: Finger beugen sich (die Bewegungen bewegen keine Finger, die Lage bleibt), die Waffe
+    // wandert aus der Handmitte in die Faust
+    for (const sd in FG || {}) {
+      const f = FG[sd];
+      if (!parts["grip" + sd]) continue;
+      bones[f.i1].quaternion.setFromAxisAngle(f.ax, f.sgn * f.a1);
+      bones[f.i2].quaternion.setFromAxisAngle(f.ax, f.sgn * f.a2);
+      const sp = E.sockets["grip" + sd].p;
+      const dp = f.fist.clone().sub(new T.Vector3(sp[0], sp[1], sp[2]));
+      for (const w of [parts.weapon, parts.weapon2]) if (w && w.parent === bones[f.hb]) w.position.add(dp);
+      parts["fist" + sd] = 1;
     }
     parts.rigPieces = rp;
     const model = R.makeModel(root, parts, "hero");
@@ -12584,7 +12804,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   }
   const ease = (u) => u * u * (3 - 2 * u);
   const bell = (u) => Math.sin(PI * u);
-  BE.pose = function (m, name, u) {
+  // einfache Bewegung je Rolle fuer Bestien ohne vollstaendige Beine (aeltere Familien)
+  function poseBasic(m, name, u) {
     const P = m.parts;
     const t = m.t;
     const B = P.B;
@@ -12673,6 +12894,365 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         else rot(b, gait ? Math.max(0, sw) * 0.3 : 0, 0, 0);
       }
     }
+  }
+
+  /* ---------- Vierbeiner mit Pfoten am Boden (erzeugte Bestien wie der Wolf) ----------
+     Jedes Bein hat drei Knochen (Oberarm oder Oberschenkel, Unterarm oder Unterschenkel, Pfote). Die Bewegung setzt
+     Rumpf, Wirbelsaeule, Kopf und Schwanz und gibt je Bein nur den Punkt der Pfote vor; die zwei oberen Knochen folgen
+     ueber eine Gelenkrechnung in der Seitenebene des Beins, die Pfote haelt ihre Neigung. So bleiben die Pfoten beim
+     Lauern, Ducken und Zurueckzucken am Boden, beim Galopp und Sprung heben sie sich in Boegen.
+     Knochen haben keine Ruhedrehung: Drehung um +X schwingt ein Bein nach hinten, senkt Kopf und Rumpfspitze und hebt
+     den Schwanz. */
+  const LEGS = ["FL", "FR", "BL", "BR"];
+  function quadRig(bones, meta) {
+    const V = (a) => new T.Vector3(a[0], a[1], a[2]);
+    const fa = (a, b) => Math.atan2(b.z - a.z, -(b.y - a.y));
+    const yz = (a, b) => Math.hypot(b.y - a.y, b.z - a.z);
+    const find = (nm) => meta.bones.findIndex((b) => b[0] === nm);
+    const legs = {};
+    for (const k of LEGS) {
+      const idx = [1, 2, 3].map((n) => find("leg" + k + n));
+      if (idx.some((i) => i < 0)) return null;
+      const [m1, m2, m3] = idx.map((i) => meta.bones[i]);
+      const J1 = V(m1[2]);
+      const J2 = V(m2[2]);
+      const J3 = V(m3[2]);
+      const tip = V(m3[3]);
+      const parent = bones[m1[1]];
+      const ph = V(meta.bones[m1[1]][2]);
+      legs[k] = {
+        b: idx.map((i) => bones[i]),
+        parent,
+        J1: J1.clone().sub(ph),
+        l1: yz(J1, J2),
+        l2: yz(J2, J3),
+        l3: yz(J3, tip),
+        a1r: fa(J1, J2),
+        a2r: fa(J2, J3),
+        a3r: fa(J3, tip),
+        bend: fa(J1, J2) > fa(J1, J3) ? 1 : -1,
+        tip,
+        front: k[0] === "F",
+        side: k[1] === "L" ? 1 : -1,
+      };
+    }
+    const by = {};
+    for (const b of bones) by[b.name] = b;
+    if (!by.hips || !by.head) return null;
+    return {
+      legs,
+      by,
+      tail: bones.filter((b) => b.userData.role === "tail"),
+      M: new T.Matrix4(),
+      MB: new T.Matrix4(),
+      v: new T.Vector3(),
+      w: new T.Vector3(),
+      d: new T.Vector3(),
+    };
+  }
+
+  const cl01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  const seg = (u, a, b) => cl01((u - a) / (b - a));
+  // Haltung je Bewegung: Rumpf (x, y, z, rx, rz, ry), Wirbel (hips, spine, chest, neck, head), Blick (hy),
+  // Schwanz (tail, wag, wagF) und je Bein { dz, dy, carry (Pfote folgt dem Rumpf), flex (Pfotenneigung), body (Pfote
+  // am Koerper statt am Boden, 0..1) }
+  function quadPose(name, u, t, ph) {
+    const breath = Math.sin(t * 1.9);
+    const Q = {
+      x: 0,
+      y: -0.03 + breath * 0.008,
+      z: 0,
+      rx: 0,
+      rz: Math.sin(t * 0.8) * 0.02,
+      ry: 0,
+      hips: 0.02,
+      spine: 0.035 + breath * 0.012,
+      chest: 0.04,
+      // Lauerhaltung: Kopf tief, Schnauze auf den Gegner
+      neck: 0.24 + Math.sin(t * 0.6) * 0.03,
+      head: -0.2 + Math.sin(t * 1.3) * 0.03,
+      hy: Math.sin(t * 0.55) * 0.12 + Math.sin(t * 7.3) * 0.012,
+      hz: 0,
+      tail: 0.32 + Math.sin(t * 0.9) * 0.04,
+      wag: 0.1,
+      wagF: 1.4,
+      legs: {},
+    };
+    for (const k of LEGS) Q.legs[k] = { dz: 0, dy: 0, carry: 0, flex: 0, body: 0, dyB: 0, dzB: 0 };
+    const L = Q.legs;
+    switch (name) {
+      case "walk": {
+        // Galopp: Hinterbeine kurz nacheinander, dann die Vorderbeine; Ruecken beugt und streckt sich
+        const f = (t * 3.1) % 1;
+        const PH = { BL: 0, BR: 0.1, FL: 0.48, FR: 0.6 };
+        const st = 0.42;
+        for (const k of LEGS) {
+          const l = L[k];
+          const fr = k[0] === "F";
+          const A = fr ? 0.2 : 0.17;
+          const p = (f + PH[k]) % 1;
+          l.carry = 1;
+          if (p < st) {
+            l.dz = A - (2 * A * p) / st;
+          } else {
+            const w = (p - st) / (1 - st);
+            l.dz = -A + 2 * A * ease(w);
+            l.dy = (fr ? 0.14 : 0.1) * Math.sin(PI * w);
+            l.flex = fr ? -1.5 * Math.sin(PI * w) : 0.55 * Math.sin(PI * w);
+          }
+        }
+        const c = Math.sin(2 * PI * f);
+        Q.y = 0.01 + 0.035 * Math.sin(4 * PI * f + 0.6);
+        Q.hips = 0.06 * c;
+        Q.spine = 0.03 + 0.11 * Math.sin(2 * PI * f + 0.9);
+        Q.chest = 0.05 * Math.sin(2 * PI * f + 1.4);
+        Q.neck = 0.08 - 0.09 * c;
+        Q.head = -0.06 + 0.07 * c;
+        Q.hy = 0;
+        Q.rz = 0;
+        Q.tail = 0.5 + 0.08 * c;
+        Q.wag = 0.05;
+        break;
+      }
+      case "attack":
+      case "special": {
+        // Sprungbiss: ducken, abspringen (Hinterbeine stossen ab), Biss mit Kopfschuetteln, zurueck in den Stand
+        const sp = name === "special";
+        const zMax = sp ? 0.42 : 0.5;
+        const hMax = sp ? 0.38 : 0.13;
+        const c = seg(u, 0, 0.3);
+        const crouch = u < 0.3 ? ease(c) : 1 - ease(seg(u, 0.3, 0.42));
+        const leap = seg(u, 0.3, 0.6);
+        const land = u > 0.6 ? Math.sin(PI * seg(u, 0.6, 0.78)) : 0;
+        const back = ease(seg(u, 0.8, 1));
+        Q.z = u < 0.3 ? -0.07 * ease(c) : u < 0.6 ? -0.07 + (zMax + 0.07) * ease(leap) : zMax * (1 - back);
+        Q.y = -0.03 - 0.1 * crouch + (u > 0.3 && u < 0.62 ? hMax * Math.sin(PI * seg(u, 0.3, 0.62)) : 0) - 0.05 * land;
+        Q.hips = 0.02 + 0.08 * crouch - 0.12 * Math.sin(PI * leap);
+        Q.spine = 0.12 * crouch - 0.1 * Math.sin(PI * leap);
+        Q.chest = 0.04 + 0.06 * crouch;
+        const bite = Math.sin(PI * seg(u, 0.46, 0.62));
+        Q.neck = 0.24 + 0.2 * crouch - 0.45 * Math.sin(PI * leap) + 0.3 * bite;
+        Q.head = -0.2 - 0.15 * crouch + 0.1 * Math.sin(PI * leap) + 0.25 * bite;
+        const shake = u > 0.55 && u < 0.85 ? Math.sin(PI * seg(u, 0.55, 0.85)) : 0;
+        Q.hy = shake * (sp ? 0.4 : 0.28) * Math.sin(t * 38);
+        Q.hz = shake * 0.15 * Math.sin(t * 38 + 1);
+        Q.tail = 0.45 + 0.25 * Math.sin(PI * leap);
+        Q.wag = 0.05;
+        if (sp) Q.rz = 0.25 * Math.sin(PI * leap) * Math.sin(PI * leap);
+        const air = u > 0.32 && u < 0.6 ? Math.sin(PI * seg(u, 0.32, 0.6)) : 0;
+        for (const k of LEGS) {
+          const l = L[k];
+          if (k[0] === "F") {
+            // Vorderpfoten greifen nach vorn und landen weiter vorn
+            l.carry = 1;
+            l.dz = 0.3 * air;
+            l.dy = (sp ? 0.24 : 0.18) * air + 0.04 * Math.sin(PI * seg(u, 0.82, 1));
+            l.flex = -0.5 * air;
+          } else {
+            // Hinterpfoten bleiben beim Absprung stehen und ziehen in der Luft nach
+            l.carry = ease(seg(u, 0.42, 0.62));
+            l.dy = 0.1 * Math.sin(PI * seg(u, 0.42, 0.66)) + 0.04 * Math.sin(PI * seg(u, 0.82, 1));
+            l.dz = -0.08 * Math.sin(PI * seg(u, 0.42, 0.66));
+            l.flex = 0.5 * Math.sin(PI * seg(u, 0.42, 0.66));
+          }
+        }
+        break;
+      }
+      case "hit": {
+        // zurueckzucken: Kopf hoch und weg, Ruecken rund, Schwanz eingezogen, Pfoten bleiben stehen
+        const k = u < 0.22 ? ease(u / 0.22) : 1 - ease(seg(u, 0.22, 1));
+        Q.z = -0.12 * k;
+        Q.y += 0.015 * k;
+        Q.hips = 0.02 - 0.08 * k;
+        Q.spine -= 0.14 * k;
+        Q.neck = 0.24 - 0.5 * k;
+        Q.head = -0.2 - 0.15 * k;
+        Q.hy = 0.3 * k * ph;
+        Q.hz = -0.15 * k * ph;
+        Q.rz = 0.07 * k * ph;
+        Q.tail = 0.32 - 0.7 * k;
+        Q.wag = 0.02;
+        break;
+      }
+      case "evade": {
+        // Satz zurueck: ducken, mit hoher Brust abspringen, Pfoten angezogen, landen
+        const c = u < 0.2 ? ease(u / 0.2) : 1 - ease(seg(u, 0.2, 0.32));
+        const air = Math.sin(PI * seg(u, 0.2, 0.72));
+        const land = Math.sin(PI * seg(u, 0.7, 0.92));
+        Q.y = -0.03 - 0.08 * c + 0.16 * air - 0.05 * land;
+        Q.hips = 0.02 - 0.22 * air + 0.06 * c;
+        Q.spine = 0.08 * c - 0.06 * air;
+        Q.neck = 0.24 - 0.3 * air;
+        Q.head = -0.2 + 0.1 * air;
+        Q.tail = 0.32 + 0.2 * air;
+        for (const k of LEGS) {
+          const l = L[k];
+          l.carry = 1;
+          l.dy = (k[0] === "F" ? 0.12 : 0.07) * air;
+          l.dz = (k[0] === "F" ? -0.06 : 0.04) * air;
+          l.flex = (k[0] === "F" ? -0.9 : 0.4) * air;
+        }
+        break;
+      }
+      case "block": {
+        // ducken und abwehren: Brust tief, Kopf zur Seite, Lefzen zum Gegner
+        const k = Math.sin(PI * u);
+        Q.y -= 0.08 * k;
+        Q.z = -0.05 * k;
+        Q.hips = 0.02 + 0.06 * k;
+        Q.neck = 0.24 + 0.25 * k;
+        Q.head = -0.2 - 0.25 * k;
+        Q.hy = 0.25 * k * ph;
+        Q.tail = 0.32 - 0.4 * k;
+        break;
+      }
+      case "cast": {
+        const k = Math.sin(PI * u);
+        Q.hips = 0.02 - 0.12 * k;
+        Q.neck = 0.24 - 0.7 * k;
+        Q.head = -0.2 - 0.4 * k;
+        Q.hy = 0.03 * k * Math.sin(t * 22);
+        break;
+      }
+      case "victory": {
+        // Siegesgeheul: Hinterteil tiefer, Brust und Schnauze zum Himmel, Schwanz wedelt
+        const r = u < 0.15 ? ease(u / 0.15) : u > 0.85 ? 1 - ease(seg(u, 0.85, 1)) : 1;
+        Q.y = -0.03 - 0.07 * r;
+        Q.hips = 0.02 - 0.2 * r;
+        Q.spine = 0.035 - 0.08 * r;
+        Q.chest = 0.04 - 0.1 * r;
+        Q.neck = 0.24 - 0.95 * r;
+        Q.head = -0.2 - 0.45 * r + 0.03 * r * Math.sin(t * 21);
+        Q.hy = 0.04 * r * Math.sin(t * 2.5);
+        Q.tail = 0.32 + 0.1 * r;
+        Q.wag = 0.1 + 0.3 * r;
+        Q.wagF = 1.4 + 6 * r;
+        for (const k of ["BL", "BR"]) L[k].dz = 0.05 * r;
+        break;
+      }
+      case "defeat": {
+        // Vorderbeine knicken ein, dann die Hinterbeine, der Koerper kippt auf die Seite, die Beine werden schlaff
+        const fr = ease(seg(u, 0, 0.35));
+        const bk = ease(seg(u, 0.25, 0.6));
+        const roll = ease(seg(u, 0.45, 0.9));
+        Q.hips = 0.02 + 0.22 * fr - 0.15 * bk;
+        Q.spine = 0.05 * fr;
+        Q.y = -0.03 - 0.12 * fr - 0.18 * bk + 0.42 * roll;
+        Q.rz = 1.42 * roll;
+        Q.x = 0.62 * roll;
+        Q.neck = 0.24 + 0.25 * fr - 0.15 * roll;
+        Q.head = -0.2 + 0.25 * fr + 0.05 * roll;
+        Q.hy = 0;
+        Q.tail = 0.32 - 0.5 * fr;
+        Q.wag = 0.02 * (1 - roll);
+        for (const k of LEGS) {
+          const l = L[k];
+          l.body = roll;
+          l.dyB = k[0] === "F" ? 0.14 : 0.1;
+          l.dzB = k[0] === "F" ? 0.08 : -0.04;
+          l.flex = k[0] === "F" ? -0.6 * roll : 0.3 * roll;
+        }
+        break;
+      }
+    }
+    return Q;
+  }
+
+  // Gelenkrechnung eines Beins: Pfotenspitze und Pfotenneigung im Raum des Elternknochens
+  function solveLeg(l, tip, a3) {
+    const J = l.J1;
+    const sn = Math.sin(a3);
+    const cs = Math.cos(a3);
+    // Punkt am Ende von Unterarm oder Unterschenkel
+    const ty0 = tip.y + l.l3 * cs;
+    const tz0 = tip.z - l.l3 * sn;
+    let dy = ty0 - J.y;
+    let dz = tz0 - J.z;
+    let d = Math.hypot(dy, dz);
+    const aD = Math.atan2(dz, -dy);
+    d = Math.max(Math.abs(l.l1 - l.l2) * 1.05 + 1e-3, Math.min((l.l1 + l.l2) * 0.999, d));
+    const ca = (l.l1 * l.l1 + d * d - l.l2 * l.l2) / (2 * l.l1 * d);
+    const A = Math.acos(Math.max(-1, Math.min(1, ca)));
+    const a1 = aD + l.bend * A;
+    const ky = J.y - l.l1 * Math.cos(a1);
+    const kz = J.z + l.l1 * Math.sin(a1);
+    const ty = J.y - d * Math.cos(aD);
+    const tz = J.z + d * Math.sin(aD);
+    const a2 = Math.atan2(tz - kz, -(ty - ky));
+    const t1 = l.a1r - a1;
+    const t2 = l.a2r - a2 - t1;
+    const t3 = l.a3r - a3 - t1 - t2;
+    return [t1, t2, t3];
+  }
+
+  function poseQuad(m, name, u) {
+    const P = m.parts;
+    const Qr = P.quad;
+    const t = m.t;
+    if (name === "defeat" && !m.anim) u = 1;
+    if (P.hitSide == null) P.hitSide = Math.random() < 0.5 ? -1 : 1;
+    if (name !== "hit" && name !== "block") P.hitSide = null;
+    const Q = quadPose(name, u, t, P.hitSide || 1);
+    const by = Qr.by;
+    P.body.position.set(Q.x, Q.y, Q.z);
+    P.body.rotation.set(Q.rx, Q.ry, Q.rz);
+    by.hips.quaternion.setFromEuler(EU.set(Q.hips, 0, 0));
+    if (by.spine) by.spine.quaternion.setFromEuler(EU.set(Q.spine, Math.sin(t * 1.1) * 0.015, 0));
+    if (by.chest) by.chest.quaternion.setFromEuler(EU.set(Q.chest, 0, 0));
+    if (by.neck) by.neck.quaternion.setFromEuler(EU.set(Q.neck, Q.hy * 0.4, 0));
+    by.head.quaternion.setFromEuler(EU.set(Q.head, Q.hy * 0.6, Q.hz));
+    Qr.tail.forEach((b, i) => {
+      const sw = Math.sin(t * Q.wagF * 1.6 - i * 0.8) * Q.wag * (1 + i * 0.4);
+      b.quaternion.setFromEuler(EU.set(i ? Math.sin(t * 1.2 + i) * 0.04 : Q.tail, sw, 0));
+    });
+    // Beine: erst Rumpf und Wirbel in die Welt rechnen, dann je Bein von Boden und Koerper in den Elternknochen
+    const root = P.body.parent;
+    P.body.updateMatrixWorld(true);
+    const s = P.body.scale.x;
+    for (const k of LEGS) {
+      const l = Qr.legs[k];
+      const q = Q.legs[k];
+      const M = Qr.M.copy(l.parent.matrixWorld).invert();
+      let tip = null;
+      let a3 = 0;
+      if (q.body < 1) {
+        // Boden: Pfote an ihrer Ruhestelle (oder mit dem Rumpf mitgenommen) plus Versatz der Bewegung
+        const v = Qr.v.set(l.tip.x * s + q.carry * Q.x, l.tip.y * s + q.dy * s, l.tip.z * s + q.carry * Q.z + q.dz * s);
+        const MG = Qr.MB.multiplyMatrices(M, root.matrixWorld);
+        v.applyMatrix4(MG);
+        const dir = Qr.d.set(0, -Math.cos(l.a3r + q.flex), Math.sin(l.a3r + q.flex)).transformDirection(MG);
+        tip = v;
+        a3 = Math.atan2(dir.z, -dir.y);
+      }
+      if (q.body > 0) {
+        // Koerper: Pfote angezogen am Rumpf (liegend)
+        const MB = Qr.MB.multiplyMatrices(M, P.body.matrixWorld);
+        const w = Qr.w.set(l.tip.x, l.tip.y + q.dyB, l.tip.z + q.dzB).applyMatrix4(MB);
+        const dir = Qr.d.set(0, -Math.cos(l.a3r + q.flex), Math.sin(l.a3r + q.flex)).transformDirection(MB);
+        const ab = Math.atan2(dir.z, -dir.y);
+        if (tip) {
+          tip.lerp(w, q.body);
+          a3 += (ab - a3) * q.body;
+        } else {
+          tip = w;
+          a3 = ab;
+        }
+      }
+      const th = solveLeg(l, tip, a3);
+      for (let i = 0; i < 3; i++) l.b[i].quaternion.setFromAxisAngle(XAX, th[i]);
+    }
+  }
+  let XAX = null;
+
+  BE.pose = function (m, name, u) {
+    const P = m.parts;
+    if (P.quad === undefined) {
+      P.quad = quadRig(P.bones, P.meta);
+      if (!XAX) XAX = new T.Vector3(1, 0, 0);
+      if (!EU) EU = new T.Euler();
+    }
+    if (P.quad) poseQuad(m, name, u);
+    else poseBasic(m, name, u);
   };
 })();
 
@@ -19446,7 +20026,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       else h += "<li><b>Dein Held " + esc(s.name) + "</b> bekommt die neue Figur, sobald sie geladen ist.</li>";
       h += "<li><b>Gegner aus Midgard</b> (Nordmann und Trollblut) in der Arena und in der Rangliste.</li>";
       h += "<li><b>Heldenerschaffung:</b> Wer einen Midgard-Helden anlegt, sieht die neue Figur auf dem Sockel.</li>";
-      h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li></ul>";
+      h += "<li><b>Funzel und Krawall</b> aus Midgard zeigen sie in ihren Portraits.</li>";
+      if (SB.R3D.beasts && SB.R3D.beasts.has && SB.R3D.beasts.has("wolf")) h += "<li><b>Wölfe</b> (Grauwolf, Frostwolf, Schattenwolf) im Kampf: neues Modell aus Meshy. Er lauert mit tiefem Kopf, galoppiert heran, springt zum Biss, zuckt bei Treffern zurück und heult beim Sieg.</li>";
+      h += "</ul>";
       h += '<div class="section-title">Noch nicht dabei</div><ul class="neu-list muted"><li>Rüstung, Helm und Umhang auf den neuen Figuren: kommt mit der Wechselausrüstung (nächster Schritt). Waffe und Schild sitzen schon in der Hand.</li><li>Neue Figuren für Albion und Hibernia: erst wenn du Midgard abgenommen hast.</li><li>Frostwicht und Glutzwerg als wählbare Völker: dafür brauche ich deine Entscheidung zu ihren Stärken.</li></ul>';
       return h;
     },
@@ -19511,7 +20093,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
       const gen = (SB.assets.data && SB.assets.data.gen) || {};
-      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur. Ausrüstung und Kampfumgebung folgen im nächsten Schritt.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
       h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Frostwicht und Glutzwerg konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
