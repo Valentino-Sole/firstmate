@@ -64,6 +64,20 @@
       skins: ["#7a8a9a", "#5f7a6a", "#8a6a8a", "#6a7f9a"], hairs: ["#1f1f24", "#3a2a2a", "#d9d2c5", "#2f4f6f", "#5a3a2a"],
       ears: "long", horns: true, tusks: true, height: 1.12, width: 1.25, bulk: 1.3,
     },
+    frostwicht: {
+      name: "Frostwicht", realm: "midgard",
+      desc: "Flinke Wichte aus dem ewigen Eis, mit Reif an den Ohrspitzen. Kalte Hände, noch kältere Witze.",
+      mods: { kraft: -1, geschick: 3, verstand: 1, konstitution: -1, glueck: 0 },
+      skins: ["#dfe9f2", "#c8dbea", "#b9cfe3", "#e8eef4"], hairs: ["#f4f7fa", "#cfe3f2", "#a9c4dc", "#e6e6ef", "#7f9ab5"],
+      ears: "elf", height: 0.88, width: 0.9, bulk: 0.85,
+    },
+    glutzwerg: {
+      name: "Glutzwerg", realm: "midgard",
+      desc: "Breite Zwerge aus den Glutschmieden unter dem Gletscher. Ihre Runen glimmen, manchmal raucht auch der Bart.",
+      mods: { kraft: 2, geschick: -2, verstand: 1, konstitution: 2, glueck: -1 },
+      skins: ["#6b4430", "#5a3626", "#7a5038", "#4e2f22"], hairs: ["#c2461e", "#d9662a", "#9b3418", "#e08a3a", "#3a2a22"],
+      ears: "human", height: 0.76, width: 1.3, bulk: 1.3,
+    },
     sidhe: {
       name: "Sidhe", realm: "hibernia",
       desc: "Das Alte Volk der Feenhügel. Schlank, alterslos und mit Augen, die zu viel gesehen haben.",
