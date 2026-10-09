@@ -37,6 +37,7 @@ import rebake as RB  # noqa: E402
 
 NT, NA = 12, 24          # Felder entlang des Knochens und um ihn herum
 T0, T1 = -0.25, 1.25     # betrachteter Bereich entlang des Knochens (0 = Gelenk, 1 = Folgegelenk)
+LIFT_GAP = 0.004         # so weit liegt ein Teil nach lift() mindestens ueber dem Koerperprofil (Meter)
 REGION = {
     "brust": (["hips", "spine", "chest", "clavicle.L", "clavicle.R"], None),
     "handschuhe": (["hand.L", "hand.R", "forearm.L", "forearm.R"], {"forearm": 0.45}),
@@ -284,40 +285,60 @@ def signed_dist(tree, P):
     return sd, nrm
 
 
-def push_out(V, tree, offset, radius, rounds=3):
-    """Ecken, die naeher als offset an der Haut oder darin liegen, nach aussen schieben; der Schub wirkt mit
-    abnehmender Staerke auch auf alle Ecken im Umkreis radius. So bewegen sich Innen- und Aussenseite duenner Stoffe
-    gemeinsam und keine innere Lage stoesst durch die aeussere (vorher: jede Ecke einzeln, die Teile zerknitterten)."""
-    from scipy.spatial import cKDTree
-    V = V.copy()
+def _neighbours(X):
+    rows = [np.vstack([X[:1], X[:-1]]), X, np.vstack([X[1:], X[-1:]])]
+    return np.stack([np.roll(Y, da, 1) for Y in rows for da in (-1, 0, 1)])
+
+
+def _blur(X):
+    X = (np.roll(X, 1, 1) + 2 * X + np.roll(X, -1, 1)) / 4
+    return (np.vstack([X[:1], X[:-1]]) + 2 * X + np.vstack([X[1:], X[-1:]])) / 4
+
+
+def lift(enc, w2, prof, gap=LIFT_GAP, rounds=5):
+    """Teil knapp ueber das Koerperprofil heben, als glatte Flaeche je Knochen: je Feld der noetige Hub der Ecken, die
+    naeher als gap am Profil oder darin liegen, auf die Nachbarfelder ausgedehnt und geglaettet, dann fuer alle Ecken
+    des Knochens auf ihren Abstand addiert. Innen- und Aussenlage duenner Stoffe liegen im selben Feld und bekommen
+    denselben Hub. Vorher wurde jede Ecke mit ihrer Umgebung entlang der Hautnormalen geschoben; dabei kreuzten sich
+    die Lagen (Kapuzen 7 %, Harnische 12 %, Roben 27 % der sichtbaren Flaeche waren Rueckseiten, jetzt 1,5 bis 3 %).
+    Da das Spiel dasselbe Profil je Koerper nimmt, liegt das Teil auch auf anderen Koerpern ueber der Haut."""
+    enc = enc.copy()
     for _ in range(rounds):
-        sd, nrm = signed_dist(tree, V)
-        need = np.maximum(0.0, offset - sd)
-        hot = np.nonzero(need > 1e-4)[0]
-        if not len(hot):
-            break
-        kd = cKDTree(V[hot])
-        disp = np.zeros_like(V)
-        best = np.zeros(len(V))
-        for j, nb in enumerate(kd.query_ball_point(V, radius)):
-            if not nb:
+        moved = False
+        for b in np.unique(enc[:, :, 0]).astype(int):
+            sel = enc[:, :, 0] == b
+            strong = sel & (w2 > 0.15)
+            need = np.maximum(0.0, gap - enc[..., 3][strong])
+            if not len(need) or need.max() < 1e-4:
                 continue
-            nb = np.array(nb)
-            d = np.linalg.norm(V[hot[nb]] - V[j], axis=1)
-            # bis zur halben Reichweite voller Schub (die naechste Stofflage geht ganz mit), danach abnehmend
-            w = need[hot[nb]] * np.clip(2 * (1 - d / radius), 0, 1)
-            k = int(np.argmax(w))
-            if w[k] > best[j]:
-                best[j] = w[k]
-                disp[j] = nrm[hot[nb[k]]] * w[k]
-        V += disp
-    return V
+            ti, ai = bins(enc[..., 1][strong], enc[..., 2][strong])
+            L = np.zeros((NT, NA))
+            np.maximum.at(L, (ti, ai), need)
+            L = _blur(_blur(_neighbours(L).max(0)))
+            enc[..., 3][sel] += sample(L, enc[..., 1][sel], enc[..., 2][sel])
+            moved = True
+        if not moved:
+            break
+    return enc
 
 
-def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, push=True, grow=6):
-    """Teil vom Koerper freistellen und Gewichte uebertragen. rigid: Mittelpunkt, um den das Teil als Ganzes
-    gleichmaessig waechst (grow Schritte zu 1,5 %), bis es fast ganz ausserhalb liegt (Helme, Kapuzen, Masken behalten so ihre Form);
-    sonst und danach werden die restlichen Ecken mit ihrer Umgebung nach aussen geschoben (push_out)."""
+def decode(enc, w2, Fr, prof):
+    """Ecken aus der knochenbezogenen Beschreibung zurueckrechnen (wie pieceGeo in src/r3d-rigged.js)."""
+    P = np.zeros((len(enc), 3))
+    for k in range(2):
+        for b in np.unique(enc[:, k, 0]).astype(int):
+            sel = enc[:, k, 0] == b
+            Pb, ax, L, u, v = Fr[b]
+            t, th, off = enc[sel, k, 1], enc[sel, k, 2], enc[sel, k, 3]
+            rad = np.maximum(0.002, sample(prof[b], t, th) + off)
+            P[sel] += w2[sel, k, None] * (Pb + np.outer(t * L, ax) + (np.outer(np.cos(th), u) + np.outer(np.sin(th), v)) * rad[:, None])
+    return P / np.maximum(w2.sum(1), 1e-9)[:, None]
+
+
+def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, grow=6):
+    """Gewichte vom Koerper uebertragen. rigid: Mittelpunkt, um den das Teil vorher als Ganzes gleichmaessig waechst
+    (grow Schritte zu 1,5 %), bis es fast ganz ausserhalb liegt (Helme, Kapuzen, Masken behalten so ihre Form); den
+    Rest hebt danach lift() an."""
     import bpy
     from mathutils import Vector
     from mathutils.bvhtree import BVHTree
@@ -350,8 +371,6 @@ def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, push=True, grow=
             if (sd < offset * 0.5).mean() < 0.03:
                 break
             V = c + (V - c) * 1.015
-    if push:
-        V = push_out(V, tree, offset, max(0.03, 3 * offset))
     piece = mk("teil", V, inv[ptri])
 
     def apply(ob, mod):
@@ -518,9 +537,7 @@ def main():
         rigid = (np.percentile(hreg, 2, axis=0) + np.percentile(hreg, 98, axis=0)) / 2
     else:
         rigid = None
-    # Umhaenge haengen frei: nicht schieben (zerknitterte sonst Fell und Saeume); das Spiel hebt sie gleichmaessig
-    # vom Ruecken ab (cloakGeo in src/r3d-rigged.js)
-    fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, push=a.slot != "umhang", grow=a.wachsen)
+    fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, grow=a.wachsen)
     if a.slot == "umhang":
         keep = np.zeros(nb, bool)
         keep[[tmap[r] for r in CAPE_BONES if r in tmap]] = True
@@ -564,6 +581,11 @@ def main():
             enc[m, k, 1] = t
             enc[m, k, 2] = th
             enc[m, k, 3] = d - sample(prof[b], t, th)
+    # ueber die Haut heben; Umhaenge haengen frei und werden nicht gehoben (zerknitterte sonst Fell und Saeume), das
+    # Spiel hebt sie gleichmaessig vom Ruecken ab (cloakGeo in src/r3d-rigged.js)
+    if a.slot != "umhang":
+        enc = lift(enc, w2, prof)
+        fpos = decode(enc, w2, Fr, prof)
     # belegte Felder je Knochen (Haut darunter ausblenden), um ein Feld erweitert. Helme mit offenem Gesicht
     # (Nasen- und Wangenschutz) wuerden so das ganze Gesicht belegen: dort gilt ein Feld nur als belegt, wenn der Helm
     # die Haut darin wirklich ueberdeckt (Strahl von der Haut nach aussen trifft den Helm)

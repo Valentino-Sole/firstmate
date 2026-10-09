@@ -203,8 +203,12 @@ Wichtige Regeln der Strecke:
   Seit 0.70 backen `fit_piece.py` und `weapon.py` die Farbe auf neue, große Texturinseln auf (`gen/rebake.py`, Teile
   768 Pixel, Waffen 512; `--ohne-backen` wie vorher). Meshy zerlegt die Textur in hunderte Schnipsel; verkleinert
   liefen sie ineinander (Flecken, ausgefranste Kanten). Freistellen ohne Zerknittern: Kopfteile wachsen als Ganzes,
-  bis der Kopf darin Platz hat, übrige Ecken in der Haut werden samt Umgebung nach außen geschoben (vorher jede Ecke
-  einzeln: bei dünnem Stoff stieß die Innenlage durch die Außenlage). Das Gesicht (vorn, unterhalb der Stirn) wird unter
+  bis der Kopf darin Platz hat; danach hebt `lift()` das Teil knapp (`LIFT_GAP`, 4 mm) über das Körperprofil, als
+  glatte Fläche je Knochen in der knochenbezogenen Beschreibung, die auch das Spiel nutzt. Innen- und Außenlage dünner
+  Stoffe bekommen so denselben Hub. Vorher wurde jede Ecke mit ihrer Umgebung entlang der Hautnormalen geschoben; dabei
+  kreuzten sich die Lagen (bis 27 % der sichtbaren Fläche einer Robe waren Rückseiten, jetzt 1,5 bis 3 %). Messen lässt
+  sich das, indem man Strahlen aus vielen Richtungen auf das Teil schießt und zählt, wie oft zuerst eine Rückseite
+  getroffen wird. Das Gesicht (vorn, unterhalb der Stirn) wird unter
   Masken und Visieren nie ausgeblendet. Kopfteile wachsen höchstens `--wachsen` Schritte zu 1,5 % (Standard 6 für Helme; weite
   Kapuzen und Masken 40). Das Kopfprofil, an dem sich Kopfteile ausrichten, verliert schmale Spitzen wie Hörner und spitze
   Ohren (`open_spikes`, im Spiel `openSpikes`); sonst beulten sie Kapuzen aus und die Innenseite stach durch.
