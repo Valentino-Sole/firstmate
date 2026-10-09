@@ -38,6 +38,7 @@ import rebake as RB  # noqa: E402
 NT, NA = 12, 24          # Felder entlang des Knochens und um ihn herum
 T0, T1 = -0.25, 1.25     # betrachteter Bereich entlang des Knochens (0 = Gelenk, 1 = Folgegelenk)
 LIFT_GAP = 0.004         # so weit liegt ein Teil nach lift() mindestens ueber dem Koerperprofil (Meter)
+WEIGHT_RADIUS = 0.03     # Umkreis, in dem smooth_weights() die Knochengewichte angleicht (Meter)
 REGION = {
     "brust": (["hips", "spine", "chest", "clavicle.L", "clavicle.R"], None),
     "handschuhe": (["hand.L", "hand.R", "forearm.L", "forearm.R"], {"forearm": 0.45}),
@@ -335,6 +336,23 @@ def decode(enc, w2, Fr, prof):
     return P / np.maximum(w2.sum(1), 1e-9)[:, None]
 
 
+def smooth_weights(P, W, radius=WEIGHT_RADIUS, rounds=2):
+    """Knochengewichte raeumlich angleichen: Mittel ueber alle Ecken im Umkreis radius (Gauss). Die Gewichte kommen von
+    der naechsten Hautstelle; Innen- und Aussenlage eines Stoffs hingen so an verschiedenen Knochen (Kopf und Hals,
+    Brust und Schulter) und verschoben sich in jeder Bewegung gegeneinander, die Innenlage stach dann durch (in der
+    Grundhaltung sauber, im Spiel dunkle Flecken). Mit gleichen Gewichten bewegen sich nahe Lagen gleich."""
+    from scipy.sparse import coo_matrix, diags
+    from scipy.spatial import cKDTree
+    kd = cKDTree(P)
+    S = kd.sparse_distance_matrix(kd, radius, output_type="coo_matrix")
+    n = len(P)
+    K = coo_matrix((np.r_[np.exp(-(S.data / (radius / 2)) ** 2), np.ones(n)], (np.r_[S.row, np.arange(n)], np.r_[S.col, np.arange(n)])), shape=(n, n)).tocsr()
+    K = diags(1.0 / np.asarray(K.sum(1)).ravel()) @ K
+    for _ in range(rounds):
+        W = K @ W
+    return W
+
+
 def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, grow=6):
     """Gewichte vom Koerper uebertragen. rigid: Mittelpunkt, um den das Teil vorher als Ganzes gleichmaessig waechst
     (grow Schritte zu 1,5 %), bis es fast ganz ausserhalb liegt (Helme, Kapuzen, Masken behalten so ihre Form); den
@@ -538,6 +556,7 @@ def main():
     else:
         rigid = None
     fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, grow=a.wachsen)
+    fW = smooth_weights(fpos, fW)
     if a.slot == "umhang":
         keep = np.zeros(nb, bool)
         keep[[tmap[r] for r in CAPE_BONES if r in tmap]] = True

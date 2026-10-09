@@ -208,7 +208,8 @@ Wichtige Regeln der Strecke:
   Stoffe bekommen so denselben Hub. Vorher wurde jede Ecke mit ihrer Umgebung entlang der Hautnormalen geschoben; dabei
   kreuzten sich die Lagen (bis 27 % der sichtbaren Fläche einer Robe waren Rückseiten, jetzt 1,5 bis 3 %). Messen lässt
   sich das, indem man Strahlen aus vielen Richtungen auf das Teil schießt und zählt, wie oft zuerst eine Rückseite
-  getroffen wird. Das Gesicht (vorn, unterhalb der Stirn) wird unter
+  getroffen wird. Die Knochengewichte gleicht `smooth_weights()` im Umkreis von 3 cm an; sonst hingen Innen- und
+  Außenlage an verschiedenen Knochen und kreuzten sich in jeder Bewegung (in der Grundhaltung unsichtbar). Das Gesicht (vorn, unterhalb der Stirn) wird unter
   Masken und Visieren nie ausgeblendet. Kopfteile wachsen höchstens `--wachsen` Schritte zu 1,5 % (Standard 6 für Helme; weite
   Kapuzen und Masken 40). Das Kopfprofil, an dem sich Kopfteile ausrichten, verliert schmale Spitzen wie Hörner und spitze
   Ohren (`open_spikes`, im Spiel `openSpikes`); sonst beulten sie Kapuzen aus und die Innenseite stach durch.
