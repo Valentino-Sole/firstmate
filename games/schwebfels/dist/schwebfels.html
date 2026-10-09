@@ -7950,6 +7950,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const tk = texKey || "rig." + key;
     const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture(tk, ref, { srgb: true }) : null });
     if (nref) m.normalMap = SB.assets.texture(tk + ".n", nref, { srgb: false });
+    // Ruestungsteile und Waffen beidseitig: Meshys Stoffe und Klingen sind duenne Doppelschichten, die sich nach dem
+    // Verkleinern und Anpassen stellenweise kreuzen; einseitig sah man dort durch Loecher auf dunkle Rueckseiten
+    if (/^(piece|weapon)\./.test(key)) m.side = T.DoubleSide;
     return (GMAT[key] = m);
   }
   function makeBones(E) {
@@ -8281,7 +8284,38 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
     }
     for (let b = 0; b < nb; b++) PR[b] = fill(PR[b], NT, NA);
+    if (PR[E.map.head]) PR[E.map.head] = openSpikes(PR[E.map.head], g);
     return (PROF[ck] = { Fr, R: PR });
+  }
+  /* Kopfprofil ohne schmale Spitzen (Hoerner, spitze Ohren): kleinster Wert der 3 x 3 Nachbarfelder, davon wieder der
+     groesste. Helme und Kapuzen folgten sonst den Hoernern und ihre Innenseite stach als dunkler Fleck durch; die
+     Hoerner liegen nun darunter und werden mit der Haut ausgeblendet. Vorn in Gesichtsmitte bleibt das Profil (Nase,
+     Bart unter Masken). Gleich in assets-src/gen/fit_piece.py (open_spikes). */
+  function openSpikes(Q, g) {
+    const [NT, NA, T0, T1] = g;
+    const pass = (X, pick) => {
+      const Y = new Float32Array(NT * NA);
+      for (let t = 0; t < NT; t++) {
+        for (let a = 0; a < NA; a++) {
+          let v = X[t * NA + a];
+          for (let dt = -1; dt <= 1; dt++) {
+            const tt = Math.min(NT - 1, Math.max(0, t + dt));
+            for (let da = -1; da <= 1; da++) v = pick(v, X[tt * NA + ((a + da + NA) % NA)]);
+          }
+          Y[t * NA + a] = v;
+        }
+      }
+      return Y;
+    };
+    const O = pass(pass(Q, Math.min), Math.max);
+    for (let t = 0; t < NT; t++) {
+      const tc = T0 + ((t + 0.5) * (T1 - T0)) / NT;
+      for (let a = 0; a < NA; a++) {
+        const ac = -Math.PI + ((a + 0.5) * 2 * Math.PI) / NA;
+        if (tc < 0.6 && Math.abs(ac) < (40 * Math.PI) / 180) O[t * NA + a] = Q[t * NA + a];
+      }
+    }
+    return O;
   }
   // leere Felder aus den Nachbarn auffuellen, dann um die Achse leicht glaetten (wie fit_piece.fill)
   function fill(Q, NT, NA) {
@@ -8476,9 +8510,77 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     geo.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(pos, Pc.idx), 3));
     return (PGEO[ck] = geo);
   }
-  // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen
+  /* Innerster Abstand eines Kopfteils von der Kopfmitte je Richtung (Infinity: kein Teil in dieser Richtung). Was am
+     Kopf weiter hinausragt (Hoerner, spitze Ohren, Haar am Scheitel), stuende durch das Teil hindurch und wird
+     ausgeblendet, auch im Gesicht, wo die belegten Felder sonst nichts ausblenden. Richtungen um die Kopfmitte statt
+     Abstand von der Kopfachse, sonst blieb der Scheitel unerfasst (Haar stach oben durch Helme). Ausgenommen bleiben
+     Gesichtsmitte und Kinn (dort liegt der Kragen einer Kapuze in derselben Richtung naeher als das Kinn). */
+  const NE = 16;
+  const NH = 32;
+  function headDir(F, x, y, z) {
+    const cx = x - (F.p.x + F.a.x * 0.5 * F.L);
+    const cy = y - (F.p.y + F.a.y * 0.5 * F.L);
+    const cz = z - (F.p.z + F.a.z * 0.5 * F.L);
+    const r = Math.hypot(cx, cy, cz) || 1e-9;
+    const e = Math.acos(Math.max(-1, Math.min(1, (cx * F.a.x + cy * F.a.y + cz * F.a.z) / r)));
+    const th = Math.atan2(cx * F.v.x + cy * F.v.y + cz * F.v.z, cx * F.u.x + cy * F.u.y + cz * F.u.z);
+    const ai = ((Math.floor(((th + Math.PI) / (2 * Math.PI)) * NH) % NH) + NH) % NH;
+    return [Math.min(NE - 1, Math.floor((e / Math.PI) * NE)) * NH + ai, r];
+  }
+  // je Richtung ein Strahl von der Kopfmitte nach aussen; erster Treffer auf dem Teil (Infinity: offen, etwa Gesicht
+  // und Hals). Strahlen statt naechster Ecken: auf dem Scheitel liegen grosse Flaechen ohne Ecke in der Mitte.
+  function headReach(nm, key, E, Fr) {
+    const F = Fr[E.map.head];
+    const geo = pieceGeo(nm, key, E);
+    const P = geo.attributes.position.array;
+    const I = geo.index.array;
+    const ox = F.p.x + F.a.x * 0.5 * F.L;
+    const oy = F.p.y + F.a.y * 0.5 * F.L;
+    const oz = F.p.z + F.a.z * 0.5 * F.L;
+    const R = new Float32Array(NE * NH).fill(Infinity);
+    for (let ei = 0; ei < NE; ei++) {
+      const e = ((ei + 0.5) / NE) * Math.PI;
+      for (let ai = 0; ai < NH; ai++) {
+        const th = -Math.PI + ((ai + 0.5) / NH) * 2 * Math.PI;
+        const se = Math.sin(e);
+        const dx = F.a.x * Math.cos(e) + (F.u.x * Math.cos(th) + F.v.x * Math.sin(th)) * se;
+        const dy = F.a.y * Math.cos(e) + (F.u.y * Math.cos(th) + F.v.y * Math.sin(th)) * se;
+        const dz = F.a.z * Math.cos(e) + (F.u.z * Math.cos(th) + F.v.z * Math.sin(th)) * se;
+        let best = Infinity;
+        for (let t = 0; t < I.length; t += 3) {
+          // Moeller-Trumbore
+          const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+          const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
+          const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
+          const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+          const det = e1x * px + e1y * py + e1z * pz;
+          if (Math.abs(det) < 1e-12) continue;
+          const inv = 1 / det;
+          const sx = ox - P[a], sy = oy - P[a + 1], sz = oz - P[a + 2];
+          const u = (sx * px + sy * py + sz * pz) * inv;
+          if (u < 0 || u > 1) continue;
+          const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+          const v = (dx * qx + dy * qy + dz * qz) * inv;
+          if (v < 0 || u + v > 1) continue;
+          const d = (e2x * qx + e2y * qy + e2z * qz) * inv;
+          if (d > 0 && d < best) best = d;
+        }
+        R[ei * NH + ai] = best;
+      }
+    }
+    return { R, F };
+  }
+  function pokes(reach, x, y, z) {
+    const [t, th] = tad(reach.F, x, y, z);
+    if (t < 0.15 || (t < 0.6 && Math.abs(th) < (40 * Math.PI) / 180)) return false;
+    const [j, r] = headDir(reach.F, x, y, z);
+    return r > reach.R[j] + 0.002;
+  }
+  // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen oder durch ein
+  // Kopfteil hindurchragen
   function pieceHide(names, key, E) {
     const D = [];
+    const hb = E.map.head;
     for (const nm of names) {
       const Pc = PIECES()[nm];
       const { Fr } = profiles(key, E, Pc.grid);
@@ -8487,7 +8589,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const i = E.skel.names.indexOf(b);
         if (i >= 0) occ[i] = Pc.occ[b];
       }
-      D.push({ Fr, occ, g: Pc.grid });
+      D.push({ Fr, occ, g: Pc.grid, reach: Pc.slot === "helm" && hb != null ? headReach(nm, key, E, Fr) : null });
     }
     const n = E.pos.length / 3;
     const cov = new Uint8Array(n);
@@ -8495,10 +8597,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const b = E.skinI[i * 4];
       for (const d of D) {
         const bits = d.occ[b];
-        if (!bits) continue;
+        const reach = b === hb ? d.reach : null;
+        if (!bits && !reach) continue;
         const [t, th] = tad(d.Fr[b], E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]);
         const j = binT(t, d.g) * d.g[1] + binA(th, d.g);
-        if ((bits[j >> 3] >> (j & 7)) & 1) {
+        if ((bits && (bits[j >> 3] >> (j & 7)) & 1) || (reach && pokes(reach, E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]))) {
           cov[i] = 1;
           break;
         }
