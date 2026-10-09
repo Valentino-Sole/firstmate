@@ -682,41 +682,50 @@
     geo.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(pos, Pc.idx), 3));
     return (PGEO[ck] = geo);
   }
-  /* Innerster Abstand eines Kopfteils von der Kopfachse je Feld (Infinity: kein Teil im Feld). Was am Kopf weiter
-     hinausragt (Hoerner, spitze Ohren, Haarspitzen), stuende durch das Teil hindurch und wird ausgeblendet, auch im
-     Gesicht, wo die belegten Felder sonst nichts ausblenden. Ausgenommen bleiben Gesichtsmitte und Kinn (dort liegt
-     der Kragen einer Kapuze im selben Feld tiefer als das Kinn). */
+  /* Innerster Abstand eines Kopfteils von der Kopfmitte je Richtung (Infinity: kein Teil in dieser Richtung). Was am
+     Kopf weiter hinausragt (Hoerner, spitze Ohren, Haar am Scheitel), stuende durch das Teil hindurch und wird
+     ausgeblendet, auch im Gesicht, wo die belegten Felder sonst nichts ausblenden. Richtungen um die Kopfmitte statt
+     Abstand von der Kopfachse, sonst blieb der Scheitel unerfasst (Haar stach oben durch Helme). Ausgenommen bleiben
+     Gesichtsmitte und Kinn (dort liegt der Kragen einer Kapuze in derselben Richtung naeher als das Kinn). */
+  const NE = 12;
+  function headDir(F, x, y, z) {
+    const cx = x - (F.p.x + F.a.x * 0.5 * F.L);
+    const cy = y - (F.p.y + F.a.y * 0.5 * F.L);
+    const cz = z - (F.p.z + F.a.z * 0.5 * F.L);
+    const r = Math.hypot(cx, cy, cz) || 1e-9;
+    const e = Math.acos(Math.max(-1, Math.min(1, (cx * F.a.x + cy * F.a.y + cz * F.a.z) / r)));
+    const th = Math.atan2(cx * F.v.x + cy * F.v.y + cz * F.v.z, cx * F.u.x + cy * F.u.y + cz * F.u.z);
+    return [Math.min(NE - 1, Math.floor((e / Math.PI) * NE)), th, r];
+  }
   function headReach(nm, key, E, Fr, g) {
-    const hb = E.map.head;
+    const F = Fr[E.map.head];
     const geo = pieceGeo(nm, key, E);
     const P = geo.attributes.position.array;
     const SI = geo.attributes.skinIndex.array;
     const SW = geo.attributes.skinWeight.array;
-    const [NT, NA, T0, T1] = g;
-    const R = new Float32Array(NT * NA).fill(Infinity);
+    const NA = g[1];
+    const R = new Float32Array(NE * NA).fill(Infinity);
     for (let i = 0; i < P.length / 3; i++) {
-      if (SI[i * 4] !== hb || SW[i * 4] < 0.5) continue;
-      const [t, th, d] = tad(Fr[hb], P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
-      if (t < T0 || t > T1) continue;
-      const j = binT(t, g) * NA + binA(th, g);
-      if (d < R[j]) R[j] = d;
+      if (SI[i * 4] !== E.map.head || SW[i * 4] < 0.5) continue;
+      const [ei, th, r] = headDir(F, P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
+      const j = ei * NA + binA(th, g);
+      if (r < R[j]) R[j] = r;
     }
-    // Felder unter grossen Dreiecken ohne eigene Ecke von den Nachbarn
+    // Richtungen unter grossen Dreiecken ohne eigene Ecke von den Nachbarn
     const c = R.slice();
-    for (let t = 0; t < NT; t++) {
+    for (let e = 0; e < NE; e++) {
       for (let a = 0; a < NA; a++) {
-        if (c[t * NA + a] < Infinity) continue;
-        for (const [tt, aa] of [[t, (a + NA - 1) % NA], [t, (a + 1) % NA], [Math.max(0, t - 1), a], [Math.min(NT - 1, t + 1), a]]) R[t * NA + a] = Math.min(R[t * NA + a], c[tt * NA + aa]);
+        if (c[e * NA + a] < Infinity) continue;
+        for (const [ee, aa] of [[e, (a + NA - 1) % NA], [e, (a + 1) % NA], [Math.max(0, e - 1), a], [Math.min(NE - 1, e + 1), a]]) R[e * NA + a] = Math.min(R[e * NA + a], c[ee * NA + aa]);
       }
     }
-    for (let t = 0; t < NT; t++) {
-      const tc = T0 + ((t + 0.5) * (T1 - T0)) / NT;
-      for (let a = 0; a < NA; a++) {
-        const ac = -Math.PI + ((a + 0.5) * 2 * Math.PI) / NA;
-        if (tc < 0.15 || (tc < 0.6 && Math.abs(ac) < (40 * Math.PI) / 180)) R[t * NA + a] = Infinity;
-      }
-    }
-    return R;
+    return { R, F, g };
+  }
+  function pokes(reach, x, y, z) {
+    const [t, th] = tad(reach.F, x, y, z);
+    if (t < 0.15 || (t < 0.6 && Math.abs(th) < (40 * Math.PI) / 180)) return false;
+    const [ei, th2, r] = headDir(reach.F, x, y, z);
+    return r > reach.R[ei * reach.g[1] + binA(th2, reach.g)] + 0.002;
   }
   // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen oder durch ein
   // Kopfteil hindurchragen
@@ -741,9 +750,9 @@
         const bits = d.occ[b];
         const reach = b === hb ? d.reach : null;
         if (!bits && !reach) continue;
-        const [t, th, r] = tad(d.Fr[b], E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]);
+        const [t, th] = tad(d.Fr[b], E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]);
         const j = binT(t, d.g) * d.g[1] + binA(th, d.g);
-        if ((bits && (bits[j >> 3] >> (j & 7)) & 1) || (reach && r > reach[j] + 0.002)) {
+        if ((bits && (bits[j >> 3] >> (j & 7)) & 1) || (reach && pokes(reach, E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]))) {
           cov[i] = 1;
           break;
         }

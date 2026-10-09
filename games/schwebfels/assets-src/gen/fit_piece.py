@@ -50,6 +50,15 @@ REGION = {
 }
 # Knochen, an denen ein Umhang haengt (keine Beine und Arme, sonst zoegen die Beine ihn beim Gehen auseinander)
 CAPE_BONES = ["hips", "spine", "chest", "neck", "clavicle.L", "clavicle.R"]
+# Knochen, an denen ein Teil je Platz haengen darf (Rollen wie in REGION; Zwischenwirbel ohne Rolle bleiben erlaubt).
+# Die Gewichte kommen von der naechsten Hautstelle; ohne Grenze hing eine Kapuze zu 12 % an den Oberarmen und ein
+# Harnisch zu 14 % am Kopf, und beim Senken der Arme oder Drehen des Kopfes verzogen sie sich. Fehlt ein Platz, gilt
+# jeder Knochen.
+KEEP = {
+    "helm": ["head", "neck", "chest", "spine", "clavicle.L", "clavicle.R"],
+    "brust": ["hips", "spine", "chest", "neck", "clavicle.L", "clavicle.R", "upperarm.L", "upperarm.R"],
+    "robe": ["hips", "spine", "chest", "neck", "clavicle.L", "clavicle.R", "upperarm.L", "upperarm.R", "thigh.L", "thigh.R"],
+}
 # Platz im Spiel (src/r3d-rigged.js, SLOT): eine Robe ersetzt wie ein Brustteil die Ruestung
 GAME_SLOT = {"robe": "brust"}
 
@@ -336,6 +345,21 @@ def decode(enc, w2, Fr, prof):
     return P / np.maximum(w2.sum(1), 1e-9)[:, None]
 
 
+def restrict_weights(W, slot, tmap, names, parents):
+    """Hilfsknochen (head_end, headfront) zaehlen zum Elternknochen; je Platz nur die Knochen aus KEEP."""
+    W = W.copy()
+    helper = np.array([bool(re.search(r"(end|front)$", n, re.I)) and parents[i] >= 0 for i, n in enumerate(names)])
+    for i in np.nonzero(helper)[0]:
+        W[:, parents[i]] += W[:, i]
+        W[:, i] = 0.0
+    if slot not in KEEP:
+        return W
+    keep = ~np.isin(np.arange(len(names)), list(tmap.values())) & ~helper
+    keep[[tmap[r] for r in KEEP[slot] if r in tmap]] = True
+    W[:, ~keep] = 0.0
+    return W
+
+
 def smooth_weights(P, W, radius=WEIGHT_RADIUS, rounds=2):
     """Knochengewichte raeumlich angleichen: Mittel ueber alle Ecken im Umkreis radius (Gauss). Die Gewichte kommen von
     der naechsten Hautstelle; Innen- und Aussenlage eines Stoffs hingen so an verschiedenen Knochen (Kopf und Hals,
@@ -556,7 +580,12 @@ def main():
     else:
         rigid = None
     fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, grow=a.wachsen)
-    fW = smooth_weights(fpos, fW)
+    fW = smooth_weights(fpos, restrict_weights(fW, a.slot, tmap, names, parents))
+    empty = fW.sum(1) < 1e-6
+    if empty.any():
+        allowed = np.nonzero(fW.sum(0) > 0)[0] if (fW.sum(0) > 0).any() else np.arange(nb)
+        for i in np.nonzero(empty)[0]:
+            fW[i, min(allowed, key=lambda b: np.linalg.norm(rest[b] - fpos[i]))] = 1.0
     if a.slot == "umhang":
         keep = np.zeros(nb, bool)
         keep[[tmap[r] for r in CAPE_BONES if r in tmap]] = True
