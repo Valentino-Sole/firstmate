@@ -163,11 +163,13 @@
   A.loadGen = function (realm) {
     if (GEN_LOAD[realm]) return GEN_LOAD[realm];
     const key = "SB_GEN_" + realm.toUpperCase();
-    const take = () => {
+    // Base64 roh oder (Handy-Fassung, eine einzige Datei) mit gzip verkleinert
+    const take = async () => {
       const s = globalThis[key];
       if (!s) return false;
+      globalThis[key] = null;
       // schon eingebettete Koerper behalten (gleiche Daten, Materialien und Geometrie sind dafuer schon gebaut)
-      const p = parse(b64(s));
+      const p = parse(await unzip(b64(s)));
       const g = p.gen || {};
       for (const k in g) if (!A.data.gen[k]) A.data.gen[k] = g[k];
       // Monster (gen-monster.js): erzeugte Bestien kommen zu den vorhandenen Familien; Texturen gleich laden, sonst
@@ -178,33 +180,26 @@
         A.texture("beast." + k, p.beasts[k].tex, { srgb: true });
         if (p.beasts[k].ntex) A.texture("beast." + k + ".n", p.beasts[k].ntex, { srgb: false });
       }
-      globalThis[key] = null;
       return true;
     };
-    GEN_LOAD[realm] = A.ready.then(
-      () =>
-        new Promise((ok, fail) => {
-          if (!A.data) return fail(new Error("Modellpaket fehlt"));
-          if (take()) return ok(A.data.gen);
-          const el = document.createElement("script");
-          el.src = "gen-" + realm + ".js";
-          el.onload = () => {
-            try {
-              if (take()) ok(A.data.gen);
-              else fail(new Error("Figurendaten leer"));
-            } catch (e) {
-              fail(e);
-            }
-          };
-          el.onerror = () => {
-            // keine Figurendatei neben der Seite (etwa beim Entwickeln ohne Paket): erwartbar, kein Fehler im Paket
-            const e = new Error("Figurendaten nicht gefunden");
-            e.missing = true;
-            fail(e);
-          };
-          document.head.appendChild(el);
-        })
-    );
+    GEN_LOAD[realm] = A.ready.then(async () => {
+      if (!A.data) throw new Error("Modellpaket fehlt");
+      if (await take()) return A.data.gen;
+      await new Promise((ok, fail) => {
+        const el = document.createElement("script");
+        el.src = "gen-" + realm + ".js";
+        el.onload = ok;
+        el.onerror = () => {
+          // keine Figurendatei neben der Seite (etwa beim Entwickeln ohne Paket): erwartbar, kein Fehler im Paket
+          const e = new Error("Figurendaten nicht gefunden");
+          e.missing = true;
+          fail(e);
+        };
+        document.head.appendChild(el);
+      });
+      if (await take()) return A.data.gen;
+      throw new Error("Figurendaten leer");
+    });
     GEN_LOAD[realm].catch(() => (GEN_LOAD[realm] = null));
     return GEN_LOAD[realm];
   };
