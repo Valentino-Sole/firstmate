@@ -34,7 +34,6 @@
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
   // Neue Figuren gelten immer (der Vergleich mit den alten ist seit Version 5.6 abgeschafft)
   const genOn = () => true;
   // Volk und Geschlecht mit fertig modellierter Figur (Meshy): Haut, Haare und Gesicht gehoeren zum Modell, die alte
@@ -46,10 +45,15 @@
   // Reiche mit Figurendatei (gen-<reich>.js neben der Seite): Midgard (Frostwicht, Glutzwerg), Albion (Albier,
   // Kreidezwerg) und Hibernia (Sidhe, Moorling); Nordmann und Trollblut stecken in der Seite
   UI.GEN_REALMS = ["midgard", "albion", "hibernia"];
+  // Jedes Volk hat einen Meshy-Koerper. Solange er noch laedt, steht ein Platzhalter da (pending), nie die alte Figur;
+  // das Laden der Datei seines Reiches wird dabei angestossen.
   const withGen = (d) => {
     if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
-    return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
+    if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] });
+    const realm = D.RACES[d.race] && D.RACES[d.race].realm;
+    if (realm && UI.use3d && !GEN_FIG[realm]) UI.loadGenFigures(realm);
+    return Object.assign(d, { pending: k });
   };
   UI.withGen = withGen;
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
@@ -61,16 +65,19 @@
   const genChanged = () => {
     if (UI.onGen) UI.onGen();
     if (UI.S) UI.refresh();
-    if (UI.panelId === "neu" || UI.panelId === "figurenprobe" || UI.panelId === "arena") UI.renderPanel();
+    // offenes Fenster neu zeichnen: Portraits und Figuren, die bis eben Platzhalter waren
+    if (UI.panelId) UI.renderPanel();
   };
   // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
-  // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); ohne Datei bleiben die gebauten Monster.
+  // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); bis dahin steht ein Platzhalter da.
+  // Ein gescheitertes Laden wird nach einer Pause erneut versucht (schwaches Netz am Handy).
   // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
   const MON_LOAD = {};
   // Familien, deren Figuren nicht in eine Datei passen (Grenze 16 MB): weitere Dateien gen-mon<familie>2.js
   const MON_MORE = { drache: ["drache2"] };
   UI.monReady = {};
-  const MON_PANELS = { taverne: 1, figurenprobe: 1, neu: 1, steinkreis: 1, mondtor: 1, tiefen: 1 };
+  const RETRY_MS = 15000;
+  const MON_PANELS = { taverne: 1, figurenprobe: 1, steinkreis: 1, mondtor: 1, tiefen: 1, heim: 1, held: 1 };
   UI.loadMonsterArch = function (arch) {
     if (!UI.use3d || !arch) return Promise.resolve(false);
     if (MON_LOAD[arch]) return MON_LOAD[arch];
@@ -96,18 +103,19 @@
         },
         (e) => {
           if (!(e && e.missing)) console.warn("Monsterfiguren " + arch + " nicht geladen", e);
+          setTimeout(() => delete MON_LOAD[arch], RETRY_MS);
           return false;
         }
       );
     return MON_LOAD[arch];
   };
-  // mehrere Familien; mit ms hoechstens so lange warten (danach kaempft notfalls die gebaute Figur)
+  // mehrere Familien; mit ms hoechstens so lange warten (danach kaempft notfalls ein Platzhalter)
   UI.loadMonsters = function (archs, ms) {
     const all = Promise.all([...new Set((archs || []).filter(Boolean))].map(UI.loadMonsterArch));
     return ms ? Promise.race([all, new Promise((r) => setTimeout(r, ms))]) : all;
   };
-  // Gemalte Kampfkulissen der drei Reiche (kulissen.js neben der Seite, etwa 1,4 MB): einmal im Hintergrund laden;
-  // ohne Datei kaempfen alle auf der gebauten Insel
+  // Gemalte Kampfkulissen der Reiche, der Arena und der Verliese (kulissen.js neben der Seite, gut 3 MB): einmal im
+  // Hintergrund laden, nach einem Fehlschlag spaeter erneut
   let KUL_LOAD = null;
   UI.loadKulissen = function () {
     if (!UI.use3d) return Promise.resolve(false);
@@ -117,7 +125,11 @@
         const el = document.createElement("script");
         el.src = "kulissen.js";
         el.onload = () => ok(!!globalThis.SB_KULISSEN);
-        el.onerror = () => ok(false);
+        el.onerror = () => {
+          el.remove();
+          setTimeout(() => (KUL_LOAD = null), RETRY_MS);
+          ok(false);
+        };
         document.head.appendChild(el);
       });
     return KUL_LOAD;
@@ -132,7 +144,8 @@
     }
     return out;
   };
-  // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet)
+  // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet);
+  // nach einem Fehlschlag erst nach einer Pause erneut
   const GEN_FIG = {};
   UI.loadGenFigures = function (realm) {
     UI.loadMonsters(UI.offerArchs());
@@ -162,8 +175,9 @@
         },
         (e) => {
           UI.genStatus.datei = e && e.missing ? "fehlt" : "fehler";
-          if (e && e.missing) console.info("Keine Figurendatei fuer " + realm + ", es bleiben die Figuren aus der Seite");
+          if (e && e.missing) console.info("Keine Figurendatei fuer " + realm + ", spaeter neuer Versuch");
           else console.warn("Neue Figuren nicht geladen", e);
+          setTimeout(() => delete GEN_FIG[realm], RETRY_MS);
           genChanged();
           return UI.genStatus.kern === "bereit" ? "bereit" : UI.genStatus.datei;
         }
@@ -216,7 +230,9 @@
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: monVisual(m), look: UI.monLook(m), mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
   UI.portrait = function (desc, size, bust) {
-    const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
+    // noch ladende Meshy-Figur (Held oder Monster): Umriss statt Bild, das Portrait entsteht nach dem Laden neu
+    const waiting = desc.pending || (desc.kind === "monster" && (desc.visual || desc.look) && !desc.mv && !(SB.R3D.beasts && SB.R3D.beasts.hasOwn && SB.R3D.beasts.hasOwn(desc.look)));
+    const url = UI.use3d && !waiting ? SB.R3D.snapshot(desc, size || 128, bust) : null;
     if (url) return '<img alt="" src="' + url + '">';
     return I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
   };
@@ -607,7 +623,6 @@
     const b = UI.badges();
     dock.innerHTML =
       '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
-      '<button class="dock-btn dock-neu' + (UI.panelId === "neu" ? " active" : "") + '" data-act="open" data-id="neu">' + I.ui("held") + "<span>Neu prüfen</span><span class=\"badge\">neu</span></button>" +
       MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
@@ -818,9 +833,12 @@
       box.hidden = true;
       return;
     }
-    if (box.dataset.step === String(S.tut) && !box.hidden) return;
+    // gleicher Schritt: nur neu zeichnen, solange Ottilies Figur noch laedt (dann steht dort ihr Umriss)
+    if (box.dataset.step === String(S.tut) && !box.hidden && box.dataset.wait !== "1") return;
     box.dataset.step = String(S.tut);
-    box.innerHTML = '<span class="porthole">' + UI.npcPortrait("ottilie") + '</span><div><p></p><button class="btn small" data-act="hintNext">' + step.btn + '</button> <button class="btn small ghost" data-act="hintSkip">Keine Tipps mehr</button></div>';
+    const ott = withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK.ottilie));
+    box.dataset.wait = ott.pending ? "1" : "";
+    box.innerHTML = '<span class="porthole">' + UI.portrait(ott, 128, true) + '</span><div><p></p><button class="btn small" data-act="hintNext">' + step.btn + '</button> <button class="btn small ghost" data-act="hintSkip">Keine Tipps mehr</button></div>';
     box.querySelector("p").textContent = step.text(S);
     box.hidden = false;
   };

@@ -11,14 +11,21 @@
   const $ = UI.$;
 
   /* ================= Kampf ================= */
-  // Monsterfiguren der Gegner und die gemalte Kulisse vorher nachladen (hoechstens einige Sekunden, sonst die gebaute
-  // Figur und Insel)
+  // Monsterfiguren der Gegner, Heldenkoerper und die gemalte Kulisse vorher nachladen (hoechstens 15 Sekunden, mit
+  // Hinweis, sonst stehen Platzhalter da); auf langsamen Handys dauert das beim ersten Kampf einen Moment
+  const BATTLE_WAIT = 15000;
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
-    const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, 6000))]);
-    // Heldenkoerper fremder Reiche (Arena): deren Figurendatei ebenfalls vorher laden
+    const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, BATTLE_WAIT))]);
+    // Heldenkoerper aller beteiligten Reiche (Arena, Rangliste): deren Figurendatei ebenfalls vorher laden
     const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
-    return Promise.all([UI.loadMonsters(archs, 6000), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
+    let done = false;
+    const note = setTimeout(() => !done && UI.toast("Figuren und Kulisse werden geladen …"), 900);
+    return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => {
+      done = true;
+      clearTimeout(note);
+      return runBattle(fight, opts);
+    });
   };
   function runBattle(fight, opts) {
     return new Promise((resolve) => {
@@ -270,7 +277,8 @@
   function randomDraft(keepName, realm) {
     const r = Math.random;
     realm = realm || realmKeys()[Math.floor(r() * 3)];
-    const race = racesOf(realm)[Math.floor(r() * 2)];
+    const races = racesOf(realm);
+    const race = races[Math.floor(r() * races.length)];
     const cls = classesOf(realm)[Math.floor(r() * 4)];
     return { name: keepName || "", realm, race, gender: r() < 0.5 ? "m" : "w", cls, look: randomLook(race) };
   }
@@ -294,20 +302,19 @@
       },
     });
   }
-  // Hinweise, solange die neue Figur laedt und solange Aussehen und Ruestung auf ihr noch nicht wirken
+  // Hinweis, solange die Figur des gewaehlten Volkes noch laedt (bis dahin steht ein Platzhalter auf dem Sockel)
   const genLoad = {};
   function genHints() {
-    const gen = !!previewDesc().gen;
-    const st = genLoad[draft.realm];
     const note = $("#create .gen-note");
-    if (note) {
-      note.hidden = !gen && st !== "laedt" && st !== "fehler";
-      note.textContent = gen ? "Neue Figur: Rüstung, Helm und Umhang folgen noch." : st === "fehler" ? "Die neue Figur konnte nicht geladen werden, hier steht noch die alte." : "Neue Figur wird geladen …";
-    }
+    if (!note) return;
+    const waiting = !!(view && previewDesc().pending);
+    const st = genLoad[draft.realm];
+    note.hidden = !waiting;
+    note.textContent = st === "fehler" || st === "fehlt" ? "Die Figur konnte noch nicht geladen werden, gleich ein neuer Versuch …" : "Figur wird geladen …";
   }
   function loadGen() {
     const realm = draft.realm;
-    if (!view || genLoad[realm] || UI.GEN_REALMS.indexOf(realm) < 0) return;
+    if (!view || genLoad[realm] === "laedt" || genLoad[realm] === "bereit" || UI.GEN_REALMS.indexOf(realm) < 0) return;
     genLoad[realm] = "laedt";
     UI.loadGenFigures(realm).then((st) => {
       genLoad[realm] = st;
@@ -319,24 +326,15 @@
     for (const a of D.ATTRS) if (mods[a]) parts.push((mods[a] > 0 ? "+" : "") + mods[a] + " " + D.ATTR_INFO[a].name);
     return parts.length ? "(" + parts.join(", ") + ")" : "";
   }
-  let formMeshy = false;
+  // Aussehen: Haut, Haare und Gesicht gehoeren zum Meshy-Koerper; zu waehlen gibt es nur eine Gestalt, falls es fuer
+  // Volk und Geschlecht mehrere Modelle gibt
   function renderForm() {
     const f = $("#create .cform");
     const R = D.RACES[draft.race];
     const C = D.CLASSES[draft.cls];
     const L = draft.look;
     const gest = UI.gestalten(draft.race, draft.gender);
-    const meshy = UI.meshyLook(draft.race, draft.gender) && !gest.length;
-    formMeshy = meshy;
-    const sw = (arr, key) =>
-      '<div class="swatches">' + arr.map((c) => {
-        const col = typeof c === "string" ? c : c.c;
-        return '<button type="button" class="sw' + (L[key] === col ? " on" : "") + (typeof c === "object" && c.glow ? " glowsw" : "") + '" style="background:' + col + '" data-cact="look" data-k="' + key + '" data-v="' + col + '" title="' + esc(typeof c === "object" ? c.name : col) + '" aria-label="' + esc(typeof c === "object" ? c.name : "Farbe") + '"></button>';
-      }).join("") + "</div>";
-    const opt = (key, labels, ids) => '<div class="choices">' + labels.map((l, i) => {
-      const v = ids ? ids[i] : i;
-      return '<button type="button" class="choice' + (L[key] === v ? " on" : "") + '" data-cact="' + (ids ? "looks" : "lookn") + '" data-k="' + key + '" data-v="' + v + '">' + esc(l) + "</button>";
-    }).join("") + "</div>";
+    const nameNo = gest.length > 1 ? 5 : 4;
     f.innerHTML =
       '<div class="step"><span class="stepno">1</span><h3>Wähle dein Reich</h3></div><div class="realmcards small">' +
       realmKeys().map((r) => '<button type="button" class="realmcard r-' + r + (draft.realm === r ? " on" : "") + '" data-cact="realm" data-v="' + r + '">' + I.realm(r) + "<h3>" + esc(D.REALMS[r].name) + "</h3><i>„" + esc(D.REALMS[r].motto) + "“</i></button>").join("") + "</div>" +
@@ -348,15 +346,8 @@
       racesOf(draft.realm).map((id) => '<button type="button" class="choice' + (draft.race === id ? " on" : "") + '" data-cact="race" data-v="' + id + '">' + D.RACES[id].name + "</button>").join("") + "</div>" +
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
-      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span>' + (gest.length === 1 || meshy ? "" : '<button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button>') + "</div>" +
-      (meshy ? '<p class="desc">Fertig modellierte Figur aus deinen Konzeptbildern: Haut, Haare und Gesicht gehören zum Modell.</p>' : gest.length ? UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) :
-        "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
-        (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
-        "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
-        "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor") +
-        "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id)) +
-        (R.horns ? "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]) : "")) +
-      '<div class="step"><span class="stepno">5</span><h3>Name</h3></div><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
+      (gest.length > 1 ? '<div class="step"><span class="stepno">4</span><h3>Gestalt</h3></div>' + UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) : "") +
+      '<div class="step"><span class="stepno">' + nameNo + '</span><h3>Name</h3></div><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
       '<p class="delta-down" id="nameErr" hidden></p>' +
       '<div class="row" style="margin-top:18px"><button type="button" class="btn ghost" data-cact="random">Alles zufällig</button><button type="button" class="btn ghost" data-cact="import">Spielstand laden</button><span class="spacer"></span><button type="button" class="btn big" data-cact="start">Für ' + esc(D.REALMS[draft.realm].name) + "!</button></div>";
     const inp = f.querySelector("#heroName");
@@ -388,11 +379,9 @@
       }
     }
     if (!view) cv.insertAdjacentHTML("beforeend", '<div class="hv-fallback" style="position:absolute;inset:120px 20% 20px"></div>');
-    // neue Figuren zeigen, sobald sie bereit sind (die aus der Seite kommen vor der Zusatzdatei)
+    // Figuren zeigen, sobald sie bereit sind (die aus der Seite kommen vor der Zusatzdatei)
     UI.onGen = () => {
       if ($("#create").hidden) return;
-      // sind die Figurendaten da, entfaellt bei Meshy-Voelkern die alte Wahl von Haut und Haaren
-      if (UI.meshyLook(draft.race, draft.gender) !== formMeshy && !UI.gestalten(draft.race, draft.gender).length) renderForm();
       if (view) updateView();
     };
     renderForm();
@@ -423,9 +412,7 @@
         draft.look.hair = R.hairs[0];
       } else if (act === "cls") draft.cls = v;
       else if (act === "gender") draft.gender = v;
-      else if (act === "look" || act === "looks") draft.look[b.dataset.k] = v;
       else if (act === "lookn") draft.look[b.dataset.k] = +v;
-      else if (act === "randomLook") draft.look = randomLook(draft.race);
       else if (act === "random") draft = randomDraft(keep);
       else if (act === "import") {
         UI.ACTIONS.importSave();

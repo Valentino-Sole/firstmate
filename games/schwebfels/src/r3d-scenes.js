@@ -2241,9 +2241,11 @@
       g.add(f);
     } else if (id === "trophaeen") {
       g.add(mesh(G.box(1.6, 1.1, 0.08), pm("wood", "#3a2a1e"), { p: [0, 1.6, 0] }));
-      const heads = [["wolf", "#7a7470", "#ffcf5a"], ["drache", "#8a2f1f", "#ffcf5a"], ["troll", "#4f6a4a", "#ffcf5a"]];
-      heads.forEach(([arch, c, a], i) => {
-        const m = R.buildMonster({ arch, color: c, accent: a });
+      // Grauwolf, Schwelwurm und Sumpftroll als kleine Figuren (Meshy-Modelle; das Heim laedt ihre Familien nach)
+      const heads = [["wolf", "grauwolf", "#7a7470", "#ffcf5a"], ["drache", "schwelwurm", "#8a2f1f", "#ffcf5a"], ["troll", "sumpftroll", "#4f6a4a", "#ffcf5a"]];
+      heads.forEach(([arch, id, c, a], i) => {
+        const m = R.buildMonster({ arch, visual: id, look: id, color: c, accent: a });
+        if (m.pending) return;
         m.update(0.01);
         const box = new T.Box3().setFromObject(m.obj);
         const s = 0.45 / Math.max(0.1, box.max.y - box.min.y);

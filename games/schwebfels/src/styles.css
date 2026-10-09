@@ -160,8 +160,6 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .dock-btn:hover { border-color: var(--gold-dim); background: linear-gradient(#3a2f26, #241c17); }
 .dock-btn.active { border-color: var(--gold); background: linear-gradient(#5a4520, #2e2412); color: var(--gold-hi); }
 .dock-btn:active { transform: translateY(1px); }
-.dock-btn.dock-neu { border-color: var(--gold); background: linear-gradient(#4a3a1c, #2a2012); color: var(--gold-hi); box-shadow: 0 0 12px rgba(201, 164, 65, 0.35), 0 2px 0 #000; }
-.dock-btn.dock-neu .badge { background: var(--gold); color: var(--ink); }
 .dock-btn .badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--blood); color: #fff; font-size: 11px; display: grid; place-items: center; border: 1px solid #000; }
 
 /* Aktivitaet */
@@ -485,15 +483,6 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 #hint p { margin: 0 0 8px; font-size: 14px; }
 #hint .btn.ghost { color: var(--parch); }
 
-/* Neu pruefen */
-.neu-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.neu-fig { display: grid; gap: 2px; padding: 8px 10px; border-radius: 4px; background: linear-gradient(var(--stone-3), var(--stone-2)); border: 1px solid #000; }
-.neu-fig b { font-family: var(--font-display); font-size: 19px; font-weight: 400; color: var(--gold-hi); }
-.neu-st { font-weight: 800; font-size: 13px; }
-.neu-st.st-bereit { color: var(--jade); }
-.neu-st.st-laedt { color: var(--gold-hi); }
-.neu-st.st-fehlt { color: #ff7a59; }
-.neu-list { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 5px; font-size: 14px; }
 .realmcard[disabled] { opacity: 0.45; cursor: default; }
 
 /* Heldenerschaffung */

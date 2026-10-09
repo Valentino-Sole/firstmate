@@ -1,4 +1,4 @@
-/* Gemalte Heimatinsel (Probeentwurf): Das Inselbild des Reiches ist die Insel, die Orte sind darauf anklickbar, dazu
+/* Gemalte Heimatinsel: Das Inselbild des Reiches ist die Insel, die Orte sind darauf anklickbar, dazu
    bewegte Details je Reich (ziehende Wolken, Rauch, flackerndes Licht, Mondtor, Wasserfaelle, Schnee und Nordlicht in
    Midgard, Gluehwuermchen in Hibernia, goldener Staub in Albion). Gleiche Schnittstelle wie die 3D-Insel
    (SB.R3D.createHub), die Oberflaeche merkt keinen Unterschied. Die Bilder bettet build.mjs aus assets/inseln/<reich>.webp

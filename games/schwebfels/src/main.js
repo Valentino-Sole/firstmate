@@ -38,7 +38,6 @@
       homeTier: S.house.tier,
       realm: S.realm,
       onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)),
-      onVisit: () => UI.panelId === "neu" && UI.renderPanel(),
     };
     // Heimatinsel ist das Gemaelde des Reiches; die 3D-Insel bleibt nur fuer Fassungen ohne Inselbilder (Entwicklung, Tests)
     if (SB.hubPainted && SB.hubPainted.has(S.realm)) {
@@ -60,15 +59,14 @@
     if (!UI.hub) stage.innerHTML = '<div class="stage-fallback"><div class="fb-grid"></div></div>';
   };
 
-  M.start = function (S, fresh) {
+  M.start = function (S) {
     UI.S = S;
     // Version 5.6: alte Wahlen aufgeraeumt (3D-Insel statt Gemaelde, neue Figuren abschalten); es gilt nur das neue Design
     delete S.settings.island;
     delete S.settings.inselV;
     delete S.settings.genFigures;
-    // Was neu ist, einmal von selbst zeigen (nicht bei frisch erschaffenen oder aus Version 1 uebernommenen Helden)
-    const showNeu = !fresh && !S.migratedFrom && S.settings.neuV !== 1;
-    S.settings.neuV = 1;
+    // Version 0.66: die Pruefseite „Neu pruefen“ gibt es nicht mehr
+    delete S.settings.neuV;
     SB.audio.setSfx(S.settings.sound !== false);
     SB.audio.setMusic(S.settings.music !== false);
     UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
@@ -76,7 +74,7 @@
     M.makeHub(S);
     E.tick(S);
     UI.refresh();
-    // Probe der neuen Figuren: bisher gibt es sie fuer Midgard
+    // Koerper der Helden des eigenen Reiches (Nordmann und Trollblut stecken schon in der Seite)
     UI.loadGenFigures(S.realm);
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
@@ -84,7 +82,6 @@
     UI.updateMusic();
     // Helden aus Version 1 waehlen beim ersten Start ihr Reich
     if (S.migratedFrom) setTimeout(() => UI.showRealmChoice(), 400);
-    else if (showNeu) setTimeout(() => !UI.panelId && UI.openPanel("neu"), 700);
   };
 
   M.replaceState = function (S) {

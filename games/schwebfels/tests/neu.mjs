@@ -1,11 +1,13 @@
-// Version 5.4: "Neu prüfen", gemalte Insel als Heimat und Besuch der anderen Inseln.
+// Neues Design ohne alte Reste (Version 0.66): gemalte Insel als Heimat, Besuch der anderen Inseln, keine alten Figuren.
 // Aufruf: node build.mjs && node tests/neu.mjs   (mit Inselbildern und assets/gen-midgard.pack wird mehr geprueft)
 //   PAGE=<datei>  andere Spieldatei pruefen (Standard: dist/schwebfels.html)
 //   CDN_CACHE=<map.json>  three.js und Schriften aus lokalen Dateien (wie tests/e2e.mjs)
 // Prueft:
-// - ein Spielstand mit "Heimatinsel: 3D-Modell" (vor 5.4) kommt einmal auf das Gemaelde zurueck
-// - "Neu prüfen" oeffnet sich einmal von selbst (nicht bei frisch erschaffenen Helden) und zeigt Inseln und Figuren
-// - Besuch auf Albion und Hibernia mit Weg zurueck (nur mit Inselbildern)
+// - ein Spielstand mit "Heimatinsel: 3D-Modell" (vor 5.4) kommt auf das Gemaelde zurueck; die Pruefseite "Neu prüfen"
+//   gibt es nicht mehr, auch nicht fuer alte Spielstaende
+// - Heldenerschaffung ohne die alten Regler fuer Haut, Haare und Gesicht; ein noch ladender Koerper ist ein Platzhalter,
+//   nie die alte Figur
+// - Besuch auf Albion und Hibernia aus den Einstellungen mit Weg zurueck (nur mit Inselbildern)
 // - die eingebetteten Midgard-Koerper tragen den eigenen Helden auch ohne Zusatzdatei (nur mit Figurenpaket)
 // - alle Tavernenmonster mit eigener Figur aus gen-mon<familie>.js (nur wenn die Dateien neben der Seite liegen)
 // - Auftraege und Chronik kaempfen vor der gemalten Kulisse des Reiches (nur mit kulissen.js neben der Seite)
@@ -55,14 +57,27 @@ await p.waitForSelector("#create:not([hidden])");
 await p.locator('[data-cact="realm"][data-v="midgard"]').click();
 await p.locator('[data-cact="race"][data-v="trollblut"]').click();
 await p.locator('[data-cact="gender"][data-v="m"]').click();
+check(!(await p.evaluate(() => [...document.querySelectorAll("#create .cform h4")].some((h) => /Haut|Haare|Augen|Narben/.test(h.textContent)))), "Heldenerschaffung zeigt noch die alten Regler");
+check(!(await p.locator('[data-cact="randomLook"]').count()), "Heldenerschaffung zeigt noch Würfeln für das Aussehen");
+// jedes Volk: Meshy-Koerper oder Platzhalter, nie die alte Figur
+const oldBodies = await p.evaluate(() => {
+  const out = [];
+  for (const race in SB.data.RACES)
+    for (const gender of ["w", "m"]) {
+      const d = SB.ui.withGen({ kind: "hero", race, gender, realm: SB.data.RACES[race].realm, cls: "schildritter", look: {}, gear: {} });
+      const m = SB.R3D.buildFighter(d);
+      if (!(m.pending || (m.parts && m.parts.rig))) out.push(race + "." + gender);
+    }
+  return out;
+});
+check(!oldBodies.length, "alte Figur statt Meshy-Körper oder Platzhalter: " + oldBodies.join(", "));
 await p.fill("#heroName", "Pruefer");
 await p.locator('[data-cact="start"]').click();
 await p.waitForSelector("#topbar .me-sub");
 await p.waitForTimeout(1500);
-check((await p.evaluate(() => SB.ui.panelId)) !== "neu", "Neu prüfen öffnet sich bei einem frisch erschaffenen Helden");
-check(await p.locator('#dock [data-id="neu"]').isVisible(), "Menüpunkt Neu prüfen fehlt");
+check(!(await p.locator('#dock [data-id="neu"]').count()), "Menüpunkt Neu prüfen gibt es noch");
 
-// 2. Spielstand wie vor 5.4: Insel auf 3D, noch nichts gesehen
+// 2. Spielstand wie vor 5.4: Insel auf 3D, die alte Pruefseite noch nicht gesehen
 await p.evaluate(() => {
   const S = SB.ui.S;
   S.settings.island = "3d";
@@ -72,15 +87,18 @@ await p.evaluate(() => {
 });
 await p.reload();
 await p.waitForSelector("#topbar .me-sub");
-for (let i = 0; i < 40 && (await p.evaluate(() => SB.ui.panelId)) !== "neu"; i++) await p.waitForTimeout(150);
-check((await p.evaluate(() => SB.ui.panelId)) === "neu", "Neu prüfen öffnet sich nicht von selbst");
+await p.waitForTimeout(1500);
+check((await p.evaluate(() => SB.ui.panelId)) !== "neu", "die alte Prüfseite öffnet sich noch von selbst");
 check((await p.evaluate(() => SB.ui.S.settings.island)) !== "3d", "Heimatinsel bleibt auf 3D-Modell stehen");
-check((await p.locator('[data-act="neuInsel"]').count()) === (hasIsles ? 3 : 0), "Neu prüfen zeigt nicht die drei Inseln");
-check((await p.locator(".neu-fig").count()) === 4, "Neu prüfen zeigt nicht die vier Völker mit neuen Figuren");
+check((await p.evaluate(() => SB.ui.S.settings.neuV)) === undefined, "alte Einstellung der Prüfseite bleibt im Spielstand");
+await p.evaluate(() => SB.ui.openPanel("einstellungen"));
+check((await p.locator('[data-act="inselBesuch"]').count()) === (hasIsles ? 2 : 0), "Einstellungen zeigen nicht die zwei anderen Inseln zum Besuchen");
+check((await p.locator('#panel [data-id="figurenprobe"]').count()) === 1, "Einstellungen zeigen die Figurenprobe nicht");
 if (hasIsles) {
   check(await p.evaluate(() => !!(SB.ui.hub && SB.ui.hub.painted && SB.ui.hub.realm() === "midgard")), "Heimat ist nicht das Gemälde von Midgard");
   for (const r of ["albion", "hibernia"]) {
-    await p.locator('[data-act="neuInsel"][data-v="' + r + '"]').click();
+    await p.evaluate(() => SB.ui.openPanel("einstellungen"));
+    await p.locator('[data-act="inselBesuch"][data-v="' + r + '"]').click();
     await p.waitForTimeout(600);
     check((await p.evaluate(() => SB.ui.hub.realm())) === r, "Besuch auf " + r + " zeigt die Insel nicht");
     check(await p.locator(".ph-visit").isVisible(), "Hinweis beim Besuch auf " + r + " fehlt");
@@ -158,12 +176,6 @@ if (hasKul) {
   check(r.out["midgard-dungeon"] === r.rostwerk, "Verlies zeigt " + (r.rostwerk ? "seine Kulisse nicht" : "eine Kulisse ohne eigenes Bild"));
 } else console.log("ohne kulissen.js: Kampfkulissen nicht geprüft");
 
-// 3. danach nicht mehr von selbst
-await p.evaluate(() => SB.ui.closePanel());
-await p.reload();
-await p.waitForSelector("#topbar .me-sub");
-await p.waitForTimeout(1500);
-check((await p.evaluate(() => SB.ui.panelId)) !== "neu", "Neu prüfen öffnet sich bei jedem Start");
 await browser.close();
 
 if (errors.length) fails.push(...errors);
@@ -171,4 +183,4 @@ if (fails.length) {
   console.log("FEHLER:\n- " + fails.join("\n- "));
   process.exit(1);
 }
-console.log("OK: Neu prüfen, gemalte Heimatinsel" + (hasIsles ? ", Besuch der Inseln" : "") + (hasKern ? ", eingebettete Figuren" : "") + (hasMon ? ", Monsterfiguren" : "") + (hasKul ? ", Kampfkulissen" : ""));
+console.log("OK: ohne alte Prüfseite und alte Figuren, gemalte Heimatinsel" + (hasIsles ? ", Besuch der Inseln" : "") + (hasKern ? ", eingebettete Figuren" : "") + (hasMon ? ", Monsterfiguren" : "") + (hasKul ? ", Kampfkulissen" : ""));

@@ -382,7 +382,7 @@ const creator = await page.evaluate(async () => {
   click("[data-k=hairStyle][data-v='1']");
   ok(document.querySelector("#create .cform [data-k=hairStyle][data-v='1']").classList.contains("on"), "Gestalt 2 nicht gewaehlt");
   click("[data-cact=gender][data-v=w]");
-  ok(heads().includes("Haut") && !heads().includes("Gestalt"), "Erschaffung fuer nordmann.w braucht die alten Regler");
+  ok(!heads().includes("Haut") && !heads().includes("Gestalt"), "Erschaffung fuer nordmann.w zeigt alte Regler oder eine Gestalt: " + heads().join(","));
   ok(SB.ui.gestaltHtml({ hairStyle: 3 }, 2, "data-act").includes('data-v="1">Gestalt 2'), "Spiegel waehlt die falsche Gestalt");
   return fails;
 });

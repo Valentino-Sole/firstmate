@@ -854,6 +854,9 @@
       if (m.boss && gen.obj) gen.obj.add(R.haloSprite(m.accent || "#ff5a3d", Math.max(2.4, (gen.height || 2) * 1.3), 0.16, [0, (gen.height || 2) * 0.45, 0]));
       return gen;
     }
+    // Version 0.66: Gegner mit Meshy-Figur (eigene oder geliehene) zeigen nie mehr die alte gebaute Figur; solange ihre
+    // Familie laedt, steht ein Platzhalter da (geladen wird vor jedem Kampf und in den Fenstern mit Monsterbildern)
+    if ((m.visual || m.look) && R.buildPending) return R.buildPending(m);
     const root = grp();
     const P = {};
     const arch = B[m.arch] ? m.arch : ALIAS[m.arch] || "ghul";
