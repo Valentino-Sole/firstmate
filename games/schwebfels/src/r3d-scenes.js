@@ -3453,7 +3453,10 @@
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
       } else {
-        const target = Bf.home.x - Bf.side * (Bf.desc.kind === "monster" ? 1.9 : 1.5);
+        // Bestien halten fuer ihren Ansprung weiter vor dem Helden (standOff), sonst steht die Schnauze schon am Gegner
+        const gap = Bf.desc.kind === "monster" ? 1.9 : Math.max(1.5, A.m.standOff || 0);
+        const target = Bf.home.x - Bf.side * gap;
+        const ST = A.m.strike;
         const from = A.home.x;
         if (special && SFX.kind === "smoke") {
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
@@ -3467,9 +3470,10 @@
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         for (let i = 0; i < ev.hits.length; i++) {
-          A.m.play(special && i === 0 ? "special" : "attack", special ? 0.5 : 0.42);
+          const big = special && i === 0;
+          A.m.play(big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
           if (opts.sfx) opts.sfx("swing");
-          await wait(0.22);
+          await wait(ST ? (big ? ST.shit : ST.hit) : 0.22);
           if (special && (SFX.kind === "slash" || SFX.kind === "aura")) slash(Bf, SFX.color, i % 2);
           else if (special && SFX.kind === "shock") {
             ring(Bf, SFX.color, true);
@@ -3477,7 +3481,8 @@
           } else if (special && SFX.kind === "roots") roots(Bf, SFX.color);
           else slash(Bf, "#ffffff", i % 2);
           await impact(ev, A, Bf, ev.hits[i], i);
-          await wait(0.16);
+          // Bestien: Biss und Satz zurueck ausspielen lassen
+          await wait(ST ? 0.3 : 0.16);
         }
         await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
       }

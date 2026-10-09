@@ -190,6 +190,16 @@
     model.height = (meta.height || 1.6) * s;
     model.ranged = SB.data.ARCH_TYPE[m.arch] === "verstand";
     model.projColor = m.accent || "#ff5a3d";
+    if (meta.form !== "flieger" && meta.form !== "schweber") {
+      // Ansprung im Kampf: Die Bestie haelt beim Anlauf so weit vor dem Gegner, dass der Sprung sichtbar Strecke macht
+      // (vorher stand die Schnauze des Wolfs schon am Helden), und der Angriff bekommt Zeit fuer Ausholen, Sprung,
+      // Biss und Satz zurueck. Der Treffer liegt bei strike.hit Sekunden (u = 0,52 in der Bewegung).
+      const hb = meta.bones.find((b) => b[0] === "head");
+      const front = (hb ? Math.max(hb[2][2], hb[3][2]) + 0.1 : (meta.length || 1.4) * 0.45) * s;
+      P.pounce = (meta.form === "drache" ? 0.5 : 0.75) * Math.min(1.3, s);
+      model.standOff = front + 0.3 + P.pounce;
+      model.strike = { dur: 0.85, hit: 0.44, sdur: 1.05, shit: 0.55 };
+    }
     return model;
   };
 
@@ -355,7 +365,7 @@
   // Haltung je Bewegung: Rumpf (x, y, z, rx, rz, ry), Wirbel (hips, spine, chest, neck, head), Blick (hy),
   // Schwanz (tail, wag, wagF) und je Bein { dz, dy, carry (Pfote folgt dem Rumpf), flex (Pfotenneigung), body (Pfote
   // am Koerper statt am Boden, 0..1) }
-  function quadPose(name, u, t, ph) {
+  function quadPose(name, u, t, ph, reach) {
     const breath = Math.sin(t * 1.9);
     const Q = {
       x: 0,
@@ -415,44 +425,45 @@
       }
       case "attack":
       case "special": {
-        // Sprungbiss: ducken, abspringen (Hinterbeine stossen ab), Biss mit Kopfschuetteln, zurueck in den Stand
+        // Ansprung: ducken und Gewicht nach hinten, weiter Sprung mit gestreckten Vorderpfoten, Biss am Gegner mit
+        // Kopfschuetteln (Treffer bei u = 0,52), dann ein Satz zurueck. Spezial: hoeher, mit Drehung im Sprung.
         const sp = name === "special";
-        const zMax = sp ? 0.42 : 0.5;
-        const hMax = sp ? 0.38 : 0.13;
-        const c = seg(u, 0, 0.3);
-        const crouch = u < 0.3 ? ease(c) : 1 - ease(seg(u, 0.3, 0.42));
-        const leap = seg(u, 0.3, 0.6);
-        const land = u > 0.6 ? Math.sin(PI * seg(u, 0.6, 0.78)) : 0;
-        const back = ease(seg(u, 0.8, 1));
-        Q.z = u < 0.3 ? -0.07 * ease(c) : u < 0.6 ? -0.07 + (zMax + 0.07) * ease(leap) : zMax * (1 - back);
-        Q.y = -0.03 - 0.1 * crouch + (u > 0.3 && u < 0.62 ? hMax * Math.sin(PI * seg(u, 0.3, 0.62)) : 0) - 0.05 * land;
-        Q.hips = 0.02 + 0.08 * crouch - 0.12 * Math.sin(PI * leap);
-        Q.spine = 0.12 * crouch - 0.1 * Math.sin(PI * leap);
-        Q.chest = 0.04 + 0.06 * crouch;
-        const bite = Math.sin(PI * seg(u, 0.46, 0.62));
-        Q.neck = 0.24 + 0.2 * crouch - 0.45 * Math.sin(PI * leap) + 0.3 * bite;
-        Q.head = -0.2 - 0.15 * crouch + 0.1 * Math.sin(PI * leap) + 0.25 * bite;
-        const shake = u > 0.55 && u < 0.85 ? Math.sin(PI * seg(u, 0.55, 0.85)) : 0;
-        Q.hy = shake * (sp ? 0.4 : 0.28) * Math.sin(t * 38);
-        Q.hz = shake * 0.15 * Math.sin(t * 38 + 1);
-        Q.tail = 0.45 + 0.25 * Math.sin(PI * leap);
+        const crouch = u < 0.28 ? ease(seg(u, 0, 0.28)) : 1 - ease(seg(u, 0.28, 0.4));
+        const fly = seg(u, 0.28, 0.52);
+        const air = Math.sin(PI * fly);
+        const pin = u > 0.5 && u < 0.76 ? Math.sin(PI * seg(u, 0.5, 0.76)) : 0;
+        const back = ease(seg(u, 0.74, 1));
+        const hopB = Math.sin(PI * seg(u, 0.76, 0.98));
+        Q.z = u < 0.28 ? -0.16 * ease(seg(u, 0, 0.28)) : u < 0.52 ? -0.16 + (reach + 0.16) * ease(fly) : reach * (1 - back);
+        Q.y = -0.03 - 0.14 * crouch + (sp ? 0.55 : 0.34) * air + 0.08 * pin + 0.1 * hopB;
+        // Brust hoch beim Absprung und beim Biss: der Wolf richtet sich am Gegner auf
+        Q.hips = 0.02 + 0.1 * crouch - 0.32 * Math.sin(PI * seg(u, 0.28, 0.46)) - 0.34 * pin;
+        Q.spine = 0.15 * crouch - 0.14 * air - 0.1 * pin;
+        Q.chest = 0.04 + 0.08 * crouch;
+        const bite = Math.sin(PI * seg(u, 0.42, 0.62));
+        Q.neck = 0.24 + 0.28 * crouch - 0.6 * air + 0.5 * bite;
+        Q.head = -0.2 - 0.22 * crouch + 0.2 * air + 0.35 * bite;
+        const shake = u > 0.5 && u < 0.8 ? Math.sin(PI * seg(u, 0.5, 0.8)) : 0;
+        Q.hy = shake * (sp ? 0.55 : 0.42) * Math.sin(t * 34);
+        Q.hz = shake * 0.25 * Math.sin(t * 34 + 1);
+        Q.rz = sp ? 0.6 * air * Math.sin(PI * fly) : 0.06 * air;
+        Q.ry = sp ? 0.5 * Math.sin(2 * PI * fly) * air : 0;
+        Q.tail = 0.45 + 0.45 * air - 0.2 * crouch;
         Q.wag = 0.05;
-        if (sp) Q.rz = 0.25 * Math.sin(PI * leap) * Math.sin(PI * leap);
-        const air = u > 0.32 && u < 0.6 ? Math.sin(PI * seg(u, 0.32, 0.6)) : 0;
         for (const k of LEGS) {
           const l = L[k];
           if (k[0] === "F") {
-            // Vorderpfoten greifen nach vorn und landen weiter vorn
+            // Vorderpfoten: beim Ducken unter dem Koerper, im Sprung weit nach vorn und oben, beim Biss auf dem Gegner
             l.carry = 1;
-            l.dz = 0.3 * air;
-            l.dy = (sp ? 0.24 : 0.18) * air + 0.04 * Math.sin(PI * seg(u, 0.82, 1));
-            l.flex = -0.5 * air;
+            l.dz = -0.04 * crouch + 0.42 * air + 0.12 * pin;
+            l.dy = (sp ? 0.42 : 0.32) * air + 0.34 * pin + 0.06 * hopB;
+            l.flex = -1.0 * air - 0.4 * pin;
           } else {
-            // Hinterpfoten bleiben beim Absprung stehen und ziehen in der Luft nach
-            l.carry = ease(seg(u, 0.42, 0.62));
-            l.dy = 0.1 * Math.sin(PI * seg(u, 0.42, 0.66)) + 0.04 * Math.sin(PI * seg(u, 0.82, 1));
-            l.dz = -0.08 * Math.sin(PI * seg(u, 0.42, 0.66));
-            l.flex = 0.5 * Math.sin(PI * seg(u, 0.42, 0.66));
+            // Hinterpfoten stossen ab, schwingen in der Luft gestreckt nach hinten und landen unter dem Koerper
+            l.carry = ease(seg(u, 0.3, 0.52));
+            l.dy = 0.16 * Math.sin(PI * seg(u, 0.32, 0.58)) + 0.06 * hopB;
+            l.dz = 0.05 * crouch - 0.22 * air;
+            l.flex = 0.7 * air;
           }
         }
         break;
@@ -591,7 +602,7 @@
     if (name === "defeat" && !m.anim) u = 1;
     if (P.hitSide == null) P.hitSide = Math.random() < 0.5 ? -1 : 1;
     if (name !== "hit" && name !== "block") P.hitSide = null;
-    const Q = quadPose(name, u, t, P.hitSide || 1);
+    const Q = quadPose(name, u, t, P.hitSide || 1, P.pounce || 0.5);
     if (name === "defeat" && Qr.wings.length) {
       // Drachen kippen nicht auf die Seite (ein Fluegel stuende in den Himmel, der andere im Boden), sondern sinken
       // auf den Bauch: Beine knicken ein, Hals und Kopf legen sich ab, die Fluegel fallen schlaff herab
@@ -740,16 +751,24 @@
         break;
       case "attack":
       case "special": {
+        // aufbaeumen mit hoch erhobenen Vorderbeinen und Kieferklauen, Satz nach vorn, Vorderbeine und Klauen
+        // stossen auf den Gegner herab (Treffer bei u = 0,52), zurueckweichen. Spezial: hoher Sprung auf den Gegner.
         const sp = name === "special";
-        const up = u < 0.35 ? ease(u / 0.35) : 1 - ease(seg(u, 0.35, 0.75));
-        const strike = Math.sin(PI * seg(u, 0.35, 0.7));
-        pitch = -0.45 * up + 0.2 * strike;
-        raise = 1.0 * up;
-        z = -0.06 * up + (sp ? 0.5 : 0.4) * strike;
-        y += 0.06 * up + (sp ? 0.18 * Math.sin(PI * seg(u, 0.3, 0.7)) : 0);
-        head = -0.3 * up + 0.35 * strike;
-        clawUp = 0.9 * up + 0.3 * strike;
-        clawOpen = 0.5 * up;
+        const reach = P.pounce || 0.4;
+        const rear = u < 0.34 ? ease(seg(u, 0, 0.34)) : 1 - ease(seg(u, 0.4, 0.52));
+        const fly = seg(u, 0.36, 0.52);
+        const strike = Math.sin(PI * seg(u, 0.42, 0.7));
+        const back = ease(seg(u, 0.72, 1));
+        z = u < 0.36 ? -0.12 * rear : u < 0.52 ? -0.12 + (reach + 0.12) * ease(fly) : reach * (1 - back);
+        // angehoben, damit der Hinterleib beim Aufbaeumen nicht in den Boden kippt
+        y += 0.24 * rear + (sp ? 0.4 : 0.14) * Math.sin(PI * fly) + 0.07 * Math.sin(PI * seg(u, 0.76, 0.98));
+        pitch = -0.62 * rear + 0.45 * strike;
+        raise = 1.6 * rear - 0.45 * strike;
+        head = -0.45 * rear + 0.6 * strike;
+        clawUp = 1.2 * rear + 0.25 * strike;
+        clawOpen = 0.7 * rear;
+        hop = 0.7 * Math.sin(PI * fly);
+        if (sp) roll = 0.12 * strike * Math.sin(t * 24);
         break;
       }
       case "hit": {

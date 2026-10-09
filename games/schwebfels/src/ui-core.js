@@ -538,6 +538,7 @@
   /* ---------- Menueleiste (links am Desktop, unten am Handy) ---------- */
   const MENU = [
     ["held", "held", "Charakter"],
+    ["heim", "heim", "Heim"],
     ["taverne", "taverne", "Taverne"],
     ["steinkreis", "steinkreis", "Chronik"],
     ["arena", "arena", "Arena"],
@@ -548,7 +549,6 @@
     ["stall", "stall", "Stall"],
     ["ruhmeshalle", "ruhm", "Rangliste"],
     ["gildenhalle", "gilde", "Gilde"],
-    ["heim", "heim", "Heim"],
     ["brunnen", "brunnen", "Brunnen"],
     ["mondtor", "mond", "Mondtor"],
   ];
@@ -621,9 +621,16 @@
     const dock = $("#dock");
     if (!dock) return;
     const b = UI.badges();
+    // Laeuft ein Auftrag oder eine Wache, zaehlt die Restzeit neben dem Menuepunkt herunter (UI.updateTimers)
+    const S = UI.S;
+    const now = E.now();
+    const left = {};
+    if (S.quest.active && S.quest.active.end > now) left.taverne = S.quest.active.end;
+    if (S.guard && S.guard.end > now) left.leuchtturm = S.guard.end;
     dock.innerHTML =
-      '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
-      MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
+      '<div class="side-logo">' + esc(D.REALMS[S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[S.realm].name) + "</small></div>" +
+      MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (left[id] ? '<b class="dock-zeit num" data-until="' + left[id] + '"></b>' : b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
+    UI.updateTimers();
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
   };
