@@ -19,6 +19,10 @@ Aufrufe (Ausgabeordner mit --out, Standard: ./meshy):
   python meshy_api.py bewegungen <name> [--clips standard|mehr|<id,id,...>] [--budget 90] [--trocken]
       Bewegungen aus der Meshy-Bibliothek auf das Skelett dieser Figur (je Anfrage bis zu 10, 3 Credits je Bewegung).
       Weil alle Meshy-Figuren dasselbe Skelett haben, reicht das einmal; meshy.py teilt die Bewegungen mit allen Figuren.
+  python meshy_api.py neutextur <name> --von <modell> --prompt "Stil" [--budget 10] [--trocken]
+      Vorhandenes Modell (Ordner <out>/<modell> mit model.glb) neu texturieren: gleiche Form, neue Farben und Muster
+      (Meshy Retexture, 10 Credits). Nimmt den Bild-zu-3D-Auftrag des Modells, solange Meshy ihn noch hat, sonst die
+      Datei. Ergebnis: <out>/<name>/model.glb, danach fit_piece.py oder weapon.py wie beim Original.
   python meshy_api.py credits                                  Summe der verbrauchten Credits je Figur
 
 Danach: python meshy.py <npz> <out>/<name>/rigged.glb --anim <out>/<name>/bewegungen_1.glb ... --race <volk> --gender f|m
@@ -52,7 +56,7 @@ CLIPS = {
     ],
 }
 # Preise laut https://docs.meshy.ai/en/api/pricing (Credits je Auftrag)
-PRICE = {"image-to-3d": 30, "rigging": 5, "animation": 3}
+PRICE = {"image-to-3d": 30, "rigging": 5, "animation": 3, "retexture": 10}
 
 
 def key():
@@ -304,6 +308,44 @@ def cmd_teil(a):
     print("Fertig:", S.dir)
 
 
+def cmd_neutextur(a):
+    """Gleiche Form, neue Textur (Felder laut docs.meshy.ai/en/api/retexture, geprueft am 9. Oktober 2026):
+    input_task_id (Bild zu 3D, solange Meshy den Auftrag noch hat) oder model_url als Daten-URI; enable_original_uv
+    behaelt die Texturaufteilung, fit_piece.py und weapon.py backen ohnehin neu auf."""
+    S = Store(a.out, a.name)
+    if S.state.get("retexture", {}).get("ok"):
+        print("Schon fertig:", S.dir)
+        return
+    src_dir = os.path.join(a.out, a.von)
+    glb = os.path.join(src_dir, "model.glb")
+    if not os.path.exists(glb):
+        raise SystemExit("Kein Modell unter " + glb)
+    guard(a.budget, PRICE["retexture"], "Neutexturierung %s aus %s" % (a.name, a.von))
+    body = {"text_style_prompt": a.prompt[:800], "ai_model": AI_MODEL, "enable_original_uv": True, "enable_pbr": False,
+            "texture_resolution": "2k", "target_formats": ["glb"]}
+    if a.trocken:
+        print("Trockenlauf, nichts gesendet:\n POST retexture", json.dumps(body, ensure_ascii=False), "+ Modell", glb)
+        return
+    src = {}
+    p = os.path.join(src_dir, "auftraege.json")
+    if os.path.exists(p):
+        src = json.load(open(p)).get("image_to_3d") or {}
+    old = call("GET", "image-to-3d/%s" % src["id"], missing_ok=True) if src.get("kind") == "image-to-3d" and src.get("id") else None
+    if old and old.get("status") == "SUCCEEDED":
+        body["input_task_id"] = src["id"]
+    else:
+        body["model_url"] = "data:application/octet-stream;base64," + base64.b64encode(open(glb, "rb").read()).decode("ascii")
+    t = run_task(S, "retexture", "retexture", body, "retexture")
+    if t["status"] != "SUCCEEDED":
+        raise SystemExit("Neutexturierung fehlgeschlagen: " + json.dumps(t.get("task_error", {}), ensure_ascii=False))
+    download(t["model_urls"]["glb"], os.path.join(S.dir, "model.glb"))
+    if t.get("thumbnail_url"):
+        download(t["thumbnail_url"], os.path.join(S.dir, "vorschau.png"))
+    S.state["retexture"]["ok"] = True
+    S.save()
+    print("Fertig:", S.dir)
+
+
 def cmd_bewegungen(a):
     S = Store(a.out, a.name)
     rig = S.state.get("rigging", {})
@@ -398,6 +440,12 @@ def main():
     p.add_argument("--clips", default="standard")
     p.add_argument("--budget", type=int)
     p.add_argument("--trocken", action="store_true")
+    p = sub.add_parser("neutextur")
+    p.add_argument("name")
+    p.add_argument("--von", required=True, help="Ordner des vorhandenen Modells unter --out")
+    p.add_argument("--prompt", required=True, help="Stil der neuen Textur (hoechstens 800 Zeichen)")
+    p.add_argument("--budget", type=int)
+    p.add_argument("--trocken", action="store_true")
     p = sub.add_parser("kosten")
     p.add_argument("--clips", default="standard")
     sub.add_parser("credits")
@@ -409,6 +457,8 @@ def main():
         cmd_teil(a)
     elif a.cmd == "bewegungen":
         cmd_bewegungen(a)
+    elif a.cmd == "neutextur":
+        cmd_neutextur(a)
     elif a.cmd == "kosten":
         cmd_kosten(a)
     elif a.cmd == "credits":

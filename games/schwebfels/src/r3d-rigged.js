@@ -772,8 +772,11 @@
         const reach = b === hb ? d.reach : null;
         if (!bits && !reach) continue;
         const [t, th] = tad(d.Fr[b], E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]);
+        // nur innerhalb des Feldbereichs; binT zaehlt alles jenseits zur Randreihe, so verschwand beim Frostwicht der
+        // Hals (oberhalb des Brustknochens) unter dem Kragen eines Brustteils, obwohl dort nichts lag
+        const inside = t >= d.g[2] && t <= d.g[3];
         const j = binT(t, d.g) * d.g[1] + binA(th, d.g);
-        if ((bits && (bits[j >> 3] >> (j & 7)) & 1) || (reach && pokes(reach, E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]))) {
+        if ((bits && inside && (bits[j >> 3] >> (j & 7)) & 1) || (reach && pokes(reach, E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]))) {
           cov[i] = 1;
           break;
         }
