@@ -687,7 +687,8 @@
      ausgeblendet, auch im Gesicht, wo die belegten Felder sonst nichts ausblenden. Richtungen um die Kopfmitte statt
      Abstand von der Kopfachse, sonst blieb der Scheitel unerfasst (Haar stach oben durch Helme). Ausgenommen bleiben
      Gesichtsmitte und Kinn (dort liegt der Kragen einer Kapuze in derselben Richtung naeher als das Kinn). */
-  const NE = 12;
+  const NE = 16;
+  const NH = 32;
   function headDir(F, x, y, z) {
     const cx = x - (F.p.x + F.a.x * 0.5 * F.L);
     const cy = y - (F.p.y + F.a.y * 0.5 * F.L);
@@ -695,37 +696,57 @@
     const r = Math.hypot(cx, cy, cz) || 1e-9;
     const e = Math.acos(Math.max(-1, Math.min(1, (cx * F.a.x + cy * F.a.y + cz * F.a.z) / r)));
     const th = Math.atan2(cx * F.v.x + cy * F.v.y + cz * F.v.z, cx * F.u.x + cy * F.u.y + cz * F.u.z);
-    return [Math.min(NE - 1, Math.floor((e / Math.PI) * NE)), th, r];
+    const ai = ((Math.floor(((th + Math.PI) / (2 * Math.PI)) * NH) % NH) + NH) % NH;
+    return [Math.min(NE - 1, Math.floor((e / Math.PI) * NE)) * NH + ai, r];
   }
-  function headReach(nm, key, E, Fr, g) {
+  // je Richtung ein Strahl von der Kopfmitte nach aussen; erster Treffer auf dem Teil (Infinity: offen, etwa Gesicht
+  // und Hals). Strahlen statt naechster Ecken: auf dem Scheitel liegen grosse Flaechen ohne Ecke in der Mitte.
+  function headReach(nm, key, E, Fr) {
     const F = Fr[E.map.head];
     const geo = pieceGeo(nm, key, E);
     const P = geo.attributes.position.array;
-    const SI = geo.attributes.skinIndex.array;
-    const SW = geo.attributes.skinWeight.array;
-    const NA = g[1];
-    const R = new Float32Array(NE * NA).fill(Infinity);
-    for (let i = 0; i < P.length / 3; i++) {
-      if (SI[i * 4] !== E.map.head || SW[i * 4] < 0.5) continue;
-      const [ei, th, r] = headDir(F, P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
-      const j = ei * NA + binA(th, g);
-      if (r < R[j]) R[j] = r;
-    }
-    // Richtungen unter grossen Dreiecken ohne eigene Ecke von den Nachbarn
-    const c = R.slice();
-    for (let e = 0; e < NE; e++) {
-      for (let a = 0; a < NA; a++) {
-        if (c[e * NA + a] < Infinity) continue;
-        for (const [ee, aa] of [[e, (a + NA - 1) % NA], [e, (a + 1) % NA], [Math.max(0, e - 1), a], [Math.min(NE - 1, e + 1), a]]) R[e * NA + a] = Math.min(R[e * NA + a], c[ee * NA + aa]);
+    const I = geo.index.array;
+    const ox = F.p.x + F.a.x * 0.5 * F.L;
+    const oy = F.p.y + F.a.y * 0.5 * F.L;
+    const oz = F.p.z + F.a.z * 0.5 * F.L;
+    const R = new Float32Array(NE * NH).fill(Infinity);
+    for (let ei = 0; ei < NE; ei++) {
+      const e = ((ei + 0.5) / NE) * Math.PI;
+      for (let ai = 0; ai < NH; ai++) {
+        const th = -Math.PI + ((ai + 0.5) / NH) * 2 * Math.PI;
+        const se = Math.sin(e);
+        const dx = F.a.x * Math.cos(e) + (F.u.x * Math.cos(th) + F.v.x * Math.sin(th)) * se;
+        const dy = F.a.y * Math.cos(e) + (F.u.y * Math.cos(th) + F.v.y * Math.sin(th)) * se;
+        const dz = F.a.z * Math.cos(e) + (F.u.z * Math.cos(th) + F.v.z * Math.sin(th)) * se;
+        let best = Infinity;
+        for (let t = 0; t < I.length; t += 3) {
+          // Moeller-Trumbore
+          const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+          const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
+          const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
+          const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+          const det = e1x * px + e1y * py + e1z * pz;
+          if (Math.abs(det) < 1e-12) continue;
+          const inv = 1 / det;
+          const sx = ox - P[a], sy = oy - P[a + 1], sz = oz - P[a + 2];
+          const u = (sx * px + sy * py + sz * pz) * inv;
+          if (u < 0 || u > 1) continue;
+          const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+          const v = (dx * qx + dy * qy + dz * qz) * inv;
+          if (v < 0 || u + v > 1) continue;
+          const d = (e2x * qx + e2y * qy + e2z * qz) * inv;
+          if (d > 0 && d < best) best = d;
+        }
+        R[ei * NH + ai] = best;
       }
     }
-    return { R, F, g };
+    return { R, F };
   }
   function pokes(reach, x, y, z) {
     const [t, th] = tad(reach.F, x, y, z);
     if (t < 0.15 || (t < 0.6 && Math.abs(th) < (40 * Math.PI) / 180)) return false;
-    const [ei, th2, r] = headDir(reach.F, x, y, z);
-    return r > reach.R[ei * reach.g[1] + binA(th2, reach.g)] + 0.002;
+    const [j, r] = headDir(reach.F, x, y, z);
+    return r > reach.R[j] + 0.002;
   }
   // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen oder durch ein
   // Kopfteil hindurchragen
@@ -740,7 +761,7 @@
         const i = E.skel.names.indexOf(b);
         if (i >= 0) occ[i] = Pc.occ[b];
       }
-      D.push({ Fr, occ, g: Pc.grid, reach: Pc.slot === "helm" && hb != null ? headReach(nm, key, E, Fr, Pc.grid) : null });
+      D.push({ Fr, occ, g: Pc.grid, reach: Pc.slot === "helm" && hb != null ? headReach(nm, key, E, Fr) : null });
     }
     const n = E.pos.length / 3;
     const cov = new Uint8Array(n);
