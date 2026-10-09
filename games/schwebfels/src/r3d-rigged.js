@@ -122,6 +122,9 @@
     const tk = texKey || "rig." + key;
     const m = new T.MeshStandardMaterial({ color: new T.Color(color || "#ffffff"), roughness: 0.75, metalness: 0, map: ref ? SB.assets.texture(tk, ref, { srgb: true }) : null });
     if (nref) m.normalMap = SB.assets.texture(tk + ".n", nref, { srgb: false });
+    // Ruestungsteile und Waffen beidseitig: Meshys Stoffe und Klingen sind duenne Doppelschichten, die sich nach dem
+    // Verkleinern und Anpassen stellenweise kreuzen; einseitig sah man dort durch Loecher auf dunkle Rueckseiten
+    if (/^(piece|weapon)\./.test(key)) m.side = T.DoubleSide;
     return (GMAT[key] = m);
   }
   function makeBones(E) {
