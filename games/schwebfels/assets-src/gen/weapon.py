@@ -26,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import meshy_import as M  # noqa: E402
 import fit_piece as FP  # noqa: E402
+import rebake as RB  # noqa: E402
 
 # Grundart: (Verfahren, Laenge, Griffpunkt als Anteil der Laenge vom Ende, Seite des Kopfes auf X)
 # gemessen an den gebauten Waffen (Variante 0, gewoehnlich)
@@ -201,10 +202,12 @@ def main():
     ap.add_argument("--umdrehen", action="store_true")
     ap.add_argument("--tris", type=int, default=3000)
     ap.add_argument("--tex", type=int, default=512)
+    ap.add_argument("--ohne-backen", action="store_true", help="Meshys Texturaufteilung behalten (fleckig, wenn verkleinert)")
     a = ap.parse_args()
     mode, length, frac, side = BASES[a.base]
     g, parts = FP.static_parts(a.glb)
-    tex = M.atlas(g, parts, a.tex)
+    # Farbe in voller Groesse; zum Schluss auf neue Texturkoordinaten aufgebacken (rebake.py)
+    tex = M.atlas(g, parts, a.tex if a.ohne_backen else 2048)
     P = np.concatenate([p["pos"] for p in parts])
     UV = np.concatenate([p["uv_game"] for p in parts])
     base = np.cumsum([0] + [len(p["pos"]) for p in parts])[:-1]
@@ -256,7 +259,11 @@ def main():
         print("Breiter als %.2f m: kleiner gesetzt (Laenge %.2f statt %.2f m)" % (MAXW[a.base], (np.ptp(P[:, 1])) * MAXW[a.base] / w, np.ptp(P[:, 1])))
         P = P * (MAXW[a.base] / w)
     tris_in = len(F)
-    if len(F) > a.tris * 1.05:
+    if not a.ohne_backen:
+        from PIL import Image
+        P, UV, F, tex = RB.rebake(P, UV, F, Image.fromarray(tex), a.tris, a.tex)
+        g.atlas_normal = None  # die Normalenkarte passt nicht zu den neuen Texturkoordinaten
+    elif len(F) > a.tris * 1.05:
         one = np.zeros((len(P), 1), np.int64)
         P, UV, F, _, _ = M.decimate(P, UV, F, one, np.ones((len(P), 1)), a.tris)
     name = a.name or os.path.splitext(os.path.basename(a.out))[0]

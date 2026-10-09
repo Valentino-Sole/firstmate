@@ -12,7 +12,10 @@ Der Referenzkoerper ist eine npz-Datei aus meshy_import.py (Art "rig"). Schritte
     zum Knie, gilt im Spiel als Brustteil; Umhang: wie Robe, haengt aber nur an Rumpf und Hals und blendet keine Haut
     aus); --paar spiegelt ein einzelnes Teil auf die andere Seite. Kopfteile, die nicht den ganzen Kopf umschliessen
     (Kappe, Krone), mit --kopf oben: gleichmaessig nach der Breite oben am Kopf skaliert und oben angelegt
- 3. Mit Blender nach aussen schieben (keine Haut darf durchstechen), glaetten, Gewichte vom Koerper uebertragen
+ 3. Vom Koerper freistellen: Kopfteile wachsen als Ganzes, bis der Kopf darin Platz hat; danach werden Ecken, die
+    noch in der Haut liegen, samt ihrer Umgebung nach aussen geschoben (Innen- und Aussenseite duenner Stoffe bewegen
+    sich gemeinsam, nichts zerknittert); Gewichte vom Koerper uebertragen (Blender). Die Farbe wird vorher auf neue,
+    grosse Texturinseln aufgebacken (rebake.py), Meshys zerstueckelte Texturaufteilung wuerde verkleinert fleckig
  4. Knochenbezogen speichern: je Ecke die zwei wichtigsten Knochen mit Lage entlang des Knochens, Winkel um ihn und
     Abstand zur Koerperoberflaeche. Im Spiel (src/r3d-rigged.js) legt sich das Teil damit ueber Querschnittsprofile
     an jeden Koerper mit gleichen Knochennamen an, schlank oder breit. Dazu die belegten Felder je Knochen, unter
@@ -30,6 +33,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import meshy_import as M  # noqa: E402
+import rebake as RB  # noqa: E402
 
 NT, NA = 12, 24          # Felder entlang des Knochens und um ihn herum
 T0, T1 = -0.25, 1.25     # betrachteter Bereich entlang des Knochens (0 = Gelenk, 1 = Folgegelenk)
@@ -213,7 +217,7 @@ def euler(deg):
 
 
 # ---------- Anpassen mit Blender ----------
-def covered_occ(bpos, bidx, bW, Fr, fpos, ptri, bones, names, reach=0.09, share=0.5):
+def covered_occ(bpos, bidx, bW, Fr, fpos, ptri, bones, names, reach=0.09, share=0.5, face=None):
     """Felder, deren Haut zum groessten Teil vom Teil ueberdeckt ist: Strahl von jeder Hautecke entlang ihrer Normalen
     nach aussen (bis reach Meter); ein Feld gilt als belegt, wenn mindestens share seiner Ecken getroffen werden."""
     from mathutils import Vector
@@ -237,13 +241,69 @@ def covered_occ(bpos, bidx, bW, Fr, fpos, ptri, bones, names, reach=0.09, share=
         np.add.at(cnt, (ti, ai), 1)
         np.add.at(got, (ti, ai), hit)
         grid = (cnt > 0) & (got >= share * np.maximum(cnt, 1))
+        if face is not None and b == face:
+            # Gesicht (vorn, unterhalb der Stirn) nie ausblenden: unter Masken und Visieren saehe man sonst durch die
+            # Augenloecher ins Leere; das Teil liegt ohnehin ausserhalb der Haut
+            tc = T0 + (np.arange(NT) + 0.5) * (T1 - T0) / NT
+            ac = -np.pi + (np.arange(NA) + 0.5) * 2 * np.pi / NA
+            grid &= ~((tc[:, None] < 0.6) & (np.abs(ac)[None, :] < np.radians(75)))
         occ[names[b]] = grid.astype(np.uint8)
         print("Haut ueberdeckt (", names[b], "):", int(hit.sum()), "von", len(m), "Ecken,", int(grid.sum()), "Felder")
     return occ
 
 
-def fit_blender(bpos, bidx, bW, ppos, ptri, offset):
+def signed_dist(tree, P):
+    """Abstand jeder Ecke zur Koerperoberflaeche (negativ: innen) und die Flaechennormale an der naechsten Stelle."""
+    from mathutils import Vector
+    sd = np.zeros(len(P))
+    nrm = np.zeros((len(P), 3))
+    for i, p in enumerate(P):
+        loc, n, _, d = tree.find_nearest(Vector(p))
+        if loc is None:
+            sd[i], nrm[i] = 1.0, (0.0, 1.0, 0.0)
+            continue
+        nrm[i] = n[:]
+        sd[i] = d if np.dot(p - np.array(loc[:]), nrm[i]) >= 0 else -d
+    return sd, nrm
+
+
+def push_out(V, tree, offset, radius, rounds=3):
+    """Ecken, die naeher als offset an der Haut oder darin liegen, nach aussen schieben; der Schub wirkt mit
+    abnehmender Staerke auch auf alle Ecken im Umkreis radius. So bewegen sich Innen- und Aussenseite duenner Stoffe
+    gemeinsam und keine innere Lage stoesst durch die aeussere (vorher: jede Ecke einzeln, die Teile zerknitterten)."""
+    from scipy.spatial import cKDTree
+    V = V.copy()
+    for _ in range(rounds):
+        sd, nrm = signed_dist(tree, V)
+        need = np.maximum(0.0, offset - sd)
+        hot = np.nonzero(need > 1e-4)[0]
+        if not len(hot):
+            break
+        kd = cKDTree(V[hot])
+        disp = np.zeros_like(V)
+        best = np.zeros(len(V))
+        for j, nb in enumerate(kd.query_ball_point(V, radius)):
+            if not nb:
+                continue
+            nb = np.array(nb)
+            d = np.linalg.norm(V[hot[nb]] - V[j], axis=1)
+            # bis zur halben Reichweite voller Schub (die naechste Stofflage geht ganz mit), danach abnehmend
+            w = need[hot[nb]] * np.clip(2 * (1 - d / radius), 0, 1)
+            k = int(np.argmax(w))
+            if w[k] > best[j]:
+                best[j] = w[k]
+                disp[j] = nrm[hot[nb[k]]] * w[k]
+        V += disp
+    return V
+
+
+def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, push=True):
+    """Teil vom Koerper freistellen und Gewichte uebertragen. rigid: Mittelpunkt, um den das Teil als Ganzes
+    gleichmaessig waechst (hoechstens 9 %), bis es fast ganz ausserhalb liegt (Helme, Kapuzen, Masken behalten so ihre Form);
+    sonst und danach werden die restlichen Ecken mit ihrer Umgebung nach aussen geschoben (push_out)."""
     import bpy
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
     def mk(name, V, F):
@@ -260,26 +320,26 @@ def fit_blender(bpos, bidx, bW, ppos, ptri, offset):
         nz = np.nonzero(bW[:, b] > 1e-3)[0]
         for v in nz:
             vg.add([int(v)], float(bW[v, b]), "REPLACE")
-    # Teil: Ecken an gleicher Stelle zusammenfassen, damit das Schieben keine Risse erzeugt
+    tree = BVHTree.FromPolygons([Vector(p) for p in bpos], [tuple(int(i) for i in f) for f in bidx])
+    # Ecken an gleicher Stelle (Texturnaehte) gemeinsam bewegen
     key = np.round(ppos / 1e-5).astype(np.int64)
     _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
     inv = inv.reshape(-1)
-    piece = mk("teil", ppos[first], inv[ptri])
+    V = ppos[first].copy()
+    if rigid is not None:
+        c = np.asarray(rigid, np.float64)
+        for _ in range(6):
+            sd, _ = signed_dist(tree, V)
+            if (sd < offset * 0.5).mean() < 0.03:
+                break
+            V = c + (V - c) * 1.015
+    if push:
+        V = push_out(V, tree, offset, max(0.03, 3 * offset))
+    piece = mk("teil", V, inv[ptri])
 
     def apply(ob, mod):
         bpy.context.view_layer.objects.active = ob
         bpy.ops.object.modifier_apply(modifier=mod.name)
-    for off, it in ((offset * 1.4, 0), (offset, 4)):
-        sw = piece.modifiers.new("aussen", "SHRINKWRAP")
-        sw.target = body
-        sw.wrap_method = "NEAREST_SURFACEPOINT"
-        sw.wrap_mode = "OUTSIDE"
-        sw.offset = off
-        apply(piece, sw)
-        if it:
-            sm = piece.modifiers.new("glatt", "CORRECTIVE_SMOOTH")
-            sm.iterations = it
-            apply(piece, sm)
     for b in range(nb):
         piece.vertex_groups.new(name="b%d" % b)
     dt = piece.modifiers.new("gewichte", "DATA_TRANSFER")
@@ -316,7 +376,8 @@ def main():
     ap.add_argument("--pad", type=float, default=0.02)
     ap.add_argument("--offset", type=float, default=0.012)
     ap.add_argument("--tris", type=int, default=4000)
-    ap.add_argument("--tex", type=int, default=512)
+    ap.add_argument("--tex", type=int, default=768)
+    ap.add_argument("--ohne-backen", action="store_true", help="Meshys Texturaufteilung behalten (fleckig, wenn verkleinert)")
     ap.add_argument("--paar", action="store_true")
     ap.add_argument("--kopf", default="box", choices=["box", "oben"], help="Kopfteil: ganzen Kopfbereich fuellen oder oben anlegen (Kappe, Krone)")
     a = ap.parse_args()
@@ -335,7 +396,8 @@ def main():
 
     # Teil laden, drehen, Textur, Reduzieren
     g, parts = static_parts(a.piece)
-    tex = M.atlas(g, parts, a.tex)
+    # Farbe in voller Groesse; nach dem Reduzieren auf neue Texturkoordinaten aufgebacken (rebake.py)
+    tex = M.atlas(g, parts, a.tex if a.ohne_backen else 2048)
     ppos = np.concatenate([p["pos"] for p in parts])
     if a.rot == "auto":
         R0 = np.eye(3)
@@ -349,7 +411,11 @@ def main():
     puv = np.concatenate([p["uv_game"] for p in parts])
     base = np.cumsum([0] + [len(p["pos"]) for p in parts])[:-1]
     ptri = np.concatenate([p["idx"] + b for p, b in zip(parts, base)])
-    if len(ptri) > a.tris * 1.05:
+    if not a.ohne_backen:
+        from PIL import Image
+        ppos, puv, ptri, tex = RB.rebake(ppos, puv, ptri, Image.fromarray(tex), a.tris, a.tex)
+        g.atlas_normal = None  # die Normalenkarte passt nicht zu den neuen Texturkoordinaten
+    elif len(ptri) > a.tris * 1.05:
         one = np.zeros((len(ppos), 1), np.int64)
         ppos, puv, ptri, _, _ = M.decimate(ppos, puv, ptri, one, np.ones((len(ppos), 1)), a.tris)
 
@@ -395,6 +461,19 @@ def main():
         if a.slot == "helm" and a.kopf == "oben":
             return place_top(P, reg)
         lo, hi = P.min(0), P.max(0)
+        if a.slot == "helm":
+            # Kopfteile behalten ihre Form: ein Mass fuer alle Richtungen aus Breite und Tiefe des Schaedels (obere
+            # 55 % des Kopfes, ohne Bart und Kinn) gegen Breite und Tiefe der oberen Haelfte des Teils; Oberkante auf
+            # dem Scheitel, Mitte ueber der Schaedelmitte. fit_blender laesst es danach hoechstens wenig wachsen.
+            top = np.percentile(reg[:, 1], 98)
+            bot = np.percentile(reg[:, 1], 2)
+            cr = reg[reg[:, 1] > top - 0.55 * (top - bot)]
+            clo, chi = np.percentile(cr, 2, axis=0), np.percentile(cr, 98, axis=0)
+            up = P[P[:, 1] > hi[1] - 0.5 * (hi[1] - lo[1])]
+            ulo, uhi = np.percentile(up, 2, axis=0), np.percentile(up, 98, axis=0)
+            sc = float(np.mean([(chi[0] - clo[0] + 2 * a.pad) / max(uhi[0] - ulo[0], 1e-6), (chi[2] - clo[2] + 2 * a.pad) / max(uhi[2] - ulo[2], 1e-6)]))
+            Q = (P - (ulo + uhi) / 2) * sc
+            return Q + np.array([(clo[0] + chi[0]) / 2, top + a.pad - Q[:, 1].max(), (clo[2] + chi[2]) / 2])
         # Ausmass des Koerperbereichs ohne Ausreisser (einzelne Ecken mit Gewicht nahe der Koerpermitte)
         rlo, rhi = np.percentile(reg, 2, axis=0) - a.pad, np.percentile(reg, 98, axis=0) + a.pad
         s = (rhi - rlo) / np.maximum(hi - lo, 1e-6)
@@ -416,7 +495,14 @@ def main():
         ppos = place(ppos, region())
 
     # Anpassen und Gewichte
-    fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset)
+    if a.slot == "helm" and a.kopf == "box":
+        hreg = region()
+        rigid = (np.percentile(hreg, 2, axis=0) + np.percentile(hreg, 98, axis=0)) / 2
+    else:
+        rigid = None
+    # Umhaenge haengen frei: nicht schieben (zerknitterte sonst Fell und Saeume); das Spiel hebt sie gleichmaessig
+    # vom Ruecken ab (cloakGeo in src/r3d-rigged.js)
+    fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, push=a.slot != "umhang")
     if a.slot == "umhang":
         keep = np.zeros(nb, bool)
         keep[[tmap[r] for r in CAPE_BONES if r in tmap]] = True
@@ -463,7 +549,7 @@ def main():
     # belegte Felder je Knochen (Haut darunter ausblenden), um ein Feld erweitert. Helme mit offenem Gesicht
     # (Nasen- und Wangenschutz) wuerden so das ganze Gesicht belegen: dort gilt ein Feld nur als belegt, wenn der Helm
     # die Haut darin wirklich ueberdeckt (Strahl von der Haut nach aussen trifft den Helm)
-    occ = covered_occ(bpos, bidx, bW, Fr, fpos, ptri, [tmap[r] for r in roles], names) if a.slot == "helm" else {}
+    occ = covered_occ(bpos, bidx, bW, Fr, fpos, ptri, [tmap[r] for r in roles], names, face=tmap["head"]) if a.slot == "helm" else {}
     for b in np.unique(order[:, 0]):
         if a.slot in ("helm", "umhang"):
             break

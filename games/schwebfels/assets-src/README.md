@@ -200,6 +200,13 @@ Wichtige Regeln der Strecke:
   gesetzt. Helme blenden nur die Haut aus, die sie wirklich überdecken (Strahl von der Haut nach außen), damit offene
   Helme mit Nasen- und Wangenschutz das Gesicht nicht verschlucken. `--kultur midgard` (auch bei `weapon.py`): Teil oder
   Waffe gilt nur für Gegenstände dieser Gestaltungskultur und geht dann vor allgemeinen vor.
+  Seit 0.70 backen `fit_piece.py` und `weapon.py` die Farbe auf neue, große Texturinseln auf (`gen/rebake.py`, Teile
+  768 Pixel, Waffen 512; `--ohne-backen` wie vorher). Meshy zerlegt die Textur in hunderte Schnipsel; verkleinert
+  liefen sie ineinander (Flecken, ausgefranste Kanten). Freistellen ohne Zerknittern: Kopfteile wachsen als Ganzes,
+  bis der Kopf darin Platz hat, übrige Ecken in der Haut werden samt Umgebung nach außen geschoben (vorher jede Ecke
+  einzeln: bei dünnem Stoff stieß die Innenlage durch die Außenlage). Das Gesicht (vorn, unterhalb der Stirn) wird unter
+  Masken und Visieren nie ausgeblendet. Im Spiel liegt ein Umhang über dem getragenen Brustteil oder der Robe
+  (`layered` in `src/r3d-rigged.js`).
   Kopfachse: Meshys Hilfsknochen `headfront` zählt nicht als Fortsetzung des Kopfes (wie `HeadTop_End`); Knochen ohne
   Fortsetzung (Kopf, Hand, Zehen) bekommen die Ausdehnung ihrer Ecken als Länge (gleiche Regel in `fit_piece.frames`
   und `src/r3d-rigged.js`). Vorher zeigte die Kopfachse nach vorn und war je Körper 5 bis 25 cm lang; Helme saßen

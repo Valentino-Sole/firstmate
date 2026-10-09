@@ -500,14 +500,42 @@
     const wa = fa - Math.floor(fa);
     return (R[t0 * NA + a0] * (1 - wa) + R[t0 * NA + a1] * wa) * (1 - wt) + (R[t1 * NA + a0] * (1 - wa) + R[t1 * NA + a1] * wa) * wt;
   }
-  // Geometrie eines Teils auf diesem Koerper
+  // Umhang ueber Brustteil oder Robe: je Knochen ein gleichmaessiger Zusatzabstand, so weit wie das darunter getragene
+  // Teil an der Rueckseite und den Schultern ueber den Koerper hinausragt (plus 1,5 cm, hoechstens 9 cm). Je Feld
+  // geschoben, zerfaserte der Umhang; so liegt er glatt ueber Schulterplatten und Robensaeumen.
+  function layered(key, E, g, under) {
+    const base = profiles(key, E, g);
+    const Fr = base.Fr;
+    const [NT, NA] = g;
+    const extra = new Float32Array(Fr.length);
+    for (const nm of under) {
+      const geo = pieceGeo(nm, key, E);
+      const P = geo.attributes.position.array;
+      const SI = geo.attributes.skinIndex.array;
+      const SW = geo.attributes.skinWeight.array;
+      for (let i = 0; i < P.length / 3; i++) {
+        for (let k = 0; k < 4; k++) {
+          if (SW[i * 4 + k] < 0.35) continue;
+          const b = SI[i * 4 + k];
+          if (!Fr[b]) continue;
+          const [t, th, d] = tad(Fr[b], P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
+          // nur hinten und seitlich (vorn traegt der Umhang nichts)
+          if (Math.abs(th) < Math.PI * 0.4) continue;
+          const j = binT(t, g) * NA + binA(th, g);
+          extra[b] = Math.max(extra[b], Math.min(0.09, d - base.R[b][j] + 0.015));
+        }
+      }
+    }
+    return { Fr, R: base.R, extra };
+  }
+  // Geometrie eines Teils auf diesem Koerper; under: Teile, ueber denen es liegt (Umhang ueber Brustteil)
   const PGEO = {};
-  function pieceGeo(name, key, E) {
-    const ck = name + "|" + key;
+  function pieceGeo(name, key, E, under) {
+    const ck = name + "|" + key + (under && under.length ? "|" + under.join(",") : "");
     if (PGEO[ck]) return PGEO[ck];
     const Pc = PIECES()[name];
     const g = Pc.grid;
-    const { Fr, R: PR } = profiles(key, E, g);
+    const { Fr, R: PR, extra } = under && under.length ? layered(key, E, g, under) : profiles(key, E, g);
     const bi = Pc.bones.map((b) => E.skel.names.indexOf(b));
     const n = Pc.uv.length / 2;
     const pos = new Float32Array(n * 3);
@@ -523,7 +551,9 @@
         const F = Fr[b];
         const t = Pc.tto[(i * 2 + k) * 3];
         const th = Pc.tto[(i * 2 + k) * 3 + 1];
-        const rad = Math.max(0.002, sampleR(PR[b], t, th, g) + Pc.tto[(i * 2 + k) * 3 + 2]);
+        // Zusatzabstand ueber dem Brustteil nur hinten, zu den Seiten auslaufend (vorne flatterten die Umhangkanten)
+        const back = extra ? Math.min(1, Math.max(0, (Math.abs(th) - Math.PI * 0.35) / (Math.PI * 0.3))) : 0;
+        const rad = Math.max(0.002, sampleR(PR[b], t, th, g) + Pc.tto[(i * 2 + k) * 3 + 2] + (extra ? extra[b] * back : 0));
         const c = Math.cos(th);
         const s = Math.sin(th);
         for (const [j, ax] of [[0, "x"], [1, "y"], [2, "z"]]) pos[i * 3 + j] += w * (F.p[ax] + F.a[ax] * t * F.L + (F.u[ax] * c + F.v[ax] * s) * rad);
@@ -546,6 +576,76 @@
     geo.setAttribute("skinIndex", new T.BufferAttribute(fs ? fs.si : si, 4));
     geo.setAttribute("skinWeight", new T.BufferAttribute(fs ? fs.sw : sw, 4));
     geo.setIndex(new T.BufferAttribute(Pc.idx, 1));
+    return (PGEO[ck] = geo);
+  }
+  /* Umhaenge haengen weit vom Koerper weg; ueber die Querschnittsprofile verschoben sank ihre Mitte bei anderen
+     Koerpern in den Ruecken. Deshalb behalten sie ihre Form vom Referenzkoerper (Pc.ref): je Knochen verschoben und
+     mit dem Verhaeltnis der Rumpfmasse (Breite, Hoehe, Tiefe) gestreckt. Nur wo sie dann die Haut (oder ein darunter
+     getragenes Brustteil, hinten) beruehren wuerden, werden sie knapp darueber angehoben. */
+  const TBOX = {};
+  function torsoBox(key, E) {
+    if (TBOX[key]) return TBOX[key];
+    const set = new Set([E.map.hips, E.map.spine, E.map.chest]);
+    const ax = [[], [], []];
+    for (let i = 0; i < E.pos.length / 3; i++) if (set.has(E.skinI[i * 4])) for (let k = 0; k < 3; k++) ax[k].push(E.pos[i * 3 + k]);
+    const q = (a, f) => a[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))];
+    return (TBOX[key] = ax.map((a) => {
+      a.sort((x, y) => x - y);
+      return Math.max(0.05, q(a, 0.98) - q(a, 0.02));
+    }));
+  }
+  function cloakGeo(name, key, E, under) {
+    const ck = "umhang|" + name + "|" + key + "|" + (under || []).join(",");
+    if (PGEO[ck]) return PGEO[ck];
+    const Pc = PIECES()[name];
+    const Er = GEN()[Pc.ref];
+    if (!Er || Er.kind !== "rig" || Pc.ref === key) return (PGEO[ck] = pieceGeo(name, key, E, under));
+    const g = Pc.grid;
+    const base = pieceGeo(name, key, E);
+    const ref = pieceGeo(name, Pc.ref, Er);
+    const { Fr, R: PR, extra } = under && under.length ? layered(key, E, g, under) : profiles(key, E, g);
+    const FrR = profiles(Pc.ref, Er, g).Fr;
+    const bt = torsoBox(key, E);
+    const br = torsoBox(Pc.ref, Er);
+    const S = [bt[0] / br[0], bt[1] / br[1], bt[2] / br[2]];
+    const PRf = ref.attributes.position.array;
+    const SIr = ref.attributes.skinIndex.array;
+    const SI = base.attributes.skinIndex.array;
+    const SW = base.attributes.skinWeight.array;
+    const n = PRf.length / 3;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      let acc = 0;
+      for (let k = 0; k < 4; k++) {
+        const w = SW[i * 4 + k];
+        if (w <= 0) continue;
+        const F = Fr[SI[i * 4 + k]];
+        const FR = FrR[SIr[i * 4 + k]];
+        if (!F || !FR) continue;
+        pos[i * 3] += w * (F.p.x + S[0] * (PRf[i * 3] - FR.p.x));
+        pos[i * 3 + 1] += w * (F.p.y + S[1] * (PRf[i * 3 + 1] - FR.p.y));
+        pos[i * 3 + 2] += w * (F.p.z + S[2] * (PRf[i * 3 + 2] - FR.p.z));
+        acc += w;
+      }
+      if (acc > 0) for (let j = 0; j < 3; j++) pos[i * 3 + j] /= acc;
+      // nicht in Haut oder Brustteil: am Hauptknochen knapp ueber das Profil heben (nur im Bereich des Knochens)
+      const b = SI[i * 4];
+      const F = Fr[b];
+      if (!F) continue;
+      const [t, th, d] = tad(F, pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+      if (t < g[2] || t > g[3] || d < 1e-4) continue;
+      const back = extra ? Math.min(1, Math.max(0, (Math.abs(th) - Math.PI * 0.35) / (Math.PI * 0.3))) : 0;
+      const need = sampleR(PR[b], t, th, g) + 0.012 + (extra ? extra[b] * back : 0);
+      if (d >= need) continue;
+      const f = need / d;
+      const cx = F.p.x + F.a.x * t * F.L, cy = F.p.y + F.a.y * t * F.L, cz = F.p.z + F.a.z * t * F.L;
+      pos[i * 3] = cx + (pos[i * 3] - cx) * f;
+      pos[i * 3 + 1] = cy + (pos[i * 3 + 1] - cy) * f;
+      pos[i * 3 + 2] = cz + (pos[i * 3 + 2] - cz) * f;
+    }
+    const geo = base.clone();
+    geo.setAttribute("position", new T.BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(pos, Pc.idx), 3));
     return (PGEO[ck] = geo);
   }
   // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen
@@ -1042,7 +1142,8 @@
     }
     for (const nm of rp) {
       const Pc = PIECES()[nm];
-      const pm = new T.SkinnedMesh(pieceGeo(nm, key, E), mat("piece." + nm, Pc.tex, null, "rigpiece." + nm, Pc.ntex));
+      const under = Pc.slot === "umhang" ? rp.filter((x) => PIECES()[x].slot === "brust") : null;
+      const pm = new T.SkinnedMesh(under ? cloakGeo(nm, key, E, under) : pieceGeo(nm, key, E), mat("piece." + nm, Pc.tex, null, "rigpiece." + nm, Pc.ntex));
       pm.bind(mesh.skeleton, mesh.bindMatrix);
       pm.frustumCulled = false;
       pm.castShadow = true;
