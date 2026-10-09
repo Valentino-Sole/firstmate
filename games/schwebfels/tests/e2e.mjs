@@ -102,6 +102,17 @@ await shot(page, "04-taverne");
 await page.click('#hint [data-act="hintNext"]').catch(() => {});
 await page.click('[data-act="questStart"][data-i="0"]');
 await page.waitForTimeout(500);
+// Der Reisebalken im Auftrag laeuft mit der Uhr weiter, ohne dass das Fenster neu aufgebaut wird
+{
+  const bar = () => page.evaluate(() => parseFloat(document.querySelector('#panel .quest .progress i').style.width));
+  const w0 = await bar();
+  // Uhr um die halbe Reisezeit vorstellen (nur fuer diese Probe)
+  await page.evaluate(() => { const a = SB.ui.S.quest.active; const d = (a.end - a.start) / 2; const real = SB.engine.now; SB.engine.now = () => real() + d; window.__uhrZurueck = () => { SB.engine.now = real; }; });
+  await page.waitForTimeout(1300);
+  const w1 = await bar();
+  await page.evaluate(() => window.__uhrZurueck());
+  if (!(w1 > w0 + 30)) throw new Error("Reisebalken steht still: " + w0 + " -> " + w1);
+}
 await page.click('[data-act="questSkip"]');
 await page.waitForSelector('[data-act="questFight"]');
 await page.click('[data-act="questFight"]');

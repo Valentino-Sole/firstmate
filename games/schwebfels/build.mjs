@@ -159,8 +159,9 @@ if (Object.keys(kern).length) {
 {
   const kul = {};
   const src = process.env.KULISSEN_DIR ? path.resolve(process.env.KULISSEN_DIR) : path.join(dir, "assets/kulissen");
-  // drei Reiche, Arena und je Verlies eins (Dateiname = Reich, "arena" oder Verlies-ID)
-  for (const r of ["albion", "midgard", "hibernia", "arena", "pilzgrotte", "glockenstadt", "rostwerk", "frostspitzen", "laternengruft", "sturmkern"]) {
+  // drei Reiche, Arena und je Verlies eins (Dateiname = Reich, "arena" oder Verlies-ID), dazu die gemalten Heime
+  // (Housing v08 des Kapitaens, heim-<reich>)
+  for (const r of ["albion", "midgard", "hibernia", "arena", "pilzgrotte", "glockenstadt", "rostwerk", "frostspitzen", "laternengruft", "sturmkern", "heim-albion", "heim-midgard", "heim-hibernia"]) {
     try {
       kul[r] = "data:image/webp;base64," + readFileSync(path.join(src, r + ".webp")).toString("base64");
     } catch (e) {
@@ -170,7 +171,7 @@ if (Object.keys(kern).length) {
   if (Object.keys(kul).length) {
     const js = "globalThis.SB_KULISSEN=" + JSON.stringify(kul) + ";";
     writeFileSync(path.join(out, "kulissen.js"), js);
-    genFiles.push(path.relative(dir, path.join(out, "kulissen.js")) + " " + (js.length / 1024).toFixed(0) + " KB (Kampfkulissen " + Object.keys(kul).join(", ") + ", beim Veroeffentlichen als kulissen.js unter files angeben)");
+    genFiles.push(path.relative(dir, path.join(out, "kulissen.js")) + " " + (js.length / 1024).toFixed(0) + " KB (Kampfkulissen und Heime " + Object.keys(kul).join(", ") + ", beim Veroeffentlichen als kulissen.js unter files angeben)");
   }
 }
 const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");

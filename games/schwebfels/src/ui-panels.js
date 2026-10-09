@@ -77,7 +77,7 @@
         const fin = a.end <= now;
         h +=
           '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
-          '<div class="progress"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
+          '<div class="progress" data-from="' + a.start + '" data-to="' + a.end + '"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="foot">' +
           (fin
             ? '<button class="btn big done-pulse" data-act="questFight">' + (o.rare ? "Die Horde stellen" : "Kampf gegen " + esc(mon.name)) + "</button>"
@@ -232,7 +232,9 @@
     },
     after(el) {
       const slot = el.querySelector("#heroViewSlot");
-      if (slot) UI.attachHeroView(slot, UI.heroDesc(S()), "<b>" + esc(S().name) + "</b>");
+      const v = slot && UI.attachHeroView(slot, UI.heroDesc(S()), "<b>" + esc(S().name) + "</b>");
+      // vor dem Spiegel nah an Kopf und Oberkoerper, im Charakterbogen die ganze Figur
+      if (v && v.focus) v.focus(UI.tabs.held === "aussehen" ? "nah" : "ganz");
     },
   };
   A.tab = (el) => {
@@ -592,7 +594,7 @@
         const fin = g.end <= now;
         h +=
           '<div class="card" style="grid-template-columns:72px 1fr"><div class="pic">' + I.ui("leuchtturm") + "</div><div><h4>" + g.shifts + " Schichten Wache</h4>" +
-          '<div class="progress"><i style="width:' + (fin ? 100 : (((now - g.start) / (g.end - g.start)) * 100).toFixed(1)) + '%"></i></div>' +
+          '<div class="progress" data-from="' + g.start + '" data-to="' + g.end + '"><i style="width:' + (fin ? 100 : (((now - g.start) / (g.end - g.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="row" style="margin-top:8px">Lohn: ' + UI.gold(g.pay) + '<span class="spacer"></span>' +
           (fin ? '<button class="btn" data-act="guardCollect">Lohn abholen</button>' : '<span>noch <b class="num" data-until="' + g.end + '"></b></span><button class="btn small ghost" data-act="guardCancel">Abbrechen</button>') +
           "</div></div></div>";
@@ -865,8 +867,12 @@
       const s = S();
       const T = D.HOUSE_TIERS[s.house.tier];
       const next = D.HOUSE_TIERS[s.house.tier + 1];
-      if (E.furn(s, "trophaeen")) UI.loadMonsters(["wolf", "drache", "troll"]);
-      let h = '<div class="homeview" id="homeSlot"></div>';
+      const painted = UI.use3d && SB.R3D.homePainted && SB.R3D.homePainted(s.realm);
+      if (!painted && E.furn(s, "trophaeen")) UI.loadMonsters(["wolf", "drache", "troll"]);
+      // gemaltes Heim (Bild aus kulissen.js): laedt es noch, zeichnet sich das Fenster danach neu
+      if (UI.use3d && !painted) UI.loadKulissen().then((ok) => ok && UI.panelId === "heim" && SB.R3D.homePainted(S().realm) && UI.renderPanel());
+      let h = '<div class="homeview' + (painted ? " painted" : "") + '" id="homeSlot"></div>';
+      if (painted) h += '<p class="muted small hp-note">So sieht dein Heim voll ausgebaut aus. Was du noch nicht eingerichtet hast, liegt im Dunkeln; ein Klick auf eine Station zeigt sie in der Liste.</p>';
       h += '<div class="housecard"><div><h3>' + esc(T.name) + '</h3><div class="muted small">' + esc(T.desc) + "</div></div>";
       if (next)
         h += '<div class="next"><div class="small">Ausbau zur <b>' + esc(next.name) + "</b>" + (s.level < next.lv ? ' <span class="delta-down">(ab Stufe ' + next.lv + ")</span>" : "") + "</div>" + '<button class="btn small" data-act="houseUp"' + (s.level < next.lv || s.gold < next.cost || (next.perlen && s.perlen < next.perlen) ? " disabled" : "") + ">" + UI.gold(next.cost) + (next.perlen ? " + " + UI.perlen(next.perlen) : "") + "</button></div>";
@@ -897,13 +903,20 @@
         slot.innerHTML = '<div class="hv-fallback">' + I.ui("heim") + "</div>";
         return;
       }
+      const painted = SB.R3D.homePainted && SB.R3D.homePainted(s.realm);
+      // Wechsel zwischen gebautem und gemaltem Heim (Bild kam nach): Ansicht neu anlegen
+      if (homeView && !!homeView.painted !== !!painted) {
+        homeView.dispose();
+        homeView = null;
+        homeEl = null;
+      }
       if (!homeEl) {
         homeEl = document.createElement("div");
         homeEl.style.cssText = "position:absolute;inset:0";
       }
       slot.appendChild(homeEl);
       if (!homeView) {
-        homeView = SB.R3D.createHome(homeEl, {
+        homeView = (painted ? SB.R3D.createPaintedHome : SB.R3D.createHome)(homeEl, {
           quality: s.settings.quality,
           onPick: (id) => {
             UI.homeFocus = id;
@@ -955,18 +968,18 @@
     '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M32 10 L36 26 L52 26 L39 36 L44 52 L32 42 L20 52 L25 36 L12 26 L28 26 Z" fill="#fff3c4" stroke="#6a4d18" stroke-width="2.6" stroke-linejoin="round"/></svg>';
   UI.lastWell = null;
   P.brunnen = {
-    role: "Einmal am Tag wirft jeder umsonst",
+    role: "Alle 8 Stunden wirft jeder umsonst",
     portrait: () => '<span class="iconport">' + I.ui("brunnen") + "</span>",
     render() {
       const s = S();
       const now = E.now();
-      const free = s.daily.wellFree > 0;
+      const free = E.wellFree(s, now);
       const paidLeft = E.C.WELL_PAID_MAX - s.daily.wellPaid;
       let h = '<div class="say">Man sagt, der Brunnen erfüllt Wünsche. Meistens wünscht er sich allerdings Münzen.</div>';
       h += '<div class="well"><div class="coin" id="coin"><div class="face">' + COIN_FRONT + '</div><div class="face back">' + I.ui("perle") + "</div></div></div>";
       h += '<div class="wellbox' + (free ? " ready" : "") + '"><div class="wl-title">' + I.ui("sanduhr") + " Freier Wurf</div>";
       if (free) h += '<div class="wl-big">Bereit!</div><button class="btn big" data-act="well">Kostenlos werfen</button>';
-      else h += '<div class="muted">Heute schon geworfen. Der nächste freie Wurf kommt um Mitternacht:</div><div class="wl-big num" data-until="' + E.nextMidnight(now) + '"></div>';
+      else h += '<div class="muted">Der Brunnen sammelt neue Kraft. Der nächste freie Wurf kommt in:</div><div class="wl-big num" data-until="' + s.wellNext + '"></div>';
       h += "</div>";
       h +=
         '<div class="wellbox"><div class="wl-title">' + I.ui("perle") + " Zusätzlicher Wurf</div><div class=\"muted small\">Kostet eine Wolkenperle. Nur wenn du willst, deine Perlen bleiben sonst gespart. Heute noch " + paidLeft + " möglich, du hast " + s.perlen + ' Perlen.</div><button class="btn ghost" data-act="wellPerl"' + (paidLeft <= 0 || s.perlen < 1 ? " disabled" : "") + ">Mit 1 Wolkenperle werfen</button></div>";

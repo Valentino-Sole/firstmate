@@ -19,13 +19,16 @@
     const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, BATTLE_WAIT))]);
     // Heldenkoerper aller beteiligten Reiche (Arena, Rangliste): deren Figurendatei ebenfalls vorher laden
     const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
-    let done = false;
-    const note = setTimeout(() => !done && UI.toast("Figuren und Kulisse werden geladen …"), 900);
-    return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => {
-      done = true;
-      clearTimeout(note);
-      return runBattle(fight, opts);
-    });
+    // Der Ausgang steht schon fest: ab jetzt gilt der Kampf als laufend (Stufenaufstieg, Abzeichen und Beute melden
+    // sich erst danach) und der Kampfbildschirm deckt die Insel samt Leiste mit Stufe und Gold zu
+    UI.inBattle = true;
+    UI.hideTip();
+    const root = $("#battle");
+    root.innerHTML = '<div class="bload"><b>' + esc(opts.title || "") + '</b><span class="muted">Figuren und Kulisse werden geladen …</span></div>';
+    root.hidden = false;
+    document.body.classList.add("in-battle");
+    $("#hint").hidden = true;
+    return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
     return new Promise((resolve) => {
@@ -282,9 +285,13 @@
     const cls = classesOf(realm)[Math.floor(r() * 4)];
     return { name: keepName || "", realm, race, gender: r() < 0.5 ? "m" : "w", cls, look: randomLook(race) };
   }
+  // Kameraeinstellung der Vorschau: "ganz" mit Waffe, "nah" und "kopf" ohne Waffe und Schild (sonst verdeckt etwa der
+  // Schild der Krieger das Gesicht)
+  let zoom = "ganz";
   function previewDesc() {
     const C = D.CLASSES[draft.cls];
     const tint = C.material === "platte" ? "#9aa4ad" : C.material === "leder" ? "#5a3d2a" : D.REALMS[draft.realm].color;
+    const armed = zoom === "ganz";
     // neue Figur (Bild zu 3D), sobald die Figurendatei des Reiches geladen ist
     return UI.withGen({
       kind: "hero",
@@ -294,10 +301,10 @@
       gender: draft.gender,
       look: draft.look,
       gear: {
-        waffe: { base: C.weapons[0], tint: "#6b4a2f", rarity: "selten", style: 0 },
+        waffe: armed ? { base: C.weapons[0], tint: "#6b4a2f", rarity: "selten", style: 0 } : null,
         ruestung: { base: C.chest, tint, rarity: "gewoehnlich", style: 1 },
         stiefel: { base: "stiefel", tint: "#4a3a2a", rarity: "gewoehnlich", style: 0 },
-        nebenhand: { base: C.offhand, rarity: "gewoehnlich", style: 0 },
+        nebenhand: armed ? { base: C.offhand, rarity: "gewoehnlich", style: 0 } : null,
         umhang: { base: "umhang", tint: D.REALMS[draft.realm].color, style: 0 },
       },
     });
@@ -367,6 +374,7 @@
   UI.showCreate = function (onDone) {
     const box = $("#create");
     draft = randomDraft("");
+    zoom = "ganz";
     box.innerHTML =
       '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div><p class="gen-note" hidden></p></div><div class="cform"></div>';
     box.hidden = false;
@@ -436,8 +444,12 @@
       }
       if (act !== "random") draft.name = keep;
       SB.audio.play("click");
+      // Kamerafahrt: bei Volk und Geschlecht nah an Kopf und Oberkoerper, bei einer Gestalt an den Kopf, sonst die ganze
+      // Figur mit Waffe
+      zoom = act === "race" || act === "gender" ? "nah" : act === "lookn" ? "kopf" : "ganz";
       renderForm();
       updateView();
+      if (view && view.focus) view.focus(zoom);
     };
   };
   UI.closeCreate = function () {

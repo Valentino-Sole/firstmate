@@ -2063,6 +2063,11 @@
     const dist = opts.distance || 7.2;
     camera.position.set(0, 1.5 + (dist - 7.2) * 0.08, dist);
     camera.lookAt(0, opts.lookY || 1.15, 0);
+    // Kamerafahrt: ganze Figur (Grundstellung), nah (Kopf und Oberkoerper) oder Kopf; weich angefahren
+    const camHome = { pos: camera.position.clone(), look: new T.Vector3(0, opts.lookY || 1.15, 0) };
+    const camGoal = { pos: camHome.pos.clone(), look: camHome.look.clone() };
+    const camLook = camHome.look.clone();
+    let camMode = "ganz";
     scene.add(new T.HemisphereLight("#dfe6ff", "#3a3028", 1.2));
     const key = new T.DirectionalLight("#fff0d8", 2.4);
     key.position.set(3, 5, 4);
@@ -2111,6 +2116,10 @@
       const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       rotY += (goalY - rotY) * Math.min(1, dt * 8);
+      const k = Math.min(1, dt * 3.5);
+      camera.position.lerp(camGoal.pos, k);
+      camLook.lerp(camGoal.look, k);
+      camera.lookAt(camLook);
       if (model) {
         model.obj.rotation.y = rotY;
         model.update(dt);
@@ -2120,6 +2129,25 @@
       renderer.render(scene, camera);
     }
     raf = requestAnimationFrame(frame);
+    // Ziel der Kamera aus den Massen der Figur (sichtbare Hoehe bei 30 Grad Blickwinkel: 0,54 x Abstand)
+    function aim() {
+      if (!model || model.pending || camMode === "ganz") {
+        camGoal.pos.copy(camHome.pos);
+        camGoal.look.copy(camHome.look);
+        return;
+      }
+      // Kopfhoehe der Figur (nicht die Spitze eines langen Stabs oder Bogens ueber dem Kopf)
+      const box3 = new T.Box3().setFromObject(model.obj);
+      const sc = model.obj.scale.y || 1;
+      const top = model.headY ? Math.min(box3.max.y, (model.headY + 0.18) * sc) : box3.max.y;
+      const h = Math.max(0.5, top - box3.min.y);
+      const show = camMode === "kopf" ? Math.max(0.45, h * 0.26) : Math.max(1.0, h * 0.62);
+      // Kopf etwas oberhalb der Bildmitte, damit Titel und Kante ihn nicht anschneiden
+      const y = top - show * (camMode === "kopf" ? 0.45 : 0.3);
+      const d = (show / 0.54) * 1.15;
+      camGoal.look.set(0, y, 0);
+      camGoal.pos.set(0, y + d * 0.06, d);
+    }
     return {
       set(desc, celebrate) {
         if (model) scene.remove(model.obj);
@@ -2137,6 +2165,12 @@
           motes.material.color.set(c);
         }
         if (celebrate) model.play("victory", 1.1);
+        aim();
+      },
+      // "ganz", "nah" (Kopf und Oberkoerper) oder "kopf"
+      focus(mode) {
+        camMode = mode || "ganz";
+        aim();
       },
       play(name, dur) {
         if (model) model.play(name, dur);
@@ -2417,6 +2451,154 @@
         cancelAnimationFrame(raf);
         ro.disconnect();
         killRenderer(renderer);
+      },
+    };
+  };
+
+  /* ---------- Gemaltes Heim (Housing v08 des Kapitaens) ----------
+     Das Raumbild des Reiches im vollen Ausbau (kulissen.js, Schluessel heim-<reich>), davor der Held als 3D-Figur.
+     Die sieben Stationen sind anklickbar; was noch nicht eingerichtet ist, liegt im Halbdunkel, gekaufte Stationen tragen
+     ihre Stufe. Lage der Stationen in Prozent des Bildes (Mitte x, y und halbe Breite, Hoehe); feet: Standort des Helden,
+     heroH: Groesse des Helden in Bildhoehen. Gleiche Schnittstelle wie createHome (update, cheer, dispose). */
+  const HOME_PAINT = {
+    albion: { feet: [50, 70], heroH: 0.3, st: { trophaeen: [16, 24, 9, 12], lager: [36, 28, 10, 16], herd: [63, 30, 9, 19], altar: [84, 34, 8, 19], kessel: [23, 46, 7, 9], truhe: [21, 66, 11, 10], staender: [81, 69, 11, 17] } },
+    midgard: { feet: [47, 64], heroH: 0.29, st: { herd: [21, 28, 10, 22], altar: [40, 28, 7, 15], trophaeen: [58, 18, 10, 9], staender: [57, 40, 8, 12], lager: [82, 42, 12, 16], kessel: [20, 55, 9, 10], truhe: [79, 68, 10, 10] } },
+    hibernia: { feet: [49, 56], heroH: 0.29, st: { staender: [33, 24, 8, 14], altar: [49, 25, 8, 15], trophaeen: [66, 19, 9, 10], herd: [81, 28, 9, 18], kessel: [86, 52, 8, 12], lager: [22, 55, 15, 17], truhe: [64, 64, 10, 9] } },
+  };
+  R.homePainted = (realm) => !!(HOME_PAINT[realm] && globalThis.SB_KULISSEN && globalThis.SB_KULISSEN["heim-" + realm]);
+  R.createPaintedHome = function (el, opts) {
+    init();
+    opts = opts || {};
+    const D = SB.data;
+    const box = document.createElement("div");
+    box.className = "hp-stage";
+    el.appendChild(box);
+    const img = document.createElement("img");
+    img.alt = "";
+    img.draggable = false;
+    box.appendChild(img);
+    const layer = document.createElement("div");
+    layer.className = "hp-layer";
+    box.appendChild(layer);
+    // Held: eigene durchsichtige Leinwand an seinem Standort
+    const heroBox = document.createElement("div");
+    heroBox.className = "hp-hero";
+    box.appendChild(heroBox);
+    const renderer = makeRenderer(heroBox, { alpha: true, maxDpr: 2, exposure: 1.15 });
+    renderer.setClearColor(0x000000, 0);
+    const scene = new T.Scene();
+    scene.environment = envMap(renderer);
+    scene.add(new T.HemisphereLight("#ffe9c8", "#2a2018", 1.2));
+    const key = new T.DirectionalLight("#ffd29a", 2.2);
+    key.position.set(2, 4, 3);
+    scene.add(key);
+    const rim = new T.DirectionalLight("#9fb8ff", 1.0);
+    rim.position.set(-3, 3, -2);
+    scene.add(rim);
+    const camera = new T.PerspectiveCamera(28, 0.7, 0.1, 50);
+    let hero = null;
+    let state = { furn: {}, realm: "albion" };
+    let raf = 0;
+    let last = performance.now();
+    function fit() {
+      const W = Math.max(1, el.clientWidth);
+      const H = Math.max(1, el.clientHeight);
+      // Bild ganz zeigen (3:2), mittig
+      const w = Math.min(W, H * 1.5);
+      const h = w / 1.5;
+      box.style.width = w + "px";
+      box.style.height = h + "px";
+      box.style.left = (W - w) / 2 + "px";
+      box.style.top = (H - h) / 2 + "px";
+      const P = HOME_PAINT[state.realm] || HOME_PAINT.albion;
+      const hh = h * P.heroH * 1.12;
+      const hw = hh * 0.75;
+      heroBox.style.width = hw + "px";
+      heroBox.style.height = hh + "px";
+      heroBox.style.left = (w * P.feet[0]) / 100 - hw / 2 + "px";
+      heroBox.style.top = (h * P.feet[1]) / 100 - hh + "px";
+      renderer.setSize(hw, hh, false);
+      renderer.domElement.style.width = hw + "px";
+      renderer.domElement.style.height = hh + "px";
+      camera.aspect = hw / hh;
+      camera.updateProjectionMatrix();
+    }
+    function aim() {
+      if (!hero) return;
+      // ganze Figur, Fuesse am unteren Rand, leicht von oben wie der Blick in den Raum
+      const b = new T.Box3().setFromObject(hero.obj);
+      const top = hero.headY ? Math.min(b.max.y, hero.headY + 0.25) : b.max.y;
+      const ht = Math.max(0.6, top);
+      const d = (ht * 1.06) / (2 * Math.tan((14 * PI) / 180));
+      camera.position.set(0, ht * 0.5 + d * 0.32, d);
+      camera.lookAt(0, ht * 0.5, 0);
+    }
+    function stations() {
+      const P = HOME_PAINT[state.realm] || HOME_PAINT.albion;
+      layer.innerHTML = "";
+      for (const f of D.FURNITURE) {
+        const r = P.st[f.id];
+        if (!r) continue;
+        const lv = state.furn[f.id];
+        const owned = lv != null;
+        const css = "left:" + (r[0] - r[2]) + "%;top:" + (r[1] - r[3]) + "%;width:" + 2 * r[2] + "%;height:" + 2 * r[3] + "%";
+        if (!owned) {
+          const v = document.createElement("div");
+          v.className = "hp-veil";
+          v.style.cssText = css;
+          layer.appendChild(v);
+        }
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "hp-spot" + (owned ? " owned" : "");
+        b.style.cssText = css;
+        const name = owned ? f.levels[Math.min(lv, f.levels.length - 1)] : f.name + ": noch nicht eingerichtet";
+        b.title = name;
+        b.setAttribute("aria-label", name);
+        b.innerHTML = '<span class="hp-tag">' + (owned ? (f.levels.length > 1 ? ["I", "II", "III"][Math.min(lv, 2)] + " " : "") + name : "?") + "</span>";
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          if (opts.onPick) opts.onPick(f.id);
+        };
+        layer.appendChild(b);
+      }
+    }
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    function frame(now) {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden) return;
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
+      last = now;
+      if (hero) hero.update(dt);
+      renderer.render(scene, camera);
+    }
+    raf = requestAnimationFrame(frame);
+    return {
+      painted: true,
+      _view: () => ({ scene, camera, hero, box }),
+      update(s) {
+        const realmChanged = s.realm && s.realm !== state.realm;
+        state = Object.assign({}, state, s);
+        if (realmChanged || !img.src) img.src = globalThis.SB_KULISSEN["heim-" + state.realm] || "";
+        stations();
+        fit();
+        if (s.hero) {
+          if (hero) scene.remove(hero.obj);
+          hero = R.buildHero(s.hero);
+          hero.obj.rotation.y = 0.35;
+          scene.add(hero.obj);
+          aim();
+        }
+      },
+      cheer() {
+        if (hero) hero.play("victory", 1.2);
+      },
+      dispose() {
+        cancelAnimationFrame(raf);
+        ro.disconnect();
+        killRenderer(renderer);
+        box.remove();
       },
     };
   };

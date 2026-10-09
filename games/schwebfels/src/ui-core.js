@@ -600,7 +600,7 @@
     else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare) ? "★" : "3";
     if (S.guard && S.guard.end <= now) b.leuchtturm = "✓";
     if (!E.busy(S, now) && S.arena.next <= now) b.arena = "!";
-    if (S.daily.wellFree > 0) b.brunnen = "1";
+    if (E.wellFree(S)) b.brunnen = "1";
     if (!E.busy(S, now) && S.story.next <= now && E.storyChapters(S).some((c) => c.available)) b.steinkreis = "!";
     if (!E.busy(S, now) && S.dungeons.next <= now) {
       for (let d = 0; d < D.DUNGEONS.length; d++) {
@@ -650,13 +650,13 @@
       done = a.end <= now;
       const pct = done ? 100 : ((now - a.start) / (a.end - a.start)) * 100;
       target = "taverne";
-      html = I.ui(done ? "arena" : "uhr") + '<div class="act-text"><div class="act-title">' + (done ? "Auftrag erledigt: Der Kampf wartet!" : esc(a.offer.title)) + '</div><div class="progress"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Kämpfen</span>' : '<b class="num" data-until="' + a.end + '"></b>');
+      html = I.ui(done ? "arena" : "uhr") + '<div class="act-text"><div class="act-title">' + (done ? "Auftrag erledigt: Der Kampf wartet!" : esc(a.offer.title)) + '</div><div class="progress" data-from="' + a.start + '" data-to="' + a.end + '"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Kämpfen</span>' : '<b class="num" data-until="' + a.end + '"></b>');
     } else if (S.guard) {
       const g = S.guard;
       done = g.end <= now;
       const pct = done ? 100 : ((now - g.start) / (g.end - g.start)) * 100;
       target = "leuchtturm";
-      html = I.ui("leuchtturm") + '<div class="act-text"><div class="act-title">' + (done ? "Wache beendet: Lohn abholen" : "Wache am Turm") + '</div><div class="progress"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Abholen</span>' : '<b class="num" data-until="' + g.end + '"></b>');
+      html = I.ui("leuchtturm") + '<div class="act-text"><div class="act-title">' + (done ? "Wache beendet: Lohn abholen" : "Wache am Turm") + '</div><div class="progress" data-from="' + g.start + '" data-to="' + g.end + '"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Abholen</span>' : '<b class="num" data-until="' + g.end + '"></b>');
     }
     box.hidden = !html || (UI.panelId && UI.panelId === target);
     box.innerHTML = html;
@@ -671,6 +671,11 @@
     document.querySelectorAll("[data-until]").forEach((el) => {
       const ms = +el.dataset.until - now;
       el.textContent = ms > 0 ? U.fmtTime(ms) : el.dataset.doneText || "fertig";
+    });
+    // Reise- und Wachebalken laufen sekundengenau mit der Uhr
+    document.querySelectorAll(".progress[data-from] > i").forEach((el) => {
+      const a = +el.parentNode.dataset.from, b = +el.parentNode.dataset.to;
+      el.style.width = (b > a ? Math.max(0, Math.min(100, ((now - a) / (b - a)) * 100)) : 100).toFixed(1) + "%";
     });
   };
 
@@ -794,6 +799,7 @@
       heroViewKey = k;
       heroView.set(desc, celebrate);
     }
+    return heroView;
   };
   UI.detachHeroView = function () {
     if (heroViewEl && heroViewEl.parentNode) heroViewEl.parentNode.removeChild(heroViewEl);
@@ -905,12 +911,6 @@
       if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day || prev[7] !== String(night))) UI.renderPanel();
     } else {
       UI.renderTop();
-      const box = $("#activity");
-      if (box && !box.hidden) {
-        const a = S.quest.active || S.guard;
-        const bar = box.querySelector(".progress i");
-        if (a && bar) bar.style.width = Math.min(100, ((now - a.start) / (a.end - a.start)) * 100).toFixed(1) + "%";
-      }
     }
     UI.updateTimers();
     if (++musicTimer >= 5) {

@@ -104,6 +104,8 @@
     SHOP_REFRESH: 15 * 60 * 1000,
     INV_SIZE: 12,
     WELL_PAID_MAX: 10,
+    // freier Wurf am Wunschbrunnen alle 8 Stunden (Wunsch des Kapitaens: ein Grund, wieder vorbeizuschauen)
+    WELL_FREE_MS: 8 * 60 * 60 * 1000,
     SPECIAL_EVERY: 4,
     MAX_ACTIONS: 90,
     NPC_COUNT: 150,
@@ -332,7 +334,8 @@
       bestiary: {},
       ach: {},
       stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 },
-      daily: { day: U.dayKey(now), wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
+      daily: { day: U.dayKey(now), brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
+      wellNext: 0,
       npcSeed: U.hash("npc:" + opts.name + now),
       npcHonor: {},
       settings: { sound: true, music: true, quality: "hoch", fastFights: false, dayCycle: "zyklus" },
@@ -394,6 +397,9 @@
     S.guild = S.guild || null;
     S.seen = S.seen || {};
     S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
+    // Version 0.67: freier Brunnenwurf alle 8 Stunden statt einmal am Tag (wer heute schon geworfen hat, darf gleich)
+    if (typeof S.wellNext !== "number") S.wellNext = 0;
+    delete S.daily.wellFree;
     S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
@@ -1049,8 +1055,8 @@
     now = now || E.now();
     const day = U.dayKey(now);
     if (S.daily.day !== day) {
-      S.daily = { day, wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 };
-      toast("Ein neuer Tag auf Schwebfels. Der Wunschbrunnen glitzert wieder.", "info");
+      S.daily = { day, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 };
+      toast("Ein neuer Tag auf Schwebfels.", "info");
     }
     for (const k of ["schmiede", "arkanum"]) if (!S.shops[k] || now - S.shops[k].ts > E.C.SHOP_REFRESH) E.refreshShop(S, k, true);
     E.activeBuffs(S, now);
@@ -1894,10 +1900,11 @@
   };
 
   /* ---------------- Wunschbrunnen ---------------- */
+  E.wellFree = (S, now) => (now || E.now()) >= (S.wellNext || 0);
   E.tossWell = function (S, now, usePerl) {
     now = now || E.now();
     let paid = false;
-    if (S.daily.wellFree > 0 && !usePerl) S.daily.wellFree--;
+    if (!usePerl && E.wellFree(S, now)) S.wellNext = now + E.C.WELL_FREE_MS;
     else {
       if (S.daily.wellPaid >= E.C.WELL_PAID_MAX) return { ok: false, msg: "Der Brunnen ist für heute erschöpft." };
       if (S.perlen < 1) return { ok: false, msg: "Ein weiterer Wurf kostet eine Wolkenperle." };

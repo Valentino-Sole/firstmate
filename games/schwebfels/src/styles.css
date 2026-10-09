@@ -416,6 +416,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 /* Kampf */
 #battle { position: fixed; inset: 0; z-index: 70; background: var(--night); }
 #battle .bstage { position: absolute; inset: 0; }
+#battle .bload { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; text-align: center; font-size: 15px; }
+#battle .bload b { font-family: var(--font-display); font-size: 26px; font-weight: 400; color: var(--gold-hi); }
 #battle .bstage .r3d-canvas { display: block; }
 .battle-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .fx-text { position: absolute; transform: translate(-50%, -50%); font-family: var(--font-display); font-size: 36px; color: #fff; text-shadow: 0 3px 0 #000, 0 0 10px rgba(0, 0, 0, 0.7); animation: floatUp 1.1s ease-out forwards; white-space: nowrap; }
@@ -576,6 +578,21 @@ table.fame tr[data-act]:hover td { background: rgba(255, 255, 255, 0.05); }
 .homeview { position: relative; height: 300px; border-radius: 4px; overflow: hidden; border: 1px solid var(--gold-dim); background: #120f16; margin-bottom: 12px; }
 .homeview .r3d-canvas { display: block; cursor: grab; }
 .homeview .hv-fallback .ic { width: 40%; height: 40%; opacity: 0.5; }
+/* Gemaltes Heim: Raumbild 3:2, Held davor, Stationen anklickbar, noch nicht Eingerichtetes im Halbdunkel */
+.homeview.painted { height: auto; aspect-ratio: 3 / 2; background: #1b1e2b; }
+.hp-stage { position: absolute; }
+.hp-stage > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
+.hp-layer { position: absolute; inset: 0; }
+.hp-veil { position: absolute; border-radius: 50%; pointer-events: none; background: rgba(8, 9, 16, 0.35); -webkit-backdrop-filter: grayscale(0.9) brightness(0.42); backdrop-filter: grayscale(0.9) brightness(0.42); -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
+.hp-spot { position: absolute; border: 0; padding: 0; margin: 0; background: transparent; border-radius: 50%; cursor: pointer; }
+.hp-spot:hover, .hp-spot:focus-visible { box-shadow: inset 0 0 0 2px rgba(255, 214, 120, 0.55), 0 0 18px rgba(255, 196, 90, 0.35); outline: none; }
+.hp-tag { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: 9px; background: rgba(14, 12, 20, 0.78); color: var(--gold-hi); border: 1px solid rgba(201, 164, 65, 0.5); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.hp-spot.owned .hp-tag { opacity: 0.92; }
+.hp-spot:not(.owned) .hp-tag { color: var(--parch); }
+.hp-spot:hover .hp-tag, .hp-spot:focus-visible .hp-tag { opacity: 1; }
+.hp-hero { position: absolute; pointer-events: none; }
+.hp-hero .r3d-canvas { display: block; }
+.hp-note { margin: -6px 0 12px; }
 .housecard { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 4px; background: linear-gradient(var(--stone-3), var(--stone-2)); border: 1px solid #000; }
 .housecard h3 { font-size: 24px; color: var(--gold-hi); }
 .housecard > div:first-child { flex: 1; min-width: 180px; }

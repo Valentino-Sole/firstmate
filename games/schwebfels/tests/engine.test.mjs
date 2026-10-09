@@ -261,18 +261,24 @@ test("Dungeons: gesperrt bis Stufe, Fortschritt nach Sieg", () => {
   assert.equal(E.dungeonFight(S, 0, now()).ok, true);
 });
 
-test("Wunschbrunnen: freier Wurf kostet nie Perlen, Perlenwurf nur auf Wunsch, Zeitgeber bis Mitternacht", () => {
-  const { E, S, now } = fresh();
+test("Wunschbrunnen: freier Wurf alle 8 Stunden, kostet nie Perlen, Perlenwurf nur auf Wunsch", () => {
+  const { E, S, now, advance } = fresh();
   S.perlen = 0;
   const r0 = E.tossWell(S, now(), true);
   assert.equal(r0.ok, false, "ohne Perlen kein Perlenwurf");
-  assert.equal(S.daily.wellFree, 1, "der freie Wurf bleibt erhalten");
-  const r1 = E.tossWell(S);
+  assert.equal(E.wellFree(S, now()), true, "der freie Wurf bleibt erhalten");
+  const r1 = E.tossWell(S, now());
   assert.equal(r1.ok, true);
   assert.equal(r1.paid, false);
-  assert.equal(E.tossWell(S).ok, false, "danach nur noch mit Perle");
-  const mid = E.nextMidnight(now());
-  assert.ok(mid > now() && mid - now() <= 86400000);
+  assert.equal(E.tossWell(S, now()).ok, false, "danach nur noch mit Perle");
+  assert.equal(S.wellNext - now(), E.C.WELL_FREE_MS, "nächster freier Wurf in 8 Stunden");
+  advance(E.C.WELL_FREE_MS - 1000);
+  assert.equal(E.wellFree(S, now()), false, "vor Ablauf der 8 Stunden kein freier Wurf");
+  advance(1000);
+  assert.equal(E.tossWell(S, now()).paid, false, "nach 8 Stunden wieder frei");
+  const old = E.migrate(Object.assign(JSON.parse(JSON.stringify(S)), { wellNext: undefined, daily: Object.assign({}, S.daily, { wellFree: 0 }) }));
+  assert.equal(old.wellNext, 0, "alte Spielstände werfen gleich wieder frei");
+  assert.equal(old.daily.wellFree, undefined);
 });
 
 test("Stufenaufstieg schenkt Perlen und Abzeichen", () => {
