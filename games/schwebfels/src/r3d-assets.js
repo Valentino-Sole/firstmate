@@ -172,6 +172,21 @@
       const p = parse(await unzip(b64(s)));
       const g = p.gen || {};
       for (const k in g) if (!A.data.gen[k]) A.data.gen[k] = g[k];
+      // Ausruestung (gen-ausr<reich><art>.js): Ruestungsteile und Waffen kommen zu den vorhandenen, Texturen gleich laden
+      const waits = [];
+      const addAll = (into, from, pre) => {
+        for (const k in from || {}) {
+          if (A.data[into][k]) continue;
+          A.data[into][k] = from[k];
+          for (const t of [A.texture(pre + k, from[k].tex, { srgb: true }), from[k].ntex && A.texture(pre + k + ".n", from[k].ntex, { srgb: false })])
+            if (t) waits.push(t.userData.ready);
+        }
+      };
+      A.data.rigPieces = A.data.rigPieces || {};
+      A.data.genWeapons = A.data.genWeapons || {};
+      addAll("rigPieces", p.pieces, "rigpiece.");
+      addAll("genWeapons", p.weapons, "weapon.");
+      if (waits.length) await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       // Monster (gen-monster.js): erzeugte Bestien kommen zu den vorhandenen Familien; Texturen gleich laden, sonst
       // stuende die Bestie im ersten Kampfbild schwarz da
       for (const k in p.beasts || {}) {

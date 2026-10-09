@@ -366,7 +366,7 @@
      und Abstand zur Koerperoberflaeche. Hier wird es ueber Querschnittsprofile auf den jeweiligen Koerper gelegt, so
      passt ein Teil auf schlanke und breite Figuren mit gleichen Knochennamen. Gleiches Verfahren wie fit_piece.py. */
   const PIECES = () => (SB.assets && SB.assets.data && SB.assets.data.rigPieces) || {};
-  const SLOT = { ruestung: "brust", handschuhe: "handschuhe", stiefel: "stiefel", helm: "helm", hose: "hose" };
+  const SLOT = { ruestung: "brust", handschuhe: "handschuhe", stiefel: "stiefel", helm: "helm", hose: "hose", umhang: "umhang" };
   // Knochenrahmen: Gelenk, Achse zum fortsetzenden Kind, Laenge, Querachsen
   function frames(E) {
     const S = E.skel;
@@ -384,8 +384,9 @@
       let e = null;
       for (let c = 0; c < n; c++) {
         if (S.parents[c] !== i) continue;
-        // Endknochen ohne eigene Kinder ("HeadTop_End") zaehlen nicht als Fortsetzung (wie fit_piece.frames)
-        if (/end$/i.test(S.names[c]) && S.parents.indexOf(c) < 0) continue;
+        // Endknochen ohne eigene Kinder ("HeadTop_End") und Hilfsknochen vor dem Gesicht ("headfront") zaehlen nicht
+        // als Fortsetzung (wie fit_piece.frames)
+        if (/(end|front)$/i.test(S.names[c]) && S.parents.indexOf(c) < 0) continue;
         const d = P(c).sub(p);
         const ln = d.length();
         if (ln < 1e-4) continue;
@@ -395,7 +396,21 @@
           e = P(c);
         }
       }
-      if (!e) e = p.clone().addScaledVector(pd, Math.max(0.05, 0.5 * pl));
+      // ohne Fortsetzung (Kopf, Hand, Zehen): Ausdehnung der eigenen Ecken entlang der Richtung vom Elternknochen
+      // (98. Perzentil wie numpy), sonst halbe Laenge des Elternknochens
+      if (!e) {
+        let ext = 0.5 * pl;
+        const pr = [];
+        for (let k = 0; k < E.pos.length / 3; k++)
+          if (E.skinI[k * 4] === i) pr.push((E.pos[k * 3] - p.x) * pd.x + (E.pos[k * 3 + 1] - p.y) * pd.y + (E.pos[k * 3 + 2] - p.z) * pd.z);
+        if (pr.length >= 20) {
+          pr.sort((x, y) => x - y);
+          const q = 0.98 * (pr.length - 1);
+          const f = Math.floor(q);
+          ext = pr[f] + (pr[Math.min(f + 1, pr.length - 1)] - pr[f]) * (q - f);
+        }
+        e = p.clone().addScaledVector(pd, Math.max(0.05, ext));
+      }
       const a = e.clone().sub(p);
       const L = Math.max(a.length(), 1e-4);
       a.divideScalar(L);
@@ -582,7 +597,9 @@
         if (f < 0) continue;
         const rar = Pc.rarity && Pc.rarity.length ? Pc.rarity : null;
         if (rar && rar.indexOf(it.rarity) < 0) continue;
-        const sc = f + (rar ? 1 : 0);
+        // Teile einer Gestaltungskultur (Midgard, Albion, Hibernia) nur fuer Gegenstaende dieser Kultur, dann vor allgemeinen
+        if (Pc.culture && Pc.culture !== V.culture) continue;
+        const sc = f + (rar ? 1 : 0) + (Pc.culture ? 0.5 : 0);
         if (sc > best) {
           best = sc;
           pick = nm;
@@ -595,7 +612,7 @@
 
   /* ---------- Erzeugte Waffen und Schilde (assets-src/gen/weapon.py) ----------
      Feste Form mit Griffpunkt im Ursprung in der Lage der gebauten Waffen; ersetzt die gebaute Waffe bei jedem Helden,
-     wenn Grundart und (falls angegeben) Form oder Seltenheit passen. */
+     wenn Grundart und (falls angegeben) Form, Seltenheit oder Gestaltungskultur passen. */
   const WEAPONS = () => (SB.assets && SB.assets.data && SB.assets.data.genWeapons) || {};
   RG.weaponName = function (it, culture) {
     const L = WEAPONS();
@@ -609,7 +626,8 @@
       if (W.base !== V.base) continue;
       if (W.forms.length && W.forms.indexOf(V.form) < 0 && W.forms.indexOf(V.base) < 0) continue;
       if (W.rarity.length && W.rarity.indexOf(it.rarity) < 0) continue;
-      const sc = (W.forms.indexOf(V.form) >= 0 ? 2 : 0) + (W.rarity.length ? 1 : 0);
+      if (W.culture && W.culture !== V.culture) continue;
+      const sc = (W.forms.indexOf(V.form) >= 0 ? 2 : 0) + (W.rarity.length ? 1 : 0) + (W.culture ? 0.5 : 0);
       if (sc > score) {
         best = nm;
         score = sc;

@@ -193,7 +193,21 @@ Wichtige Regeln der Strecke:
   Unterordner `teile` auf. Im Spiel trägt eine Figur das Teil, dessen Form oder Grundart zum angelegten Gegenstand passt
   (`forms`); ein Teil ohne Formliste passt zu jedem Gegenstand des Platzes. Mit `--seltenheit episch,legendaer` gilt ein
   Teil nur für diese Seltenheiten und geht dann vor (etwa ein eigener Panzer je Seltenheit wie auf Tafel 10). Ein Helm
-  als Teil ersetzt den gebauten Helm.
+  als Teil ersetzt den gebauten Helm. Weitere Plätze: `robe` (Rumpf und Oberschenkel bis zum Knie, gilt im Spiel als
+  Brustteil; knielange Roben und Mäntel) und `umhang` (hängt nur an Hüfte, Rücken, Brust und Hals, blendet keine Haut
+  aus; Vorlage von hinten gemalt, deshalb mit `--flip` und `--offset 0.05`). Kopfteile, die nicht den ganzen Kopf
+  umschließen (Kappe, Krone), mit `--kopf oben`: gleichmäßig nach der Breite oben am Kopf skaliert und auf den Scheitel
+  gesetzt. Helme blenden nur die Haut aus, die sie wirklich überdecken (Strahl von der Haut nach außen), damit offene
+  Helme mit Nasen- und Wangenschutz das Gesicht nicht verschlucken. `--kultur midgard` (auch bei `weapon.py`): Teil oder
+  Waffe gilt nur für Gegenstände dieser Gestaltungskultur und geht dann vor allgemeinen vor.
+  Kopfachse: Meshys Hilfsknochen `headfront` zählt nicht als Fortsetzung des Kopfes (wie `HeadTop_End`); Knochen ohne
+  Fortsetzung (Kopf, Hand, Zehen) bekommen die Ausdehnung ihrer Ecken als Länge (gleiche Regel in `fit_piece.frames`
+  und `src/r3d-rigged.js`). Vorher zeigte die Kopfachse nach vorn und war je Körper 5 bis 25 cm lang; Helme saßen
+  dann bei Nordmann-Frau und Frostwicht-Mann wie eine nach hinten gerutschte Kapuze.
+- Ausrüstung je Reich und Heldenart: `gen_pack.py meshy/ausr-midgard-<art> ../../assets/gen-ausrmidgard<art>.pack`
+  (`krieger`, `schurke`, `jaeger`, `magier`, `umhang`); `build.mjs` macht daraus `gen-ausrmidgard<art>.js`. Das Spiel
+  lädt sie nach den Heldenkörpern des Reiches (`UI.loadGear`, `UI.GEAR_FILES` in `src/ui-core.js`), zuerst die Art des
+  eigenen Helden und die Umhänge; danach zeichnen sich Ansichten und Portraits neu (`gv` in der Figurenbeschreibung).
 - Bestien: Meshy riggt per API nur Zweibeiner und hat keine Tierbewegungen. `beasts/from_glb.py` gibt einem
   stehenden Tier aus einer GLB (Blick +Z) ein Vierbeiner-Skelett mit den Rollen des Bestiensystems (Wirbelsäule,
   Kopf, Schwanz, vier Beine mit je drei Gliedern, Gewichte per Bone Heat). Im Spiel bewegt es sich wie die anderen
@@ -241,6 +255,10 @@ Wichtige Regeln der Strecke:
   es verkehrt, `--umdrehen`. Im Spiel ersetzt die Waffe bei jedem Helden die gebaute Waffe derselben Grundart
   (`--forms` und `--seltenheit` grenzen ein), das Gegenstandsbild zeigt dann das Modell. Konzepttafeln mit mehreren
   Waffen vorher so zuschneiden, dass jedes Bild nur eine Waffe zeigt. `gen_pack.py` nimmt den Unterordner `waffen` auf.
+  Weitere Grundarten: `armbrust` (Schaft ist die längste Richtung und kommt nach +X, der Querbogen nach Z, unten ist
+  die Seite mit Griff und Abzug, vorn das Ende mit dem breiten Querbogen, Griff bei 54 % vom Kolben, 0,81 m), `koecher` (aufrecht, 0,67 m hoch), `wurfmesser` (kurzes Gürtelstück mit Messern,
+  Sternen oder Phiolen, 0,2 m breit, Rückseite am Körper) und `fokus` (größte Ausdehnung 0,16 m); die Lage am Körper
+  bestimmt wie bisher `R.gear.attachRigid`.
 - Kampfumgebung: `prop.py` stellt ein Requisit (Meshy-Lage, oben +Y) auf den Boden und bringt es auf die Zielhöhe
   seiner Rolle (`baum` 4,6 m, `deko` 0,8 m, `wahrzeichen` 3,2 m, sonst `--hoehe`). Im Kampf eines Reiches ersetzen
   dessen Requisiten die gebauten Bäume und Dekorationen (je Dekomodell höchstens zwei Stück), ein Wahrzeichen steht

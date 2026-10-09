@@ -50,7 +50,7 @@
   const withGen = (d) => {
     if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
-    if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] });
+    if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] }, GEAR_V ? { gv: GEAR_V } : {});
     const realm = D.RACES[d.race] && D.RACES[d.race].realm;
     if (realm && UI.use3d && !GEN_FIG[realm]) UI.loadGenFigures(realm);
     return Object.assign(d, { pending: k });
@@ -144,6 +144,35 @@
     }
     return out;
   };
+  // Ausruestung aus Meshy-Modellen je Reich und Heldenart (gen-ausr<reich><art>.js neben der Seite): Ruestungsteile und
+  // Waffen fuer Gegenstaende dieser Gestaltungskultur. Erst die Art des eigenen Helden, dann die uebrigen im Hintergrund.
+  // GEAR_V zaehlt die geladenen Dateien; es steht in der Beschreibung der Figur, damit Portraits und Ansichten neu entstehen.
+  UI.GEAR_FILES = { midgard: ["krieger", "schurke", "jaeger", "magier", "umhang"] };
+  let GEAR_V = 0;
+  const GEAR_LOAD = {};
+  UI.loadGear = function (realm) {
+    const own = UI.S && D.CLASSES[UI.S.cls] ? D.CLASSES[UI.S.cls].arch : null;
+    const rank = (x) => (x === own ? 2 : x === "umhang" ? 1 : 0);
+    const list = (UI.GEAR_FILES[realm] || []).slice().sort((a, b) => rank(b) - rank(a));
+    return list.reduce(
+      (prev, arch) =>
+        prev.then(() => {
+          const id = "ausr" + realm + arch;
+          if (GEAR_LOAD[id]) return GEAR_LOAD[id];
+          return (GEAR_LOAD[id] = SB.assets.loadGen(id).then(
+            () => {
+              GEAR_V++;
+              genChanged();
+            },
+            (e) => {
+              if (!(e && e.missing)) console.warn("Ausruestung nicht geladen", id, e);
+              setTimeout(() => delete GEAR_LOAD[id], RETRY_MS);
+            }
+          ));
+        }),
+      Promise.resolve()
+    );
+  };
   // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet);
   // nach einem Fehlschlag erst nach einer Pause erneut
   const GEN_FIG = {};
@@ -171,7 +200,7 @@
           UI.genStatus.datei = "bereit";
           if (!UI.genStatus.kern) UI.genStatus.kern = "bereit";
           genChanged();
-          return "bereit";
+          return UI.loadGear(realm).then(() => "bereit");
         },
         (e) => {
           UI.genStatus.datei = e && e.missing ? "fehlt" : "fehler";
@@ -779,6 +808,7 @@
   let heroView = null;
   let heroViewEl = null;
   let heroViewKey = "";
+  let heroViewStill = "";
   UI.attachHeroView = function (slot, desc, caption) {
     if (!slot) return;
     if (!UI.use3d) {
@@ -802,8 +832,11 @@
     }
     const k = JSON.stringify(desc);
     if (k !== heroViewKey) {
-      const celebrate = !!heroViewKey;
+      // Jubel nur bei neuer Ausruestung oder neuem Helden, nicht wenn Figur oder Ausruestungsmodelle fertig geladen sind
+      const still = JSON.stringify(Object.assign({}, desc, { gen: 0, genGear: 0, gv: 0, pending: 0 }));
+      const celebrate = !!heroViewKey && still !== heroViewStill;
       heroViewKey = k;
+      heroViewStill = still;
       heroView.set(desc, celebrate);
     }
     return heroView;

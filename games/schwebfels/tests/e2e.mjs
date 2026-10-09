@@ -108,7 +108,8 @@ await page.waitForTimeout(500);
   const w0 = await bar();
   // Uhr um die halbe Reisezeit vorstellen (nur fuer diese Probe)
   await page.evaluate(() => { const a = SB.ui.S.quest.active; const d = (a.end - a.start) / 2; const real = SB.engine.now; SB.engine.now = () => real() + d; window.__uhrZurueck = () => { SB.engine.now = real; }; });
-  await page.waitForTimeout(1300);
+  // die Uhr tickt jede Sekunde; unter Last (Figurendaten werden im Hintergrund geladen) kann ein Takt spaeter kommen
+  await page.waitForFunction((w) => parseFloat(document.querySelector("#panel .quest .progress i").style.width) > w + 30, w0, { timeout: 6000 }).catch(() => {});
   const w1 = await bar();
   await page.evaluate(() => window.__uhrZurueck());
   if (!(w1 > w0 + 30)) throw new Error("Reisebalken steht still: " + w0 + " -> " + w1);

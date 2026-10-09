@@ -1,15 +1,17 @@
 """Ruestungsteil (einzeln erzeugte GLB, z. B. von Meshy) fuer Figuren mit eigenem Skelett vorbereiten.
 
 Aufruf:
-  python fit_piece.py <ausgabe.npz> <referenzkoerper.npz> <teil.glb> --slot brust|handschuhe|stiefel|helm|hose
+  python fit_piece.py <ausgabe.npz> <referenzkoerper.npz> <teil.glb> --slot brust|robe|umhang|handschuhe|stiefel|helm|hose
                       [--name harnisch_eisen] [--forms harnisch.0,harnisch] [--rot 0,0,90] [--pad 0.02]
-                      [--tris 4000] [--tex 512] [--paar] [--flip] [--offset 0.012]
+                      [--tris 4000] [--tex 512] [--paar] [--flip] [--offset 0.012] [--kopf box|oben] [--kultur midgard]
 
 Der Referenzkoerper ist eine npz-Datei aus meshy_import.py (Art "rig"). Schritte:
  1. Teil laden (alle Netze, Textur als Atlas), optional drehen (--rot in Grad um X, Y, Z) und reduzieren
  2. Auf den Koerperbereich des Platzes ausrichten (Brust: Huefte bis Schultern, Handschuhe: Hand und halber
-    Unterarm, Stiefel: Fuss und halbes Schienbein, Helm: Kopf, Hose: Huefte und Beine); --paar spiegelt ein einzelnes
-    Teil auf die andere Seite
+    Unterarm, Stiefel: Fuss und halbes Schienbein, Helm: Kopf, Hose: Huefte und Beine, Robe: Rumpf und Oberschenkel bis
+    zum Knie, gilt im Spiel als Brustteil; Umhang: wie Robe, haengt aber nur an Rumpf und Hals und blendet keine Haut
+    aus); --paar spiegelt ein einzelnes Teil auf die andere Seite. Kopfteile, die nicht den ganzen Kopf umschliessen
+    (Kappe, Krone), mit --kopf oben: gleichmaessig nach der Breite oben am Kopf skaliert und oben angelegt
  3. Mit Blender nach aussen schieben (keine Haut darf durchstechen), glaetten, Gewichte vom Koerper uebertragen
  4. Knochenbezogen speichern: je Ecke die zwei wichtigsten Knochen mit Lage entlang des Knochens, Winkel um ihn und
     Abstand zur Koerperoberflaeche. Im Spiel (src/r3d-rigged.js) legt sich das Teil damit ueber Querschnittsprofile
@@ -37,18 +39,27 @@ REGION = {
     "stiefel": (["foot.L", "foot.R", "toe.L", "toe.R", "shin.L", "shin.R"], {"shin": 0.45}),
     "helm": (["head"], None),
     "hose": (["hips", "thigh.L", "thigh.R", "shin.L", "shin.R"], None),
+    "robe": (["hips", "spine", "chest", "clavicle.L", "clavicle.R", "thigh.L", "thigh.R"], None),
+    "umhang": (["hips", "spine", "chest", "clavicle.L", "clavicle.R", "thigh.L", "thigh.R"], None),
 }
+# Knochen, an denen ein Umhang haengt (keine Beine und Arme, sonst zoegen die Beine ihn beim Gehen auseinander)
+CAPE_BONES = ["hips", "spine", "chest", "neck", "clavicle.L", "clavicle.R"]
+# Platz im Spiel (src/r3d-rigged.js, SLOT): eine Robe ersetzt wie ein Brustteil die Ruestung
+GAME_SLOT = {"robe": "brust"}
 
 
 # ---------- Knochenrahmen und Querschnittsprofile (gleiches Verfahren wie in src/r3d-rigged.js) ----------
-def frames(rest, parents, names=None):
+def frames(rest, parents, names=None, pos=None, dom=None):
     """Je Knochen: Gelenk P, Achse a, Laenge L, Querachsen u und v. Endknochen ohne eigene Kinder ("HeadTop_End",
-    "LeftToe_End") zaehlen nicht als Fortsetzung, sonst haengt die Laenge davon ab, ob ein Modell sie mitbringt
+    "LeftToe_End") zaehlen nicht als Fortsetzung, sonst haengt die Laenge davon ab, ob ein Modell sie mitbringt; ebenso
+    Hilfsknochen vor dem Gesicht ("headfront"), sonst zeigte die Kopfachse nach vorn und ihre Laenge schwankte je
+    Figur zwischen 5 und 25 cm. Knochen ohne Fortsetzung (Kopf, Hand, Zehen) bekommen mit Koerperecken (pos, dom:
+    wichtigster Knochen je Ecke) die Ausdehnung ihrer Ecken entlang der Richtung vom Elternknochen als Laenge
     (gleiche Regel in src/r3d-rigged.js)."""
     n = len(parents)
     kids = [[c for c in range(n) if parents[c] == i] for i in range(n)]
     if names:
-        kids = [[c for c in k if kids[c] or not re.search(r"end$", names[c], re.I)] for k in kids]
+        kids = [[c for c in k if kids[c] or not re.search(r"(end|front)$", names[c], re.I)] for k in kids]
     out = []
     for i in range(n):
         P = rest[i]
@@ -65,7 +76,12 @@ def frames(rest, parents, names=None):
             if s > best:
                 best, E = s, rest[c]
         if E is None:
-            E = P + pd * max(0.05, 0.5 * pl)
+            ext = 0.5 * pl
+            if pos is not None:
+                sel = dom == i
+                if sel.sum() >= 20:
+                    ext = float(np.percentile((pos[sel] - P) @ pd, 98))
+            E = P + pd * max(0.05, ext)
         a = E - P
         L = max(np.linalg.norm(a), 1e-4)
         a = a / L
@@ -95,7 +111,7 @@ def bins(t, th):
 
 def profiles(pos, skin_i, skin_w, rest, parents, names=None):
     """Groesster Abstand der Koerperoberflaeche von der Knochenachse je Feld, Luecken aufgefuellt."""
-    Fr = frames(rest, parents, names)
+    Fr = frames(rest, parents, names, pos, skin_i[:, 0])
     nb = len(parents)
     W = np.zeros((len(pos), nb))
     for k in range(4):
@@ -197,6 +213,35 @@ def euler(deg):
 
 
 # ---------- Anpassen mit Blender ----------
+def covered_occ(bpos, bidx, bW, Fr, fpos, ptri, bones, names, reach=0.09, share=0.5):
+    """Felder, deren Haut zum groessten Teil vom Teil ueberdeckt ist: Strahl von jeder Hautecke entlang ihrer Normalen
+    nach aussen (bis reach Meter); ein Feld gilt als belegt, wenn mindestens share seiner Ecken getroffen werden."""
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    tree = BVHTree.FromPolygons([Vector(p) for p in fpos], [tuple(int(i) for i in f) for f in ptri])
+    fn = np.cross(bpos[bidx[:, 1]] - bpos[bidx[:, 0]], bpos[bidx[:, 2]] - bpos[bidx[:, 0]])
+    vn = np.zeros_like(bpos)
+    for k in range(3):
+        np.add.at(vn, bidx[:, k], fn)
+    vn /= np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-12)
+    occ = {}
+    for b in bones:
+        m = np.nonzero(bW[:, b] >= 0.35)[0]
+        if not len(m):
+            continue
+        hit = np.array([tree.ray_cast(Vector(bpos[i] + vn[i] * 0.002), Vector(vn[i]), reach)[0] is not None for i in m])
+        t, th, _ = tad(Fr[b], bpos[m])
+        ti, ai = bins(t, th)
+        cnt = np.zeros((NT, NA))
+        got = np.zeros((NT, NA))
+        np.add.at(cnt, (ti, ai), 1)
+        np.add.at(got, (ti, ai), hit)
+        grid = (cnt > 0) & (got >= share * np.maximum(cnt, 1))
+        occ[names[b]] = grid.astype(np.uint8)
+        print("Haut ueberdeckt (", names[b], "):", int(hit.sum()), "von", len(m), "Ecken,", int(grid.sum()), "Felder")
+    return occ
+
+
 def fit_blender(bpos, bidx, bW, ppos, ptri, offset):
     import bpy
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -265,6 +310,7 @@ def main():
     ap.add_argument("--name")
     ap.add_argument("--forms", default="")
     ap.add_argument("--seltenheit", default="", help="nur fuer diese Seltenheiten, z. B. episch,legendaer")
+    ap.add_argument("--kultur", default="", help="nur fuer Gegenstaende dieser Gestaltungskultur (midgard, albion, hibernia)")
     ap.add_argument("--rot", default="auto", help="Drehung in Grad um X,Y,Z oder auto (Handschuh entlang des Arms)")
     ap.add_argument("--flip", action="store_true", help="Teil umdrehen, falls es verkehrt herum sitzt")
     ap.add_argument("--pad", type=float, default=0.02)
@@ -272,6 +318,7 @@ def main():
     ap.add_argument("--tris", type=int, default=4000)
     ap.add_argument("--tex", type=int, default=512)
     ap.add_argument("--paar", action="store_true")
+    ap.add_argument("--kopf", default="box", choices=["box", "oben"], help="Kopfteil: ganzen Kopfbereich fuellen oder oben anlegen (Kappe, Krone)")
     a = ap.parse_args()
 
     z = np.load(a.body)
@@ -284,7 +331,7 @@ def main():
     bW = np.zeros((len(bpos), nb))
     for k in range(4):
         np.add.at(bW, (np.arange(len(bpos)), si[:, k]), sw[:, k] / 255.0)
-    Fr = frames(rest, parents, names)
+    Fr = frames(rest, parents, names, bpos, si[:, 0])
 
     # Teil laden, drehen, Textur, Reduzieren
     g, parts = static_parts(a.piece)
@@ -328,11 +375,32 @@ def main():
             raise SystemExit("Kein Koerperbereich fuer " + a.slot)
         return bpos[sel]
 
+    def place_top(P, reg):
+        """Kappe oder Krone: gleichmaessig so gross, dass sie oben am Kopf (oberste 7 cm) mit a.pad Abstand anliegt;
+        die Mitte ihrer Oberkante sitzt auf dem Scheitel."""
+        top = np.percentile(reg[:, 1], 99)
+        band = reg[reg[:, 1] > top - 0.07]
+        hw = np.percentile(band[:, 0], 98) - np.percentile(band[:, 0], 2)
+        cx, cz = (np.percentile(band[:, 0], 98) + np.percentile(band[:, 0], 2)) / 2, (np.percentile(band[:, 2], 98) + np.percentile(band[:, 2], 2)) / 2
+        lo, hi = P.min(0), P.max(0)
+        mid = np.abs(P[:, 0] - (lo[0] + hi[0]) / 2) < 0.25 * (hi[0] - lo[0])
+        ptop = P[mid, 1].max()
+        pb = P[P[:, 1] > ptop - 0.3 * (hi[1] - lo[1])]
+        pw = np.percentile(pb[:, 0], 98) - np.percentile(pb[:, 0], 2)
+        s = (hw + 2 * a.pad) / max(pw, 1e-6)
+        pcx, pcz = (np.percentile(pb[:, 0], 98) + np.percentile(pb[:, 0], 2)) / 2, (np.percentile(pb[:, 2], 98) + np.percentile(pb[:, 2], 2)) / 2
+        return (P - np.array([pcx, ptop, pcz])) * s + np.array([cx, top + a.pad * 0.5, cz])
+
     def place(P, reg):
+        if a.slot == "helm" and a.kopf == "oben":
+            return place_top(P, reg)
         lo, hi = P.min(0), P.max(0)
         # Ausmass des Koerperbereichs ohne Ausreisser (einzelne Ecken mit Gewicht nahe der Koerpermitte)
         rlo, rhi = np.percentile(reg, 2, axis=0) - a.pad, np.percentile(reg, 98, axis=0) + a.pad
         s = (rhi - rlo) / np.maximum(hi - lo, 1e-6)
+        if a.slot == "umhang":
+            # ein Umhang ist duenner als der Rumpf tief: Tiefe im gleichen Mass wie die Breite
+            s[2] = s[0]
         return (P - (lo + hi) / 2) * s + (rlo + rhi) / 2
 
     paired = a.slot in ("handschuhe", "stiefel")
@@ -349,6 +417,14 @@ def main():
 
     # Anpassen und Gewichte
     fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset)
+    if a.slot == "umhang":
+        keep = np.zeros(nb, bool)
+        keep[[tmap[r] for r in CAPE_BONES if r in tmap]] = True
+        fW = np.where(keep[None, :], fW, 0.0)
+        empty = fW.sum(1) < 1e-6
+        if empty.any():
+            # tief haengende Ecken (unter der Huefte) folgen der Huefte
+            fW[empty, tmap["hips"]] = 1.0
     if paired and not single:
         # ein Paar aus einem Guss: Dreiecke, die beide Seiten verbinden (Schnuersenkel, Steg zwischen den Stiefeln), weg;
         # sie wuerden beim Gehen quer gezogen
@@ -384,9 +460,13 @@ def main():
             enc[m, k, 1] = t
             enc[m, k, 2] = th
             enc[m, k, 3] = d - sample(prof[b], t, th)
-    # belegte Felder je Knochen (Haut darunter ausblenden), um ein Feld erweitert
-    occ = {}
+    # belegte Felder je Knochen (Haut darunter ausblenden), um ein Feld erweitert. Helme mit offenem Gesicht
+    # (Nasen- und Wangenschutz) wuerden so das ganze Gesicht belegen: dort gilt ein Feld nur als belegt, wenn der Helm
+    # die Haut darin wirklich ueberdeckt (Strahl von der Haut nach aussen trifft den Helm)
+    occ = covered_occ(bpos, bidx, bW, Fr, fpos, ptri, [tmap[r] for r in roles], names) if a.slot == "helm" else {}
     for b in np.unique(order[:, 0]):
+        if a.slot in ("helm", "umhang"):
+            break
         m = (order[:, 0] == b) & (w2[:, 0] >= 0.35)
         if not m.any():
             continue
@@ -401,8 +481,8 @@ def main():
     used = sorted(set(order.ravel().tolist()))
     remap = {b: i for i, b in enumerate(used)}
     enc_b = np.vectorize(lambda b: remap[int(b)])(enc[:, :, 0].astype(int))
-    name = a.name or os.path.splitext(os.path.basename(a.piece))[0]
-    pmeta = {"name": name, "slot": a.slot, "forms": [f for f in a.forms.split(",") if f], "rarity": [r for r in a.seltenheit.split(",") if r], "bones": [names[b] for b in used],
+    name = a.name or os.path.splitext(os.path.basename(a.out))[0]
+    pmeta = {"name": name, "slot": GAME_SLOT.get(a.slot, a.slot), "forms": [f for f in a.forms.split(",") if f], "rarity": [r for r in a.seltenheit.split(",") if r], "culture": a.kultur, "bones": [names[b] for b in used],
              "nt": NT, "na": NA, "t0": T0, "t1": T1, "ref": os.path.splitext(os.path.basename(a.body))[0], "occ": sorted(occ)}
     np.savez_compressed(a.out, **M.normal_extra(g, tex), kind="piece", pos=fpos.astype(np.float32), uv=puv.astype(np.float32), idx=ptri.astype(np.int32),
                         bone=enc_b.astype(np.uint8), tto=enc[:, :, 1:].astype(np.float32), w=w2.astype(np.float32), tex=tex.astype(np.uint8),

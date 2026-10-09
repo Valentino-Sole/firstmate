@@ -472,7 +472,10 @@ def main():
         js = open(f, encoding="utf-8").read()
         mm = re.match(r'globalThis\.(SB_GEN_\w+)="([A-Za-z0-9+/=]+)"', js)
         name = os.path.basename(f)
-        z = shrink_pack(base64.b64decode(mm.group(2)), opt, name.startswith("gen-mon"), name)
+        raw = base64.b64decode(mm.group(2))
+        if raw[:2] == b"\x1f\x8b":
+            raw = gzip.decompress(raw)
+        z = shrink_pack(raw, opt, name.startswith("gen-mon"), name)
         scripts.append("<script>/* %s */\nglobalThis.%s=\"%s\";\n</script>" % (name, mm.group(1), base64.b64encode(z).decode()))
     kf = os.path.join(opt.dist, "kulissen.js")
     if os.path.exists(kf):

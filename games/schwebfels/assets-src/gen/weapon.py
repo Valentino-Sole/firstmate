@@ -34,13 +34,21 @@ BASES = {
     "axt": ("kopf", 0.744, 0.2, 1), "hammer": ("kopf", 0.72, 0.21, 0), "sichel": ("kopf", 0.302, 0.3, 1),
     "speer": ("kopf", 1.678, 0.328, 0), "stab": ("kopf", 2.041, 0.3, 0), "runenstab": ("kopf", 1.9, 0.316, 0),
     "zepter": ("kopf", 0.792, 0.33, 0), "bogen": ("bogen", 1.74, 0.5, -1), "schild": ("schild", 1.082, 0.435, 0),
+    # Armbrust: Schaft entlang +X ueber der Faust, Bogen quer (Z), Griff bei 54 % vom Kolben, Schaft 8,5 cm ueber dem Griff
+    "armbrust": ("armbrust", 0.81, 0.54, 0),
+    # feste Nebenhand-Teile (Lage wie die gebauten in src/r3d-items-armor.js): Groesse, Ursprung als Anteil der Hoehe
+    "koecher": ("fest", 0.67, 0.42, 0), "wurfmesser": ("fest", 0.2, 0.8, 0), "fokus": ("fest", 0.16, 0.5, 0),
 }
+# fest: gemessen an Hoehe, Breite oder groesster Ausdehnung; vorn: duennste waagerechte Richtung nach Z, Ursprung an
+# der Rueckseite (Guertelhalterung liegt am Koerper an)
+FEST = {"koecher": ("hoehe", False), "wurfmesser": ("breite", True), "fokus": ("max", False)}
 
 
 # groesste Breite (Meter, quer zur Klinge oder zum Schaft): etwa doppelt so viel wie bei den gebauten Waffen. Breitere
 # Modelle (riesige Kugel am Stab, Klotz am Hammer) werden insgesamt kleiner, statt die Figur zu verdecken
 MAXW = {"schwert": 0.4, "kurzschwert": 0.3, "dolch": 0.2, "axt": 0.45, "hammer": 0.4, "sichel": 0.4, "speer": 0.3,
-        "stab": 0.35, "runenstab": 0.35, "zepter": 0.3, "bogen": 0.5, "schild": 0.8}
+        "stab": 0.35, "runenstab": 0.35, "zepter": 0.3, "bogen": 0.5, "schild": 0.8,
+        "armbrust": 0.75, "koecher": 0.3, "wurfmesser": 0.3, "fokus": 0.25}
 
 
 def area_pca(P, F):
@@ -133,6 +141,52 @@ def orient(P, F, mode, frac, side, flip, grip):
     return R, origin, L, gy / L
 
 
+def front_z(P, F, back=False):
+    """Duennste waagerechte Richtung nach +Z drehen; vorn ist die Seite, die weiter vorsteht (back kehrt das um)."""
+    S = surface_points(P, F)
+    Q = S[:, [0, 2]] - S[:, [0, 2]].mean(0)
+    val, vec = np.linalg.eigh(Q.T @ Q)
+    tx, tz = vec[:, 0]
+    ang = np.arctan2(tx, tz)
+    Ry = np.array([[np.cos(-ang), 0, np.sin(-ang)], [0, 1, 0], [-np.sin(-ang), 0, np.cos(-ang)]])
+    P = P @ Ry.T
+    z = (S @ Ry.T)[:, 2]
+    if (z.max() - z.mean() < z.mean() - z.min()) != back:
+        P = P * np.array([-1.0, 1.0, -1.0])
+    return P, ang
+
+
+def orient_crossbow(P, F, frac, target):
+    """Armbrust: Schaft ist die laengste Richtung (X), der Querbogen die zweitlaengste (Z), die duennste ist oben-unten
+    (Y); so ist es gleich, ob Meshy sie liegend oder aufrecht gebaut hat. Unten ist die Seite, zu der Griff und Abzug
+    weiter herausragen (Schiefe der Verteilung), vorn (+X) das Ende mit dem breiten Querbogen. Liefert R, Ursprung,
+    Laenge und Griffanteil wie orient()."""
+    S = surface_points(P, F)
+    c, ax, _ = area_pca(P, F)
+    x, z0, y = ax[0], ax[1], ax[2]
+    sy = (S - c) @ y
+    if ((sy - sy.mean()) ** 3).mean() > 0:
+        y = -y
+    s, w = (S - c) @ x, (S - c) @ z0
+    nb = 20
+    b = np.clip(((s - s.min()) / max(np.ptp(s), 1e-9) * nb).astype(int), 0, nb - 1)
+    spread = np.array([np.ptp(w[b == k]) if (b == k).sum() > 2 else 0 for k in range(nb)])
+    if np.argmax(spread) < nb / 2:
+        x = -x
+    z = np.cross(x, y)
+    R = np.array([x, y, z])
+    Pr = (S - c) @ R.T
+    lo, hi = Pr[:, 0].min(), Pr[:, 0].max()
+    L = hi - lo
+    gx = lo + frac * L
+    near = np.abs(Pr[:, 0] - gx) < 0.06 * L
+    ys = np.median(Pr[near, 1]) if near.sum() > 5 else np.median(Pr[:, 1])
+    oz = np.median(Pr[near, 2]) if near.sum() > 5 else 0.0
+    sc = target / L
+    origin = c + R.T @ np.array([gx, ys - 0.085 / sc, oz])
+    return R, origin, L, frac
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("out")
@@ -141,6 +195,7 @@ def main():
     ap.add_argument("--name")
     ap.add_argument("--forms", default="")
     ap.add_argument("--seltenheit", default="")
+    ap.add_argument("--kultur", default="", help="nur fuer Gegenstaende dieser Gestaltungskultur (midgard, albion, hibernia)")
     ap.add_argument("--laenge", type=float)
     ap.add_argument("--griff", type=float)
     ap.add_argument("--umdrehen", action="store_true")
@@ -176,11 +231,27 @@ def main():
         origin = np.array([(lo[0] + hi[0]) / 2, lo[1] + (a.griff if a.griff is not None else frac) * h, hi[2] - 0.041 / sc])
         R = np.eye(3)
         L, gf = h, frac
+    elif mode == "fest":
+        measure, front = FEST[a.base]
+        if front:
+            P, _ = front_z(P, F, a.umdrehen)
+        lo, hi = P.min(0), P.max(0)
+        ext = hi - lo
+        L = {"hoehe": ext[1], "breite": ext[0], "max": ext.max()}[measure]
+        sc = target / L
+        gf = a.griff if a.griff is not None else frac
+        origin = np.array([(lo[0] + hi[0]) / 2, lo[1] + gf * ext[1], lo[2] if front else (lo[2] + hi[2]) / 2])
+        R = np.eye(3)
+    elif mode == "armbrust":
+        R, origin, L, gf = orient_crossbow(P, F, a.griff if a.griff is not None else frac, target)
+        sc = target / L
+        if a.umdrehen:
+            R = np.array([-R[0], R[1], -R[2]])
     else:
         R, origin, L, gf = orient(P, F, mode, frac, side, a.umdrehen, a.griff)
         sc = target / L
     P = ((P - origin) @ R.T) * sc
-    w = max(np.ptp(P[:, 0]), np.ptp(P[:, 2])) if mode != "schild" else np.ptp(P[:, 0])
+    w = max(np.ptp(P[:, 0]), np.ptp(P[:, 2])) if mode not in ("schild", "armbrust") else np.ptp(P[:, 0]) if mode == "schild" else np.ptp(P[:, 2])
     if a.laenge is None and w > MAXW[a.base]:
         print("Breiter als %.2f m: kleiner gesetzt (Laenge %.2f statt %.2f m)" % (MAXW[a.base], (np.ptp(P[:, 1])) * MAXW[a.base] / w, np.ptp(P[:, 1])))
         P = P * (MAXW[a.base] / w)
@@ -190,7 +261,7 @@ def main():
         P, UV, F, _, _ = M.decimate(P, UV, F, one, np.ones((len(P), 1)), a.tris)
     name = a.name or os.path.splitext(os.path.basename(a.out))[0]
     lo, hi = P.min(0), P.max(0)
-    meta = {"name": name, "base": a.base, "forms": [x for x in a.forms.split(",") if x], "rarity": [x for x in a.seltenheit.split(",") if x],
+    meta = {"name": name, "base": a.base, "forms": [x for x in a.forms.split(",") if x], "rarity": [x for x in a.seltenheit.split(",") if x], "culture": a.kultur,
             "min": [float(v) for v in lo], "max": [float(v) for v in hi], "grip": float(gf)}
     np.savez_compressed(a.out, **M.normal_extra(g, tex), kind="weapon", pos=P.astype(np.float32), uv=UV.astype(np.float32), idx=F.astype(np.int32),
                         tex=tex.astype(np.uint8), meta=json.dumps(meta, ensure_ascii=False))

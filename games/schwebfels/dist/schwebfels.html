@@ -5033,6 +5033,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const p = parse(await unzip(b64(s)));
       const g = p.gen || {};
       for (const k in g) if (!A.data.gen[k]) A.data.gen[k] = g[k];
+      // Ausruestung (gen-ausr<reich><art>.js): Ruestungsteile und Waffen kommen zu den vorhandenen, Texturen gleich laden
+      const waits = [];
+      const addAll = (into, from, pre) => {
+        for (const k in from || {}) {
+          if (A.data[into][k]) continue;
+          A.data[into][k] = from[k];
+          for (const t of [A.texture(pre + k, from[k].tex, { srgb: true }), from[k].ntex && A.texture(pre + k + ".n", from[k].ntex, { srgb: false })])
+            if (t) waits.push(t.userData.ready);
+        }
+      };
+      A.data.rigPieces = A.data.rigPieces || {};
+      A.data.genWeapons = A.data.genWeapons || {};
+      addAll("rigPieces", p.pieces, "rigpiece.");
+      addAll("genWeapons", p.weapons, "weapon.");
+      if (waits.length) await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       // Monster (gen-monster.js): erzeugte Bestien kommen zu den vorhandenen Familien; Texturen gleich laden, sonst
       // stuende die Bestie im ersten Kampfbild schwarz da
       for (const k in p.beasts || {}) {
@@ -8179,7 +8194,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
      und Abstand zur Koerperoberflaeche. Hier wird es ueber Querschnittsprofile auf den jeweiligen Koerper gelegt, so
      passt ein Teil auf schlanke und breite Figuren mit gleichen Knochennamen. Gleiches Verfahren wie fit_piece.py. */
   const PIECES = () => (SB.assets && SB.assets.data && SB.assets.data.rigPieces) || {};
-  const SLOT = { ruestung: "brust", handschuhe: "handschuhe", stiefel: "stiefel", helm: "helm", hose: "hose" };
+  const SLOT = { ruestung: "brust", handschuhe: "handschuhe", stiefel: "stiefel", helm: "helm", hose: "hose", umhang: "umhang" };
   // Knochenrahmen: Gelenk, Achse zum fortsetzenden Kind, Laenge, Querachsen
   function frames(E) {
     const S = E.skel;
@@ -8197,8 +8212,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       let e = null;
       for (let c = 0; c < n; c++) {
         if (S.parents[c] !== i) continue;
-        // Endknochen ohne eigene Kinder ("HeadTop_End") zaehlen nicht als Fortsetzung (wie fit_piece.frames)
-        if (/end$/i.test(S.names[c]) && S.parents.indexOf(c) < 0) continue;
+        // Endknochen ohne eigene Kinder ("HeadTop_End") und Hilfsknochen vor dem Gesicht ("headfront") zaehlen nicht
+        // als Fortsetzung (wie fit_piece.frames)
+        if (/(end|front)$/i.test(S.names[c]) && S.parents.indexOf(c) < 0) continue;
         const d = P(c).sub(p);
         const ln = d.length();
         if (ln < 1e-4) continue;
@@ -8208,7 +8224,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           e = P(c);
         }
       }
-      if (!e) e = p.clone().addScaledVector(pd, Math.max(0.05, 0.5 * pl));
+      // ohne Fortsetzung (Kopf, Hand, Zehen): Ausdehnung der eigenen Ecken entlang der Richtung vom Elternknochen
+      // (98. Perzentil wie numpy), sonst halbe Laenge des Elternknochens
+      if (!e) {
+        let ext = 0.5 * pl;
+        const pr = [];
+        for (let k = 0; k < E.pos.length / 3; k++)
+          if (E.skinI[k * 4] === i) pr.push((E.pos[k * 3] - p.x) * pd.x + (E.pos[k * 3 + 1] - p.y) * pd.y + (E.pos[k * 3 + 2] - p.z) * pd.z);
+        if (pr.length >= 20) {
+          pr.sort((x, y) => x - y);
+          const q = 0.98 * (pr.length - 1);
+          const f = Math.floor(q);
+          ext = pr[f] + (pr[Math.min(f + 1, pr.length - 1)] - pr[f]) * (q - f);
+        }
+        e = p.clone().addScaledVector(pd, Math.max(0.05, ext));
+      }
       const a = e.clone().sub(p);
       const L = Math.max(a.length(), 1e-4);
       a.divideScalar(L);
@@ -8395,7 +8425,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         if (f < 0) continue;
         const rar = Pc.rarity && Pc.rarity.length ? Pc.rarity : null;
         if (rar && rar.indexOf(it.rarity) < 0) continue;
-        const sc = f + (rar ? 1 : 0);
+        // Teile einer Gestaltungskultur (Midgard, Albion, Hibernia) nur fuer Gegenstaende dieser Kultur, dann vor allgemeinen
+        if (Pc.culture && Pc.culture !== V.culture) continue;
+        const sc = f + (rar ? 1 : 0) + (Pc.culture ? 0.5 : 0);
         if (sc > best) {
           best = sc;
           pick = nm;
@@ -8408,7 +8440,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
   /* ---------- Erzeugte Waffen und Schilde (assets-src/gen/weapon.py) ----------
      Feste Form mit Griffpunkt im Ursprung in der Lage der gebauten Waffen; ersetzt die gebaute Waffe bei jedem Helden,
-     wenn Grundart und (falls angegeben) Form oder Seltenheit passen. */
+     wenn Grundart und (falls angegeben) Form, Seltenheit oder Gestaltungskultur passen. */
   const WEAPONS = () => (SB.assets && SB.assets.data && SB.assets.data.genWeapons) || {};
   RG.weaponName = function (it, culture) {
     const L = WEAPONS();
@@ -8422,7 +8454,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (W.base !== V.base) continue;
       if (W.forms.length && W.forms.indexOf(V.form) < 0 && W.forms.indexOf(V.base) < 0) continue;
       if (W.rarity.length && W.rarity.indexOf(it.rarity) < 0) continue;
-      const sc = (W.forms.indexOf(V.form) >= 0 ? 2 : 0) + (W.rarity.length ? 1 : 0);
+      if (W.culture && W.culture !== V.culture) continue;
+      const sc = (W.forms.indexOf(V.form) >= 0 ? 2 : 0) + (W.rarity.length ? 1 : 0) + (W.culture ? 0.5 : 0);
       if (sc > score) {
         best = nm;
         score = sc;
@@ -18920,7 +18953,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   const withGen = (d) => {
     if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
-    if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] });
+    if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] }, GEAR_V ? { gv: GEAR_V } : {});
     const realm = D.RACES[d.race] && D.RACES[d.race].realm;
     if (realm && UI.use3d && !GEN_FIG[realm]) UI.loadGenFigures(realm);
     return Object.assign(d, { pending: k });
@@ -19014,6 +19047,35 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     return out;
   };
+  // Ausruestung aus Meshy-Modellen je Reich und Heldenart (gen-ausr<reich><art>.js neben der Seite): Ruestungsteile und
+  // Waffen fuer Gegenstaende dieser Gestaltungskultur. Erst die Art des eigenen Helden, dann die uebrigen im Hintergrund.
+  // GEAR_V zaehlt die geladenen Dateien; es steht in der Beschreibung der Figur, damit Portraits und Ansichten neu entstehen.
+  UI.GEAR_FILES = { midgard: ["krieger", "schurke", "jaeger", "magier", "umhang"] };
+  let GEAR_V = 0;
+  const GEAR_LOAD = {};
+  UI.loadGear = function (realm) {
+    const own = UI.S && D.CLASSES[UI.S.cls] ? D.CLASSES[UI.S.cls].arch : null;
+    const rank = (x) => (x === own ? 2 : x === "umhang" ? 1 : 0);
+    const list = (UI.GEAR_FILES[realm] || []).slice().sort((a, b) => rank(b) - rank(a));
+    return list.reduce(
+      (prev, arch) =>
+        prev.then(() => {
+          const id = "ausr" + realm + arch;
+          if (GEAR_LOAD[id]) return GEAR_LOAD[id];
+          return (GEAR_LOAD[id] = SB.assets.loadGen(id).then(
+            () => {
+              GEAR_V++;
+              genChanged();
+            },
+            (e) => {
+              if (!(e && e.missing)) console.warn("Ausruestung nicht geladen", id, e);
+              setTimeout(() => delete GEAR_LOAD[id], RETRY_MS);
+            }
+          ));
+        }),
+      Promise.resolve()
+    );
+  };
   // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet);
   // nach einem Fehlschlag erst nach einer Pause erneut
   const GEN_FIG = {};
@@ -19041,7 +19103,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           UI.genStatus.datei = "bereit";
           if (!UI.genStatus.kern) UI.genStatus.kern = "bereit";
           genChanged();
-          return "bereit";
+          return UI.loadGear(realm).then(() => "bereit");
         },
         (e) => {
           UI.genStatus.datei = e && e.missing ? "fehlt" : "fehler";
@@ -19649,6 +19711,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   let heroView = null;
   let heroViewEl = null;
   let heroViewKey = "";
+  let heroViewStill = "";
   UI.attachHeroView = function (slot, desc, caption) {
     if (!slot) return;
     if (!UI.use3d) {
@@ -19672,8 +19735,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     const k = JSON.stringify(desc);
     if (k !== heroViewKey) {
-      const celebrate = !!heroViewKey;
+      // Jubel nur bei neuer Ausruestung oder neuem Helden, nicht wenn Figur oder Ausruestungsmodelle fertig geladen sind
+      const still = JSON.stringify(Object.assign({}, desc, { gen: 0, genGear: 0, gv: 0, pending: 0 }));
+      const celebrate = !!heroViewKey && still !== heroViewStill;
       heroViewKey = k;
+      heroViewStill = still;
       heroView.set(desc, celebrate);
     }
     return heroView;

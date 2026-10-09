@@ -117,7 +117,8 @@ for (const f of readdirSync(path.join(dir, "assets"))) {
   const m = /^gen-([a-z0-9]+)\.pack$/.exec(f);
   if (!m) continue;
   const buf = readFileSync(path.join(dir, "assets", f));
-  const js = "globalThis.SB_GEN_" + m[1].toUpperCase() + '="' + buf.toString("base64") + '";\n';
+  // mit gzip verkleinert (Ausruestung und Monster sind sonst ein Drittel groesser); A.loadGen entpackt im Browser
+  const js = "globalThis.SB_GEN_" + m[1].toUpperCase() + '="' + gzipSync(buf, { level: 9 }).toString("base64") + '";\n';
   writeFileSync(path.join(out, "gen-" + m[1] + ".js"), js);
   genFiles.push(path.relative(dir, path.join(out, "gen-" + m[1] + ".js")) + " " + (js.length / 1024).toFixed(0) + " KB (eigene Datei, beim Veroeffentlichen als gen-" + m[1] + ".js unter files angeben)");
   const pk = readPack(buf);
