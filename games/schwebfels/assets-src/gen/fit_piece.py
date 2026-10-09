@@ -305,13 +305,15 @@ def _blur(X):
     return (np.vstack([X[:1], X[:-1]]) + 2 * X + np.vstack([X[1:], X[-1:]])) / 4
 
 
-def lift(enc, w2, prof, gap=LIFT_GAP, rounds=5):
+def lift(enc, w2, prof, gap=LIFT_GAP, rounds=5, caps=()):
     """Teil knapp ueber das Koerperprofil heben, als glatte Flaeche je Knochen: je Feld der noetige Hub der Ecken, die
     naeher als gap am Profil oder darin liegen, auf die Nachbarfelder ausgedehnt und geglaettet, dann fuer alle Ecken
     des Knochens auf ihren Abstand addiert. Innen- und Aussenlage duenner Stoffe liegen im selben Feld und bekommen
     denselben Hub. Vorher wurde jede Ecke mit ihrer Umgebung entlang der Hautnormalen geschoben; dabei kreuzten sich
     die Lagen (Kapuzen 7 %, Harnische 12 %, Roben 27 % der sichtbaren Flaeche waren Rueckseiten, jetzt 1,5 bis 3 %).
-    Da das Spiel dasselbe Profil je Koerper nimmt, liegt das Teil auch auf anderen Koerpern ueber der Haut."""
+    Da das Spiel dasselbe Profil je Koerper nimmt, liegt das Teil auch auf anderen Koerpern ueber der Haut.
+    caps: Endknochen (Kopf, Haende, Zehen); an ihrem Ende (Scheitel, Fingerspitzen, Stiefelkappe) liegt das Teil quer
+    zur Achse, dort laeuft der Hub aus, sonst riss er die Kappe auseinander (Loch im Helm, Haar stach durch)."""
     enc = enc.copy()
     for _ in range(rounds):
         moved = False
@@ -319,13 +321,17 @@ def lift(enc, w2, prof, gap=LIFT_GAP, rounds=5):
             sel = enc[:, :, 0] == b
             strong = sel & (w2 > 0.15)
             need = np.maximum(0.0, gap - enc[..., 3][strong])
+            if b in caps:
+                need = need * np.clip((1.1 - enc[..., 1][strong]) / 0.3, 0.0, 1.0)
             if not len(need) or need.max() < 1e-4:
                 continue
             ti, ai = bins(enc[..., 1][strong], enc[..., 2][strong])
             L = np.zeros((NT, NA))
             np.maximum.at(L, (ti, ai), need)
             L = _blur(_blur(_neighbours(L).max(0)))
-            enc[..., 3][sel] += sample(L, enc[..., 1][sel], enc[..., 2][sel])
+            t = enc[..., 1][sel]
+            fade = np.clip((1.1 - t) / 0.3, 0.0, 1.0) if b in caps else 1.0
+            enc[..., 3][sel] += sample(L, t, enc[..., 2][sel]) * fade
             moved = True
         if not moved:
             break
@@ -632,7 +638,7 @@ def main():
     # ueber die Haut heben; Umhaenge haengen frei und werden nicht gehoben (zerknitterte sonst Fell und Saeume), das
     # Spiel hebt sie gleichmaessig vom Ruecken ab (cloakGeo in src/r3d-rigged.js)
     if a.slot != "umhang":
-        enc = lift(enc, w2, prof)
+        enc = lift(enc, w2, prof, caps={tmap[r] for r in ("head", "hand.L", "hand.R", "toe.L", "toe.R") if r in tmap})
         fpos = decode(enc, w2, Fr, prof)
     # belegte Felder je Knochen (Haut darunter ausblenden), um ein Feld erweitert. Helme mit offenem Gesicht
     # (Nasen- und Wangenschutz) wuerden so das ganze Gesicht belegen: dort gilt ein Feld nur als belegt, wenn der Helm
