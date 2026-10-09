@@ -46,7 +46,8 @@ async function newPage(vp, dpr = 1) {
 const shot = (page, name) => page.screenshot({ path: path.join(out, name + ".png") });
 const step = (t) => console.log("→ " + t);
 const open = async (page, id) => {
-  await page.click('#dock [data-id="' + id + '"]');
+  // mit Software-WebGL dauert das erste Bild neuer Portraits (Arena: vier Gegner) bis zu einer halben Minute
+  await page.click('#dock [data-id="' + id + '"]', { timeout: 120000 });
   await page.waitForSelector('#panel[data-id="' + id + '"]');
   await page.waitForTimeout(700);
 };

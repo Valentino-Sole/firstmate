@@ -643,3 +643,33 @@ test("schwere Abzeichen zaehlen mit und werden beim Erreichen vergeben", () => {
   E.checkAch(S);
   assert.ok(S.ach.unbesiegt20);
 });
+
+test("Verliesbosse tauchen selten in der Taverne auf, ab Stufe 10 und ohne Endbosse", () => {
+  const { E, S } = fresh("sturmhuene");
+  const DUNGEONS = load().data.DUNGEONS;
+  const zaehle = (lv) => {
+    S.level = lv;
+    let boss = 0, alle = 0;
+    for (let i = 0; i < 400; i++) {
+      E.refreshOffers(S);
+      for (const o of S.quest.offers) {
+        alle++;
+        if (!o.boss) continue;
+        boss++;
+        const mon = E.questMonster(o);
+        assert.ok(mon && mon.name, "Boss " + o.monster + " aufloesbar");
+        const [, dun, floor] = /^(.+)-(\d+)$/.exec(o.monster);
+        assert.ok(!DUNGEONS.find((d) => d.id === dun).bosses[+floor].final, "kein Endboss in der Taverne");
+        assert.ok(o.item, "Verliesboss bringt immer einen Gegenstand");
+        const foes = E.questFoes(o, E.heroFighter(S));
+        assert.equal(foes.length, 1);
+        assert.ok(foes[0].boss);
+      }
+      assert.ok(S.quest.offers.filter((o) => o.boss).length <= 1, "hoechstens ein Verliesboss je Auswahl");
+    }
+    return boss / alle;
+  };
+  assert.equal(zaehle(8), 0);
+  const q = zaehle(24);
+  assert.ok(q > 0.02 && q < 0.08, "Anteil " + q);
+});

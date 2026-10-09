@@ -147,7 +147,8 @@
   // Ausruestung aus Meshy-Modellen je Reich und Heldenart (gen-ausr<reich><art>.js neben der Seite): Ruestungsteile und
   // Waffen fuer Gegenstaende dieser Gestaltungskultur. Erst die Art des eigenen Helden, dann die uebrigen im Hintergrund.
   // GEAR_V zaehlt die geladenen Dateien; es steht in der Beschreibung der Figur, damit Portraits und Ansichten neu entstehen.
-  UI.GEAR_FILES = { midgard: ["krieger", "schurke", "jaeger", "magier", "umhang"] };
+  const GEAR_ARCHS = ["krieger", "schurke", "jaeger", "magier", "umhang"];
+  UI.GEAR_FILES = { albion: GEAR_ARCHS, midgard: GEAR_ARCHS, hibernia: GEAR_ARCHS };
   let GEAR_V = 0;
   const GEAR_LOAD = {};
   UI.loadGear = function (realm) {
@@ -230,8 +231,11 @@
   };
   const LOOK = {};
   UI.monKey = slug;
+  // nur Monster aus D.MONSTERS haben eine eigene Figur unter ihrer ID (Verliesbosse loest E.monById zwar auch auf,
+  // sie leihen sich aber eine Figur ihrer Familie)
+  const ownFigure = (id) => !!id && SB.data.MONSTERS.some((m) => m.id === id);
   UI.monLook = function (f) {
-    if (!f || (f.id && SB.engine.monById(f.id))) return null;
+    if (!f || ownFigure(f.id)) return null;
     const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
     if (key in LOOK) return LOOK[key];
     const fam = SB.data.MONSTERS.filter((m) => m.arch === f.arch);
@@ -252,7 +256,7 @@
     return (LOOK[key] = best ? best.id : null);
   };
   // visual: eigene Figur (Monster-ID oder Name), look: geliehene Figur, falls es keine eigene gibt
-  const monVisual = (f) => (f.id && SB.engine.monById(f.id) ? f.id : slug(f.name) || f.id);
+  const monVisual = (f) => (ownFigure(f.id) ? f.id : slug(f.name) || f.id);
   UI.fighterDesc = function (f) {
     if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: monVisual(f), look: UI.monLook(f), mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
@@ -626,7 +630,7 @@
     const b = {};
     const a = S.quest.active;
     if (a && a.end <= now) b.taverne = "!";
-    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare) ? "★" : "3";
+    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare || o.boss) ? "★" : "3";
     if (S.guard && S.guard.end <= now) b.leuchtturm = "✓";
     if (!E.busy(S, now) && S.arena.next <= now) b.arena = "!";
     if (E.wellFree(S)) b.brunnen = "1";

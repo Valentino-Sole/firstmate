@@ -1576,8 +1576,10 @@
       speed: 1,
       flashT: 0,
       play(name, dur) {
-        dur = (dur || 0.5) / (model.speed || 1);
-        if (model.inner) model.inner.play(name, dur * (model.speed || 1));
+        // Dauer in Spielzeit: die Kampfbuehne treibt update() schon mit dt * Tempo an (vorher zusaetzlich durch das
+        // Tempo geteilt, bei doppeltem Tempo liefen Bewegungen vierfach schnell und der Schlag kam vor dem Treffer)
+        dur = dur || 0.5;
+        if (model.inner) model.inner.play(name, dur);
         return new Promise((res) => {
           if (model.anim && model.anim.res) model.anim.res();
           model.anim = { name, t: 0, dur, res };

@@ -80,8 +80,13 @@
   };
   const KIND = { idle: "loop", walk: "loop", sit: "loop", drink: "loop", hammer: "loop", victory: "free", defeat: "hold" };
   const BODY_HIT = { hit: 1, evade: 1 };
-  // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden } }
-  RG.MARKS = {};
+  // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden, from:
+  // Sekunden } }. Bei den Schuessen ist die automatische Marke die schnellste Handbewegung (der Griff zum Koecher); das
+  // Spiel zeigte nur Griff und Vorschnellen der Hand, das Geschoss flog dabei schon. Jetzt: ab dem Anheben des Bogens
+  // (from) bis zum Loslassen (hit, gemessen an der Handbewegung des Clips).
+  RG.MARKS = { Archery_Shot: { hit: 3.87, from: 2.1 }, Draw_and_Shoot_from_Back: { hit: 5.8, from: 3.1 } };
+  // Schussrichtung der Bogenclips: so weit links von der Blickrichtung der Figur (Bogenarm zum Ziel), im Bogenmass
+  RG.SHOT_TURN = { Archery_Shot: 1.69, Draw_and_Shoot_from_Back: 1.01 };
   // Waffenlage in der Hand: Drehung um den Griff (twist) und Neigung (tilt) in Bogenmass
   RG.GRIP = { twist: 0, tilt: 0 };
   // Dolche im Rueckhandgriff (Klinge an der Kleinfingerseite): im Kampfstand von Meshy zeigten die Klingen sonst zum
@@ -1042,8 +1047,9 @@
     for (let f = 0; f < n; f++) low = Math.min(low, hv[f * 3 + 1]);
     tracks.push(new T.VectorKeyframeTrack(hips + ".position", times, hv));
     const clip = new T.AnimationClip(name, C.d, tracks);
-    const mk = RG.MARKS[name] || {};
-    return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
+    // Marken nur, wenn der Clip so lang ist (Pruefclips und Ersatzclips gleichen Namens sind kuerzer)
+    const mk = RG.MARKS[name] && RG.MARKS[name].hit < C.d ? RG.MARKS[name] : {};
+    return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], from: mk.from || 0, hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
   }
 
   let QH = null, QW = null, QU = null, QI = null;
@@ -1081,14 +1087,16 @@
     const c = this.pick(action);
     if (!c) return this.settle(this.m.hold || "idle");
     const kind = KIND[action] || "impact";
-    let rate = this.m.speed || 1;
+    // Spielzeit: die Kampfbuehne treibt den Mischer schon mit dem Tempo an
+    let rate = 1;
     let t0 = 0;
     let wait = 0;
     if (kind === "impact") {
-      // Ausholen beschleunigen oder kuerzen, bei sehr kurzem Ausholen spaeter beginnen
+      // Ausholen beschleunigen oder kuerzen, bei sehr kurzem Ausholen spaeter beginnen; from: fruehester Startpunkt
       const hit = c.hit[BODY_HIT[action] ? 1 : 0];
-      rate = Math.min(1.7, Math.max(0.6, hit / Math.max(dur, 0.05)));
-      t0 = Math.max(0, hit - rate * dur);
+      const from = c.from < hit ? c.from : 0;
+      rate = Math.min(1.7, Math.max(0.6, (hit - from) / Math.max(dur, 0.05)));
+      t0 = Math.max(from, hit - rate * dur);
       wait = Math.max(0, dur - (hit - t0) / rate);
     } else if (action === "walk") rate *= 1.15;
     const p = { action, kind, c, rate, t0 };
@@ -1115,7 +1123,7 @@
     const cur = this.cur;
     if (cur && cur.action === action && cur.kind !== "impact" && cur.kind !== "free") return;
     if (cur && action === "defeat") return;
-    if (cur) cur.act.timeScale = this.m.speed || 1;
+    if (cur) cur.act.timeScale = 1;
     // Schlag, Treffer oder Ausweichen schwingen nach dem Spielmoment noch kurz aus (hoechstens 0,6 s), dann Ruhe
     if (cur && (cur.kind === "impact" || cur.kind === "free") && cur.action !== action) {
       if (cur.endAt == null) cur.endAt = this.clock;
@@ -1134,7 +1142,7 @@
     act.reset();
     act.setLoop(T.LoopRepeat, Infinity);
     act.clampWhenFinished = false;
-    act.timeScale = this.m.speed || 1;
+    act.timeScale = 1;
     this.fade(act, 0.3);
     this.cur = { action, act, kind: "loop", c };
   };
@@ -1177,6 +1185,67 @@
     }
     W.quaternion.copy(qh.invert().multiply(target));
   };
+  /* Armbrust beim Schuss: Schaft von der rechten Hand (an der Wange) zur linken (vorgestreckt), wie angelegt; der Kolben
+     liegt knapp hinter der rechten Hand. Die Bogenclips halten den Bogen links; ohne Ausrichtung schwang die Armbrust in
+     der Zughand ueber die Schulter. Gebaute und erzeugte Armbrueste liegen gleich: Schaft entlang +x, Bogen (Prod) vorn
+     bei +x, Griff im Ursprung (assets-src/gen/weapon.py, F.armbrust in src/r3d-items-weapons.js). */
+  let VL = null, VR = null, MB = null, VS = null;
+  // Ausdehnung einer Waffe entlang ihres Schafts (einmal je Waffe): tip vorn (Bolzenspitze), back hinten (Kolben)
+  RG.weaponExtent = function (W) {
+    if (W.userData.ext) return W.userData.ext;
+    W.updateWorldMatrix(true, true);
+    const inv = new T.Matrix4().copy(W.matrixWorld).invert();
+    const box = new T.Box3();
+    const v = new T.Vector3();
+    W.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      const bb = o.geometry.boundingBox;
+      const M = new T.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+      for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) box.expandByPoint(v.set(x, y, z).applyMatrix4(M));
+    });
+    return (W.userData.ext = box.isEmpty() ? { tip: 0.4, back: -0.4 } : { tip: box.max.x, back: box.min.x });
+  };
+  Player.prototype.aimCrossbow = function () {
+    const W = this.m.parts.weapon;
+    if (!W || this.m.weaponBase !== "armbrust") return;
+    if (!W.userData.q0) {
+      W.userData.q0 = W.quaternion.clone();
+      W.userData.p0 = W.position.clone();
+    }
+    const B = this.m.parts.B || {};
+    const aiming = this.cur && this.cur.action === "shoot" && B["hand.L"] && B["hand.R"] && W.parent;
+    if (!aiming) {
+      W.quaternion.copy(W.userData.q0);
+      W.position.copy(W.userData.p0);
+      return;
+    }
+    if (!VL) {
+      VL = new T.Vector3();
+      VR = new T.Vector3();
+      VS = new T.Vector3();
+      MB = new T.Matrix4();
+    }
+    B["hand.L"].getWorldPosition(VL);
+    B["hand.R"].getWorldPosition(VR);
+    const x = VL.sub(VR);
+    if (x.lengthSq() < 1e-6) return;
+    x.normalize();
+    const ext = RG.weaponExtent(W);
+    const up = new T.Vector3(0, 1, 0).addScaledVector(x, -x.y).normalize();
+    const z = new T.Vector3().crossVectors(x, up);
+    MB.makeBasis(x, up, z);
+    const qT = QW.setFromRotationMatrix(MB);
+    const P = W.parent;
+    P.updateWorldMatrix(true, false);
+    W.quaternion.copy(P.getWorldQuaternion(QU).invert().multiply(qT));
+    // Faust der rechten Hand (Lage des Griffs ohne Ausrichtung)
+    P.localToWorld(VR.copy(W.userData.p0));
+    // Griff so weit vor die rechte Hand, dass der Kolben 8 cm hinter ihr endet (Wange), hoechstens 35 cm
+    const sc = W.getWorldScale(VS).x;
+    const d = Math.max(0, Math.min(0.35, -ext.back * sc - 0.08));
+    W.position.copy(P.worldToLocal(VR.addScaledVector(x, d)));
+  };
   Player.prototype.tick = function (dt) {
     const m = this.m;
     const a = m.anim;
@@ -1196,6 +1265,7 @@
     // steife Knochen (Kopf und Hals grosser Monster): Bewegung der Heldenbewegungen nur zum kleinen Teil uebernehmen
     if (this.stiff) for (const b of this.stiff) b.quaternion.slerp(QI, 0.85);
     this.fixStaff();
+    this.aimCrossbow();
     // Sitzen: Huefte auf Bankhoehe wie bei den alten Figuren (Huefte 0,5 ueber dem Boden)
     const P = m.parts;
     const sit = this.cur && (this.cur.action === "sit" || this.cur.action === "drink");

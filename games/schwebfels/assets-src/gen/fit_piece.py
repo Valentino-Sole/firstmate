@@ -465,6 +465,7 @@ def main():
     ap.add_argument("--paar", action="store_true")
     ap.add_argument("--wachsen", type=int, default=6, help="Kopfteile: hoechstens so viele Schritte zu 1,5 %% wachsen (Helme 6, weite Kapuzen und Masken 40)")
     ap.add_argument("--kopf", default="box", choices=["box", "oben"], help="Kopfteil: ganzen Kopfbereich fuellen oder oben anlegen (Kappe, Krone)")
+    ap.add_argument("--innen", action="store_true", help="dunkel bemalte Innenseiten in der Farbe der Aussenseite (innen.py; fuer Meshys Neutexturierung)")
     a = ap.parse_args()
 
     z = np.load(a.body)
@@ -657,6 +658,10 @@ def main():
         grid = grid | np.roll(grid, 1, 1) | np.roll(grid, -1, 1)
         grid = grid | np.vstack([grid[:1], grid[:-1]]) | np.vstack([grid[1:], grid[-1:]])
         occ[names[b]] = grid.astype(np.uint8)
+
+    if a.innen and a.slot != "umhang":
+        import innen
+        tex = innen.paint(fpos, ptri, puv, tex, innen.interior(fpos, ptri, bpos, bidx))
 
     used = sorted(set(order.ravel().tolist()))
     remap = {b: i for i, b in enumerate(used)}

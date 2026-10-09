@@ -2972,20 +2972,27 @@
       const home = new T.Vector3(side * sep, 0, 0.4);
       m.obj.position.copy(home);
       m.obj.rotation.y = side < 0 ? PI / 2 - 0.5 : -PI / 2 + 0.5;
-      const box3 = new T.Box3().setFromObject(m.obj);
+      let box3 = new T.Box3().setFromObject(m.obj);
       const hgt = box3.max.y - box3.min.y;
-      if (hgt > 3.8) {
-        const s = 3.8 / hgt;
+      // Bestien (grosse Drachen) duerfen hoeher sein als Menschenartige; die Kamera hat dafuer Platz nach oben
+      const maxH = m.parts && m.parts.beast ? 4.4 : 3.8;
+      if (hgt > maxH) {
+        const s = maxH / hgt;
         m.obj.scale.multiplyScalar(s);
         m.headY *= s;
+        box3 = new T.Box3().setFromObject(m.obj);
       }
+      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte)
+      const front = side < 0 ? box3.max.x - home.x : home.x - box3.min.x;
       const sh = KUL ? new T.Mesh(new T.CircleGeometry(1, 24), softShadowMat()) : new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
       sh.rotation.x = -PI / 2;
       sh.position.set(home.x, 0.03, home.z);
-      sh.scale.setScalar(desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9);
+      // Schatten nach der Grundflaeche (grosse Drachen), hoechstens 3 m
+      const foot = Math.max(box3.max.x - box3.min.x, box3.max.z - box3.min.z) * 0.38;
+      sh.scale.setScalar(Math.min(3, Math.max(foot, desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9)));
       scene.add(sh);
       scene.add(m.obj);
-      return { m, home, side, shadow: sh, desc };
+      return { m, home, side, shadow: sh, desc, front };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
 
@@ -3206,8 +3213,10 @@
       f.aura = null;
       if (!color) return;
       const a = grp();
-      a.add(R.haloSprite(color, 3.4, 0.35, [0, 1.2, 0]));
-      a.add(mesh(G.torus(0.8, 0.03, PI * 2, 4, 40), glow(color, 0.6), { p: [0, 0.08, 0], r: [PI / 2, 0, 0] }));
+      // mit der Groesse des Kaempfers (grosse Drachen)
+      const H = Math.max(1.8, f.m.height || 1.8);
+      a.add(R.haloSprite(color, 3.4 * (H / 1.8), 0.35, [0, 1.2 * (H / 1.8), 0]));
+      a.add(mesh(G.torus(0.8, 0.03, PI * 2, 4, 40), glow(color, 0.6), { p: [0, 0.08, 0], r: [PI / 2, 0, 0], s: Math.max(1, f.shadow.scale.x / 0.9) }));
       scene.add(a);
       f.aura = a;
     }
@@ -3240,17 +3249,33 @@
         f.stars = null;
       }
     }
+    // Abschusspunkt: Pfeil am Bogen (Griff in der linken Faust), Bolzen an der Spitze der Armbrust; sonst wie bisher
+    // vor der Brust
+    const VTMP = new T.Vector3();
+    function launchPoint(A, kind) {
+      // Bestien speien aus dem Kopf (grosse Drachen haben ihn weit vorn)
+      const hd = A.m.parts && A.m.parts.beast && A.m.parts.B && A.m.parts.B.head;
+      if (hd) return hd.getWorldPosition(new T.Vector3());
+      const W = A.m.parts && A.m.parts.weapon;
+      if (!W || (kind !== "arrow" && kind !== "bolt")) return null;
+      W.updateWorldMatrix(true, true);
+      // Bolzen liegt etwa 9 cm ueber dem Griff auf dem Schaft
+      if (kind === "bolt") return R.rigged && R.rigged.weaponExtent ? W.localToWorld(new T.Vector3(R.rigged.weaponExtent(W).tip, 0.09, 0)) : null;
+      return W.getWorldPosition(new T.Vector3());
+    }
     async function projectile(A, Bf, kind, color) {
-      const start = new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
+      const start = launchPoint(A, kind) || new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
       const end = new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z);
+      const shaft = kind === "arrow" || kind === "spear" || kind === "bolt";
       let obj;
-      if (kind === "arrow" || kind === "spear") {
+      if (shaft) {
         obj = grp();
-        const L = kind === "spear" ? 1.6 : 1.0;
-        obj.add(mesh(G.cyl(0.022, 0.022, L, 5), pm("wood", "#c9b89a"), { r: [0, 0, PI / 2] }));
-        obj.add(mesh(G.cone(0.06, 0.2, 5), pm("metal", "#c8ced6"), { p: [L / 2 + 0.08, 0, 0], r: [0, 0, -PI / 2] }));
-        obj.add(spark(color, 0.6));
-        if (A.side > 0) obj.rotation.y = PI;
+        const L = kind === "spear" ? 1.6 : kind === "bolt" ? 0.45 : 0.85;
+        const r = kind === "bolt" ? 0.028 : 0.02;
+        obj.add(mesh(G.cyl(r, r, L, 5), pm("wood", "#c9b89a"), { r: [0, 0, PI / 2] }));
+        obj.add(mesh(G.cone(kind === "bolt" ? 0.05 : 0.055, 0.16, 5), pm("metal", "#c8ced6"), { p: [L / 2 + 0.07, 0, 0], r: [0, 0, -PI / 2] }));
+        if (kind !== "spear") obj.add(mesh(G.cone(0.05, 0.12, 3), pm("cloth", "#e8e2d4"), { p: [-L / 2 + 0.05, 0, 0], r: [0, 0, -PI / 2] }));
+        obj.add(spark(color, 0.5));
       } else {
         obj = grp();
         obj.add(mesh(G.sph(kind === "star" ? 0.3 : 0.18, 12, 10), new T.MeshBasicMaterial({ color: col("#ffffff") })));
@@ -3259,11 +3284,21 @@
       obj.position.copy(start);
       scene.add(obj);
       const trail = [];
-      await tween(kind === "arrow" ? 0.26 : 0.36, (u) => {
+      const arc = kind === "bolt" ? 0.12 : kind === "arrow" ? 0.35 : kind === "spear" ? 0.5 : 0.3;
+      const prev = start.clone();
+      const XAX = new T.Vector3(1, 0, 0);
+      await tween(kind === "bolt" ? 0.2 : kind === "arrow" ? 0.26 : 0.36, (u) => {
+        prev.copy(obj.position);
         obj.position.lerpVectors(start, end, u);
-        obj.position.y += Math.sin(u * PI) * (kind === "arrow" || kind === "spear" ? 0.5 : 0.3);
+        obj.position.y += Math.sin(u * PI) * arc;
+        // Schaft entlang der Flugbahn (vorher nur seitlich gedreht, der Pfeil flog waagerecht durch den Bogen)
+        if (shaft) {
+          const v = VTMP.copy(obj.position).sub(prev);
+          if (v.lengthSq() > 1e-8) obj.quaternion.setFromUnitVectors(XAX, v.normalize());
+          else if (u === 0) obj.quaternion.setFromUnitVectors(XAX, VTMP.copy(end).sub(start).normalize());
+        }
         if (Math.random() < 0.7) {
-          const p = spark(color, kind === "arrow" ? 0.15 : 0.35);
+          const p = spark(color, shaft ? 0.15 : 0.35);
           p.position.copy(obj.position);
           scene.add(p);
           trail.push(p);
@@ -3436,9 +3471,19 @@
       const bowLike = isHero && (wb === "bogen" || wb === "armbrust" || wb === "speer");
       const spell = (isHero && A.m.arch === "magier") || (!isHero && A.m.ranged);
       if (bowLike || spell) {
+        // Bogen und Armbrust: in Schussstellung drehen (die Bogenclips schiessen zur Seite des Bogenarms), anheben,
+        // zielen; das Geschoss fliegt erst beim Loslassen und vom Bogen oder der Armbrust aus
+        const archer = bowLike && wb !== "speer" && A.m.parts && A.m.parts.rig && R.rigged;
+        const yaw0 = A.m.obj.rotation.y;
+        const turn = archer ? R.rigged.SHOT_TURN.Archery_Shot : 0;
+        if (archer) {
+          const aim = (A.side < 0 ? PI / 2 : -PI / 2) - turn;
+          tween(0.3, (u) => (A.m.obj.rotation.y = yaw0 + (aim - yaw0) * (1 - (1 - u) * (1 - u))));
+        }
         for (let i = 0; i < ev.hits.length; i++) {
-          A.m.play(bowLike ? "shoot" : "cast", 0.5);
-          await wait(bowLike ? 0.3 : 0.3);
+          const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
+          A.m.play(bowLike ? "shoot" : "cast", D);
+          await wait(archer ? D : 0.3);
           if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell");
           if (special && SFX.kind === "beam") {
             await beam(A, Bf, SFX.color);
@@ -3446,15 +3491,19 @@
             roots(Bf, SFX.color);
             await wait(0.35);
           } else {
-            const kind = bowLike ? (wb === "speer" ? "spear" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
+            const kind = bowLike ? (wb === "speer" ? "spear" : wb === "armbrust" ? "bolt" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
             await projectile(A, Bf, kind, special ? SFX.color : A.m.projColor || "#c47bff");
           }
           await impact(ev, A, Bf, ev.hits[i], i);
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
+        if (archer) {
+          const yaw1 = A.m.obj.rotation.y;
+          tween(0.35, (u) => (A.m.obj.rotation.y = yaw1 + (yaw0 - yaw1) * u));
+        }
       } else {
         // Bestien halten fuer ihren Ansprung weiter vor dem Helden (standOff), sonst steht die Schnauze schon am Gegner
-        const gap = Bf.desc.kind === "monster" ? 1.9 : Math.max(1.5, A.m.standOff || 0);
+        const gap = Bf.desc.kind === "monster" ? Math.max(1.9, Bf.front + 0.7) : Math.max(1.5, A.m.standOff || 0);
         const target = Bf.home.x - Bf.side * gap;
         const ST = A.m.strike;
         const from = A.home.x;

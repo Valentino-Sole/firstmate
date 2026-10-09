@@ -144,6 +144,9 @@
     };
   }
 
+  // Groesse je Gestalt: Drachen waren mit 1,6 bis 1,7 m so hoch wie ein Pferd (Wunsch des Kapitaens: viel groesser),
+  // Spinnen etwas groesser
+  BE.SIZE = { drache: 2, spinne: 1.25 };
   BE.build = function (m) {
     T = R.T();
     const fam = BE.familyOf(m.arch, m.visual);
@@ -181,7 +184,7 @@
     body.add(mesh);
     const by = {};
     bones.forEach((b) => (by[b.name] = b));
-    const s = (m.boss ? (m.final ? 1.35 : 1.18) : 1) * (meta.scale || 1);
+    const s = (m.boss ? (m.final ? 1.35 : 1.18) : 1) * (meta.scale || 1) * (BE.SIZE[meta.form] || 1);
     body.scale.setScalar(s);
     const P = { beast: true, fam, body, mesh, B: by, bones, meta };
     const model = R.makeModel(root, P, "monster");
@@ -595,6 +598,26 @@
     return [t1, t2, t3];
   }
 
+  /* Drachen fliegen ab und zu (Wunsch des Kapitaens): in Ruhe, beim Getroffenwerden und beim Ausweichen heben sie in
+     festen Abstaenden (je Drache versetzt) fuer einige Sekunden ab und schweben knapp ueber dem Boden, gut ein Viertel
+     ihrer Hoehe; so bleiben Kopf und Brust in Reichweite jeder Waffe. Zum Angriff stossen sie herab, beim Laufen und
+     bei der Niederlage gehen sie zu Boden. In der Luft liegen die Pfoten am Rumpf, die Fluegel schlagen kraeftig. */
+  BE.FLY = { period: 15, from: 7, to: 13, lift: 0.28 };
+  const FLY_ACT = { idle: 1, hit: 1, block: 1, evade: 1, cast: 1, victory: 1 };
+  function dragonFly(P, name, t) {
+    if (P.flyOff == null) {
+      P.flyOff = Math.random() * BE.FLY.period;
+      P.fly = 0;
+      P.flyT = t;
+    }
+    const ph = (t + P.flyOff) % BE.FLY.period;
+    const air = !!FLY_ACT[name] && ph >= BE.FLY.from && ph < BE.FLY.to;
+    const dt = Math.max(0, Math.min(0.2, t - P.flyT));
+    P.flyT = t;
+    P.fly += ((air ? 1 : 0) - P.fly) * Math.min(1, dt * (air ? 1.6 : 2.6));
+    return P.fly;
+  }
+
   function poseQuad(m, name, u) {
     const P = m.parts;
     const Qr = P.quad;
@@ -603,6 +626,7 @@
     if (P.hitSide == null) P.hitSide = Math.random() < 0.5 ? -1 : 1;
     if (name !== "hit" && name !== "block") P.hitSide = null;
     const Q = quadPose(name, u, t, P.hitSide || 1, P.pounce || 0.5);
+    const fly = P.meta.form === "drache" && Qr.wings.length ? dragonFly(P, name, t) : 0;
     if (name === "defeat" && Qr.wings.length) {
       // Drachen kippen nicht auf die Seite (ein Fluegel stuende in den Himmel, der andere im Boden), sondern sinken
       // auf den Bauch: Beine knicken ein, Hals und Kopf legen sich ab, die Fluegel fallen schlaff herab
@@ -618,6 +642,21 @@
       for (const k of LEGS) {
         Q.legs[k].body = e;
         Q.legs[k].flex = (k[0] === "F" ? -0.5 : 0.4) * e;
+      }
+    }
+    if (fly > 0.001) {
+      // Hoehe in Metern (der Rumpf ist mit der Groesse der Gestalt skaliert), leichtes Auf und Ab im Fluegeltakt
+      const H = BE.FLY.lift * (P.meta.height || 1.6) * P.body.scale.x;
+      Q.y += fly * H * (1 + 0.06 * Math.sin(t * 5.5 - 1.2));
+      Q.neck -= 0.12 * fly;
+      Q.tail -= 0.1 * fly;
+      for (const k of LEGS) {
+        const q = Q.legs[k];
+        const f = k[0] === "F";
+        q.dyB = q.dyB + (f ? 0.14 : 0.1) * fly * (1 - q.body);
+        q.dzB = q.dzB + (f ? 0.1 : -0.06) * fly * (1 - q.body);
+        q.flex += (f ? -0.7 : 0.5) * fly * (1 - q.body);
+        q.body = Math.max(q.body, 0.85 * fly);
       }
     }
     const by = Qr.by;
@@ -668,7 +707,17 @@
       const th = solveLeg(l, tip, a3);
       for (let i = 0; i < 3; i++) l.b[i].quaternion.setFromAxisAngle(XAX, th[i]);
     }
-    if (Qr.wings.length) poseWings(Qr.wings, wingBeat(name, u, t));
+    if (Qr.wings.length) {
+      const w = wingBeat(name, u, t);
+      if (fly > 0.001) {
+        // Flugschlag: weit ausholen, Spitzen gestreckt
+        const sn = Math.sin(t * 5.5);
+        w.a += (0.12 + 0.6 * sn - w.a) * fly;
+        w.b += (0.45 * Math.sin(t * 5.5 - 0.7) + 0.05 - w.b) * fly;
+        w.fold += (0.05 - w.fold) * fly;
+      }
+      poseWings(Qr.wings, w);
+    }
   }
   let XAX = null;
 

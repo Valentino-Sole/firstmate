@@ -42,7 +42,7 @@ Auf der Insel ist Leben: Leute trinken vor der Taverne aus Krügen, ein Spielman
 | Vorbild | Schwebfels | Eigene Note |
 |---|---|---|
 | 2D-Comicgrafik | prozedurale **3D-Welt** mit handgemalt wirkenden Texturen | Heimatinsel des eigenen Reiches im Nebelmeer mit Steinkreis, Wasserfällen ins Nichts, Glühwürmchen, Himmelswal; **automatischer Tag-Nacht-Wechsel** (20 Minuten, echte Uhrzeit, immer Tag oder immer Nacht) mit Mond, Sternen und Polarlicht |
-| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; Gegner aus der Tierwelt der eigenen Heimatinsel; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen |
+| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; Gegner aus der Tierwelt der eigenen Heimatinsel; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen; ab Stufe 10 selten ein **Verliesboss**, der aus einem schon geöffneten Verlies entkommen ist (je Angebot 5 %, höchstens einer je Auswahl, keine Endbosse) |
 | Bier gegen Pilze | Nebelmet gegen **Wolkenperlen** | Perlen gibt es nur im Spiel, kein Echtgeld; Perlen werden nie ungefragt ausgegeben |
 | Charakterbild mit Slots | **Charakterbogen** im gleichen Aufbau | Große Erfahrungsleiste mit „noch X EP bis Stufe Y“, in der Kopfleiste immer sichtbar; **Vergleichstabelle** beim Anlegen (Wert für Wert und die eigenen Werte danach) |
 | Aussehen | Haut, Haare, Bart, Augen (auch glühend), **Gesichtstätowierungen** in sieben Mustern und Farben (teils leuchtend, kräftig gezeichnet), Narben, Hörner | Jederzeit kostenlos änderbar |
@@ -83,6 +83,7 @@ Vorbild ist Dark Age of Camelot: Dort verteilt jede Klasse Punkte auf eigene Spe
 - `tests/balance.mjs`: Klassen-Duelle im Mittel zwischen etwa 44 und 58 %; Aufträge und Dungeon-Bosse für alle zwölf Klassen.
 - `tests/progression.mjs`: simulierter Spieler; alle Grundarten erreichen Stufe 30 nach rund 12 bis 15 Spielstunden reinem Tatendrang, ohne Abwärtsspirale.
 - Hordenaufträge: gemütlich fast immer, ordentlich rund 90 %, halsbrecherisch bewusst schwer (25 bis 50 %) bei 1,5-facher Belohnung.
+- Verliesbosse in der Taverne: ordentlich oder halsbrecherisch, Stufe des Helden, Lebenspunkte eines Bosses; 1,8-fache Belohnung und immer ein Gegenstand ab selten. Mit Talenten (`tests/quests.mjs`, 0.73): ordentlich rund 85 % Siege mit gut einem Drittel Leben, halsbrecherisch 47 % (Stufe 10) bis 75 % (Stufe 31).
 - Gegner in Aufträgen, Chronik und Nachtjagd holen drei Viertel des Vorsprungs des Helden vor dem Modellhelden auf (`E.ADAPT_FOLLOW`); die Stärke wird gemessen (`E.heroStrength`: Gegnerstärke, bei der der Held so abschneidet wie der Modellheld), damit Talente, Rüstung und Tränke zählen. Stufe 31 mit Talenten und guter Ausrüstung (`tests/quests.mjs 31 1.2`, 0.72): Horde gemütlich etwa 67 % Leben übrig, ordentlich 50 %, halsbrecherisch rund 85 % Siege mit gut einem Drittel Leben.
 - Chronik-Kapitel: auf der Kapitelstufe mit durchschnittlicher Ausrüstung meist 60 bis 100 %.
 - Nachtjagd: mit durchschnittlicher Ausrüstung je nach Klasse und Stufe etwa 55 bis 95 %.

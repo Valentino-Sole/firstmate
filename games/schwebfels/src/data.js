@@ -677,6 +677,13 @@
     { t: "Das Nest in {o}", x: "Seltener Auftrag: {p} hat in {o} ein Nest gefunden, und es ist nicht leer. Räum es aus, bevor {m} zurückkehrt. Er kehrt zurück." },
   ];
 
+  // Selten bricht ein Verliesboss aus und taucht in der Taverne auf ({m}: sein Name, {d}: das Verlies, aus dem er kommt)
+  const BOSS_QUESTS = [
+    { t: "Kopfgeld: {m}", x: "Verliesboss: Aus dem Verlies „{d}“ ist {m} entkommen und treibt sich in {o} herum. {p} zahlt gut, wenn du dich darum kümmerst, und zwar endgültig." },
+    { t: "Ausbruch aus der Tiefe", x: "Verliesboss: Die Siegel von „{d}“ haben nachgegeben. {m} ist heraufgestiegen und lauert in {o}. Ein Verliesboss im Tageslicht, das gibt es nicht oft." },
+    { t: "Besuch aus „{d}“", x: "Verliesboss: {p} schwört, in {o} {m} gesehen zu haben, leibhaftig und schlecht gelaunt. Wer das erledigt, muss in der Taverne nie wieder zahlen. Fast nie." },
+  ];
+
   const NPC_FIRST = ["Brakus", "Mira", "Tjark", "Ilva", "Gorm", "Senna", "Fenja", "Okko", "Rurik", "Wenzel", "Lotta", "Bodo",
     "Hilde", "Quirin", "Yara", "Zeno", "Pim", "Runa", "Tamo", "Edda", "Knut", "Fiete", "Smilla", "Hauke", "Ida", "Jorin",
     "Malte", "Nele", "Rasmus", "Svea", "Ole", "Greta", "Hinnerk", "Wiebke", "Arvid", "Talea", "Kalle", "Frieda", "Bjarne", "Insa",
@@ -801,7 +808,7 @@
   SB.data = {
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
-    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
+    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
     POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS,
   };
 })();

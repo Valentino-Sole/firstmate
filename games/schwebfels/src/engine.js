@@ -1142,10 +1142,55 @@
     if (list.length < 3) list = D.MONSTERS.slice().sort((a, b) => Math.abs((a.lv[0] + Math.min(a.lv[1], 60)) / 2 - L) - Math.abs((b.lv[0] + Math.min(b.lv[1], 60)) / 2 - L)).slice(0, 6);
     return list;
   };
+  // Verliesbosse in der Taverne (Wunsch des Kapitaens: selten ein Boss aus den Verliesen, damit es nicht eintoenig
+  // wird): je Angebot mit dieser Wahrscheinlichkeit, hoechstens einer je Auswahl, nur Bosse aus Verliesen, die die Stufe
+  // schon oeffnet, ohne die Endbosse (die bleiben dem Verlies vorbehalten). Er kaempft wie ein Gegner der Stufe mit den
+  // Lebenspunkten eines Bosses; Belohnung wie ein seltener Auftrag und mehr, immer mit Gegenstand.
+  E.C.BOSS_OFFER = 0.05;
+  E.C.BOSS_OFFER_LV = 10;
+  E.tavernBosses = (L) => {
+    const out = [];
+    for (const D0 of D.DUNGEONS) if (L >= D0.unlock) D0.bosses.forEach((b, f) => !b.final && out.push(E.dungeonMon(D0.id + "-" + f)));
+    return out;
+  };
+  function makeBossOffer(S, r, tier, diff, boss) {
+    const L = S.level;
+    const D0 = D.DUNGEONS.find((d) => d.id === boss.dungeon);
+    const tpl = U.pick(r, D.BOSS_QUESTS);
+    const place = U.pick(r, D.PLACES);
+    const person = U.pick(r, D.PERSONS);
+    const fill = (s) => s.replace(/\{m\}/g, boss.name).replace(/\{d\}/g, D0.name).replace(/\{o\}/g, place).replace(/\{p\}/g, person);
+    const energy = tier.energy + 4;
+    const ef = energy / 10;
+    const dm = DIFF[diff].reward * 1.8;
+    const bonus = E.bestiaryBonus(S);
+    // Stufe des Helden, auch halsbrecherisch (Boss-Lebenspunkte und hoehere Staerke reichen als Wagnis)
+    const mlevel = Math.max(1, L);
+    const offer = {
+      id: U.uid(), tpl: tpl.t, title: fill(tpl.t), text: U.cap(fill(tpl.x)), place, tier: tier.id,
+      sec: U.ri(r, tier.sec[0], tier.sec[1]) + 20, energy, diff, rare: false, boss: D0.id, monster: boss.id, mlevel,
+      waves: [{ monster: boss.id, mlevel, power: DIFF[diff].power, boss: true }],
+      xp: Math.max(5, Math.round(E.xpNeed(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
+      gold: Math.max(3, Math.round(E.goldBase(L) * ef * dm * U.rf(r, 0.85, 1.15) * bonus * (1 + E.goldBonus(S)))),
+      item: E.makeItem(r, { level: L + 1, cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + 1.2 + E.lootBoost(S), minRarity: "selten" }),
+      perle: r() < 0.35 + 0.05 * diff ? 1 : 0,
+      seed: Math.floor(r() * 1e9),
+    };
+    return offer;
+  }
   E.makeOffer = function (S, r, idx, used) {
     const L = S.level;
     const tier = TIERS[idx % 3 === 0 ? U.ri(r, 0, 1) : idx % 3 === 1 ? 1 : U.ri(r, 1, 2)];
     const diff = U.wpick(r, [{ d: 1, w: 38 }, { d: 2, w: 42 }, { d: 3, w: 20 }]).d;
+    if (L >= E.C.BOSS_OFFER_LV && !used.boss && r() < E.C.BOSS_OFFER) {
+      const bosses = E.tavernBosses(L).filter((b) => used.mons.indexOf(b.id) < 0);
+      if (bosses.length) {
+        const boss = U.pick(r, bosses);
+        used.boss = true;
+        used.mons.push(boss.id);
+        return makeBossOffer(S, r, tier, Math.max(2, diff), boss);
+      }
+    }
     const rare = L >= 3 && r() < 0.08 + 0.04 * diff;
     const pool = E.monstersFor(L, S.realm);
     let mon = U.pick(r, pool);
@@ -1213,7 +1258,14 @@
     a.end = now;
     return { ok: true };
   };
-  E.monById = (id) => D.MONSTERS.find((m) => m.id === id);
+  // Verliesbosse haben die Kennung <verlies>-<stockwerk> (wie in E.bossFor)
+  E.dungeonMon = function (id) {
+    const m = /^(.+)-(\d+)$/.exec(id || "");
+    const D0 = m && D.DUNGEONS.find((d) => d.id === m[1]);
+    const b = D0 && D0.bosses[+m[2]];
+    return b ? { id, name: b.name, arch: b.arch, color: b.color, accent: b.accent, dungeon: D0.id } : null;
+  };
+  E.monById = (id) => D.MONSTERS.find((m) => m.id === id) || E.dungeonMon(id);
   E.questMonster = (o) => E.monById(o.monster);
   /* Staerke des Helden als Faktor auf die Gegnerstaerke: gesucht ist die Staerke zweier fester Pruefgegner, bei der
      der Held so abschneidet wie der Modellheld seiner Klasse (gewoehnliche Ausruestung, keine Talente) bei Staerke 1.
@@ -1299,6 +1351,7 @@
         S.stats.hordes++;
         E.grantAch(S, "horde");
       }
+      if (o.boss) S.stats.tavernBosses = (S.stats.tavernBosses || 0) + 1;
       if (o.diff === 3) S.stats.hardWins++;
       S.stats.streak++;
       if (fight.hero && fight.chain.hpLeft <= fight.hero.maxHp * 0.05) E.grantAch(S, "knapp");
@@ -1806,7 +1859,7 @@
   E.bossFor = function (d, floor) {
     const D0 = D.DUNGEONS[d];
     const b = D0.bosses[floor];
-    const mon = { id: D0.id + "-" + floor, name: b.name, arch: b.arch, color: b.color, accent: b.accent };
+    const mon = E.dungeonMon(D0.id + "-" + floor);
     return { mon, L: D0.base + floor, power: 0.95 + 0.02 * floor + (b.final ? 0.05 : 0), final: !!b.final };
   };
   E.dungeonFight = function (S, d, now) {

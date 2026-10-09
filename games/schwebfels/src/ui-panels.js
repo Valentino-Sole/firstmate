@@ -76,7 +76,7 @@
         const mon = E.questMonster(o);
         const fin = a.end <= now;
         h +=
-          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
+          '<div class="quest' + (o.rare || o.boss ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare || !!o.boss), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
           '<div class="progress" data-from="' + a.start + '" data-to="' + a.end + '"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="foot">' +
           (fin
@@ -91,16 +91,19 @@
         const mon = E.questMonster(o);
         const c = estimate(hero, E.questFoes(o, hero), o.id);
         const dur = E.questDuration(s, o);
+        const bossDef = o.boss && D.DUNGEONS.find((d) => d.id === o.boss);
         const waves = o.rare
           ? '<div class="waves"><span class="tag rare">Seltener Auftrag</span> ' + o.waves.length + " Gegner nacheinander, ohne Pause:" + '<div class="wavepics">' + o.waves.map((w, k) => '<span class="wp' + (w.boss ? " boss" : "") + '" title="' + esc(E.monById(w.monster).name) + '">' + UI.portrait(UI.monDesc(E.monById(w.monster), w.boss), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div></div>"
-          : "";
+          : bossDef
+            ? '<div class="waves"><span class="tag rare">Verliesboss</span> ' + esc(bossDef.name) + ": kämpft mit den Kräften eines Bosses</div>"
+            : "";
         h +=
-          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
+          '<div class="quest' + (o.rare || o.boss ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare || !!o.boss), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
           '<div class="meta">' + pips(o.diff) + "<span>" + E.DIFF[o.diff].name + "</span><span>" + I.ui("uhr") + " " + U.fmtTime(dur) + "</span><span>" + I.ui("tatendrang") + " " + o.energy + "</span>" + chanceTxt(c) + "</div>" +
           '<div class="rewards"><span>' + I.ui("xp") + ' <span class="num">' + U.fmt(o.xp) + " EP</span></span><span>" + UI.gold(o.gold) + "</span>" +
           (o.perle ? "<span>" + UI.perlen(o.perle) + "</span>" : "") +
           (o.item ? '<button type="button" class="mini-item r-' + o.item.rarity + '" data-item="offer:' + i + '" data-act="itemInfo" data-ref="offer:' + i + '" aria-label="' + esc(o.item.name) + '">' + I.item(o.item) + "</button>" : "") +
-          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
+          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : o.boss ? "Verliesboss" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
       });
       h += "</div>";
       if (en < 6) h += '<div class="say" style="margin-top:12px">Dein Tatendrang ist erschöpft. Ein Krug Nebelmet hilft, oder du hältst so lange Wache am Turm.</div>';

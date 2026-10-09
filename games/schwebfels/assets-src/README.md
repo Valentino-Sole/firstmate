@@ -222,8 +222,21 @@ Wichtige Regeln der Strecke:
   Fortsetzung (Kopf, Hand, Zehen) bekommen die Ausdehnung ihrer Ecken als Länge (gleiche Regel in `fit_piece.frames`
   und `src/r3d-rigged.js`). Vorher zeigte die Kopfachse nach vorn und war je Körper 5 bis 25 cm lang; Helme saßen
   dann bei Nordmann-Frau und Frostwicht-Mann wie eine nach hinten gerutschte Kapuze.
-- Ausrüstung je Reich und Heldenart: `gen_pack.py meshy/ausr-midgard-<art> ../../assets/gen-ausrmidgard<art>.pack`
-  (`krieger`, `schurke`, `jaeger`, `magier`, `umhang`); `build.mjs` macht daraus `gen-ausrmidgard<art>.js`. Das Spiel
+- Albion und Hibernia (0.73): dieselben 102 Formen wie Midgard, nicht neu erzeugt, sondern mit Meshys Neutexturierung
+  umgemalt (`meshy_api.py neutextur <name> --von <midgard-modell> --prompt "<Stil des Reiches>"`, 10 Credits je
+  Modell statt 30 für ein Modell und 6 für die Vorlage; Form und Texturkoordinaten bleiben gleich). Dann wie Midgard
+  `fit_piece.py`/`weapon.py` mit `--kultur albion` oder `hibernia`. Meshy malt bei der Neutexturierung die Innenseiten
+  fast schwarz (die Stilvorgabe verlangt ein dunkles Innenfutter); wo die dünne Innenlage beim Anpassen durch die
+  Außenlage sticht, sah man dunkle Flecken (Albion-Flügelhelm). `fit_piece.py --innen` (oder nachträglich
+  `gen/innen.py <teil.npz>`) färbt deshalb Innenflächen in der Farbe der nächsten Außenfläche: Das Teil sitzt auf dem
+  Referenzkörper, Strahlen aus allen Richtungen außer von unten (die Spielkamera steht höher; von unten sähe man durch
+  die Gesichtsöffnung die Innenseite des Helms) treffen Teil oder Körper; Dreiecke, die nie zuerst und von vorn
+  getroffen werden, liegen innen. Umgefärbt wird davon nur, was deutlich dunkler ist als die nächste Außenfläche, damit
+  in der Grundhaltung verdeckte Außenflächen (unter den Armen) ihre Zeichnung behalten. Umhänge bleiben unverändert
+  (das Spiel legt sie selbst um den Rücken). Je Teil höchstens 7 % der Textur.
+- Ausrüstung je Reich und Heldenart: `gen_pack.py meshy/ausr-<reich>-<art> ../../assets/gen-ausr<reich><art>.pack`
+  (Reich `midgard`, `albion`, `hibernia`; Art `krieger`, `schurke`, `jaeger`, `magier`, `umhang`); `build.mjs` macht
+  daraus `gen-ausr<reich><art>.js`. Das Spiel
   lädt sie nach den Heldenkörpern des Reiches (`UI.loadGear`, `UI.GEAR_FILES` in `src/ui-core.js`), zuerst die Art des
   eigenen Helden und die Umhänge; danach zeichnen sich Ansichten und Portraits neu (`gv` in der Figurenbeschreibung).
 - Bestien: Meshy riggt per API nur Zweibeiner und hat keine Tierbewegungen. `beasts/from_glb.py` gibt einem

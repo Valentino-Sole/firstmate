@@ -1,4 +1,4 @@
-// Tavernenauftraege mit Talenten: Modellheld (Talente nach autoTalents) gegen Einzelgegner und Horden, Siegquote und
+// Tavernenauftraege mit Talenten: Modellheld (Talente nach autoTalents) gegen Einzelgegner, Horden und Verliesbosse, Siegquote und
 // uebrige Lebenspunkte je Schwierigkeit. Aufruf: node tests/quests.mjs [stufen, z. B. 10,20,31,40] [ausruestung q, z. B. 1.25]
 // Umgebung zum Ausprobieren: TAL=0 (ohne Talente), FOLLOW, D2, D3, HB (Mitziehen, Staerke ordentlich/halsbrecherisch, Hordenanfuehrer)
 import { loadGame } from "./load.mjs";
@@ -18,7 +18,8 @@ function hero(L, c, seed) {
   return E.applyTalents(f, E.talentEffects(c, E.autoTalents(c, L, seed), L));
 }
 for (const L of Ls) {
-  const res = { single: [[], [], []], horde: [[], [], []] };
+  const res = { single: [[], [], []], horde: [[], [], []], boss: [[], [], []] };
+  const bosses = E.tavernBosses(L);
   for (const c of classes) {
     for (let k = 0; k < 6; k++) {
       const h = hero(L, c, c + k);
@@ -40,9 +41,16 @@ for (const L of Ls) {
         ];
         const r2 = E.simulateChain(h, foes, "h" + c + k + d);
         res.horde[d - 1].push([r2.winner === 0 ? 1 : 0, r2.winner === 0 ? r2.hpLeft / h.maxHp : 0]);
+        // Verliesboss in der Taverne (ordentlich oder halsbrecherisch, Stufe wie makeBossOffer)
+        if (bosses.length && d >= 2) {
+          const bl = L;
+          const bf = E.monsterFighter(bosses[(k * 5 + d) % bosses.length], bl, E.adaptPower(h, bl, p), { boss: true });
+          const r3 = E.simulate(h, bf, "b" + c + k + d);
+          res.boss[d - 1].push([r3.winner === 0 ? 1 : 0, r3.winner === 0 ? Math.max(0, r3.hp ? r3.hp[0] : 0) / h.maxHp : 0]);
+        }
       }
     }
   }
-  const fmt = (arr) => arr.map((a) => { const w = a.reduce((s, x) => s + x[0], 0) / a.length; const wins = a.filter((x) => x[0]); const hp = wins.length ? wins.reduce((s, x) => s + x[1], 0) / wins.length : 0; return Math.round(w * 100) + "%/" + Math.round(hp * 100) + "%"; }).join("  ");
-  console.log("Stufe " + L + (talents ? " mit Talenten" : " ohne Talente") + " q=" + q + " | einzeln (Sieg/Leben) " + fmt(res.single) + " | Horde " + fmt(res.horde));
+  const fmt = (arr) => arr.filter((a) => a.length).map((a) => { const w = a.reduce((s, x) => s + x[0], 0) / a.length; const wins = a.filter((x) => x[0]); const hp = wins.length ? wins.reduce((s, x) => s + x[1], 0) / wins.length : 0; return Math.round(w * 100) + "%/" + Math.round(hp * 100) + "%"; }).join("  ");
+  console.log("Stufe " + L + (talents ? " mit Talenten" : " ohne Talente") + " q=" + q + " | einzeln (Sieg/Leben) " + fmt(res.single) + " | Horde " + fmt(res.horde) + (bosses.length ? " | Verliesboss (ordentlich, halsbrecherisch) " + fmt(res.boss) : ""));
 }
