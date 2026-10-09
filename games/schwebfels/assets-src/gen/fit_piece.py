@@ -113,8 +113,9 @@ def bins(t, th):
     return ti, ai
 
 
-def profiles(pos, skin_i, skin_w, rest, parents, names=None):
-    """Groesster Abstand der Koerperoberflaeche von der Knochenachse je Feld, Luecken aufgefuellt."""
+def profiles(pos, skin_i, skin_w, rest, parents, names=None, head=None):
+    """Groesster Abstand der Koerperoberflaeche von der Knochenachse je Feld, Luecken aufgefuellt. Am Kopf (head)
+    ohne schmale Spitzen (open_spikes)."""
     Fr = frames(rest, parents, names, pos, skin_i[:, 0])
     nb = len(parents)
     W = np.zeros((len(pos), nb))
@@ -129,7 +130,23 @@ def profiles(pos, skin_i, skin_w, rest, parents, names=None):
         ti, ai = bins(t, th)
         np.maximum.at(prof[b], (ti, ai), d)
         prof[b] = fill(prof[b])
+        if b == head:
+            prof[b] = open_spikes(prof[b])
     return prof
+
+
+def open_spikes(R):
+    """Schmale Spitzen (Hoerner, spitze Ohren) aus dem Kopfprofil nehmen: kleinster Wert der 3 x 3 Nachbarfelder,
+    davon wieder der groesste (morphologisches Oeffnen). Helme und Kapuzen folgen sonst den Hoernern und ihre Innenseite
+    stach als dunkler Fleck durch die Aussenseite; die Hoerner liegen nun darunter und werden mit der Haut ausgeblendet.
+    Vorn in Gesichtsmitte bleibt das Profil (Nase, Bart unter Masken). Gleich in src/r3d-rigged.js (openSpikes)."""
+    def nb(X):
+        rows = [np.vstack([X[:1], X[:-1]]), X, np.vstack([X[1:], X[-1:]])]
+        return np.stack([np.roll(Y, da, 1) for Y in rows for da in (-1, 0, 1)])
+    tc = T0 + (np.arange(NT) + 0.5) * (T1 - T0) / NT
+    ac = -np.pi + (np.arange(NA) + 0.5) * 2 * np.pi / NA
+    core = (tc[:, None] < 0.6) & (np.abs(ac)[None, :] < np.radians(40))
+    return np.where(core, R, nb(nb(R).min(0)).max(0))
 
 
 def fill(R):
@@ -297,9 +314,9 @@ def push_out(V, tree, offset, radius, rounds=3):
     return V
 
 
-def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, push=True):
+def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, push=True, grow=6):
     """Teil vom Koerper freistellen und Gewichte uebertragen. rigid: Mittelpunkt, um den das Teil als Ganzes
-    gleichmaessig waechst (hoechstens 9 %), bis es fast ganz ausserhalb liegt (Helme, Kapuzen, Masken behalten so ihre Form);
+    gleichmaessig waechst (grow Schritte zu 1,5 %), bis es fast ganz ausserhalb liegt (Helme, Kapuzen, Masken behalten so ihre Form);
     sonst und danach werden die restlichen Ecken mit ihrer Umgebung nach aussen geschoben (push_out)."""
     import bpy
     from mathutils import Vector
@@ -328,7 +345,7 @@ def fit_blender(bpos, bidx, bW, ppos, ptri, offset, rigid=None, push=True):
     V = ppos[first].copy()
     if rigid is not None:
         c = np.asarray(rigid, np.float64)
-        for _ in range(6):
+        for _ in range(grow):
             sd, _ = signed_dist(tree, V)
             if (sd < offset * 0.5).mean() < 0.03:
                 break
@@ -379,6 +396,7 @@ def main():
     ap.add_argument("--tex", type=int, default=768)
     ap.add_argument("--ohne-backen", action="store_true", help="Meshys Texturaufteilung behalten (fleckig, wenn verkleinert)")
     ap.add_argument("--paar", action="store_true")
+    ap.add_argument("--wachsen", type=int, default=6, help="Kopfteile: hoechstens so viele Schritte zu 1,5 %% wachsen (Helme 6, weite Kapuzen und Masken 40)")
     ap.add_argument("--kopf", default="box", choices=["box", "oben"], help="Kopfteil: ganzen Kopfbereich fuellen oder oben anlegen (Kappe, Krone)")
     a = ap.parse_args()
 
@@ -502,7 +520,7 @@ def main():
         rigid = None
     # Umhaenge haengen frei: nicht schieben (zerknitterte sonst Fell und Saeume); das Spiel hebt sie gleichmaessig
     # vom Ruecken ab (cloakGeo in src/r3d-rigged.js)
-    fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, push=a.slot != "umhang")
+    fpos, fW = fit_blender(bpos, bidx, bW, ppos, ptri, a.offset, rigid, push=a.slot != "umhang", grow=a.wachsen)
     if a.slot == "umhang":
         keep = np.zeros(nb, bool)
         keep[[tmap[r] for r in CAPE_BONES if r in tmap]] = True
@@ -536,7 +554,7 @@ def main():
     w2 = np.where(w2.sum(1, keepdims=True) > 1e-6, w2 / np.maximum(w2.sum(1, keepdims=True), 1e-9), np.array([1.0, 0.0]))
 
     # Knochenbezogene Beschreibung gegen das Profil des Referenzkoerpers
-    prof = profiles(bpos, si, z["skin_w"].astype(np.float64), rest, parents, names)
+    prof = profiles(bpos, si, z["skin_w"].astype(np.float64), rest, parents, names, head=tmap["head"])
     enc = np.zeros((len(fpos), 2, 4))
     for k in range(2):
         for b in np.unique(order[:, k]):

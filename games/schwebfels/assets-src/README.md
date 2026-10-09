@@ -205,7 +205,10 @@ Wichtige Regeln der Strecke:
   liefen sie ineinander (Flecken, ausgefranste Kanten). Freistellen ohne Zerknittern: Kopfteile wachsen als Ganzes,
   bis der Kopf darin Platz hat, übrige Ecken in der Haut werden samt Umgebung nach außen geschoben (vorher jede Ecke
   einzeln: bei dünnem Stoff stieß die Innenlage durch die Außenlage). Das Gesicht (vorn, unterhalb der Stirn) wird unter
-  Masken und Visieren nie ausgeblendet. Im Spiel liegt ein Umhang über dem getragenen Brustteil oder der Robe
+  Masken und Visieren nie ausgeblendet. Kopfteile wachsen höchstens `--wachsen` Schritte zu 1,5 % (Standard 6 für Helme; weite
+  Kapuzen und Masken 40). Das Kopfprofil, an dem sich Kopfteile ausrichten, verliert schmale Spitzen wie Hörner und spitze
+  Ohren (`open_spikes`, im Spiel `openSpikes`); sonst beulten sie Kapuzen aus und die Innenseite stach durch.
+  Was dann durch das Kopfteil hindurchragt, blendet das Spiel aus (`headReach` in `src/r3d-rigged.js`). Im Spiel liegt ein Umhang über dem getragenen Brustteil oder der Robe
   (`layered` in `src/r3d-rigged.js`).
   Kopfachse: Meshys Hilfsknochen `headfront` zählt nicht als Fortsetzung des Kopfes (wie `HeadTop_End`); Knochen ohne
   Fortsetzung (Kopf, Hand, Zehen) bekommen die Ausdehnung ihrer Ecken als Länge (gleiche Regel in `fit_piece.frames`

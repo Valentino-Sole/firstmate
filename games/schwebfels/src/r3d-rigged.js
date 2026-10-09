@@ -453,7 +453,38 @@
       }
     }
     for (let b = 0; b < nb; b++) PR[b] = fill(PR[b], NT, NA);
+    if (PR[E.map.head]) PR[E.map.head] = openSpikes(PR[E.map.head], g);
     return (PROF[ck] = { Fr, R: PR });
+  }
+  /* Kopfprofil ohne schmale Spitzen (Hoerner, spitze Ohren): kleinster Wert der 3 x 3 Nachbarfelder, davon wieder der
+     groesste. Helme und Kapuzen folgten sonst den Hoernern und ihre Innenseite stach als dunkler Fleck durch; die
+     Hoerner liegen nun darunter und werden mit der Haut ausgeblendet. Vorn in Gesichtsmitte bleibt das Profil (Nase,
+     Bart unter Masken). Gleich in assets-src/gen/fit_piece.py (open_spikes). */
+  function openSpikes(Q, g) {
+    const [NT, NA, T0, T1] = g;
+    const pass = (X, pick) => {
+      const Y = new Float32Array(NT * NA);
+      for (let t = 0; t < NT; t++) {
+        for (let a = 0; a < NA; a++) {
+          let v = X[t * NA + a];
+          for (let dt = -1; dt <= 1; dt++) {
+            const tt = Math.min(NT - 1, Math.max(0, t + dt));
+            for (let da = -1; da <= 1; da++) v = pick(v, X[tt * NA + ((a + da + NA) % NA)]);
+          }
+          Y[t * NA + a] = v;
+        }
+      }
+      return Y;
+    };
+    const O = pass(pass(Q, Math.min), Math.max);
+    for (let t = 0; t < NT; t++) {
+      const tc = T0 + ((t + 0.5) * (T1 - T0)) / NT;
+      for (let a = 0; a < NA; a++) {
+        const ac = -Math.PI + ((a + 0.5) * 2 * Math.PI) / NA;
+        if (tc < 0.6 && Math.abs(ac) < (40 * Math.PI) / 180) O[t * NA + a] = Q[t * NA + a];
+      }
+    }
+    return O;
   }
   // leere Felder aus den Nachbarn auffuellen, dann um die Achse leicht glaetten (wie fit_piece.fill)
   function fill(Q, NT, NA) {
@@ -648,9 +679,47 @@
     geo.setAttribute("normal", new T.BufferAttribute(R.human.smoothNormals(pos, Pc.idx), 3));
     return (PGEO[ck] = geo);
   }
-  // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen
+  /* Innerster Abstand eines Kopfteils von der Kopfachse je Feld (Infinity: kein Teil im Feld). Was am Kopf weiter
+     hinausragt (Hoerner, spitze Ohren, Haarspitzen), stuende durch das Teil hindurch und wird ausgeblendet, auch im
+     Gesicht, wo die belegten Felder sonst nichts ausblenden. Ausgenommen bleiben Gesichtsmitte und Kinn (dort liegt
+     der Kragen einer Kapuze im selben Feld tiefer als das Kinn). */
+  function headReach(nm, key, E, Fr, g) {
+    const hb = E.map.head;
+    const geo = pieceGeo(nm, key, E);
+    const P = geo.attributes.position.array;
+    const SI = geo.attributes.skinIndex.array;
+    const SW = geo.attributes.skinWeight.array;
+    const [NT, NA, T0, T1] = g;
+    const R = new Float32Array(NT * NA).fill(Infinity);
+    for (let i = 0; i < P.length / 3; i++) {
+      if (SI[i * 4] !== hb || SW[i * 4] < 0.5) continue;
+      const [t, th, d] = tad(Fr[hb], P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
+      if (t < T0 || t > T1) continue;
+      const j = binT(t, g) * NA + binA(th, g);
+      if (d < R[j]) R[j] = d;
+    }
+    // Felder unter grossen Dreiecken ohne eigene Ecke von den Nachbarn
+    const c = R.slice();
+    for (let t = 0; t < NT; t++) {
+      for (let a = 0; a < NA; a++) {
+        if (c[t * NA + a] < Infinity) continue;
+        for (const [tt, aa] of [[t, (a + NA - 1) % NA], [t, (a + 1) % NA], [Math.max(0, t - 1), a], [Math.min(NT - 1, t + 1), a]]) R[t * NA + a] = Math.min(R[t * NA + a], c[tt * NA + aa]);
+      }
+    }
+    for (let t = 0; t < NT; t++) {
+      const tc = T0 + ((t + 0.5) * (T1 - T0)) / NT;
+      for (let a = 0; a < NA; a++) {
+        const ac = -Math.PI + ((a + 0.5) * 2 * Math.PI) / NA;
+        if (tc < 0.15 || (tc < 0.6 && Math.abs(ac) < (40 * Math.PI) / 180)) R[t * NA + a] = Infinity;
+      }
+    }
+    return R;
+  }
+  // Haut unter einem Teil: Dreiecke, deren Ecken alle in belegten Feldern ihres Hauptknochens liegen oder durch ein
+  // Kopfteil hindurchragen
   function pieceHide(names, key, E) {
     const D = [];
+    const hb = E.map.head;
     for (const nm of names) {
       const Pc = PIECES()[nm];
       const { Fr } = profiles(key, E, Pc.grid);
@@ -659,7 +728,7 @@
         const i = E.skel.names.indexOf(b);
         if (i >= 0) occ[i] = Pc.occ[b];
       }
-      D.push({ Fr, occ, g: Pc.grid });
+      D.push({ Fr, occ, g: Pc.grid, reach: Pc.slot === "helm" && hb != null ? headReach(nm, key, E, Fr, Pc.grid) : null });
     }
     const n = E.pos.length / 3;
     const cov = new Uint8Array(n);
@@ -667,10 +736,11 @@
       const b = E.skinI[i * 4];
       for (const d of D) {
         const bits = d.occ[b];
-        if (!bits) continue;
-        const [t, th] = tad(d.Fr[b], E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]);
+        const reach = b === hb ? d.reach : null;
+        if (!bits && !reach) continue;
+        const [t, th, r] = tad(d.Fr[b], E.pos[i * 3], E.pos[i * 3 + 1], E.pos[i * 3 + 2]);
         const j = binT(t, d.g) * d.g[1] + binA(th, d.g);
-        if ((bits[j >> 3] >> (j & 7)) & 1) {
+        if ((bits && (bits[j >> 3] >> (j & 7)) & 1) || (reach && r > reach[j] + 0.002)) {
           cov[i] = 1;
           break;
         }
