@@ -233,7 +233,8 @@ Wichtige Regeln der Strecke:
   die Gesichtsöffnung die Innenseite des Helms) treffen Teil oder Körper; Dreiecke, die nie zuerst und von vorn
   getroffen werden, liegen innen. Umgefärbt wird davon nur, was deutlich dunkler ist als die nächste Außenfläche, damit
   in der Grundhaltung verdeckte Außenflächen (unter den Armen) ihre Zeichnung behalten. Umhänge bleiben unverändert
-  (das Spiel legt sie selbst um den Rücken). Je Teil höchstens 7 % der Textur.
+  (das Spiel legt sie selbst um den Rücken). Je Teil höchstens 7 % der Textur. Auch die Midgard-Teile haben dunkle
+  Innenseiten und sind seit 0.73 so umgefärbt (Kapuzen- und Rabenmaske je gut 5 %, die übrigen unter 3 %).
 - Ausrüstung je Reich und Heldenart: `gen_pack.py meshy/ausr-<reich>-<art> ../../assets/gen-ausr<reich><art>.pack`
   (Reich `midgard`, `albion`, `hibernia`; Art `krieger`, `schurke`, `jaeger`, `magier`, `umhang`); `build.mjs` macht
   daraus `gen-ausr<reich><art>.js`. Das Spiel

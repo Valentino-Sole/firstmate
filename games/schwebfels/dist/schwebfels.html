@@ -1384,6 +1384,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     { t: "Das Nest in {o}", x: "Seltener Auftrag: {p} hat in {o} ein Nest gefunden, und es ist nicht leer. Räum es aus, bevor {m} zurückkehrt. Er kehrt zurück." },
   ];
 
+  // Selten bricht ein Verliesboss aus und taucht in der Taverne auf ({m}: sein Name, {d}: das Verlies, aus dem er kommt)
+  const BOSS_QUESTS = [
+    { t: "Kopfgeld: {m}", x: "Verliesboss: Aus dem Verlies „{d}“ ist {m} entkommen und treibt sich in {o} herum. {p} zahlt gut, wenn du dich darum kümmerst, und zwar endgültig." },
+    { t: "Ausbruch aus der Tiefe", x: "Verliesboss: Die Siegel von „{d}“ haben nachgegeben. {m} ist heraufgestiegen und lauert in {o}. Ein Verliesboss im Tageslicht, das gibt es nicht oft." },
+    { t: "Besuch aus „{d}“", x: "Verliesboss: {p} schwört, in {o} {m} gesehen zu haben, leibhaftig und schlecht gelaunt. Wer das erledigt, muss in der Taverne nie wieder zahlen. Fast nie." },
+  ];
+
   const NPC_FIRST = ["Brakus", "Mira", "Tjark", "Ilva", "Gorm", "Senna", "Fenja", "Okko", "Rurik", "Wenzel", "Lotta", "Bodo",
     "Hilde", "Quirin", "Yara", "Zeno", "Pim", "Runa", "Tamo", "Edda", "Knut", "Fiete", "Smilla", "Hauke", "Ida", "Jorin",
     "Malte", "Nele", "Rasmus", "Svea", "Ole", "Greta", "Hinnerk", "Wiebke", "Arvid", "Talea", "Kalle", "Frieda", "Bjarne", "Insa",
@@ -1508,7 +1515,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   SB.data = {
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
-    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
+    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
     POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS,
   };
 })();
@@ -2659,10 +2666,55 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (list.length < 3) list = D.MONSTERS.slice().sort((a, b) => Math.abs((a.lv[0] + Math.min(a.lv[1], 60)) / 2 - L) - Math.abs((b.lv[0] + Math.min(b.lv[1], 60)) / 2 - L)).slice(0, 6);
     return list;
   };
+  // Verliesbosse in der Taverne (Wunsch des Kapitaens: selten ein Boss aus den Verliesen, damit es nicht eintoenig
+  // wird): je Angebot mit dieser Wahrscheinlichkeit, hoechstens einer je Auswahl, nur Bosse aus Verliesen, die die Stufe
+  // schon oeffnet, ohne die Endbosse (die bleiben dem Verlies vorbehalten). Er kaempft wie ein Gegner der Stufe mit den
+  // Lebenspunkten eines Bosses; Belohnung wie ein seltener Auftrag und mehr, immer mit Gegenstand.
+  E.C.BOSS_OFFER = 0.05;
+  E.C.BOSS_OFFER_LV = 10;
+  E.tavernBosses = (L) => {
+    const out = [];
+    for (const D0 of D.DUNGEONS) if (L >= D0.unlock) D0.bosses.forEach((b, f) => !b.final && out.push(E.dungeonMon(D0.id + "-" + f)));
+    return out;
+  };
+  function makeBossOffer(S, r, tier, diff, boss) {
+    const L = S.level;
+    const D0 = D.DUNGEONS.find((d) => d.id === boss.dungeon);
+    const tpl = U.pick(r, D.BOSS_QUESTS);
+    const place = U.pick(r, D.PLACES);
+    const person = U.pick(r, D.PERSONS);
+    const fill = (s) => s.replace(/\{m\}/g, boss.name).replace(/\{d\}/g, D0.name).replace(/\{o\}/g, place).replace(/\{p\}/g, person);
+    const energy = tier.energy + 4;
+    const ef = energy / 10;
+    const dm = DIFF[diff].reward * 1.8;
+    const bonus = E.bestiaryBonus(S);
+    // Stufe des Helden, auch halsbrecherisch (Boss-Lebenspunkte und hoehere Staerke reichen als Wagnis)
+    const mlevel = Math.max(1, L);
+    const offer = {
+      id: U.uid(), tpl: tpl.t, title: fill(tpl.t), text: U.cap(fill(tpl.x)), place, tier: tier.id,
+      sec: U.ri(r, tier.sec[0], tier.sec[1]) + 20, energy, diff, rare: false, boss: D0.id, monster: boss.id, mlevel,
+      waves: [{ monster: boss.id, mlevel, power: DIFF[diff].power, boss: true }],
+      xp: Math.max(5, Math.round(E.xpNeed(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
+      gold: Math.max(3, Math.round(E.goldBase(L) * ef * dm * U.rf(r, 0.85, 1.15) * bonus * (1 + E.goldBonus(S)))),
+      item: E.makeItem(r, { level: L + 1, cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + 1.2 + E.lootBoost(S), minRarity: "selten" }),
+      perle: r() < 0.35 + 0.05 * diff ? 1 : 0,
+      seed: Math.floor(r() * 1e9),
+    };
+    return offer;
+  }
   E.makeOffer = function (S, r, idx, used) {
     const L = S.level;
     const tier = TIERS[idx % 3 === 0 ? U.ri(r, 0, 1) : idx % 3 === 1 ? 1 : U.ri(r, 1, 2)];
     const diff = U.wpick(r, [{ d: 1, w: 38 }, { d: 2, w: 42 }, { d: 3, w: 20 }]).d;
+    if (L >= E.C.BOSS_OFFER_LV && !used.boss && r() < E.C.BOSS_OFFER) {
+      const bosses = E.tavernBosses(L).filter((b) => used.mons.indexOf(b.id) < 0);
+      if (bosses.length) {
+        const boss = U.pick(r, bosses);
+        used.boss = true;
+        used.mons.push(boss.id);
+        return makeBossOffer(S, r, tier, Math.max(2, diff), boss);
+      }
+    }
     const rare = L >= 3 && r() < 0.08 + 0.04 * diff;
     const pool = E.monstersFor(L, S.realm);
     let mon = U.pick(r, pool);
@@ -2730,7 +2782,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     a.end = now;
     return { ok: true };
   };
-  E.monById = (id) => D.MONSTERS.find((m) => m.id === id);
+  // Verliesbosse haben die Kennung <verlies>-<stockwerk> (wie in E.bossFor)
+  E.dungeonMon = function (id) {
+    const m = /^(.+)-(\d+)$/.exec(id || "");
+    const D0 = m && D.DUNGEONS.find((d) => d.id === m[1]);
+    const b = D0 && D0.bosses[+m[2]];
+    return b ? { id, name: b.name, arch: b.arch, color: b.color, accent: b.accent, dungeon: D0.id } : null;
+  };
+  E.monById = (id) => D.MONSTERS.find((m) => m.id === id) || E.dungeonMon(id);
   E.questMonster = (o) => E.monById(o.monster);
   /* Staerke des Helden als Faktor auf die Gegnerstaerke: gesucht ist die Staerke zweier fester Pruefgegner, bei der
      der Held so abschneidet wie der Modellheld seiner Klasse (gewoehnliche Ausruestung, keine Talente) bei Staerke 1.
@@ -2816,6 +2875,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         S.stats.hordes++;
         E.grantAch(S, "horde");
       }
+      if (o.boss) S.stats.tavernBosses = (S.stats.tavernBosses || 0) + 1;
       if (o.diff === 3) S.stats.hardWins++;
       S.stats.streak++;
       if (fight.hero && fight.chain.hpLeft <= fight.hero.maxHp * 0.05) E.grantAch(S, "knapp");
@@ -3323,7 +3383,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   E.bossFor = function (d, floor) {
     const D0 = D.DUNGEONS[d];
     const b = D0.bosses[floor];
-    const mon = { id: D0.id + "-" + floor, name: b.name, arch: b.arch, color: b.color, accent: b.accent };
+    const mon = E.dungeonMon(D0.id + "-" + floor);
     return { mon, L: D0.base + floor, power: 0.95 + 0.02 * floor + (b.final ? 0.05 : 0), final: !!b.final };
   };
   E.dungeonFight = function (S, d, now) {
@@ -6801,8 +6861,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       speed: 1,
       flashT: 0,
       play(name, dur) {
-        dur = (dur || 0.5) / (model.speed || 1);
-        if (model.inner) model.inner.play(name, dur * (model.speed || 1));
+        // Dauer in Spielzeit: die Kampfbuehne treibt update() schon mit dt * Tempo an (vorher zusaetzlich durch das
+        // Tempo geteilt, bei doppeltem Tempo liefen Bewegungen vierfach schnell und der Schlag kam vor dem Treffer)
+        dur = dur || 0.5;
+        if (model.inner) model.inner.play(name, dur);
         return new Promise((res) => {
           if (model.anim && model.anim.res) model.anim.res();
           model.anim = { name, t: 0, dur, res };
@@ -8021,8 +8083,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   const KIND = { idle: "loop", walk: "loop", sit: "loop", drink: "loop", hammer: "loop", victory: "free", defeat: "hold" };
   const BODY_HIT = { hit: 1, evade: 1 };
-  // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden } }
-  RG.MARKS = {};
+  // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden, from:
+  // Sekunden } }. Bei den Schuessen ist die automatische Marke die schnellste Handbewegung (der Griff zum Koecher); das
+  // Spiel zeigte nur Griff und Vorschnellen der Hand, das Geschoss flog dabei schon. Jetzt: ab dem Anheben des Bogens
+  // (from) bis zum Loslassen (hit, gemessen an der Handbewegung des Clips).
+  RG.MARKS = { Archery_Shot: { hit: 3.87, from: 2.1 }, Draw_and_Shoot_from_Back: { hit: 5.8, from: 3.1 } };
+  // Schussrichtung der Bogenclips: so weit links von der Blickrichtung der Figur (Bogenarm zum Ziel), im Bogenmass
+  RG.SHOT_TURN = { Archery_Shot: 1.69, Draw_and_Shoot_from_Back: 1.01 };
   // Waffenlage in der Hand: Drehung um den Griff (twist) und Neigung (tilt) in Bogenmass
   RG.GRIP = { twist: 0, tilt: 0 };
   // Dolche im Rueckhandgriff (Klinge an der Kleinfingerseite): im Kampfstand von Meshy zeigten die Klingen sonst zum
@@ -8983,8 +9050,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     for (let f = 0; f < n; f++) low = Math.min(low, hv[f * 3 + 1]);
     tracks.push(new T.VectorKeyframeTrack(hips + ".position", times, hv));
     const clip = new T.AnimationClip(name, C.d, tracks);
-    const mk = RG.MARKS[name] || {};
-    return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
+    // Marken nur, wenn der Clip so lang ist (Pruefclips und Ersatzclips gleichen Namens sind kuerzer)
+    const mk = RG.MARKS[name] && RG.MARKS[name].hit < C.d ? RG.MARKS[name] : {};
+    return (CC[ck] = { clip, name, hit: [mk.hit != null ? mk.hit : C.hit[0], mk.hit != null ? mk.hit : C.hit[1]], from: mk.from || 0, hipsLow: low, hipsAvg: hv.reduce((s, x, i) => (i % 3 === 1 ? s + x : s), 0) / n });
   }
 
   let QH = null, QW = null, QU = null, QI = null;
@@ -9022,14 +9090,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const c = this.pick(action);
     if (!c) return this.settle(this.m.hold || "idle");
     const kind = KIND[action] || "impact";
-    let rate = this.m.speed || 1;
+    // Spielzeit: die Kampfbuehne treibt den Mischer schon mit dem Tempo an
+    let rate = 1;
     let t0 = 0;
     let wait = 0;
     if (kind === "impact") {
-      // Ausholen beschleunigen oder kuerzen, bei sehr kurzem Ausholen spaeter beginnen
+      // Ausholen beschleunigen oder kuerzen, bei sehr kurzem Ausholen spaeter beginnen; from: fruehester Startpunkt
       const hit = c.hit[BODY_HIT[action] ? 1 : 0];
-      rate = Math.min(1.7, Math.max(0.6, hit / Math.max(dur, 0.05)));
-      t0 = Math.max(0, hit - rate * dur);
+      const from = c.from < hit ? c.from : 0;
+      rate = Math.min(1.7, Math.max(0.6, (hit - from) / Math.max(dur, 0.05)));
+      t0 = Math.max(from, hit - rate * dur);
       wait = Math.max(0, dur - (hit - t0) / rate);
     } else if (action === "walk") rate *= 1.15;
     const p = { action, kind, c, rate, t0 };
@@ -9056,7 +9126,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const cur = this.cur;
     if (cur && cur.action === action && cur.kind !== "impact" && cur.kind !== "free") return;
     if (cur && action === "defeat") return;
-    if (cur) cur.act.timeScale = this.m.speed || 1;
+    if (cur) cur.act.timeScale = 1;
     // Schlag, Treffer oder Ausweichen schwingen nach dem Spielmoment noch kurz aus (hoechstens 0,6 s), dann Ruhe
     if (cur && (cur.kind === "impact" || cur.kind === "free") && cur.action !== action) {
       if (cur.endAt == null) cur.endAt = this.clock;
@@ -9075,7 +9145,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     act.reset();
     act.setLoop(T.LoopRepeat, Infinity);
     act.clampWhenFinished = false;
-    act.timeScale = this.m.speed || 1;
+    act.timeScale = 1;
     this.fade(act, 0.3);
     this.cur = { action, act, kind: "loop", c };
   };
@@ -9118,6 +9188,67 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
     W.quaternion.copy(qh.invert().multiply(target));
   };
+  /* Armbrust beim Schuss: Schaft von der rechten Hand (an der Wange) zur linken (vorgestreckt), wie angelegt; der Kolben
+     liegt knapp hinter der rechten Hand. Die Bogenclips halten den Bogen links; ohne Ausrichtung schwang die Armbrust in
+     der Zughand ueber die Schulter. Gebaute und erzeugte Armbrueste liegen gleich: Schaft entlang +x, Bogen (Prod) vorn
+     bei +x, Griff im Ursprung (assets-src/gen/weapon.py, F.armbrust in src/r3d-items-weapons.js). */
+  let VL = null, VR = null, MB = null, VS = null;
+  // Ausdehnung einer Waffe entlang ihres Schafts (einmal je Waffe): tip vorn (Bolzenspitze), back hinten (Kolben)
+  RG.weaponExtent = function (W) {
+    if (W.userData.ext) return W.userData.ext;
+    W.updateWorldMatrix(true, true);
+    const inv = new T.Matrix4().copy(W.matrixWorld).invert();
+    const box = new T.Box3();
+    const v = new T.Vector3();
+    W.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      const bb = o.geometry.boundingBox;
+      const M = new T.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+      for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) box.expandByPoint(v.set(x, y, z).applyMatrix4(M));
+    });
+    return (W.userData.ext = box.isEmpty() ? { tip: 0.4, back: -0.4 } : { tip: box.max.x, back: box.min.x });
+  };
+  Player.prototype.aimCrossbow = function () {
+    const W = this.m.parts.weapon;
+    if (!W || this.m.weaponBase !== "armbrust") return;
+    if (!W.userData.q0) {
+      W.userData.q0 = W.quaternion.clone();
+      W.userData.p0 = W.position.clone();
+    }
+    const B = this.m.parts.B || {};
+    const aiming = this.cur && this.cur.action === "shoot" && B["hand.L"] && B["hand.R"] && W.parent;
+    if (!aiming) {
+      W.quaternion.copy(W.userData.q0);
+      W.position.copy(W.userData.p0);
+      return;
+    }
+    if (!VL) {
+      VL = new T.Vector3();
+      VR = new T.Vector3();
+      VS = new T.Vector3();
+      MB = new T.Matrix4();
+    }
+    B["hand.L"].getWorldPosition(VL);
+    B["hand.R"].getWorldPosition(VR);
+    const x = VL.sub(VR);
+    if (x.lengthSq() < 1e-6) return;
+    x.normalize();
+    const ext = RG.weaponExtent(W);
+    const up = new T.Vector3(0, 1, 0).addScaledVector(x, -x.y).normalize();
+    const z = new T.Vector3().crossVectors(x, up);
+    MB.makeBasis(x, up, z);
+    const qT = QW.setFromRotationMatrix(MB);
+    const P = W.parent;
+    P.updateWorldMatrix(true, false);
+    W.quaternion.copy(P.getWorldQuaternion(QU).invert().multiply(qT));
+    // Faust der rechten Hand (Lage des Griffs ohne Ausrichtung)
+    P.localToWorld(VR.copy(W.userData.p0));
+    // Griff so weit vor die rechte Hand, dass der Kolben 8 cm hinter ihr endet (Wange), hoechstens 35 cm
+    const sc = W.getWorldScale(VS).x;
+    const d = Math.max(0, Math.min(0.35, -ext.back * sc - 0.08));
+    W.position.copy(P.worldToLocal(VR.addScaledVector(x, d)));
+  };
   Player.prototype.tick = function (dt) {
     const m = this.m;
     const a = m.anim;
@@ -9137,6 +9268,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     // steife Knochen (Kopf und Hals grosser Monster): Bewegung der Heldenbewegungen nur zum kleinen Teil uebernehmen
     if (this.stiff) for (const b of this.stiff) b.quaternion.slerp(QI, 0.85);
     this.fixStaff();
+    this.aimCrossbow();
     // Sitzen: Huefte auf Bankhoehe wie bei den alten Figuren (Huefte 0,5 ueber dem Boden)
     const P = m.parts;
     const sit = this.cur && (this.cur.action === "sit" || this.cur.action === "drink");
@@ -13267,6 +13399,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     };
   }
 
+  // Groesse je Gestalt: Drachen waren mit 1,6 bis 1,7 m so hoch wie ein Pferd (Wunsch des Kapitaens: viel groesser),
+  // Spinnen etwas groesser
+  BE.SIZE = { drache: 2, spinne: 1.25 };
   BE.build = function (m) {
     T = R.T();
     const fam = BE.familyOf(m.arch, m.visual);
@@ -13304,7 +13439,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     body.add(mesh);
     const by = {};
     bones.forEach((b) => (by[b.name] = b));
-    const s = (m.boss ? (m.final ? 1.35 : 1.18) : 1) * (meta.scale || 1);
+    const s = (m.boss ? (m.final ? 1.35 : 1.18) : 1) * (meta.scale || 1) * (BE.SIZE[meta.form] || 1);
     body.scale.setScalar(s);
     const P = { beast: true, fam, body, mesh, B: by, bones, meta };
     const model = R.makeModel(root, P, "monster");
@@ -13718,6 +13853,26 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return [t1, t2, t3];
   }
 
+  /* Drachen fliegen ab und zu (Wunsch des Kapitaens): in Ruhe, beim Getroffenwerden und beim Ausweichen heben sie in
+     festen Abstaenden (je Drache versetzt) fuer einige Sekunden ab und schweben knapp ueber dem Boden, gut ein Viertel
+     ihrer Hoehe; so bleiben Kopf und Brust in Reichweite jeder Waffe. Zum Angriff stossen sie herab, beim Laufen und
+     bei der Niederlage gehen sie zu Boden. In der Luft liegen die Pfoten am Rumpf, die Fluegel schlagen kraeftig. */
+  BE.FLY = { period: 15, from: 7, to: 13, lift: 0.28 };
+  const FLY_ACT = { idle: 1, hit: 1, block: 1, evade: 1, cast: 1, victory: 1 };
+  function dragonFly(P, name, t) {
+    if (P.flyOff == null) {
+      P.flyOff = Math.random() * BE.FLY.period;
+      P.fly = 0;
+      P.flyT = t;
+    }
+    const ph = (t + P.flyOff) % BE.FLY.period;
+    const air = !!FLY_ACT[name] && ph >= BE.FLY.from && ph < BE.FLY.to;
+    const dt = Math.max(0, Math.min(0.2, t - P.flyT));
+    P.flyT = t;
+    P.fly += ((air ? 1 : 0) - P.fly) * Math.min(1, dt * (air ? 1.6 : 2.6));
+    return P.fly;
+  }
+
   function poseQuad(m, name, u) {
     const P = m.parts;
     const Qr = P.quad;
@@ -13726,6 +13881,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (P.hitSide == null) P.hitSide = Math.random() < 0.5 ? -1 : 1;
     if (name !== "hit" && name !== "block") P.hitSide = null;
     const Q = quadPose(name, u, t, P.hitSide || 1, P.pounce || 0.5);
+    const fly = P.meta.form === "drache" && Qr.wings.length ? dragonFly(P, name, t) : 0;
     if (name === "defeat" && Qr.wings.length) {
       // Drachen kippen nicht auf die Seite (ein Fluegel stuende in den Himmel, der andere im Boden), sondern sinken
       // auf den Bauch: Beine knicken ein, Hals und Kopf legen sich ab, die Fluegel fallen schlaff herab
@@ -13741,6 +13897,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       for (const k of LEGS) {
         Q.legs[k].body = e;
         Q.legs[k].flex = (k[0] === "F" ? -0.5 : 0.4) * e;
+      }
+    }
+    if (fly > 0.001) {
+      // Hoehe in Metern (der Rumpf ist mit der Groesse der Gestalt skaliert), leichtes Auf und Ab im Fluegeltakt
+      const H = BE.FLY.lift * (P.meta.height || 1.6) * P.body.scale.x;
+      Q.y += fly * H * (1 + 0.06 * Math.sin(t * 5.5 - 1.2));
+      Q.neck -= 0.12 * fly;
+      Q.tail -= 0.1 * fly;
+      for (const k of LEGS) {
+        const q = Q.legs[k];
+        const f = k[0] === "F";
+        q.dyB = q.dyB + (f ? 0.14 : 0.1) * fly * (1 - q.body);
+        q.dzB = q.dzB + (f ? 0.1 : -0.06) * fly * (1 - q.body);
+        q.flex += (f ? -0.7 : 0.5) * fly * (1 - q.body);
+        q.body = Math.max(q.body, 0.85 * fly);
       }
     }
     const by = Qr.by;
@@ -13791,7 +13962,17 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const th = solveLeg(l, tip, a3);
       for (let i = 0; i < 3; i++) l.b[i].quaternion.setFromAxisAngle(XAX, th[i]);
     }
-    if (Qr.wings.length) poseWings(Qr.wings, wingBeat(name, u, t));
+    if (Qr.wings.length) {
+      const w = wingBeat(name, u, t);
+      if (fly > 0.001) {
+        // Flugschlag: weit ausholen, Spitzen gestreckt
+        const sn = Math.sin(t * 5.5);
+        w.a += (0.12 + 0.6 * sn - w.a) * fly;
+        w.b += (0.45 * Math.sin(t * 5.5 - 0.7) + 0.05 - w.b) * fly;
+        w.fold += (0.05 - w.fold) * fly;
+      }
+      poseWings(Qr.wings, w);
+    }
   }
   let XAX = null;
 
@@ -17022,20 +17203,27 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const home = new T.Vector3(side * sep, 0, 0.4);
       m.obj.position.copy(home);
       m.obj.rotation.y = side < 0 ? PI / 2 - 0.5 : -PI / 2 + 0.5;
-      const box3 = new T.Box3().setFromObject(m.obj);
+      let box3 = new T.Box3().setFromObject(m.obj);
       const hgt = box3.max.y - box3.min.y;
-      if (hgt > 3.8) {
-        const s = 3.8 / hgt;
+      // Bestien (grosse Drachen) duerfen hoeher sein als Menschenartige; die Kamera hat dafuer Platz nach oben
+      const maxH = m.parts && m.parts.beast ? 4.4 : 3.8;
+      if (hgt > maxH) {
+        const s = maxH / hgt;
         m.obj.scale.multiplyScalar(s);
         m.headY *= s;
+        box3 = new T.Box3().setFromObject(m.obj);
       }
+      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte)
+      const front = side < 0 ? box3.max.x - home.x : home.x - box3.min.x;
       const sh = KUL ? new T.Mesh(new T.CircleGeometry(1, 24), softShadowMat()) : new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
       sh.rotation.x = -PI / 2;
       sh.position.set(home.x, 0.03, home.z);
-      sh.scale.setScalar(desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9);
+      // Schatten nach der Grundflaeche (grosse Drachen), hoechstens 3 m
+      const foot = Math.max(box3.max.x - box3.min.x, box3.max.z - box3.min.z) * 0.38;
+      sh.scale.setScalar(Math.min(3, Math.max(foot, desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9)));
       scene.add(sh);
       scene.add(m.obj);
-      return { m, home, side, shadow: sh, desc };
+      return { m, home, side, shadow: sh, desc, front };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
 
@@ -17256,8 +17444,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       f.aura = null;
       if (!color) return;
       const a = grp();
-      a.add(R.haloSprite(color, 3.4, 0.35, [0, 1.2, 0]));
-      a.add(mesh(G.torus(0.8, 0.03, PI * 2, 4, 40), glow(color, 0.6), { p: [0, 0.08, 0], r: [PI / 2, 0, 0] }));
+      // mit der Groesse des Kaempfers (grosse Drachen)
+      const H = Math.max(1.8, f.m.height || 1.8);
+      a.add(R.haloSprite(color, 3.4 * (H / 1.8), 0.35, [0, 1.2 * (H / 1.8), 0]));
+      a.add(mesh(G.torus(0.8, 0.03, PI * 2, 4, 40), glow(color, 0.6), { p: [0, 0.08, 0], r: [PI / 2, 0, 0], s: Math.max(1, f.shadow.scale.x / 0.9) }));
       scene.add(a);
       f.aura = a;
     }
@@ -17290,17 +17480,33 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         f.stars = null;
       }
     }
+    // Abschusspunkt: Pfeil am Bogen (Griff in der linken Faust), Bolzen an der Spitze der Armbrust; sonst wie bisher
+    // vor der Brust
+    const VTMP = new T.Vector3();
+    function launchPoint(A, kind) {
+      // Bestien speien aus dem Kopf (grosse Drachen haben ihn weit vorn)
+      const hd = A.m.parts && A.m.parts.beast && A.m.parts.B && A.m.parts.B.head;
+      if (hd) return hd.getWorldPosition(new T.Vector3());
+      const W = A.m.parts && A.m.parts.weapon;
+      if (!W || (kind !== "arrow" && kind !== "bolt")) return null;
+      W.updateWorldMatrix(true, true);
+      // Bolzen liegt etwa 9 cm ueber dem Griff auf dem Schaft
+      if (kind === "bolt") return R.rigged && R.rigged.weaponExtent ? W.localToWorld(new T.Vector3(R.rigged.weaponExtent(W).tip, 0.09, 0)) : null;
+      return W.getWorldPosition(new T.Vector3());
+    }
     async function projectile(A, Bf, kind, color) {
-      const start = new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
+      const start = launchPoint(A, kind) || new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
       const end = new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z);
+      const shaft = kind === "arrow" || kind === "spear" || kind === "bolt";
       let obj;
-      if (kind === "arrow" || kind === "spear") {
+      if (shaft) {
         obj = grp();
-        const L = kind === "spear" ? 1.6 : 1.0;
-        obj.add(mesh(G.cyl(0.022, 0.022, L, 5), pm("wood", "#c9b89a"), { r: [0, 0, PI / 2] }));
-        obj.add(mesh(G.cone(0.06, 0.2, 5), pm("metal", "#c8ced6"), { p: [L / 2 + 0.08, 0, 0], r: [0, 0, -PI / 2] }));
-        obj.add(spark(color, 0.6));
-        if (A.side > 0) obj.rotation.y = PI;
+        const L = kind === "spear" ? 1.6 : kind === "bolt" ? 0.45 : 0.85;
+        const r = kind === "bolt" ? 0.028 : 0.02;
+        obj.add(mesh(G.cyl(r, r, L, 5), pm("wood", "#c9b89a"), { r: [0, 0, PI / 2] }));
+        obj.add(mesh(G.cone(kind === "bolt" ? 0.05 : 0.055, 0.16, 5), pm("metal", "#c8ced6"), { p: [L / 2 + 0.07, 0, 0], r: [0, 0, -PI / 2] }));
+        if (kind !== "spear") obj.add(mesh(G.cone(0.05, 0.12, 3), pm("cloth", "#e8e2d4"), { p: [-L / 2 + 0.05, 0, 0], r: [0, 0, -PI / 2] }));
+        obj.add(spark(color, 0.5));
       } else {
         obj = grp();
         obj.add(mesh(G.sph(kind === "star" ? 0.3 : 0.18, 12, 10), new T.MeshBasicMaterial({ color: col("#ffffff") })));
@@ -17309,11 +17515,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       obj.position.copy(start);
       scene.add(obj);
       const trail = [];
-      await tween(kind === "arrow" ? 0.26 : 0.36, (u) => {
+      const arc = kind === "bolt" ? 0.12 : kind === "arrow" ? 0.35 : kind === "spear" ? 0.5 : 0.3;
+      const prev = start.clone();
+      const XAX = new T.Vector3(1, 0, 0);
+      await tween(kind === "bolt" ? 0.2 : kind === "arrow" ? 0.26 : 0.36, (u) => {
+        prev.copy(obj.position);
         obj.position.lerpVectors(start, end, u);
-        obj.position.y += Math.sin(u * PI) * (kind === "arrow" || kind === "spear" ? 0.5 : 0.3);
+        obj.position.y += Math.sin(u * PI) * arc;
+        // Schaft entlang der Flugbahn (vorher nur seitlich gedreht, der Pfeil flog waagerecht durch den Bogen)
+        if (shaft) {
+          const v = VTMP.copy(obj.position).sub(prev);
+          if (v.lengthSq() > 1e-8) obj.quaternion.setFromUnitVectors(XAX, v.normalize());
+          else if (u === 0) obj.quaternion.setFromUnitVectors(XAX, VTMP.copy(end).sub(start).normalize());
+        }
         if (Math.random() < 0.7) {
-          const p = spark(color, kind === "arrow" ? 0.15 : 0.35);
+          const p = spark(color, shaft ? 0.15 : 0.35);
           p.position.copy(obj.position);
           scene.add(p);
           trail.push(p);
@@ -17486,9 +17702,19 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const bowLike = isHero && (wb === "bogen" || wb === "armbrust" || wb === "speer");
       const spell = (isHero && A.m.arch === "magier") || (!isHero && A.m.ranged);
       if (bowLike || spell) {
+        // Bogen und Armbrust: in Schussstellung drehen (die Bogenclips schiessen zur Seite des Bogenarms), anheben,
+        // zielen; das Geschoss fliegt erst beim Loslassen und vom Bogen oder der Armbrust aus
+        const archer = bowLike && wb !== "speer" && A.m.parts && A.m.parts.rig && R.rigged;
+        const yaw0 = A.m.obj.rotation.y;
+        const turn = archer ? R.rigged.SHOT_TURN.Archery_Shot : 0;
+        if (archer) {
+          const aim = (A.side < 0 ? PI / 2 : -PI / 2) - turn;
+          tween(0.3, (u) => (A.m.obj.rotation.y = yaw0 + (aim - yaw0) * (1 - (1 - u) * (1 - u))));
+        }
         for (let i = 0; i < ev.hits.length; i++) {
-          A.m.play(bowLike ? "shoot" : "cast", 0.5);
-          await wait(bowLike ? 0.3 : 0.3);
+          const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
+          A.m.play(bowLike ? "shoot" : "cast", D);
+          await wait(archer ? D : 0.3);
           if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell");
           if (special && SFX.kind === "beam") {
             await beam(A, Bf, SFX.color);
@@ -17496,15 +17722,19 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             roots(Bf, SFX.color);
             await wait(0.35);
           } else {
-            const kind = bowLike ? (wb === "speer" ? "spear" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
+            const kind = bowLike ? (wb === "speer" ? "spear" : wb === "armbrust" ? "bolt" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
             await projectile(A, Bf, kind, special ? SFX.color : A.m.projColor || "#c47bff");
           }
           await impact(ev, A, Bf, ev.hits[i], i);
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
+        if (archer) {
+          const yaw1 = A.m.obj.rotation.y;
+          tween(0.35, (u) => (A.m.obj.rotation.y = yaw1 + (yaw0 - yaw1) * u));
+        }
       } else {
         // Bestien halten fuer ihren Ansprung weiter vor dem Helden (standOff), sonst steht die Schnauze schon am Gegner
-        const gap = Bf.desc.kind === "monster" ? 1.9 : Math.max(1.5, A.m.standOff || 0);
+        const gap = Bf.desc.kind === "monster" ? Math.max(1.9, Bf.front + 0.7) : Math.max(1.5, A.m.standOff || 0);
         const target = Bf.home.x - Bf.side * gap;
         const ST = A.m.strike;
         const from = A.home.x;
@@ -19370,7 +19600,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   // Ausruestung aus Meshy-Modellen je Reich und Heldenart (gen-ausr<reich><art>.js neben der Seite): Ruestungsteile und
   // Waffen fuer Gegenstaende dieser Gestaltungskultur. Erst die Art des eigenen Helden, dann die uebrigen im Hintergrund.
   // GEAR_V zaehlt die geladenen Dateien; es steht in der Beschreibung der Figur, damit Portraits und Ansichten neu entstehen.
-  UI.GEAR_FILES = { midgard: ["krieger", "schurke", "jaeger", "magier", "umhang"] };
+  const GEAR_ARCHS = ["krieger", "schurke", "jaeger", "magier", "umhang"];
+  UI.GEAR_FILES = { albion: GEAR_ARCHS, midgard: GEAR_ARCHS, hibernia: GEAR_ARCHS };
   let GEAR_V = 0;
   const GEAR_LOAD = {};
   UI.loadGear = function (realm) {
@@ -19453,8 +19684,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   const LOOK = {};
   UI.monKey = slug;
+  // nur Monster aus D.MONSTERS haben eine eigene Figur unter ihrer ID (Verliesbosse loest E.monById zwar auch auf,
+  // sie leihen sich aber eine Figur ihrer Familie)
+  const ownFigure = (id) => !!id && SB.data.MONSTERS.some((m) => m.id === id);
   UI.monLook = function (f) {
-    if (!f || (f.id && SB.engine.monById(f.id))) return null;
+    if (!f || ownFigure(f.id)) return null;
     const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
     if (key in LOOK) return LOOK[key];
     const fam = SB.data.MONSTERS.filter((m) => m.arch === f.arch);
@@ -19475,7 +19709,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return (LOOK[key] = best ? best.id : null);
   };
   // visual: eigene Figur (Monster-ID oder Name), look: geliehene Figur, falls es keine eigene gibt
-  const monVisual = (f) => (f.id && SB.engine.monById(f.id) ? f.id : slug(f.name) || f.id);
+  const monVisual = (f) => (ownFigure(f.id) ? f.id : slug(f.name) || f.id);
   UI.fighterDesc = function (f) {
     if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: monVisual(f), look: UI.monLook(f), mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
@@ -19849,7 +20083,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const b = {};
     const a = S.quest.active;
     if (a && a.end <= now) b.taverne = "!";
-    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare) ? "★" : "3";
+    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare || o.boss) ? "★" : "3";
     if (S.guard && S.guard.end <= now) b.leuchtturm = "✓";
     if (!E.busy(S, now) && S.arena.next <= now) b.arena = "!";
     if (E.wellFree(S)) b.brunnen = "1";
@@ -20304,7 +20538,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const mon = E.questMonster(o);
         const fin = a.end <= now;
         h +=
-          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
+          '<div class="quest' + (o.rare || o.boss ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare || !!o.boss), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
           '<div class="progress" data-from="' + a.start + '" data-to="' + a.end + '"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="foot">' +
           (fin
@@ -20319,16 +20553,19 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const mon = E.questMonster(o);
         const c = estimate(hero, E.questFoes(o, hero), o.id);
         const dur = E.questDuration(s, o);
+        const bossDef = o.boss && D.DUNGEONS.find((d) => d.id === o.boss);
         const waves = o.rare
           ? '<div class="waves"><span class="tag rare">Seltener Auftrag</span> ' + o.waves.length + " Gegner nacheinander, ohne Pause:" + '<div class="wavepics">' + o.waves.map((w, k) => '<span class="wp' + (w.boss ? " boss" : "") + '" title="' + esc(E.monById(w.monster).name) + '">' + UI.portrait(UI.monDesc(E.monById(w.monster), w.boss), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div></div>"
-          : "";
+          : bossDef
+            ? '<div class="waves"><span class="tag rare">Verliesboss</span> ' + esc(bossDef.name) + ": kämpft mit den Kräften eines Bosses</div>"
+            : "";
         h +=
-          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
+          '<div class="quest' + (o.rare || o.boss ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare || !!o.boss), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
           '<div class="meta">' + pips(o.diff) + "<span>" + E.DIFF[o.diff].name + "</span><span>" + I.ui("uhr") + " " + U.fmtTime(dur) + "</span><span>" + I.ui("tatendrang") + " " + o.energy + "</span>" + chanceTxt(c) + "</div>" +
           '<div class="rewards"><span>' + I.ui("xp") + ' <span class="num">' + U.fmt(o.xp) + " EP</span></span><span>" + UI.gold(o.gold) + "</span>" +
           (o.perle ? "<span>" + UI.perlen(o.perle) + "</span>" : "") +
           (o.item ? '<button type="button" class="mini-item r-' + o.item.rarity + '" data-item="offer:' + i + '" data-act="itemInfo" data-ref="offer:' + i + '" aria-label="' + esc(o.item.name) + '">' + I.item(o.item) + "</button>" : "") +
-          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
+          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : o.boss ? "Verliesboss" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
       });
       h += "</div>";
       if (en < 6) h += '<div class="say" style="margin-top:12px">Dein Tatendrang ist erschöpft. Ein Krug Nebelmet hilft, oder du hältst so lange Wache am Turm.</div>';
