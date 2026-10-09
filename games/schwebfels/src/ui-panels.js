@@ -253,6 +253,7 @@
     const col = (arr) => '<div class="col">' + arr.map((sl) => UI.slotHtml(s.equip[sl], "eq:" + sl, { emptyIcon: slotIcon[sl], label: D.SLOT_INFO[sl].name })).join("") + "</div>";
     let h = UI.xpBlock(s);
     h += '<div class="sheet">' + col(left) + '<div class="heroview" id="heroViewSlot"></div>' + col(right) + "</div>";
+    h += '<div class="row helm-toggle"><span class="spacer"></span><button class="btn small ghost" data-act="toggleHelm" aria-pressed="' + !!s.look.hideHelm + '">' + (s.look.hideHelm ? "Helm einblenden" : "Helm ausblenden") + '</button><span class="spacer"></span></div>';
     h += '<div class="section-title">Attribute <span class="muted small">Gold: ' + UI.gold(s.gold) + "</span></div>";
     h += '<div class="row" style="margin-bottom:8px"><span class="muted">Kaufmenge</span>' + [1, 5, 10].map((q) => '<button class="tab' + (UI.qty === q ? " on" : "") + '" data-act="qty" data-q="' + q + '">×' + q + "</button>").join("") + "</div>";
     h += '<div class="attrs">';
@@ -381,6 +382,13 @@
     h += "</div></div>";
     return h;
   }
+  // Helm nur optisch aus- oder einblenden; Werte und Ausruestung bleiben
+  A.toggleHelm = () => {
+    E.setLook(S(), { hideHelm: !S().look.hideHelm });
+    SB.audio.play("click");
+    UI.save();
+    UI.refresh();
+  };
   A.lookn = (el) => {
     E.setLook(S(), { [el.dataset.k]: el.dataset.str ? el.dataset.v : +el.dataset.v });
     SB.audio.play("click");
@@ -415,7 +423,9 @@
     let h = "";
     for (const a of D.ACHIEVEMENTS) {
       const got = s.ach[a.id];
-      h += '<div class="ach' + (got ? "" : " locked") + '">' + I.ui("abzeichen") + "<div><b>" + esc(a.name) + '</b><div class="muted" style="font-size:13px">' + esc(a.desc) + "</div></div><span>" + (got ? "✓ " : "") + "+" + a.perlen + " " + I.ui("perle") + "</span></div>";
+      const pr = got ? null : E.achProgress(s, a.id);
+      const bar = pr ? '<div class="ach-prog"><i style="width:' + Math.round((pr[0] / pr[1]) * 100) + '%"></i></div><div class="muted num" style="font-size:12px">' + U.fmt(pr[0]) + " von " + U.fmt(pr[1]) + "</div>" : "";
+      h += '<div class="ach' + (got ? "" : " locked") + (a.hard ? " hard" : "") + '">' + I.ui("abzeichen") + "<div><b>" + esc(a.name) + (a.hard ? ' <span class="tag">schwer</span>' : "") + '</b><div class="muted" style="font-size:13px">' + esc(a.desc) + "</div>" + bar + "</div><span>" + (got ? "✓ " : "") + "+" + a.perlen + " " + I.ui("perle") + "</span></div>";
     }
     return h;
   }

@@ -55,7 +55,7 @@ Auf der Insel ist Leben: Leute trinken vor der Taverne aus Krügen, ein Spielman
 | (kein Gegenstück) | **Talentbäume** | Je Klasse drei Zweige (Angriff, Verteidigung, Klassenpfad) mit je fünf Talenten; alle zwei Stufen ein Punkt, Stufen eines Zweigs öffnen sich mit 3, 6 und 8 Punkten darin; Zurücksetzen kostet 3 Wolkenperlen. Siehe Abschnitt 4a |
 | (kein Gegenstück) | **Mondtor** | Öffnet sich nur bei Nacht: drei Nachtjagden pro Tag gegen zwei Nachtwesen der eigenen Insel (sichere seltene Beute, kein Tatendrang) und die Händlerin Selene mit drei besonderen Stücken |
 | (kein Gegenstück) | **Heim** | Vier Ausbaustufen (Zeltlager bis Turmfeste) und sieben Einrichtungen mit dauerhaften Boni, als begehbare 3D-Ansicht |
-| Album, Erfolge | **Bestiarium**, **Abzeichen** | 20 Abzeichen mit Perlen-Belohnung |
+| Album, Erfolge | **Bestiarium**, **Abzeichen** | 33 Abzeichen mit Perlen-Belohnung, davon 12 schwere mit Fortschrittsanzeige |
 
 ## 4. Kampf
 
@@ -83,10 +83,11 @@ Vorbild ist Dark Age of Camelot: Dort verteilt jede Klasse Punkte auf eigene Spe
 - `tests/balance.mjs`: Klassen-Duelle im Mittel zwischen etwa 44 und 58 %; Aufträge und Dungeon-Bosse für alle zwölf Klassen.
 - `tests/progression.mjs`: simulierter Spieler; alle Grundarten erreichen Stufe 30 nach rund 12 bis 15 Spielstunden reinem Tatendrang, ohne Abwärtsspirale.
 - Hordenaufträge: gemütlich fast immer, ordentlich rund 90 %, halsbrecherisch bewusst schwer (25 bis 50 %) bei 1,5-facher Belohnung.
+- Gegner in Aufträgen, Chronik und Nachtjagd holen drei Viertel des Vorsprungs des Helden vor dem Modellhelden auf (`E.ADAPT_FOLLOW`); die Stärke wird gemessen (`E.heroStrength`: Gegnerstärke, bei der der Held so abschneidet wie der Modellheld), damit Talente, Rüstung und Tränke zählen. Stufe 31 mit Talenten und guter Ausrüstung (`tests/quests.mjs 31 1.2`, 0.72): Horde gemütlich etwa 67 % Leben übrig, ordentlich 50 %, halsbrecherisch rund 85 % Siege mit gut einem Drittel Leben.
 - Chronik-Kapitel: auf der Kapitelstufe mit durchschnittlicher Ausrüstung meist 60 bis 100 %.
 - Nachtjagd: mit durchschnittlicher Ausrüstung je nach Klasse und Stufe etwa 55 bis 95 %.
 - Arena: die vier Herausforderer liegen bei etwa 75, 60, 45 und 30 % Siegchance.
-- Talente (`tests/talents.mjs`): jede Klasse mit jedem Schwerpunkt gegen alle anderen Klassen auf Stufe 20 und 40 im Mittel zwischen etwa 39 und 62 %, also so ausgeglichen wie ohne Talente; Aufträge werden mit Talenten nur leicht leichter.
+- Talente (`tests/talents.mjs`): jede Klasse mit jedem Schwerpunkt gegen alle anderen Klassen auf Stufe 20 und 40 im Mittel zwischen etwa 39 und 62 %, also so ausgeglichen wie ohne Talente. Aufträge holten Talente bis 0.71 nicht ein (ab Stufe 30 gewann man alles mit drei Vierteln der Lebenspunkte); seit 0.72 zählen sie in der gemessenen Heldenstärke.
 - Glück verbessert die Beute (Fundchance und Seltenheit), damit es sich auch für Nicht-Schurken lohnt.
 
 ## 6. Technik

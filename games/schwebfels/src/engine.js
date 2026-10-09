@@ -333,7 +333,7 @@
       mounts: { owned: [] },
       bestiary: {},
       ach: {},
-      stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 },
+      stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0, hardWins: 0, streak: 0, legendaries: 0 },
       daily: { day: U.dayKey(now), brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
       wellNext: 0,
       npcSeed: U.hash("npc:" + opts.name + now),
@@ -385,7 +385,7 @@
     if (!D.CLASSES[S.cls] || !D.RACES[S.race]) return null;
     S.realm = D.CLASSES[S.cls].realm;
     S.settings = Object.assign({ sound: true, music: true, quality: "hoch", fastFights: false, dayCycle: "zyklus" }, S.settings || {});
-    S.stats = Object.assign({ quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 }, S.stats || {});
+    S.stats = Object.assign({ quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0, hardWins: 0, streak: 0, legendaries: 0 }, S.stats || {});
     S.bestiary = S.bestiary || {};
     S.ach = S.ach || {};
     S.buffs = S.buffs || [];
@@ -651,6 +651,13 @@
     }
     return g;
   };
+  // Darstellung des Helden: wie gearVisual, nur ohne Helm, wenn der Spieler ihn im Charakterfenster ausgeblendet hat
+  // (die Werte bleiben, andere Spieler und Kaempfe zeigen ihn ebenfalls nicht)
+  E.heroGear = function (S) {
+    const g = E.gearVisual(S.equip);
+    if (S.look && S.look.hideHelm) g.helm = null;
+    return g;
+  };
   E.heroFighter = function (S, now) {
     const C = E.classOf(S);
     const attrs = E.heroAttrs(S, now);
@@ -660,7 +667,7 @@
     const L = S.level;
     const f = {
       kind: "hero", name: S.name, level: L, cls: S.cls, realm: S.realm, race: S.race, gender: S.gender, look: S.look,
-      gear: E.gearVisual(S.equip), mainKey: C.main, attrs, prof,
+      gear: E.heroGear(S), mainKey: C.main, attrs, prof,
       maxHp: Math.round(attrs.konstitution * prof.hpMult * (L + 1)),
       wMin: (w ? w.min : 0) + E.baseDmg(L)[0],
       wMax: (w ? w.max : 1) + E.baseDmg(L)[1],
@@ -1099,7 +1106,10 @@
     S.inv.push(item);
     S.stats.items++;
     if (item.rarity === "episch") E.grantAch(S, "episch");
-    if (item.rarity === "legendaer") E.grantAch(S, "legendaer");
+    if (item.rarity === "legendaer") {
+      S.stats.legendaries = (S.stats.legendaries || 0) + 1;
+      E.grantAch(S, "legendaer");
+    }
     return true;
   };
   function giveItem(S, item, rew) {
@@ -1116,7 +1126,9 @@
     { id: "mittel", name: "Mittel", sec: [40, 70], energy: 10 },
     { id: "lang", name: "Lang", sec: [80, 120], energy: 14 },
   ];
-  const DIFF = [null, { name: "Gemütlich", power: 0.88, reward: 0.85 }, { name: "Ordentlich", power: 0.97, reward: 1.0 }, { name: "Halsbrecherisch", power: 1.06, reward: 1.35 }];
+  // Schwierigkeit 0.72: ordentlich 1.0 (vorher 0.97), halsbrecherisch 1.15 (vorher 1.06); zusammen mit der gemessenen
+  // Heldenstaerke (heroStrength) ist halsbrecherisch wieder ein Wagnis (Stufe 31 mit Talenten: Horde etwa 70 bis 85 %)
+  const DIFF = [null, { name: "Gemütlich", power: 0.88, reward: 0.85 }, { name: "Ordentlich", power: 1.0, reward: 1.0 }, { name: "Halsbrecherisch", power: 1.15, reward: 1.35 }];
   E.DIFF = DIFF;
   E.TIERS = TIERS;
   // Gegner passend zur Stufe; mit Reich bevorzugt die Geschoepfe der eigenen Heimatinsel
@@ -1203,15 +1215,57 @@
   };
   E.monById = (id) => D.MONSTERS.find((m) => m.id === id);
   E.questMonster = (o) => E.monById(o.monster);
+  /* Staerke des Helden als Faktor auf die Gegnerstaerke: gesucht ist die Staerke zweier fester Pruefgegner, bei der
+     der Held so abschneidet wie der Modellheld seiner Klasse (gewoehnliche Ausruestung, keine Talente) bei Staerke 1.
+     Gemessen statt geschaetzt, damit Talente (Doppelschlag, Lebensraub, zweiter Atem ...), Ruestung und Traenke
+     mitzaehlen; vorher zaehlten nur Hauptwert, Lebenspunkte und Waffe, und ab Stufe 30 gewann man selbst
+     halsbrecherische Horden immer mit drei Vierteln der Lebenspunkte. Je Kaempferwerten einmal gerechnet. */
+  const EDGE = {};
   E.heroStrength = function (hero, L) {
-    const m = E.modelHeroFighter(L, hero.cls, 1);
-    const main = hero.attrs[hero.mainKey] / m.attrs[m.mainKey];
-    const hp = hero.maxHp / m.maxHp;
-    const wpn = (hero.wMin + hero.wMax) / (m.wMin + m.wMax);
-    return U.clamp(Math.cbrt(main * hp * wpn), 0.4, 2.0);
+    if (!hero || !hero.cls || !D.CLASSES[hero.cls]) return 1;
+    const tal = hero.tal ? Object.keys(hero.tal).filter((k) => k !== "_names").sort().map((k) => k + ":" + hero.tal[k]).join(",") : "";
+    const ck = [hero.cls, L, hero.maxHp, hero.wMin, hero.wMax, hero.armor, JSON.stringify(hero.attrs), JSON.stringify(hero.prof), tal].join("|");
+    if (EDGE[ck]) return EDGE[ck];
+    const mons = E.monstersFor(L).slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+    const refs = [mons[0], mons[Math.floor(mons.length / 2)]].filter(Boolean);
+    const plain = E.modelHeroFighter(L, hero.cls, 1);
+    const N = 16;
+    const score = (f, p) => {
+      let s = 0;
+      for (const mon of refs)
+        for (let i = 0; i < N; i++) {
+          const r = E.simulate(f, E.monsterFighter(mon, L, p), "edge" + mon.id + i);
+          if (r.winner === 0) s += 0.5 + (0.5 * Math.max(0, r.hp[0])) / f.maxHp;
+        }
+      return s / (refs.length * N);
+    };
+    const target = score(plain, 1);
+    let lo = 1;
+    let hi = 1;
+    if (score(hero, 1) > target) {
+      hi = 1.25;
+      while (score(hero, hi) > target && hi < 3) {
+        lo = hi;
+        hi *= 1.25;
+      }
+    } else {
+      lo = 0.8;
+      while (score(hero, lo) < target && lo > 0.4) {
+        hi = lo;
+        lo *= 0.8;
+      }
+    }
+    for (let it = 0; it < 6; it++) {
+      const mid = (lo + hi) / 2;
+      if (score(hero, mid) > target) lo = mid;
+      else hi = mid;
+    }
+    return (EDGE[ck] = U.clamp(Math.round(((lo + hi) / 2) * 100) / 100, 0.4, 3));
   };
-  /* Auftragsgegner wachsen mit dem Helden, aber nur halb so schnell wie seine tatsaechliche Staerke */
-  E.adaptPower = (hero, L, p) => (hero ? p * (0.5 + 0.5 * E.heroStrength(hero, L)) : p);
+  /* Gegner in Auftraegen, Chronik und Nachtjagd wachsen mit dem Helden: um drei Viertel seines Vorsprungs vor dem
+     Modellhelden (vorher die Haelfte, und Talente zaehlten nicht); bessere Ausruestung und Talente lohnen sich weiter */
+  E.ADAPT_FOLLOW = 0.75;
+  E.adaptPower = (hero, L, p) => (hero ? p * (1 - E.ADAPT_FOLLOW + E.ADAPT_FOLLOW * E.heroStrength(hero, L)) : p);
   E.questFoes = function (o, hero) {
     return o.waves.map((w) => E.monsterFighter(E.monById(w.monster), w.mlevel, E.adaptPower(hero, w.mlevel, w.power), { boss: !!w.boss }));
   };
@@ -1245,12 +1299,16 @@
         S.stats.hordes++;
         E.grantAch(S, "horde");
       }
+      if (o.diff === 3) S.stats.hardWins++;
+      S.stats.streak++;
+      if (fight.hero && fight.chain.hpLeft <= fight.hero.maxHp * 0.05) E.grantAch(S, "knapp");
       E.grantAch(S, "ersterSieg");
     } else {
       rew.xp = Math.round(o.xp * 0.25);
       rew.gold = Math.round(o.gold * 0.25);
       E.gainGold(S, rew.gold);
       S.stats.losses++;
+      S.stats.streak = 0;
     }
     S.stats.quests++;
     E.gainXp(S, rew.xp);
@@ -1967,6 +2025,38 @@
     SB.bus.emit("achievement", A);
     return true;
   };
+  // Fortschritt zaehlbarer Abzeichen: [erreicht, noetig] oder null
+  E.achProgress = function (S, id) {
+    const st = S.stats || {};
+    const done = (n, max) => [Math.min(n || 0, max), max];
+    switch (id) {
+      case "quest10": return done(st.quests, 10);
+      case "quest50": return done(st.quests, 50);
+      case "quest150": return done(st.quests, 150);
+      case "quest300": return done(st.quests, 300);
+      case "stufe10": return done(S.level, 10);
+      case "stufe25": return done(S.level, 25);
+      case "stufe40": return done(S.level, 40);
+      case "stufe50": return done(S.level, 50);
+      case "arena10": return done(st.arenaWins, 10);
+      case "arena100": return done(st.arenaWins, 100);
+      case "mondjaeger": return done(st.nightHunts, 5);
+      case "mondjaeger25": return done(st.nightHunts, 25);
+      case "bestiarium12": return done(Object.keys(S.bestiary || {}).length, 12);
+      case "bestiarium30": return done(Object.keys(S.bestiary || {}).length, 30);
+      case "halsbrecher25": return done(st.hardWins, 25);
+      case "horde10": return done(st.hordes, 10);
+      case "unbesiegt20": return done(st.streak, 20);
+      case "legendaer5": return done(st.legendaries, 5);
+      case "kapitel3": return done(Object.keys((S.story && S.story.done) || {}).length, 3);
+      case "chronik": {
+        const ch = E.storyChapters(S);
+        return done(ch.filter((c) => c.done).length, ch.length);
+      }
+      case "dungeonAll": return done(D.DUNGEONS.filter((d) => ((S.dungeons && S.dungeons.progress[d.id]) || 0) >= d.bosses.length).length, D.DUNGEONS.length);
+      default: return null;
+    }
+  };
   E.checkAch = function (S, now) {
     if (S.stats.quests >= 10) E.grantAch(S, "quest10");
     if (S.stats.quests >= 50) E.grantAch(S, "quest50");
@@ -1977,6 +2067,12 @@
     if (S.stats.arenaWins >= 10) E.grantAch(S, "arena10");
     if ((S.stats.nightHunts || 0) >= 5) E.grantAch(S, "mondjaeger");
     if (Object.keys(S.bestiary).length >= 12) E.grantAch(S, "bestiarium12");
+    // schwere Abzeichen; ihr Fortschritt steht in E.achProgress
+    for (const a of D.ACHIEVEMENTS) {
+      if (!a.hard || S.ach[a.id]) continue;
+      const pr = E.achProgress(S, a.id);
+      if (pr && pr[0] >= pr[1]) E.grantAch(S, a.id);
+    }
     if (now !== undefined) {
       const me = E.allHeroes(S, now, SB.remoteHeroes || null).find((h) => h.kind === "me");
       if (me && me.rank <= 10) E.grantAch(S, "arenaTop10");

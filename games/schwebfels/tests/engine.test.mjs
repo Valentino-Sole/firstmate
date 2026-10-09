@@ -607,3 +607,39 @@ function SB_rng(E, seed) {
 function loadUtilRng(seed) {
   return load().util.rng(seed);
 }
+
+test("Helm ausblenden aendert nur die Darstellung, nicht die Werte", () => {
+  const { E, S } = fresh("sturmhuene");
+  const it = E.makeItem(() => 0.5, { level: 5, slot: "helm", base: "helm", arch: "krieger", realm: "midgard", rarity: "selten" });
+  S.equip.helm = it;
+  const werte = () => {
+    const x = E.heroSummary(S);
+    return JSON.stringify([x.attrs, x.hp, x.dmgMin, x.dmgMax, x.armor, x.crit, x.block, x.evade]);
+  };
+  const vor = werte();
+  E.setLook(S, { hideHelm: true });
+  assert.equal(E.heroFighter(S).gear.helm, null);
+  assert.equal(werte(), vor);
+  E.setLook(S, { hideHelm: false });
+  assert.ok(E.heroFighter(S).gear.helm);
+});
+
+test("Heldenstaerke misst Talente und Ausruestung; Modellheld ohne Talente hat Staerke 1", () => {
+  const SB = load();
+  const E = SB.engine;
+  assert.equal(E.heroStrength(E.modelHeroFighter(31, "sturmhuene", 1), 31), 1);
+  const tal = E.applyTalents(E.modelHeroFighter(31, "sturmhuene", 1), E.talentEffects("sturmhuene", E.autoTalents("sturmhuene", 31, "a"), 31));
+  assert.ok(E.heroStrength(tal, 31) > 1.1);
+  assert.ok(E.heroStrength(E.modelHeroFighter(31, "sturmhuene", 1.25), 31) > 1.2);
+});
+
+test("schwere Abzeichen zaehlen mit und werden beim Erreichen vergeben", () => {
+  const { E, S } = fresh();
+  assert.equal(JSON.stringify(E.achProgress(S, "halsbrecher25")), "[0,25]");
+  S.stats.hardWins = 25;
+  E.checkAch(S);
+  assert.ok(S.ach.halsbrecher25);
+  S.stats.streak = 20;
+  E.checkAch(S);
+  assert.ok(S.ach.unbesiegt20);
+});

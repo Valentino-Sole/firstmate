@@ -744,6 +744,19 @@
     { id: "gilde", name: "Gemeinsam stark", desc: "Tritt einer Gilde bei oder gründe eine.", perlen: 2 },
     { id: "heim", name: "Eigene vier Wände", desc: "Baue dein Heim zur Steinkate aus.", perlen: 3 },
     { id: "mondjaeger", name: "Kind der Nacht", desc: "Gewinne 5 Nachtjagden am Mondtor.", perlen: 4 },
+    // schwere Abzeichen (0.72, Wunsch des Kapitaens)
+    { id: "halsbrecher25", name: "Halsbrecher", desc: "Gewinne 25 halsbrecherische Aufträge.", perlen: 6, hard: true },
+    { id: "horde10", name: "Hordenschreck", desc: "Gewinne 10 seltene Hordenaufträge.", perlen: 6, hard: true },
+    { id: "unbesiegt20", name: "Unbesiegt", desc: "Gewinne 20 Aufträge hintereinander ohne Niederlage.", perlen: 6, hard: true },
+    { id: "knapp", name: "Mit letzter Kraft", desc: "Gewinne einen Auftrag mit höchstens 5 % deiner Lebenspunkte.", perlen: 3, hard: true },
+    { id: "quest300", name: "Unermüdlich", desc: "Schließe 300 Aufträge ab.", perlen: 12, hard: true },
+    { id: "stufe50", name: "Wolkenfürst", desc: "Erreiche Stufe 50.", perlen: 15, hard: true },
+    { id: "chronik", name: "Die ganze Geschichte", desc: "Schließe alle Kapitel deiner Chronik ab.", perlen: 8, hard: true },
+    { id: "dungeonAll", name: "Bezwinger der Tiefen", desc: "Schließe alle sechs Verliese vollständig ab.", perlen: 15, hard: true },
+    { id: "arena100", name: "Herr des Rings", desc: "Gewinne 100 Kämpfe im Ring der Reiche.", perlen: 8, hard: true },
+    { id: "mondjaeger25", name: "Schrecken der Nacht", desc: "Gewinne 25 Nachtjagden am Mondtor.", perlen: 6, hard: true },
+    { id: "legendaer5", name: "Schatzhüter", desc: "Finde 5 legendäre Gegenstände.", perlen: 8, hard: true },
+    { id: "bestiarium30", name: "Weltenkundler", desc: "Entdecke 30 Wesen im Bestiarium.", perlen: 6, hard: true },
   ];
 
   const WELL_PRIZES = [

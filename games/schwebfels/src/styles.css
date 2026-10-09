@@ -610,6 +610,10 @@ table.fame tr[data-act]:hover td { background: rgba(255, 255, 255, 0.05); }
 .ach { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 4px; background: linear-gradient(var(--stone-3), var(--stone-2)); margin-bottom: 6px; }
 .ach .ic { width: 30px; height: 30px; }
 .ach.locked { opacity: 0.5; }
+.ach.locked.hard { opacity: 0.72; }
+.ach-prog { height: 4px; margin-top: 5px; border-radius: 2px; background: var(--stone); overflow: hidden; }
+.ach-prog i { display: block; height: 100%; background: var(--gold); }
+.helm-toggle { margin: 2px 0 8px; }
 input[type="range"] { width: 100%; accent-color: var(--gold); }
 
 /* Handy und schmale Fenster: Menue als Leiste unten */
