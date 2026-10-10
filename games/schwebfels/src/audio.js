@@ -492,6 +492,11 @@
         sample("schwung.klinge", { gain: 0.5, pan: p, delay: 0.12 });
       } else if (k === "arrows") {
         for (let i = 0; i < 4; i++) sample("bogen.schuss", { gain: 0.45, pan: p, delay: i * 0.11 });
+      } else if (k === "stoss") {
+        // Jaeger mit Speer (Frostspeer, Speerhagel): Anlauf mit zwei schnellen Stoessen statt Bogensehne
+        sample("schwung.stoss", { gain: 0.6, pan: p });
+        sample("schwung.stoss", { gain: 0.5, pan: p, delay: 0.14, rate: 1.1 });
+        if (c.sp === "frostpfeil") sample("magie.frost.wirken", { gain: 0.45, pan: p, delay: 0.05 });
       } else if (k === "beam") sample("magie.licht.wirken", { gain: 0.7, pan: p, rate: 0.8 });
       else if (k === "roots") sample("magie.dorn.wirken", { gain: 0.7, pan: p, rate: 0.85 });
       else if (k === "smoke") sample("magie.teleport", { gain: 0.6, pan: p });

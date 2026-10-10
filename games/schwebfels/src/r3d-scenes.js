@@ -3187,6 +3187,21 @@
         if (u >= 1) scene.remove(arc);
       });
     }
+    // Speerstoss: heller Stich in Stossrichtung, der in den Gegner faehrt
+    function thrust(A, f, color) {
+      const dir = Math.sign(f.m.obj.position.x - A.m.obj.position.x) || 1;
+      const c = chestOf(f, 0.62);
+      const m = new T.Mesh(G.cone(0.08, 1.2, 8), new T.MeshBasicMaterial({ color: col(color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+      m.rotation.z = -dir * PI / 2;
+      m.position.copy(c);
+      scene.add(m);
+      return tween(0.22, (u) => {
+        m.position.x = c.x - dir * (0.9 - u * 1.1);
+        m.scale.set(1, 0.6 + u * 0.6, 1);
+        m.material.opacity = u < 0.5 ? 1 : 2 - u * 2;
+        if (u >= 1) scene.remove(m);
+      });
+    }
     function roots(f, color) {
       const g = grp([f.m.obj.position.x, 0, f.m.obj.position.z]);
       const rm = pm("bark", "#4a3a2a");
@@ -4030,7 +4045,8 @@
       const d = A.desc || {};
       if (d.kind !== "monster") {
         const c = HERO_TINT[d.cls] || "#ffffff";
-        slash(Bf, c, i % 2);
+        if (A.m.weaponBase === "speer") thrust(A, Bf, c);
+        else slash(Bf, c, i % 2);
         if (A.m.arch === "krieger") burst(chestOf(Bf, 0.62), c, 8, 1.6);
         if (A.m.arch === "schurke") wait(0.08).then(() => slash(Bf, "#ffffff", (i + 1) % 2));
         return;
@@ -4357,12 +4373,18 @@
       }
       const special = ev.kind === "special";
       const SFX = special ? SPECIAL_FX[ev.sp] || { color: A.m.projColor || "#ffd25a", kind: "shock" } : null;
+      const isHero = A.desc.kind !== "monster";
+      const wb = A.m.weaponBase;
+      // Der Speer ist eine Nahkampfwaffe: der Held laeuft zum Gegner und stoesst zu, nichts fliegt. Die Pfeil-Namen der
+      // Jaeger (Frostpfeil, Pfeilhagel, Pfeilsalve) heissen mit dem Speer Frostspeer, Speerhagel, Speersalve
+      const spear = isHero && wb === "speer";
+      const spName = (n) => (spear ? n.replace(/pfeil/g, "speer").replace(/Pfeil/g, "Speer") : n);
       if (special) {
-        banner(ev.spName || "Spezialangriff", A.side);
+        banner(spName(ev.spName || "Spezialangriff"), A.side);
         ring(A, SFX.color, true);
         rising(A, SFX.color, 14);
         zoom = 0.5;
-        if (opts.sfx) opts.sfx("special", { sp: ev.sp, kind: SFX.kind, a: A.desc, side: A.side });
+        if (opts.sfx) opts.sfx("special", { sp: ev.sp, kind: spear && /^arrows?$/.test(SFX.kind) ? "stoss" : SFX.kind, a: A.desc, side: A.side });
         if (SFX.kind === "aura") setAura(A, SFX.color);
         if (ev.master) {
           // Grossmeister (Abschluss-Talent des Klassenpfads): goldener Kreis und Funken, der Spezialangriff kommt oefter
@@ -4372,14 +4394,12 @@
         }
         await wait(0.4);
       }
-      const isHero = A.desc.kind !== "monster";
-      const wb = A.m.weaponBase;
-      const bowLike = isHero && (wb === "bogen" || wb === "armbrust" || wb === "speer");
+      const bowLike = isHero && (wb === "bogen" || wb === "armbrust");
       const spell = (isHero && A.m.arch === "magier") || (!isHero && A.m.ranged);
       if (bowLike || spell) {
         // Bogen und Armbrust: in Schussstellung drehen (die Bogenclips schiessen zur Seite des Bogenarms), anheben,
         // zielen; das Geschoss fliegt erst beim Loslassen und vom Bogen oder der Armbrust aus
-        const archer = bowLike && wb !== "speer" && A.m.parts && A.m.parts.rig && R.rigged;
+        const archer = bowLike && A.m.parts && A.m.parts.rig && R.rigged;
         const yaw0 = A.m.obj.rotation.y;
         const turn = archer ? R.rigged.SHOT_TURN.Archery_Shot : 0;
         if (archer) {
@@ -4411,7 +4431,7 @@
             roots(Bf, SFX.color);
             await wait(0.35);
           } else if (bowLike || (special && SFX.kind === "orbs")) {
-            const kind = bowLike ? (wb === "speer" ? "spear" : wb === "armbrust" ? "bolt" : "arrow") : "star";
+            const kind = bowLike ? (wb === "armbrust" ? "bolt" : "arrow") : "star";
             await projectile(A, Bf, kind, special ? SFX.color : HERO_TINT[A.desc.cls] || A.m.projColor || "#c47bff");
           } else await castFx(A, Bf, spellOf(A));
           await impact(ev, A, Bf, ev.hits[i], i, bowLike ? (wb === "speer" ? "speer" : "pfeil") : "magie");
@@ -4470,12 +4490,16 @@
           }
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
+        // Pfeilsalve (Abschluss-Talent der Jaeger) mit dem Speer: die zusaetzlichen Treffer als schnelle Stossfolge
+        const flurry = ev.volley ? ev.hits.length - ev.volley : ev.hits.length;
         for (let i = 0; i < ev.hits.length; i++) {
           const big = special && i === 0;
           const stab = assassin && i === 0;
-          A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
+          const quick = i >= flurry ? 0.7 : 1;
+          if (spear && i === flurry) banner(spName("Pfeilsalve"), A.side);
+          A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", (ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42) * quick);
           if (opts.sfx) opts.sfx("swing", { a: A.desc, side: A.side });
-          await wait(ST ? (big ? ST.shit : ST.hit) : 0.22);
+          await wait((ST ? (big ? ST.shit : ST.hit) : 0.22) * quick);
           if (opener && i === 0) {
             shockwave(Bf, "#ffd27a");
             shake = Math.max(shake, 0.45);
@@ -4487,7 +4511,10 @@
             ring(Bf, SFX.color, true);
             shake = 0.3;
           } else if (special && SFX.kind === "roots") roots(Bf, SFX.color);
-          else meleeFx(A, Bf, i);
+          else if (special && spear) {
+            thrust(A, Bf, SFX.color);
+            burst(chestOf(Bf, 0.62), SFX.color, 12, 2);
+          } else meleeFx(A, Bf, i);
           await impact(ev, A, Bf, ev.hits[i], i);
           // Bestien: Biss und Satz zurueck ausspielen lassen
           await wait(ST ? 0.3 : 0.16);
