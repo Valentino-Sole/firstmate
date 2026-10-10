@@ -390,7 +390,9 @@ await mob.click('[data-cact="realm"][data-v="hibernia"]');
 await mob.waitForTimeout(400);
 await mob.fill("#heroName", "Pim");
 await mob.click('[data-cact="start"]');
-await mob.waitForSelector("#topbar .me-sub");
+// Start mit Meshy-Figuren in Software-WebGL bei doppelter Pixeldichte: allein 10 bis 17 Sekunden, nach dem langen
+// Durchlauf auch ueber 30
+await mob.waitForSelector("#topbar .me-sub", { timeout: 120000 });
 await mob.click('#modal [data-act="closeDialog"]');
 await mob.waitForTimeout(2000);
 await shot(mob, "31-mobil-insel");
