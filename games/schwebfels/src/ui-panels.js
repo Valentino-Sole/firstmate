@@ -1196,7 +1196,7 @@
       slot.appendChild(FP.el);
       if (FP.state === "ok") {
         if (!FP.view) {
-          FP.view = SB.R3D.createHeroView(FP.el);
+          FP.view = SB.R3D.createHeroView(FP.el, { zoomButtons: true });
           fpShow();
         }
         return;

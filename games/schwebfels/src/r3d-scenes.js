@@ -2085,17 +2085,65 @@
     let goalY = 0.35;
     let dragX = null;
     const canvas = renderer.domElement;
+    // Zoomen (Wunsch des Kapitaens): Mausrad, zwei Finger oder Knoepfe; 1 = Grundansicht, kleiner = naeher. Beim
+    // Heranzoomen wandert der Blick zum Kopf. Am Anschlag scrollt das Mausrad wieder die Seite.
+    const ZMIN = 0.3;
+    const ZMAX = 1.3;
+    let zoom = 1;
+    let zoomGoal = 1;
+    const headPt = camHome.look.clone();
+    const setZoom = (z) => (zoomGoal = Math.max(ZMIN, Math.min(ZMAX, z)));
+    const touch = new Map();
+    let pinch = null;
+    const spread = () => {
+      const [a, b] = [...touch.values()];
+      return Math.max(10, Math.hypot(a[0] - b[0], a[1] - b[1]));
+    };
+    if (opts.zoom !== false) {
+      canvas.style.touchAction = "pan-y";
+      canvas.addEventListener(
+        "wheel",
+        (e) => {
+          if ((e.deltaY > 0 && zoomGoal >= ZMAX) || (e.deltaY < 0 && zoomGoal <= ZMIN)) return;
+          e.preventDefault();
+          setZoom(zoomGoal * Math.exp(Math.max(-200, Math.min(200, e.deltaY)) * 0.0015));
+        },
+        { passive: false }
+      );
+    }
     canvas.addEventListener("pointerdown", (e) => {
-      dragX = e.clientX;
+      touch.set(e.pointerId, [e.clientX, e.clientY]);
       canvas.setPointerCapture(e.pointerId);
+      if (touch.size === 2 && opts.zoom !== false) {
+        pinch = { d: spread(), z: zoomGoal };
+        dragX = null;
+      } else if (touch.size === 1) dragX = e.clientX;
     });
     canvas.addEventListener("pointermove", (e) => {
+      if (touch.has(e.pointerId)) touch.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pinch && touch.size >= 2) return setZoom((pinch.z * pinch.d) / spread());
       if (dragX == null) return;
       goalY += (e.clientX - dragX) * 0.012;
       dragX = e.clientX;
     });
-    canvas.addEventListener("pointerup", () => (dragX = null));
-    canvas.addEventListener("pointercancel", () => (dragX = null));
+    const up = (e) => {
+      touch.delete(e.pointerId);
+      if (touch.size < 2) pinch = null;
+      dragX = null;
+    };
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+    if (opts.zoomButtons) {
+      const bar = document.createElement("div");
+      bar.className = "hv-zoom";
+      bar.innerHTML = '<button type="button" aria-label="Heranzoomen">+</button><button type="button" aria-label="Herauszoomen">\u2212</button>';
+      const [plus, minus] = bar.querySelectorAll("button");
+      plus.addEventListener("click", () => setZoom(zoomGoal * 0.75));
+      minus.addEventListener("click", () => setZoom(zoomGoal / 0.75));
+      el.appendChild(bar);
+    }
+    const zLook = new T.Vector3();
+    const zPos = new T.Vector3();
     let raf = 0;
     let last = performance.now();
     function resize() {
@@ -2116,9 +2164,13 @@
       const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       rotY += (goalY - rotY) * Math.min(1, dt * 8);
+      zoom += (zoomGoal - zoom) * Math.min(1, dt * 8);
+      const zt = zoom < 1 ? (1 - zoom) / (1 - ZMIN) : 0;
+      zLook.copy(camGoal.look).lerp(headPt, Math.min(1, zt * 1.4));
+      zPos.copy(camGoal.pos).sub(camGoal.look).multiplyScalar(zoom).add(zLook);
       const k = Math.min(1, dt * 3.5);
-      camera.position.lerp(camGoal.pos, k);
-      camLook.lerp(camGoal.look, k);
+      camera.position.lerp(zPos, k);
+      camLook.lerp(zLook, k);
       camera.lookAt(camLook);
       if (model) {
         model.obj.rotation.y = rotY;
@@ -2131,6 +2183,18 @@
     raf = requestAnimationFrame(frame);
     // Ziel der Kamera aus den Massen der Figur (sichtbare Hoehe bei 30 Grad Blickwinkel: 0,54 x Abstand)
     function aim() {
+      // Kopfmitte als Ziel beim Heranzoomen
+      const hb = model && !model.pending && model.parts && model.parts.B && model.parts.B.head;
+      if (hb) {
+        // Figuren mit Skelett: Kopfknochen (sitzt am Schaedelansatz), Kopfmitte etwas darueber
+        model.obj.updateMatrixWorld(true);
+        headPt.set(0, hb.getWorldPosition(new T.Vector3()).y + 0.08 * (model.obj.scale.y || 1), 0);
+      } else if (model && !model.pending) {
+        const b3 = new T.Box3().setFromObject(model.obj);
+        const s3 = model.obj.scale.y || 1;
+        const t3 = model.headY ? Math.min(b3.max.y, (model.headY + 0.18) * s3) : b3.max.y;
+        headPt.set(0, t3 - Math.max(0.12, (t3 - b3.min.y) * 0.07), 0);
+      } else headPt.copy(camHome.look);
       if (!model || model.pending || camMode === "ganz") {
         camGoal.pos.copy(camHome.pos);
         camGoal.look.copy(camHome.look);
@@ -2170,6 +2234,7 @@
       // "ganz", "nah" (Kopf und Oberkoerper) oder "kopf"
       focus(mode) {
         camMode = mode || "ganz";
+        zoomGoal = 1;
         aim();
       },
       play(name, dur) {

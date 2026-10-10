@@ -308,6 +308,9 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .heroview.small { height: 320px; }
 .heroview.fp-stage { height: min(50vh, 460px); min-height: 280px; margin: 6px 0 4px; position: sticky; top: 0; z-index: 2; }
 .heroview .r3d-canvas { display: block; cursor: grab; }
+.hv-zoom { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+.hv-zoom button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--gold-dim); background: rgba(20, 15, 24, 0.75); color: var(--gold-hi); font: 600 20px/1 var(--font-display, serif); cursor: pointer; padding: 0; }
+.hv-zoom button:hover { background: rgba(58, 52, 72, 0.9); }
 .heroview .hv-caption { position: absolute; left: 0; right: 0; top: 6px; text-align: center; pointer-events: none; }
 .heroview .hv-caption b { font-family: var(--font-display); font-size: 24px; font-weight: 400; color: var(--gold-hi); text-shadow: 0 2px 0 #000; }
 .hv-fallback { display: grid; place-items: center; height: 100%; }

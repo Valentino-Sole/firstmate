@@ -689,6 +689,11 @@
     const left = {};
     if (S.quest.active && S.quest.active.end > now) left.taverne = S.quest.active.end;
     if (S.guard && S.guard.end > now) left.leuchtturm = S.guard.end;
+    // Wunsch des Kapitaens: offenes Mondtor zeigt, wie lange es noch offen bleibt
+    if (UI.isNight()) {
+      const open = E.nightChangeIn(S.settings.dayCycle || "zyklus", now);
+      if (open !== Infinity) left.mondtor = now + open;
+    }
     dock.innerHTML =
       '<div class="side-logo">' + esc(D.REALMS[S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[S.realm].name) + "</small></div>" +
       MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (left[id] ? '<b class="dock-zeit num" data-until="' + left[id] + '"></b>' : b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
@@ -860,7 +865,7 @@
       slot.appendChild(c);
     }
     if (!heroView) {
-      heroView = SB.R3D.createHeroView(heroViewEl);
+      heroView = SB.R3D.createHeroView(heroViewEl, { zoomButtons: true });
       heroViewKey = "";
     }
     const k = JSON.stringify(desc);

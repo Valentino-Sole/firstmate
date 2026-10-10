@@ -418,7 +418,7 @@
             down = null;
           });
           root.appendChild(heroBox);
-          heroView = R.createHeroView(heroBox, { distance: 7.6, lookY: 1.1 });
+          heroView = R.createHeroView(heroBox, { distance: 7.6, lookY: 1.1, zoom: false });
         }
         heroView.set(desc);
       } catch (e) {
