@@ -5269,6 +5269,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   A.loadGen = function (realm) {
     if (GEN_LOAD[realm]) return GEN_LOAD[realm];
     const key = "SB_GEN_" + realm.toUpperCase();
+    // Handy-Fassung: die Ausruestung der drei Reiche steckt in einem Paket, die anderen Namen verweisen darauf
+    // ("@ausrmidgardkrieger", assets-src/handy.py)
+    const al = globalThis[key];
+    if (typeof al === "string" && al.charAt(0) === "@") return (GEN_LOAD[realm] = A.loadGen(al.slice(1)));
     // Base64 roh oder (Handy-Fassung, eine einzige Datei) mit gzip verkleinert
     const take = async () => {
       const s = globalThis[key];

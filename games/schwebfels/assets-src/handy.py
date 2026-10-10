@@ -1,8 +1,8 @@
 """Handy-Fassung: das ganze Spiel als eine einzige HTML-Datei von hoechstens etwa 30 MB.
 
 Aufruf (Blender als Python-Modul, siehe CLAUDE.md "Werkzeuge in einer neuen Sitzung"):
-  python handy.py <dist-ordner> <ausgabe.html> [--held 6000] [--monster 4000] [--tex 512] [--tex-monster 384]
-                  [--kulisse 1024] [--ganz]
+  python handy.py <dist-ordner> <ausgabe.html> [--held 6000] [--monster 2600] [--tex 512] [--tex-monster 256]
+                  [--tex-ausr 144] [--kulisse 800] [--ganz]
 
 <dist-ordner> ist ein Bau wie zum Veroeffentlichen: schwebfels.html mit Inselbildern, daneben die Figurendateien
 gen-*.js und kulissen.js. Die Seite laedt diese Dateien sonst einzeln nach; auf dem Handy liegt aber nur die eine
@@ -23,6 +23,10 @@ Damit die Datei klein genug bleibt:
    Heldenart kommen die drei Reiche in ein Paket, jede Form (Ecken, Dreiecke, Gewichte) nur einmal, die Bilder je Reich
    auf --tex-ausr Pixel; die Namen der beiden anderen Reiche verweisen darauf ("@ausrmidgard<art>", A.loadGen in
    src/r3d-assets.js). Ohne das kaeme die Datei mit 0.75 auf 71 MB.
+ - Das Grundpaket der Seite verliert die Kleidung der gebauten Figuren (Haare, Baerte, Hemden, Roben; strip_legacy),
+   die hier nie zu sehen ist: rund 4 MB.
+Mit 0.75 ergeben die Standardwerte 28,9 MB (vorher 40 MB). Die Ausruestung ist der groesste Block (gut 11 MB, davon
+knapp 9 MB Formen); bessere Kompression der Formen (Ebenen trennen, Differenzen) brachte mit gzip nichts.
 --ganz bettet alles unveraendert ein (etwa 120 MB, fuer Rechner mit viel Speicher).
 """
 import argparse
@@ -299,6 +303,36 @@ def rebake(pos, uv, idx, si, sw, tex, target, size, keep=None, head=False):
     return P2, np.array(UV2), np.array(I2), order, w4, Image.fromarray(rgb), near
 
 
+def pack_bytes(head, P):
+    h = json.dumps(head, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    head_b = b"SBP1" + struct.pack("<I", len(h)) + h
+    head_b += b"\0" * ((-len(head_b)) % 4)
+    return head_b + b"".join(P.parts)
+
+
+def strip_legacy(b):
+    """Grundpaket der Seite ohne die Kleidung der gebauten Figuren (Haare, Baerte, Hemden, Roben, Stiefel ...).
+
+    In der Handy-Fassung hat jedes Volk einen Meshy-Koerper und jede Ausruestungsform ein Meshy-Teil; die gebauten
+    Figuren erscheinen nur, wenn eine Figurendatei fehlt, und die liegen hier alle in der Datei. Fehlende Teile
+    ueberspringt das Spiel ohne Fehler (src/r3d-gear.js, src/r3d-human.js). Koerper, Profile, Materialien und der
+    gebaute Schlund bleiben, alles unveraendert."""
+    head, data = read_pack(b)
+    P = Pack()
+
+    def cp(o):
+        if is_ref(o):
+            r = o["$"]
+            return {"$": [r[0], P._add(bytes(raw(data, o))), r[2]] + r[3:]}
+        if isinstance(o, dict):
+            return {k: cp(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [cp(v) for v in o]
+        return o
+
+    return pack_bytes({k: ({} if k == "pieces" else cp(v)) for k, v in head.items()}, P)
+
+
 class Repack:
     def __init__(self, data, opt, monster):
         self.data = data
@@ -420,14 +454,7 @@ class Repack:
                 out[sec] = {k: self.mesh(e, self.opt.monster, True) for k, e in v.items()}
             else:
                 out[sec] = self.walk(v)
-        bio = io.BytesIO()
-        h = json.dumps(out, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        head_b = b"SBP1" + struct.pack("<I", len(h)) + h
-        head_b += b"\0" * ((-len(head_b)) % 4)
-        bio.write(head_b)
-        for p in self.P.parts:
-            bio.write(p)
-        return bio.getvalue()
+        return pack_bytes(out, self.P)
 
 
 def shrink_pack(b, opt, monster, name):
@@ -462,14 +489,7 @@ def shrink_ausr(files, opt):
         out["weapons"].update(part.get("weapons") or {})
         img[0] += R.stat["img"][0]
         img[1] += R.stat["img"][1]
-    bio = io.BytesIO()
-    h = json.dumps(out, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    head_b = b"SBP1" + struct.pack("<I", len(h)) + h
-    head_b += b"\0" * ((-len(head_b)) % 4)
-    bio.write(head_b)
-    for p in P.parts:
-        bio.write(p)
-    z = gzip.compress(bio.getvalue(), 9, mtime=0)
+    z = gzip.compress(pack_bytes(out, P), 9, mtime=0)
     print("%-22s %6.2f MB -> %5.2f MB (gzip, %d Reiche zusammen)  Bilder %5.2f -> %5.2f MB" % (os.path.basename(files[0]).replace("midgard", "*"), size / 1e6, len(z) / 1e6, len(files), img[0] / 1e6, img[1] / 1e6))
     return z
 
@@ -497,12 +517,12 @@ def main():
     ap.add_argument("dist")
     ap.add_argument("out")
     ap.add_argument("--held", type=int, default=6000, help="Dreiecke je Heldenkoerper")
-    ap.add_argument("--monster", type=int, default=4000, help="Dreiecke je Monster oder Bestie")
+    ap.add_argument("--monster", type=int, default=2600, help="Dreiecke je Monster oder Bestie")
     ap.add_argument("--tex", type=int, default=512)
-    ap.add_argument("--tex-monster", type=int, default=384)
-    ap.add_argument("--tex-ausr", type=int, default=256, help="Farbbilder der Ausruestung")
+    ap.add_argument("--tex-monster", type=int, default=256)
+    ap.add_argument("--tex-ausr", type=int, default=144, help="Farbbilder der Ausruestung")
     ap.add_argument("--qualitaet", type=int, default=72)
-    ap.add_argument("--kulisse", type=int, default=1024)
+    ap.add_argument("--kulisse", type=int, default=800)
     ap.add_argument("--qualitaet-kulisse", type=int, default=62)
     ap.add_argument("--ganz", action="store_true")
     opt = ap.parse_args()
@@ -516,6 +536,13 @@ def main():
     if m:
         z = shrink_pack(gzip.decompress(base64.b64decode(m.group(1))), opt, False, "Kernpaket")
         page = page[:m.start(1)] + base64.b64encode(z).decode() + page[m.end(1):]
+    if not opt.ganz:
+        m = re.search(r'globalThis\.SB_PACK="([A-Za-z0-9+/=]+)"', page)
+        b = base64.b64decode(m.group(1))
+        nb = strip_legacy(gzip.decompress(b) if b[:2] == b"\x1f\x8b" else b)
+        z = base64.b64encode(gzip.compress(nb, 9, mtime=0)).decode()
+        print("Grundpaket           %6.2f MB -> %5.2f MB (ohne Kleidung der gebauten Figuren)" % (len(m.group(1)) / 1e6, len(z) / 1e6))
+        page = page[:m.start(1)] + z + page[m.end(1):]
     done = set()
     if not opt.ganz:
         arts = sorted({m.group(2) for m in (re.match(r"gen-ausr(albion|midgard|hibernia)(\w+)\.js$", os.path.basename(f)) for f in glob.glob(os.path.join(opt.dist, "gen-ausr*.js"))) if m})
