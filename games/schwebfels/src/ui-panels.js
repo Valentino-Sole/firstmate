@@ -36,10 +36,10 @@
     return '<div class="say">' + (b.what === "quest" ? "Du bist gerade auf einem Auftrag unterwegs." : "Du hältst gerade Wache am Turm.") + "</div>";
   };
   const estCache = new Map();
-  function estimate(hero, foes, key) {
-    const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block + "|" + hero.maxHp + "|" + JSON.stringify(hero.tal || {});
+  function estimate(hero, foes, key, n) {
+    const k = key + "|" + (n || 30) + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block + "|" + hero.maxHp + "|" + JSON.stringify(hero.tal || {});
     if (estCache.has(k)) return estCache.get(k);
-    const v = E.estimateWin(hero, foes, 30, key);
+    const v = E.estimateWin(hero, foes, n || 30, key);
     estCache.set(k, v);
     if (estCache.size > 200) estCache.delete(estCache.keys().next().value);
     return v;
@@ -68,7 +68,7 @@
         '<div class="row" style="margin-bottom:12px"><span class="gauge" style="padding-right:12px">' + UI.gauge(en, max) + "<span><small>Tatendrang</small>" + Math.floor(en) + " / " + max + "</span></span>" +
         (en < max ? '<span class="muted">+1 in <b class="num" data-until="' + (now + E.nextEnergyIn(s, now)) + '"></b></span>' : "") +
         '<span class="spacer"></span><button class="btn small" data-act="brew"' + (s.daily.brews >= E.C.BREW_MAX ? " disabled" : "") + ">Nebelmet +" + E.C.BREW_ENERGY + " · 1 " + I.ui("perle") + "</button></div>" +
-        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " Krüge Nebelmet erhältlich.</div>";
+        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " von " + E.C.BREW_MAX + " Krügen Nebelmet erhältlich." + (s.daily.brews >= E.C.BREW_MAX ? ' Neue Krüge um Mitternacht, in <b class="num" data-until="' + E.nextMidnight(now) + '"></b>.' : "") + "</div>";
       if (s.guard) return h + busyNote();
       const a = s.quest.active;
       if (a) {
@@ -501,20 +501,31 @@
       // Heldenkoerper der fremden Reiche nachladen (die Bilder erneuern sich danach einmal)
       for (const rl of new Set(rivals.map((r) => r.realm).filter(Boolean))) UI.loadGenFigures(rl);
       const hero = E.heroFighter(s, now);
-      h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div><div class="cards">';
+      const rc = E.arenaRerollCost(s);
+      h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div>';
+      h += '<div class="row" style="margin:-2px 0 10px"><span class="muted small">Siegchance aus 400 Probekämpfen. Schwere Gegner bringen mehr Ehre.</span><span class="spacer"></span><button class="btn ghost small" data-act="arenaReroll">Andere Gegner · ' + (rc ? U.fmt(rc) + " " + I.ui("gold") : "kostenlos") + "</button></div>";
+      h += '<div class="cards">';
       rivals.forEach((r) => {
         const f = E.rivalFighter(r);
-        const c = estimate(hero, [f], "arena" + r.id + r.level);
-        const tier = c >= 0.68 ? ["leicht", "Leicht"] : c >= 0.42 ? ["fair", "Ebenbürtig"] : ["schwer", "Schwer"];
+        // dieselbe Rechnung wie E.arenaChance (gleiche Probekaempfe), damit Anzeige, Einstufung und Ehre zusammenpassen
+        const c = estimate(hero, [f], "arena" + r.id + r.level, E.ARENA_N);
+        const t = E.arenaTier(c);
+        const tier = [t.key, t.label];
+        const hon = E.arenaHonor(c);
         const where = r.kind === "wander" ? "Wanderkämpfer" : "Platz " + r.rank;
         h +=
           '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + ' <span class="tier t-' + tier[0] + '">' + tier[1] + "</span></h4>" +
-          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · " + where + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
+          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · " + where + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + ' <span class="muted small">Sieg +' + hon.win + " Ehre, Niederlage kostet " + hon.loss + "</span></div>" +
           '<button class="btn" data-act="arenaFight" data-id="' + esc(r.id) + '"' + (busy || s.arena.next > now ? " disabled" : "") + ">Herausfordern</button></div>";
       });
       h += '</div><div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn ghost small" data-act="open" data-id="ruhmeshalle">Alle Ranglisten</button></div>';
       return h;
     },
+  };
+  A.arenaReroll = () => {
+    if (!done(E.arenaReroll(S()))) return;
+    UI.saveNow();
+    UI.refresh();
   };
   A.arenaSkip = () => {
     if (!done(E.skipArena(S()))) return;

@@ -321,7 +321,7 @@
       inv: [],
       quest: { seed: U.hash(opts.name + now), offers: [], active: null },
       guard: null,
-      arena: { next: 0, wins: 0, losses: 0 },
+      arena: { next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] },
       dungeons: { progress: {}, next: 0 },
       story: { done: {}, next: 0 },
       house: { tier: 0, furn: {} },
@@ -400,7 +400,7 @@
     if (typeof S.wellNext !== "number") S.wellNext = 0;
     delete S.daily.wellFree;
     S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
-    S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
+    S.arena = Object.assign({ next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
     for (const s of D.SLOTS) if (!(s in S.equip)) S.equip[s] = null;
@@ -481,6 +481,12 @@
     return out;
   };
   // Glueck verbessert die Beute: hoehere Chance auf seltenere Gegenstaende und auf Funde ueberhaupt
+  /* Beute von Bossen (Verliese, Verliesbosse in der Taverne, Chronik): ab Stufe 30 steigt der Anteil an epischen und
+     legendaeren Gegenstaenden, ab Stufe 40 ist sie mindestens episch. Vorher (bis 0.74) blieb sie in jeder Stufe gleich,
+     ab 40 waren rund 60 % selten (blau), 32 % episch und 7 % legendaer. tests/beute.mjs misst die Anteile. */
+  E.bossLoot = function (L, final, base, extra) {
+    return { minRarity: final || L >= 40 ? "episch" : "selten", boost: base + Math.max(0, L - 25) * 0.06 + (extra || 0) };
+  };
   E.lootBoost = function (S) {
     const luck = E.heroAttrs(S).glueck;
     const L = S.level;
@@ -1057,6 +1063,12 @@
     for (let dt = step; dt <= span; dt += step) if (E.isNight(mode, now + dt) !== cur) return dt;
     return Infinity;
   };
+  // Tageswechsel (Nebelmet, Arena-Erfahrung, Brunnen, Nachtjagd) um Mitternacht nach der Uhr des Geraets
+  E.nextMidnight = function (now) {
+    const d = new Date(now || E.now());
+    d.setHours(24, 0, 0, 0);
+    return d.getTime();
+  };
   E.tick = function (S, now) {
     now = now || E.now();
     const day = U.dayKey(now);
@@ -1171,7 +1183,7 @@
       waves: [{ monster: boss.id, mlevel, power: DIFF[diff].power, boss: true }],
       xp: Math.max(5, Math.round(E.xpNeed(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
       gold: Math.max(3, Math.round(E.goldBase(L) * ef * dm * U.rf(r, 0.85, 1.15) * bonus * (1 + E.goldBonus(S)))),
-      item: E.makeItem(r, { level: L + 1, cls: S.cls, slot: U.pick(r, D.SLOTS), boost: 0.25 * diff + 1.2 + E.lootBoost(S), minRarity: "selten" }),
+      item: E.makeItem(r, Object.assign({ level: L + 1, cls: S.cls, slot: U.pick(r, D.SLOTS) }, E.bossLoot(L, false, 0.25 * diff + 1.2, E.lootBoost(S)))),
       perle: r() < 0.35 + 0.05 * diff ? 1 : 0,
       seed: Math.floor(r() * 1e9),
     };
@@ -1435,7 +1447,7 @@
     S.perlen += rew.perlen;
     E.gainGold(S, rew.gold);
     const r = U.rng(U.hash(S.name + ch.key));
-    giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: final ? "episch" : "selten", boost: 1 + E.lootBoost(S) }), rew);
+    giveItem(S, E.makeItem(r, Object.assign({ level: S.level + 1, cls: S.cls }, E.bossLoot(S.level, final, 1, E.lootBoost(S)))), rew);
     E.gainXp(S, rew.xp);
     for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
     S.stats.wins++;
@@ -1723,8 +1735,16 @@
   /* ---------------- Arena: Ring der Reiche ---------------- */
   /* Vier Herausforderer aus den anderen Reichen, deren Staerke zum Helden passt:
      einer leicht, zwei ausgeglichen, einer schwer. Echte Mitspieler und Helden der Ranglisten haben Vorrang,
-     fehlt ein passender, tritt ein Wanderkaempfer gleicher Stufe an. Die Auswahl bleibt bis zum naechsten Kampf. */
-  E.ARENA_TARGETS = [{ c: 0.78, label: "Leicht" }, { c: 0.58, label: "Ausgeglichen" }, { c: 0.46, label: "Ausgeglichen" }, { c: 0.32, label: "Schwer" }];
+     fehlt ein passender, tritt ein Wanderkaempfer gleicher Stufe an. Die Auswahl bleibt bis zum naechsten Kampf.
+     Die Siegchance kommt aus 400 Probekaempfen (E.arenaChance; 30 lagen im Mittel 7, hoechstens 27 Prozentpunkte
+     daneben, tests/arena.mjs), die Einstufung daraus (E.arenaTier) und die Ehre auch: je schwerer, desto mehr. */
+  E.ARENA_TARGETS = [{ c: 0.86, label: "Leicht" }, { c: 0.64, label: "Ausgeglichen" }, { c: 0.5, label: "Ausgeglichen" }, { c: 0.3, label: "Schwer" }];
+  E.ARENA_N = 400;
+  E.arenaChance = (hero, foe, opp) => E.estimateWin(hero, [foe], E.ARENA_N, "arena" + opp.id + opp.level);
+  E.arenaTier = (c) => (c >= 0.75 ? { key: "leicht", label: "Leicht" } : c >= 0.45 ? { key: "fair", label: "Ebenbürtig" } : { key: "schwer", label: "Schwer" });
+  // Ehre nach Siegchance: leicht etwa 15 fuer den Sieg und 9 fuer die Niederlage, schwer (30 %) 47 und 4; im Mittel
+  // bringt jede Wahl ungefaehr gleich viel, ein Sieg gegen einen schweren Gegner aber dreimal so viel
+  E.arenaHonor = (c) => ({ win: U.clamp(Math.round(4 + 9 * Math.pow(Math.max(0.05, c), -1.3)), 6, 60), loss: Math.round(2 + 8 * c) });
   E.wanderFighter = function (w) {
     const f = E.modelHeroFighter(w.level, w.cls, w.q);
     Object.assign(f, { name: w.name, race: w.race, realm: w.realm, gender: w.gender, look: w.look, gear: E.npcGear(w), kind: "hero" });
@@ -1734,7 +1754,7 @@
   E.rivalFighter = (opp) => opp.fighter || (opp.kind === "wander" ? E.wanderFighter(opp) : E.npcFighter(opp));
   E.arenaRivals = function (S, now, remote) {
     now = now || E.now();
-    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm + ":" + JSON.stringify(S.talents || {});
+    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm + ":" + JSON.stringify(S.talents || {}) + ":" + (S.arena.roll || 0);
     const all = E.allHeroes(S, now, remote);
     const me = all.find((h) => h.kind === "me");
     const byId = {};
@@ -1747,21 +1767,30 @@
     const hero = E.heroFighter(S, now);
     const L = S.level;
     const span = Math.max(3, Math.round(L * 0.12));
-    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + L * 31);
-    const est = (f, salt) => E.estimateWin(hero, [f], 24, "ar" + salt);
-    let pool = all.filter((h) => h.kind !== "me" && h.realm !== S.realm && Math.abs(h.level - L) <= span);
+    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + L * 31 + (S.arena.roll || 0) * 101);
+    const est = (f, salt, n) => E.estimateWin(hero, [f], n || 80, "ar" + salt);
+    // nach dem Neuwuerfeln (E.arenaReroll) nicht dieselben Gegner noch einmal
+    const prev = S.arena.prev || [];
+    let pool = all.filter((h) => h.kind !== "me" && h.realm !== S.realm && Math.abs(h.level - L) <= span && prev.indexOf(h.id) < 0);
     pool.sort((a, b) => (a.kind === "real" ? -1 : 0) - (b.kind === "real" ? -1 : 0) || r() - 0.5);
     pool = pool.slice(0, 24).map((h) => Object.assign({}, h, { chance: est(E.rivalFighter(h), h.id) }));
     const out = [];
     E.ARENA_TARGETS.forEach((tg, ti) => {
+      // grob vorsortiert, dann die naechsten drei genau nachgerechnet
+      const near = pool
+        .filter((h) => !out.find((x) => x.id === h.id))
+        .map((h) => ({ h, d: Math.abs(h.chance - tg.c) - (h.kind === "real" ? 0.05 : 0) }))
+        .filter((x) => x.d <= 0.15)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 3);
       let best = null;
-      for (const h of pool) {
-        if (out.find((x) => x.id === h.id)) continue;
-        const d = Math.abs(h.chance - tg.c) - (h.kind === "real" ? 0.05 : 0);
-        if (d <= 0.13 && (!best || d < best.d)) best = { h, d };
+      for (const x of near) {
+        const c = E.arenaChance(hero, E.rivalFighter(x.h), x.h);
+        const d = Math.abs(c - tg.c) - (x.h.kind === "real" ? 0.05 : 0);
+        if (d <= 0.1 && (!best || d < best.d)) best = { h: x.h, d, c };
       }
       if (best) {
-        out.push(Object.assign(best.h, { tier: ti }));
+        out.push(Object.assign(best.h, { tier: ti, chance: best.c }));
         return;
       }
       // Wanderkaempfer: Staerke so lange anpassen, bis die Siegchance zum Ziel passt
@@ -1781,14 +1810,14 @@
       for (let tries = 0; tries < 5; tries++) {
         let lo = 0.15;
         let hi = 1.8;
-        for (let k = 0; k < 7; k++) {
+        for (let k = 0; k < 8; k++) {
           w.q = (lo + hi) / 2;
           const c = est(E.wanderFighter(w), w.id + k);
           if (c > tg.c) lo = w.q;
           else hi = w.q;
         }
         w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
-        w.chance = est(E.wanderFighter(w), w.id);
+        w.chance = E.arenaChance(hero, E.wanderFighter(w), w);
         // Selbst ganz schwach noch zu stark: eine Stufe tiefer suchen
         if (w.chance >= tg.c - 0.15 || w.level <= 1) break;
         w.level = Math.max(1, w.level - Math.max(1, Math.round(L * 0.15)));
@@ -1800,6 +1829,20 @@
     S.arena.rivals = { stamp, until: now + 30 * 60 * 1000, list: out.map((h) => (h.kind === "wander" ? h : { id: h.id, kind: h.kind, tier: h.tier, chance: h.chance })) };
     return out;
   };
+  // Neue Herausforderer: einmal je Auswahl kostenlos, danach fuer etwas Gold; nach jedem Kampf wieder frei
+  E.arenaRerollCost = (S) => (S.arena.freeRoll !== false ? 0 : Math.max(10, Math.round(E.goldBase(S.level) * 0.25)));
+  E.arenaReroll = function (S, now) {
+    now = now || E.now();
+    const cost = E.arenaRerollCost(S);
+    if (cost > S.gold) return { ok: false, msg: "Für neue Herausforderer fehlen dir " + U.fmt(cost - S.gold) + " Gold." };
+    S.gold -= cost;
+    const cur = S.arena.rivals ? S.arena.rivals.list.map((h) => h.id) : [];
+    S.arena.prev = cur;
+    S.arena.roll = (S.arena.roll || 0) + 1;
+    S.arena.freeRoll = false;
+    S.arena.rivals = null;
+    return { ok: true, cost };
+  };
   E.arenaFight = function (S, opp, now) {
     now = now || E.now();
     if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
@@ -1808,20 +1851,24 @@
     const hero = E.heroFighter(S, now);
     const foe = E.rivalFighter(opp);
     const chain = E.simulateChain(hero, [foe], U.hash(S.name + opp.id + now));
-    return { ok: true, fight: { hero, foes: [foe], chain, opp } };
+    return { ok: true, fight: { hero, foes: [foe], chain, opp, chance: E.arenaChance(hero, foe, opp) } };
   };
   E.resolveArena = function (S, fight, now) {
     now = now || E.now();
     const opp = fight.opp;
     const won = fight.chain.winner === 0;
-    const gain = U.clamp(Math.round(22 + (opp.honor - S.honor) / 15), 6, 60);
+    const c = fight.chance != null ? fight.chance : E.arenaChance(fight.hero, fight.foes[0], opp);
+    const hon = E.arenaHonor(c);
+    const gain = hon.win;
     const rew = { won, honor: 0, gold: 0, xp: 0 };
     S.arena.next = now + E.C.ARENA_CD;
     S.arena.rivals = null;
+    S.arena.freeRoll = true;
+    S.arena.prev = [];
     if (won) {
       S.honor += gain;
       rew.honor = gain;
-      rew.gold = Math.round(E.goldBase(S.level) * 0.5);
+      rew.gold = Math.round(E.goldBase(S.level) * 0.5 * (0.7 + 0.8 * (1 - c)));
       E.gainGold(S, rew.gold);
       if (S.daily.arenaXp < 10) {
         S.daily.arenaXp++;
@@ -1833,7 +1880,7 @@
       if (opp.kind === "npc") S.npcHonor[opp.id] = (S.npcHonor[opp.id] || 0) - Math.round(gain * 0.6);
       E.grantAch(S, "ersterSieg");
     } else {
-      const loss = Math.round(gain * 0.5);
+      const loss = hon.loss;
       S.honor = Math.max(0, S.honor - loss);
       rew.honor = -loss;
       S.arena.losses++;
@@ -1888,7 +1935,7 @@
       rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * (b.final ? 8 : 3));
       const r = U.rng(U.hash(b.mon.id + now));
-      giveItem(S, E.makeItem(r, { level: b.L, cls: S.cls, minRarity: b.final ? "episch" : "selten", boost: (b.final ? 2 : 0.6) + E.lootBoost(S) }), rew);
+      giveItem(S, E.makeItem(r, Object.assign({ level: b.L, cls: S.cls }, E.bossLoot(b.L, b.final, b.final ? 2 : 0.6, E.lootBoost(S)))), rew);
       if (b.final) {
         rew.perlen = 3;
         S.perlen += 3;

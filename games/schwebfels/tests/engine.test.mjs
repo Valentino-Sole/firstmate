@@ -387,6 +387,35 @@ test("Arena: vier Herausforderer, Staerke passend gestaffelt, Auswahl bleibt bis
   }
 });
 
+test("Arena: genaue Siegchance, Ehre nach Schwierigkeit, einmal kostenlos neu wuerfeln", () => {
+  const { E, D, S, now, SB } = fresh("schildritter");
+  S.level = 20;
+  const rr = SB.util.rng("reroll");
+  for (const sl of D.SLOTS) S.equip[sl] = E.makeItem(rr, { level: 20, cls: "schildritter", slot: sl, rarity: "selten" });
+  S.gold = 100000;
+  const hard = E.arenaHonor(0.3), easy = E.arenaHonor(0.86);
+  assert.ok(hard.win >= 2.5 * easy.win, "schwere Gegner bringen deutlich mehr Ehre");
+  assert.ok(hard.loss < easy.loss, "gegen schwere Gegner kostet die Niederlage weniger");
+  assert.equal(E.arenaTier(0.86).key, "leicht");
+  assert.equal(E.arenaTier(0.3).key, "schwer");
+  const r1 = E.arenaRivals(S, now());
+  const hero = E.heroFighter(S, now());
+  for (const r of r1) assert.equal(r.chance, E.arenaChance(hero, E.rivalFighter(r), r), "gespeicherte und angezeigte Chance gleich");
+  assert.equal(E.arenaRerollCost(S), 0, "erstes Neuwuerfeln kostenlos");
+  const g = S.gold;
+  assert.equal(E.arenaReroll(S, now()).ok, true);
+  assert.equal(S.gold, g);
+  const r2 = E.arenaRivals(S, now());
+  assert.ok(r2.every((r) => !r1.find((x) => x.id === r.id)), "andere Gegner");
+  const cost = E.arenaRerollCost(S);
+  assert.ok(cost > 0, "zweites Neuwuerfeln kostet Gold");
+  E.arenaReroll(S, now());
+  assert.equal(S.gold, g - cost);
+  const res = E.arenaFight(S, E.arenaRivals(S, now())[0], now());
+  E.resolveArena(S, res.fight, now());
+  assert.equal(E.arenaRerollCost(S), 0, "nach dem Kampf wieder kostenlos");
+});
+
 test("Tag und Nacht: Modi, Wechselzeit, Mondtor nur nachts", () => {
   const { E, S, now, advance } = fresh();
   assert.equal(E.isNight("tag", now()), false);

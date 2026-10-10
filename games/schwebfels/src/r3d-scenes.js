@@ -3317,6 +3317,724 @@
       trail.forEach((p) => scene.remove(p));
       burst(end, color, kind === "star" ? 18 : 9, kind === "star" ? 3 : 1.6);
     }
+    /* ---------- Eigene Zauber und Treffer je Kaempfer (0.75) ----------
+       Vorher flog bei jedem Zauberer dieselbe Kugel, nur die Farbe wechselte. Jetzt hat jede Magierklasse und jedes
+       zaubernde Monster einen eigenen Zauber, Drachen speien ihr Element (auch die Endbossdrachen, nach Name und Farbe),
+       Monster im Nahkampf treffen je Familie anders, Helden schlagen und schiessen in der Farbe ihrer Klasse.
+       Gegner ohne eigene Figur (Chronik, Verliese) zaubern wie die Figur, die sie sich leihen, in ihrer eigenen Farbe. */
+    const SPELL_FX = {
+      lichtweber: { kind: "arcane", color: "#b45aff", c2: "#f2dcff" },
+      runenwirker: { kind: "rune", color: "#6fc0ff", c2: "#e6f6ff" },
+      dornenrufer: { kind: "thorns", color: "#7fd06a", c2: "#d6ff9a" },
+      sporling: { kind: "spores", color: "#e6dc6a", c2: "#9cc04a" },
+      sporenschrecken: { kind: "sporerain", color: "#c890ff", c2: "#f0d4ff" },
+      giftmorchel: { kind: "glob", color: "#8aff4a", c2: "#2f7a1a" },
+      hohlkultist: { kind: "void", color: "#9a5aff", c2: "#120818" },
+      blutkultist: { kind: "blood", color: "#c8121e", c2: "#ff6a5a" },
+      runenhexe: { kind: "hex", color: "#ff4ad0", c2: "#ffd6f4" },
+      nebeldruide: { kind: "mist", color: "#d8ece6", c2: "#7fd0a8" },
+      fahlerschemen: { kind: "wisp", color: "#dbe8ff", c2: "#7f9cc8" },
+      irrlichtschemen: { kind: "lights", color: "#6ff0ff", c2: "#fff27a" },
+      leerenschemen: { kind: "tendril", color: "#7a3aff", c2: "#16082a" },
+      schwelwurm: { kind: "breath", el: "fire" },
+      sturmdrache: { kind: "breath", el: "storm" },
+      eiswyrm: { kind: "breath", el: "ice" },
+      smaragdwyrm: { kind: "breath", el: "acid" },
+    };
+    // Helden: Klinge und Geschoss in der Farbe ihrer Klasse
+    const HERO_TINT = {
+      schildritter: "#ffe2a0", sturmhuene: "#bfe6ff", hainwaechter: "#c8ffb0",
+      meuchler: "#ff7a7a", nebelschleicher: "#a8b8ff", schattentaenzer: "#d0a0ff",
+      langbogner: "#ffd27a", wolfsjaeger: "#cfeeff", mondschuetze: "#e8ecff",
+    };
+    const ELEMENTS = [
+      ["ice", /eis|frost|reif|kristall|gletscher|schnee|winter/],
+      ["storm", /sturm|donner|blitz|gewitter|tempest|himmel|wolke/],
+      ["fire", /feuer|glut|flamm|asche|schwel|brand|lava|sonne|esse/],
+      ["acid", /gift|moor|sumpf|smaragd|faul|seuche|moder|spor/],
+      ["shadow", /schatten|leere|nacht|dunkel|fluch|tod|grab|hohl/],
+    ];
+    const hueOf = (c) => {
+      const x = col(c || "#ff5a3d");
+      const hsl = {};
+      x.getHSL(hsl);
+      return hsl;
+    };
+    function elemOf(name, accent) {
+      for (const [e, re] of ELEMENTS) if (re.test(name)) return e;
+      const h = hueOf(accent);
+      if (h.s < 0.2) return h.l > 0.6 ? "storm" : "shadow";
+      const d = h.h * 360;
+      return d < 45 || d >= 330 ? "fire" : d < 70 ? "storm" : d < 165 ? "acid" : d < 255 ? "ice" : "shadow";
+    }
+    function spellOf(f) {
+      const d = f.desc || {};
+      if (d.kind !== "monster") return SPELL_FX[d.cls] || { kind: "orb", color: f.m.projColor || "#c47bff" };
+      const own = SPELL_FX[d.visual];
+      if (own) return own;
+      const lent = SPELL_FX[d.look];
+      if (d.arch === "drache") return { kind: "breath", el: ELEMENTS.some(([, re]) => re.test(d.visual || "")) ? elemOf(d.visual || "", d.accent) : lent ? lent.el : elemOf("", d.accent), tint: d.accent };
+      if (lent) return Object.assign({}, lent, d.accent ? { color: d.accent } : {});
+      return { kind: "orb", color: f.m.projColor || d.accent || "#c47bff" };
+    }
+    const chestOf = (f, k) => new T.Vector3(f.m.obj.position.x, (f.m.headY || 1.8) * (k || 0.6), f.m.obj.position.z);
+    const castFrom = (A) => launchPoint(A, "spell") || new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
+    const rnd = (s) => (Math.random() - 0.5) * s;
+    const rvec = (s) => new T.Vector3(rnd(s), rnd(s), rnd(s));
+    function puff(color, size, op, normal) {
+      const s = new T.Sprite(new T.SpriteMaterial({ map: dot(), color: col(color), transparent: true, opacity: op == null ? 1 : op, blending: normal ? T.NormalBlending : T.AdditiveBlending, depthWrite: false }));
+      s.scale.setScalar(size);
+      return s;
+    }
+    // kleines Partikelsystem: spawn(u, add) legt waehrend dur neue Teilchen an, jedes lebt life Sekunden
+    function emit(dur, life, spawn) {
+      const parts = [];
+      let last = 0;
+      const total = dur + life;
+      const add = (pos, color, size, v, lf, o) => {
+        o = o || {};
+        const s = puff(color, size, o.op, o.normal);
+        s.position.copy(pos);
+        scene.add(s);
+        parts.push(Object.assign({ s, v: v || new T.Vector3(), life: lf, age: 0, size, op: o.op == null ? 1 : o.op, c1: o.to ? col(color) : null, c2: o.to ? col(o.to) : null }, o));
+      };
+      return tween(total, (u) => {
+        const t = u * total;
+        const dt = Math.max(0, t - last);
+        last = t;
+        if (t <= dur) spawn(t / dur, add);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const p = parts[i];
+          p.age += dt;
+          const k = p.age / p.life;
+          if (k >= 1) {
+            scene.remove(p.s);
+            parts.splice(i, 1);
+            continue;
+          }
+          p.s.position.addScaledVector(p.v, dt);
+          if (p.g) p.v.y -= p.g * dt;
+          if (p.drag) p.v.multiplyScalar(Math.max(0, 1 - p.drag * dt));
+          p.s.scale.setScalar(p.size * (1 + (p.grow || 0) * k));
+          p.s.material.opacity = p.op * Math.min(1, k * 6) * (1 - k);
+          if (p.c1) p.s.material.color.copy(p.c1).lerp(p.c2, k);
+        }
+        if (u >= 1) parts.forEach((p) => scene.remove(p.s));
+      });
+    }
+    // Ein Koerper fliegt von a nach b (Bogenhoehe arc), step(obj, u) fuer eigene Bewegung, trail(pos) fuer Spuren
+    function fly(obj, a, b, dur, arc, step) {
+      obj.position.copy(a);
+      scene.add(obj);
+      return tween(dur, (u) => {
+        obj.position.lerpVectors(a, b, u);
+        obj.position.y += Math.sin(u * PI) * arc;
+        if (step) step(obj, u);
+        if (u >= 1) scene.remove(obj);
+      });
+    }
+    function flashAt(pos, color, size) {
+      const s = puff(color, size || 2.2, 0.9);
+      s.position.copy(pos);
+      scene.add(s);
+      tween(0.3, (u) => {
+        s.material.opacity = 0.9 * (1 - u);
+        s.scale.setScalar((size || 2.2) * (1 + u));
+        if (u >= 1) scene.remove(s);
+      });
+    }
+    function groundRing(f, color, r0, r1, dur) {
+      const r = new T.Mesh(G.torus(1, 0.05, PI * 2, 6, 48), new T.MeshBasicMaterial({ color: col(color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+      r.rotation.x = PI / 2;
+      r.position.set(f.m.obj.position.x, 0.08, f.m.obj.position.z);
+      scene.add(r);
+      return tween(dur || 0.5, (u) => {
+        r.scale.setScalar(r0 + (r1 - r0) * u);
+        r.material.opacity = 1 - u;
+        if (u >= 1) scene.remove(r);
+      });
+    }
+    // Drachenodem: Feuer, Eis, Gift, Schatten als Strom aus dem Maul, Blitz als zuckende Entladung
+    const BREATH = {
+      fire: { c: ["#fff3b0", "#ffb040", "#ff6a1a"], end: "#9a1a0a", smoke: "#2e2420", size: 0.5 },
+      ice: { c: ["#ffffff", "#d4f0ff", "#8ad0ff"], end: "#4a9ae0", size: 0.42 },
+      acid: { c: ["#eaffb0", "#9aff4a", "#4ac02a"], end: "#1e5a10", size: 0.6 },
+      shadow: { c: ["#e6c8ff", "#8a4aff", "#4a1a8a"], end: "#120818", size: 0.55 },
+    };
+    function lightning(A, Bf) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const path = (jag) => {
+        const pts = [];
+        for (let i = 0; i <= 12; i++) {
+          const p = from.clone().lerp(to, i / 12);
+          if (i > 0 && i < 12) p.add(rvec(jag));
+          pts.push(p);
+        }
+        return pts;
+      };
+      const mat = new T.LineBasicMaterial({ color: col("#eef0ff"), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      const lines = [0, 1].map(() => {
+        const l = new T.Line(new T.BufferGeometry().setFromPoints(path(0.6)), mat);
+        scene.add(l);
+        return l;
+      });
+      const glows = [];
+      for (let i = 0; i <= 12; i++) {
+        const s = puff(i % 3 ? "#9ab4ff" : "#ffffff", 0.45, 0.8);
+        scene.add(s);
+        glows.push(s);
+      }
+      let n = 0;
+      tween(0.6, (u) => {
+        if (n++ % 3 === 0) {
+          const pts = path(0.7);
+          lines.forEach((l, j) => {
+            l.geometry.dispose();
+            l.geometry = new T.BufferGeometry().setFromPoints(j ? path(0.5) : pts);
+          });
+          glows.forEach((s, i) => s.position.copy(pts.at(i)));
+        }
+        const o = u < 0.75 ? (Math.random() < 0.75 ? 1 : 0.35) : (1 - u) * 4;
+        mat.opacity = o;
+        glows.forEach((s) => (s.material.opacity = 0.8 * o));
+        if (u >= 1) {
+          lines.forEach((l) => {
+            scene.remove(l);
+            l.geometry.dispose();
+          });
+          glows.forEach((s) => scene.remove(s));
+        }
+      });
+      return wait(0.1).then(() => {
+        flashAt(to, "#c8d4ff", 2.6);
+        burst(to, "#eef0ff", 16, 2.6);
+        shake = Math.max(shake, 0.2);
+      });
+    }
+    function breath(A, Bf, fx) {
+      if (fx.el === "storm") return lightning(A, Bf);
+      const B = BREATH[fx.el] || BREATH.fire;
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const dir = to.clone().sub(from);
+      const dist = dir.length();
+      dir.normalize();
+      const sp = dist / 0.36;
+      const big = Math.sqrt(Math.max(1, (A.m.height || 1.8) / 1.8));
+      emit(0.7, 0.5, (u, add) => {
+        for (let i = 0; i < 4; i++) {
+          const c = B.c[Math.floor(Math.random() * B.c.length)];
+          add(from, c, B.size * big * (0.45 + Math.random() * 0.4), dir.clone().multiplyScalar(sp * (0.8 + Math.random() * 0.35)).add(rvec(sp * 0.22)), 0.36 + Math.random() * 0.14, { grow: 1.8, to: B.end });
+        }
+        if (fx.el === "fire" && Math.random() < 0.5) add(from.clone().addScaledVector(dir, dist * (0.4 + Math.random() * 0.5)), B.smoke, 0.7 * big, new T.Vector3(rnd(0.4), 0.9, rnd(0.4)), 0.9, { normal: true, op: 0.45, grow: 1.4 });
+        if (fx.el === "acid" && Math.random() < 0.4) add(from.clone().addScaledVector(dir, dist * Math.random()), "#7fff3a", 0.12, new T.Vector3(rnd(0.3), -0.2, rnd(0.3)), 0.6, { g: 6 });
+      });
+      if (fx.el === "ice") {
+        for (let i = 0; i < 6; i++) {
+          const sh = mesh(G.octa(0.09 + Math.random() * 0.06), new T.MeshBasicMaterial({ color: col(i % 2 ? "#ffffff" : "#a8e0ff") }));
+          sh.scale.set(0.6, 1.8, 0.6);
+          const off = rvec(0.6);
+          wait(i * 0.08).then(() => fly(sh, from.clone(), to.clone().add(off), 0.32, 0.05, (o) => (o.rotation.z += 0.3)));
+        }
+      }
+      return wait(0.36).then(() => {
+        flashAt(to, B.c[1], 2.4);
+        if (fx.el === "fire") emit(0.5, 0.6, (u, add) => add(to.clone().add(rvec(0.8)), Math.random() < 0.5 ? "#ffb040" : "#ff6a1a", 0.18, new T.Vector3(rnd(1), 1.2 + Math.random(), rnd(1)), 0.6));
+        else if (fx.el === "ice") frostSpikes(Bf);
+        else if (fx.el === "acid") puddle(Bf, "#6aff2a");
+        else emit(0.3, 0.7, (u, add) => add(to.clone().add(rvec(0.9)), "#2a1040", 0.6, new T.Vector3(0, 0.6, 0), 0.7, { normal: true, op: 0.6, grow: 1 }));
+      });
+    }
+    function frostSpikes(f) {
+      const g = grp([f.m.obj.position.x, 0, f.m.obj.position.z]);
+      const m = new T.MeshBasicMaterial({ color: col("#cfeeff"), transparent: true, opacity: 0.9 });
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * PI * 2;
+        const h = 0.5 + Math.random() * 0.7;
+        g.add(mesh(G.cone(0.1, h, 5), m, { p: [Math.cos(a) * 0.55, h / 2, Math.sin(a) * 0.55], r: [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4] }));
+      }
+      g.scale.set(1, 0.01, 1);
+      scene.add(g);
+      tween(1.1, (u) => {
+        g.scale.y = u < 0.15 ? u / 0.15 : 1;
+        m.opacity = u < 0.7 ? 0.9 : 0.9 * (1 - u) / 0.3;
+        if (u >= 1) {
+          scene.remove(g);
+          burst(new T.Vector3(f.m.obj.position.x, 0.6, f.m.obj.position.z), "#e6f6ff", 12, 2);
+        }
+      });
+    }
+    function puddle(f, color) {
+      const p = new T.Mesh(G.cyl(0.9, 0.9, 0.02, 24), new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0.55, blending: T.AdditiveBlending, depthWrite: false }));
+      p.position.set(f.m.obj.position.x, 0.03, f.m.obj.position.z);
+      p.scale.setScalar(0.2);
+      scene.add(p);
+      tween(1.4, (u) => {
+        p.scale.setScalar(Math.min(1, 0.2 + u * 3));
+        p.material.opacity = 0.55 * (1 - u);
+        if (u >= 1) scene.remove(p);
+      });
+      emit(0.6, 0.6, (u, add) => add(new T.Vector3(f.m.obj.position.x + rnd(1.2), 0.1, f.m.obj.position.z + rnd(1.2)), color, 0.2, new T.Vector3(0, 0.8, 0), 0.6));
+    }
+    // Lichtweber: lila Strahl mit kreisenden Funken
+    function arcane(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const len = from.distanceTo(to);
+      const dir = to.clone().sub(from).normalize();
+      const side = new T.Vector3(0, 1, 0).cross(dir).normalize();
+      const up = dir.clone().cross(side).normalize();
+      const tube = (r, c) => {
+        const m = new T.Mesh(G.cyl(r, r, 1, 10, true), new T.MeshBasicMaterial({ color: col(c), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir);
+        scene.add(m);
+        return m;
+      };
+      const outer = tube(0.1, fx.color);
+      const core = tube(0.035, fx.c2);
+      tween(0.55, (u) => {
+        const L = len * Math.min(1, u / 0.18);
+        for (const m of [outer, core]) {
+          m.position.copy(from).addScaledVector(dir, L / 2);
+          m.scale.set(1, Math.max(0.001, L), 1);
+        }
+        const o = u < 0.7 ? 1 : (1 - u) / 0.3;
+        outer.material.opacity = 0.75 * o;
+        core.material.opacity = o;
+        outer.scale.x = outer.scale.z = 1 + 0.35 * Math.sin(u * 40);
+        if (u >= 1) {
+          scene.remove(outer);
+          scene.remove(core);
+        }
+      });
+      emit(0.45, 0.25, (u, add) => {
+        for (let i = 0; i < 3; i++) {
+          const k = Math.random();
+          const a = k * 16 + u * 24;
+          add(from.clone().lerp(to, k).addScaledVector(side, Math.cos(a) * 0.16).addScaledVector(up, Math.sin(a) * 0.16), Math.random() < 0.5 ? fx.color : fx.c2, 0.14, dir.clone().multiplyScalar(1.2), 0.25);
+        }
+      });
+      return wait(0.12).then(() => {
+        flashAt(to, fx.color, 1.8);
+        burst(to, fx.c2, 12, 1.8);
+      });
+    }
+    // Runenwirker: kreisende Runenscheibe, zerspringt in Runenfunken
+    function rune(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const g = grp();
+      const m = new T.MeshBasicMaterial({ color: col(fx.color), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      const m2 = new T.MeshBasicMaterial({ color: col(fx.c2), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      g.add(new T.Mesh(G.torus(0.26, 0.025, PI * 2, 4, 40), m));
+      g.add(new T.Mesh(G.torus(0.15, 0.018, PI * 2, 4, 32), m2));
+      for (let i = 0; i < 3; i++) g.add(mesh(G.box(0.03, 0.4, 0.01), m2, { r: [0, 0, (i * PI) / 3] }));
+      const hs = puff(fx.color, 0.9, 0.6);
+      g.add(hs);
+      const t = fly(g, from, to, 0.4, 0.25, (o, u) => {
+        o.rotation.z = u * 9;
+        o.scale.setScalar(0.7 + 0.5 * u);
+      });
+      emit(0.4, 0.3, (u, add) => add(g.position.clone().add(rvec(0.2)), fx.color, 0.12, rvec(0.5), 0.3));
+      return t.then(() => {
+        flashAt(to, fx.color, 2);
+        for (let i = 0; i < 6; i++) {
+          const piece = mesh(G.box(0.03, 0.18, 0.01), m2.clone(), {});
+          piece.position.copy(to);
+          const v = rvec(3);
+          scene.add(piece);
+          tween(0.5, (u) => {
+            piece.position.addScaledVector(v, 0.02);
+            piece.rotation.z += 0.3;
+            piece.material.opacity = 1 - u;
+            if (u >= 1) scene.remove(piece);
+          });
+        }
+      });
+    }
+    // Dornenrufer: Faecher aus Dornen
+    function thorns(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const bark = pm("bark", "#5a4a2a");
+      const Y = new T.Vector3(0, 1, 0);
+      let last = null;
+      for (let i = 0; i < 5; i++) {
+        const th = grp();
+        th.add(mesh(G.cone(0.05, 0.5, 5), bark, {}));
+        th.add(puff(fx.color, 0.35, 0.7));
+        const off = new T.Vector3(0, (i - 2) * 0.18, rnd(0.4));
+        const a = from.clone().add(new T.Vector3(0, (i - 2) * 0.12, 0));
+        const b = to.clone().add(off);
+        const dir = b.clone().sub(a).normalize();
+        th.quaternion.setFromUnitVectors(Y, dir);
+        last = wait(i * 0.05).then(() => fly(th, a, b, 0.28, 0.12));
+      }
+      emit(0.4, 0.3, (u, add) => add(from.clone().lerp(to, u).add(rvec(0.4)), fx.c2, 0.1, rvec(0.6), 0.3));
+      return last.then(() => {
+        burst(to, fx.c2, 14, 2);
+        emit(0.2, 0.8, (u, add) => add(to.clone().add(rvec(0.4)), Math.random() < 0.5 ? "#6aa040" : "#a8d870", 0.16, new T.Vector3(rnd(2), 1 + Math.random(), rnd(2)), 0.8, { g: 3, normal: true }));
+      });
+    }
+    // Sporling: langsame Sporenwolke
+    function spores(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const g = grp();
+      for (let i = 0; i < 6; i++) {
+        const s = puff(i % 2 ? fx.color : fx.c2, 0.45 + Math.random() * 0.25, 0.55, true);
+        s.position.copy(rvec(0.35));
+        g.add(s);
+      }
+      emit(0.6, 0.6, (u, add) => add(g.position.clone().add(rvec(0.4)), fx.color, 0.08, new T.Vector3(rnd(0.3), -0.3, rnd(0.3)), 0.6));
+      return fly(g, from, to, 0.6, 0.15, (o, u) => (o.rotation.z = u * 2)).then(() => {
+        emit(0.3, 1.0, (u, add) => add(to.clone().add(rvec(1)), Math.random() < 0.5 ? fx.color : fx.c2, 0.6, rvec(0.6), 1.0, { normal: true, op: 0.5, grow: 1.2 }));
+      });
+    }
+    // Sporenschrecken: Sporen steigen auf und regnen auf den Gegner
+    function sporeRain(A, Bf, fx) {
+      const top = chestOf(Bf, 1).add(new T.Vector3(0, 2.2, 0));
+      emit(0.35, 0.5, (u, add) => add(chestOf(A, 0.8).add(rvec(0.6)), fx.color, 0.18, new T.Vector3(rnd(0.4), 3, rnd(0.4)), 0.5));
+      return wait(0.3).then(() => {
+        emit(0.45, 0.6, (u, add) => {
+          for (let i = 0; i < 3; i++) add(top.clone().add(new T.Vector3(rnd(1.6), rnd(0.3), rnd(1.6))), Math.random() < 0.6 ? fx.color : fx.c2, 0.2, new T.Vector3(0, -4.5, 0), 0.6);
+        });
+        return wait(0.35).then(() => groundRing(Bf, fx.color, 0.3, 1.6, 0.6));
+      });
+    }
+    // Giftmorchel: Giftklumpen im hohen Bogen, Pfuetze
+    function glob(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf, 0.45);
+      const g = grp();
+      g.add(mesh(G.sph(0.18, 12, 10), new T.MeshBasicMaterial({ color: col(fx.c2) })));
+      g.add(puff(fx.color, 0.7, 0.8));
+      emit(0.5, 0.6, (u, add) => {
+        if (Math.random() < 0.6) add(g.position.clone(), fx.color, 0.1, new T.Vector3(0, -0.5, 0), 0.6, { g: 8 });
+      });
+      return fly(g, from, to, 0.5, 1.2, (o, u) => o.scale.set(1 + 0.2 * Math.sin(u * 30), 1 - 0.2 * Math.sin(u * 30), 1)).then(() => {
+        burst(to, fx.color, 14, 2.2);
+        puddle(Bf, fx.color);
+      });
+    }
+    // Hohlkultist: schwarze Leerenkugel, die Licht ansaugt, und Einsturz
+    function voidOrb(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const g = grp();
+      g.add(mesh(G.sph(0.2, 14, 10), new T.MeshBasicMaterial({ color: col(fx.c2) })));
+      g.add(puff(fx.color, 0.9, 0.9));
+      emit(0.45, 0.25, (u, add) => {
+        for (let i = 0; i < 2; i++) {
+          const off = rvec(1.2);
+          add(g.position.clone().add(off), fx.color, 0.14, off.multiplyScalar(-3.5), 0.25);
+        }
+      });
+      return fly(g, from, to, 0.45, 0.1).then(() => {
+        const r = new T.Mesh(G.torus(1, 0.06, PI * 2, 6, 40), new T.MeshBasicMaterial({ color: col(fx.color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        r.position.copy(to);
+        scene.add(r);
+        tween(0.35, (u) => {
+          r.scale.setScalar(1.6 * (1 - u) + 0.05);
+          r.material.opacity = 1 - u * 0.5;
+          if (u >= 1) {
+            scene.remove(r);
+            emit(0.15, 0.6, (k, add) => add(to.clone(), "#1a0a28", 0.5, rvec(3), 0.6, { normal: true, op: 0.7, grow: 1 }));
+            burst(to, fx.color, 10, 2);
+          }
+        });
+      });
+    }
+    // Blutkultist: Doppelspirale aus Blutstropfen
+    function bloodBolt(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const dir = to.clone().sub(from).normalize();
+      const side = new T.Vector3(0, 1, 0).cross(dir).normalize();
+      const up = dir.clone().cross(side).normalize();
+      const heads = [0, 1].map(() => {
+        const s = puff(fx.color, 0.35, 1, true);
+        scene.add(s);
+        return s;
+      });
+      emit(0.4, 0.35, (u, add) => {
+        heads.forEach((s, j) => {
+          const a = u * 18 + j * PI;
+          s.position.copy(from).lerp(to, u).addScaledVector(side, Math.cos(a) * 0.22).addScaledVector(up, Math.sin(a) * 0.22);
+          add(s.position, j ? fx.c2 : fx.color, 0.16, new T.Vector3(0, -0.3, 0), 0.35, { normal: j === 0 });
+        });
+      });
+      return wait(0.4).then(() => {
+        heads.forEach((s) => scene.remove(s));
+        flashAt(to, fx.c2, 1.6);
+        emit(0.12, 0.7, (u, add) => {
+          for (let i = 0; i < 5; i++) add(to.clone(), "#8a0a12", 0.13, new T.Vector3(rnd(3), 1 + Math.random() * 1.5, rnd(3)), 0.7, { g: 7, normal: true });
+        });
+      });
+    }
+    // Runenhexe: Fluchzeichen ueber dem Gegner, dann ein Schlag von oben
+    function hex(A, Bf, fx) {
+      const top = chestOf(Bf, 1).add(new T.Vector3(0, 1.1, 0));
+      const g = grp();
+      g.position.copy(top);
+      const m = new T.MeshBasicMaterial({ color: col(fx.color), transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide });
+      g.add(new T.Mesh(G.torus(0.6, 0.03, PI * 2, 4, 48), m));
+      for (let i = 0; i < 5; i++) g.add(mesh(G.box(0.025, 1.12, 0.01), m, { r: [0, 0, (i * PI * 2) / 5 + PI / 10], p: [Math.cos((i * PI * 2) / 5) * 0.17, Math.sin((i * PI * 2) / 5) * 0.17, 0] }));
+      g.rotation.x = PI / 2;
+      g.scale.setScalar(0.01);
+      scene.add(g);
+      emit(0.3, 0.4, (u, add) => add(chestOf(A, 0.9).add(rvec(0.5)), fx.color, 0.14, new T.Vector3(0, 1.5, 0), 0.4));
+      tween(0.75, (u) => {
+        g.scale.setScalar(Math.min(1, u / 0.35));
+        g.rotation.z = u * 4;
+        m.opacity = u < 0.6 ? 1 : (1 - u) / 0.4;
+        if (u >= 1) scene.remove(g);
+      });
+      return wait(0.38).then(() => {
+        const b = new T.Mesh(G.cyl(0.12, 0.22, 1, 8, true), new T.MeshBasicMaterial({ color: col(fx.c2), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        const y0 = 0;
+        b.position.set(top.x, (top.y + y0) / 2, top.z);
+        b.scale.set(1, top.y - y0, 1);
+        scene.add(b);
+        tween(0.3, (u) => {
+          b.material.opacity = 1 - u;
+          b.scale.x = b.scale.z = 1 + u;
+          if (u >= 1) scene.remove(b);
+        });
+        flashAt(chestOf(Bf), fx.color, 2.2);
+        groundRing(Bf, fx.color, 0.4, 1.8, 0.5);
+      });
+    }
+    // Nebeldruide: Nebelwelle am Boden entlang
+    function mist(A, Bf, fx) {
+      const a = new T.Vector3(A.m.obj.position.x - A.side * 0.4, 0.3, A.m.obj.position.z);
+      const b = new T.Vector3(Bf.m.obj.position.x, 0.3, Bf.m.obj.position.z);
+      emit(0.55, 0.9, (u, add) => {
+        for (let i = 0; i < 2; i++) add(a.clone().lerp(b, Math.min(1, u * 1.1)).add(new T.Vector3(rnd(0.3), Math.random() * 0.5, rnd(1))), Math.random() < 0.7 ? fx.color : fx.c2, 0.7, new T.Vector3(rnd(0.3), 0.15, rnd(0.3)), 0.9, { normal: true, op: 0.38, grow: 0.8 });
+      });
+      return wait(0.55).then(() => {
+        emit(0.35, 0.8, (u, add) => add(chestOf(Bf, 0.5).add(rvec(0.9)), fx.c2, 0.15, new T.Vector3(rnd(0.5), 1.2, rnd(0.5)), 0.8));
+      });
+    }
+    // Fahler Schemen: geisterhafter Funke auf einer Spirale mit langem Schweif
+    function wisp(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const head = puff(fx.color, 0.55, 1);
+      scene.add(head);
+      emit(0.5, 0.5, (u, add) => add(head.position, fx.c2, 0.32, new T.Vector3(0, 0.2, 0), 0.5, { op: 0.6 }));
+      return tween(0.5, (u) => {
+        const a = u * 12;
+        head.position.copy(from).lerp(to, u).add(new T.Vector3(0, Math.sin(a) * 0.35 * (1 - u), Math.cos(a) * 0.35 * (1 - u)));
+        if (u >= 1) scene.remove(head);
+      }).then(() => {
+        flashAt(to, fx.color, 2);
+        groundRing(Bf, fx.c2, 0.3, 1.4, 0.45);
+      });
+    }
+    // Irrlichtschemen: drei tanzende Lichter
+    function lights(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const all = [0, 1, 2].map((j) => {
+        const s = puff(j === 1 ? fx.c2 : fx.color, 0.4, 1);
+        scene.add(s);
+        return wait(j * 0.08).then(() =>
+          tween(0.45, (u) => {
+            s.position.copy(from).lerp(to, u).add(new T.Vector3(0, Math.sin(u * 14 + j * 2) * 0.4, Math.cos(u * 10 + j) * 0.4));
+            if (u >= 1) {
+              scene.remove(s);
+              burst(to, j === 1 ? fx.c2 : fx.color, 6, 1.4);
+            }
+          })
+        );
+      });
+      emit(0.6, 0.3, (u, add) => add(from.clone().lerp(to, u).add(rvec(0.5)), fx.color, 0.1, rvec(0.4), 0.3));
+      return all[0];
+    }
+    // Leerenschemen: windende Ranke aus Leere vom Schemen zum Gegner
+    function tendril(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const n = 22;
+      const beads = [];
+      for (let i = 0; i < n; i++) {
+        const s = puff(i % 3 ? fx.color : "#c8a0ff", 0.28 - (i / n) * 0.12, 0.9);
+        s.visible = false;
+        scene.add(s);
+        beads.push(s);
+      }
+      const dark = [];
+      for (let i = 0; i < n; i += 2) {
+        const s = puff(fx.c2, 0.32, 0.7, true);
+        s.visible = false;
+        scene.add(s);
+        dark.push(s);
+      }
+      tween(0.7, (u) => {
+        const reach = u < 0.4 ? u / 0.4 : u > 0.75 ? 1 - (u - 0.75) / 0.25 : 1;
+        beads.forEach((s, i) => {
+          const k = i / (n - 1);
+          s.visible = k <= reach;
+          s.position.copy(from).lerp(to, k * reach).add(new T.Vector3(0, Math.sin(k * 9 + u * 18) * 0.25 * Math.sin(k * PI), Math.cos(k * 7 + u * 14) * 0.2 * Math.sin(k * PI)));
+        });
+        dark.forEach((s, j) => {
+          s.visible = beads.at(j * 2).visible;
+          s.position.copy(beads.at(j * 2).position);
+        });
+        if (u >= 1) beads.concat(dark).forEach((s) => scene.remove(s));
+      });
+      return wait(0.3).then(() => {
+        emit(0.2, 0.6, (u, add) => add(to.clone().add(rvec(0.5)), "#140820", 0.5, rvec(1), 0.6, { normal: true, op: 0.7, grow: 1 }));
+        flashAt(to, fx.color, 1.6);
+      });
+    }
+    function castFx(A, Bf, fx) {
+      switch (fx.kind) {
+        case "breath": return breath(A, Bf, fx);
+        case "arcane": return arcane(A, Bf, fx);
+        case "rune": return rune(A, Bf, fx);
+        case "thorns": return thorns(A, Bf, fx);
+        case "spores": return spores(A, Bf, fx);
+        case "sporerain": return sporeRain(A, Bf, fx);
+        case "glob": return glob(A, Bf, fx);
+        case "void": return voidOrb(A, Bf, fx);
+        case "blood": return bloodBolt(A, Bf, fx);
+        case "hex": return hex(A, Bf, fx);
+        case "mist": return mist(A, Bf, fx);
+        case "wisp": return wisp(A, Bf, fx);
+        case "lights": return lights(A, Bf, fx);
+        case "tendril": return tendril(A, Bf, fx);
+        default: return projectile(A, Bf, "orb", fx.color);
+      }
+    }
+    // Nahkampf-Treffer: Helden in der Farbe ihrer Klasse, Monster je Familie
+    function claw(f, color) {
+      for (let j = 0; j < 3; j++) {
+        const arc = new T.Mesh(G.torus(0.55, 0.03, PI * 0.55, 4, 20), new T.MeshBasicMaterial({ color: col(color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        arc.position.set(f.m.obj.position.x, (f.m.headY || 1.8) * 0.6 + (j - 1) * 0.16, f.m.obj.position.z + 0.6);
+        arc.rotation.set(0, 0, -0.9);
+        scene.add(arc);
+        tween(0.28, (u) => {
+          arc.rotation.z -= 0.08;
+          arc.material.opacity = 1 - u;
+          if (u >= 1) scene.remove(arc);
+        });
+      }
+    }
+    function bite(f, color) {
+      const y = (f.m.headY || 1.8) * 0.6;
+      for (const s of [-1, 1]) {
+        const arc = new T.Mesh(G.torus(0.5, 0.045, PI * 0.8, 4, 20), new T.MeshBasicMaterial({ color: col("#ffffff"), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        arc.position.set(f.m.obj.position.x, y + s * 0.5, f.m.obj.position.z + 0.6);
+        arc.rotation.set(0, 0, s > 0 ? PI * 1.1 : PI * 0.1);
+        scene.add(arc);
+        tween(0.25, (u) => {
+          arc.position.y = y + s * 0.5 * (1 - u);
+          arc.material.opacity = 1 - u * 0.8;
+          if (u >= 1) scene.remove(arc);
+        });
+      }
+      emit(0.1, 0.6, (u, add) => {
+        for (let i = 0; i < 4; i++) add(new T.Vector3(f.m.obj.position.x, y, f.m.obj.position.z + 0.4), color, 0.12, new T.Vector3(rnd(3), 1 + Math.random(), rnd(3)), 0.6, { g: 7 });
+      });
+    }
+    function rocks(f, color) {
+      groundRing(f, "#c8b89a", 0.3, 2.2, 0.5);
+      dust(f.m.obj.position.x, f.m.obj.position.z, "#a89880");
+      const m = pm("stone", color || "#7a7068");
+      for (let i = 0; i < 6; i++) {
+        const r = mesh(G.box(0.14, 0.12, 0.12), m, {});
+        r.position.set(f.m.obj.position.x + rnd(0.8), 0.1, f.m.obj.position.z + rnd(0.8));
+        const v = new T.Vector3(rnd(3), 3 + Math.random() * 2, rnd(3));
+        scene.add(r);
+        tween(0.7, (u) => {
+          r.position.addScaledVector(v, 0.016);
+          v.y -= 0.2;
+          r.rotation.x += 0.2;
+          if (u >= 1) scene.remove(r);
+        });
+      }
+      shake = Math.max(shake, 0.3);
+    }
+    function gust(f, color) {
+      groundRing(f, color, 0.4, 2, 0.4);
+      emit(0.25, 0.5, (u, add) => {
+        const a = u * 20;
+        add(chestOf(f, 0.6).add(new T.Vector3(Math.cos(a) * 0.6, rnd(0.6), Math.sin(a) * 0.6)), "#e6e6f0", 0.22, new T.Vector3(-Math.sin(a) * 2, 0.8, Math.cos(a) * 2), 0.5, { op: 0.6 });
+        add(chestOf(f, 0.6).add(rvec(0.6)), "#2a2430", 0.14, new T.Vector3(rnd(2), -0.5, rnd(2)), 0.5, { normal: true, g: 2 });
+      });
+    }
+    function venom(f, color) {
+      claw(f, "#ffffff");
+      emit(0.4, 0.7, (u, add) => add(chestOf(f, 0.65).add(rvec(0.4)), color, 0.12, new T.Vector3(0, -0.4, 0), 0.7, { g: 4 }));
+    }
+    function soulSlash(f, color) {
+      slash(f, color, 0);
+      slash(f, "#ffffff", 1);
+      emit(0.3, 0.8, (u, add) => add(chestOf(f, 0.5).add(rvec(0.6)), color, 0.22, new T.Vector3(rnd(0.3), 1.6, rnd(0.3)), 0.8, { op: 0.8 }));
+    }
+    function splinter(f, color) {
+      slash(f, "#d8c8a0", 0);
+      emit(0.15, 0.8, (u, add) => {
+        for (let i = 0; i < 4; i++) add(chestOf(f, 0.6), Math.random() < 0.5 ? "#8a6a3a" : color, 0.15, new T.Vector3(rnd(3), 1.2 + Math.random() * 1.5, rnd(3)), 0.8, { g: 5, normal: true });
+      });
+    }
+    function sparksX(f, color) {
+      slash(f, color, 0);
+      slash(f, color, 1);
+      burst(chestOf(f, 0.6), color, 10, 2.2);
+    }
+    function meleeFx(A, Bf, i) {
+      const d = A.desc || {};
+      if (d.kind !== "monster") {
+        const c = HERO_TINT[d.cls] || "#ffffff";
+        slash(Bf, c, i % 2);
+        if (A.m.arch === "krieger") burst(chestOf(Bf, 0.62), c, 8, 1.6);
+        if (A.m.arch === "schurke") wait(0.08).then(() => slash(Bf, "#ffffff", (i + 1) % 2));
+        return;
+      }
+      const name = String(d.visual || "") + " " + String(d.look || "");
+      const el = ELEMENTS.find(([, re]) => re.test(name));
+      const e = el ? el[0] : null;
+      const acc = d.accent || "#ffffff";
+      switch (d.arch) {
+        case "ghul": claw(Bf, "#b8d08a"); emit(0.2, 0.7, (u, add) => add(chestOf(Bf, 0.5).add(rvec(0.5)), "#3a4a2a", 0.4, new T.Vector3(0, 0.5, 0), 0.7, { normal: true, op: 0.5, grow: 1 })); break;
+        case "schlund": bite(Bf, "#9aff5a"); break;
+        case "goblin": sparksX(Bf, e === "ice" ? "#cfeeff" : "#ffe27a"); break;
+        case "wolf": claw(Bf, e === "ice" ? "#cfeeff" : e === "shadow" ? "#b48cff" : /fee/.test(name) ? "#7fffe0" : "#ffffff"); break;
+        case "golem": rocks(Bf, e === "ice" ? "#bfe0f0" : /obsidian/.test(name) ? "#2a2430" : /eisen/.test(name) ? "#8a8e96" : "#7a7068"); if (/eisen/.test(name)) burst(chestOf(Bf, 0.5), "#ffd27a", 12, 2.4); break;
+        case "fledermaus": gust(Bf, acc); break;
+        case "spinne": venom(Bf, e === "shadow" ? "#b48cff" : /kristall/.test(name) ? "#bfe9ff" : "#9aff4a"); break;
+        case "krebs":
+          sparksX(Bf, "#cfe6ff");
+          emit(0.12, 0.6, (u, add) => {
+            for (let k = 0; k < 4; k++) add(chestOf(Bf, 0.6), "#7fc8ff", 0.13, new T.Vector3(rnd(3), 1.5 + Math.random(), rnd(3)), 0.6, { g: 7 });
+          });
+          if (e === "storm") lightningShort(Bf);
+          break;
+        case "troll": shockwave(Bf, "#c8b89a"); dust(Bf.m.obj.position.x, Bf.m.obj.position.z, "#a89880"); shake = Math.max(shake, 0.35); slash(Bf, "#ffffff", i % 2); break;
+        case "todesritter": soulSlash(Bf, "#7fb8ff"); break;
+        case "baum": splinter(Bf, "#7fc04a"); break;
+        default: slash(Bf, acc, i % 2);
+      }
+    }
+    function lightningShort(f) {
+      const top = chestOf(f, 1).add(new T.Vector3(0, 0.6, 0));
+      const mat = new T.LineBasicMaterial({ color: col("#eef0ff"), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      const pts = [];
+      for (let i = 0; i <= 6; i++) pts.push(top.clone().lerp(chestOf(f, 0.3), i / 6).add(i && i < 6 ? rvec(0.35) : new T.Vector3()));
+      const l = new T.Line(new T.BufferGeometry().setFromPoints(pts), mat);
+      scene.add(l);
+      tween(0.25, (u) => {
+        mat.opacity = Math.random() < 0.7 ? 1 - u : 0.2;
+        if (u >= 1) {
+          scene.remove(l);
+          l.geometry.dispose();
+        }
+      });
+    }
     const hp = [opts.hp ? opts.hp[0] : 1, opts.hp ? opts.hp[1] : 1];
     const report = (side, ev, idx) => {
       if (opts.onImpact) opts.onImpact(side, hp[side], ev, idx);
@@ -3649,10 +4367,10 @@
           } else if (special && SFX.kind === "roots") {
             roots(Bf, SFX.color);
             await wait(0.35);
-          } else {
-            const kind = bowLike ? (wb === "speer" ? "spear" : wb === "armbrust" ? "bolt" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
-            await projectile(A, Bf, kind, special ? SFX.color : A.m.projColor || "#c47bff");
-          }
+          } else if (bowLike || (special && SFX.kind === "orbs")) {
+            const kind = bowLike ? (wb === "speer" ? "spear" : wb === "armbrust" ? "bolt" : "arrow") : "star";
+            await projectile(A, Bf, kind, special ? SFX.color : HERO_TINT[A.desc.cls] || A.m.projColor || "#c47bff");
+          } else await castFx(A, Bf, spellOf(A));
           await impact(ev, A, Bf, ev.hits[i], i);
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
@@ -3722,7 +4440,7 @@
             ring(Bf, SFX.color, true);
             shake = 0.3;
           } else if (special && SFX.kind === "roots") roots(Bf, SFX.color);
-          else slash(Bf, "#ffffff", i % 2);
+          else meleeFx(A, Bf, i);
           await impact(ev, A, Bf, ev.hits[i], i);
           // Bestien: Biss und Satz zurueck ausspielen lassen
           await wait(ST ? 0.3 : 0.16);
