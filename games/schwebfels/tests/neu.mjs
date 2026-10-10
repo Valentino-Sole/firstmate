@@ -27,8 +27,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const page0 = process.env.PAGE ? path.resolve(process.env.PAGE) : path.join(dir, "..", "dist", "schwebfels.html");
 const html = readFileSync(page0, "utf8");
 const hasIsles = html.includes("globalThis.SB_INSELN=");
-// Koerper der waehlbaren Voelker in der Seite: als Figuren mit echten Bewegungen (SB_GENPACK) oder aelter (SB_GENKERN)
-const hasKern = html.includes("globalThis.SB_GENKERN=") || html.includes("globalThis.SB_GENPACK=");
+// Koerper von Nordmann und Trollblut in der Seite (Figuren mit echten Bewegungen, SB_GENPACK)
+const hasKern = html.includes("globalThis.SB_GENPACK=");
 const cdnMap = process.env.CDN_CACHE ? JSON.parse(readFileSync(process.env.CDN_CACHE, "utf8")) : null;
 const fails = [];
 const errors = [];

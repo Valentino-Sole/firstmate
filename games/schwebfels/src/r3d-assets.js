@@ -141,12 +141,6 @@
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
       data.gen = data.gen || {};
-      // Koerper der waehlbaren Voelker direkt aus der Seite (build.mjs, GEN_KERN); der Rest kommt mit gen-<reich>.js
-      if (globalThis.SB_GENKERN) {
-        const k = parse(await unzip(b64(globalThis.SB_GENKERN))).gen || {};
-        for (const key in k) if (!data.gen[key]) data.gen[key] = k[key];
-        globalThis.SB_GENKERN = null;
-      }
       A.data = data;
     } catch (e) {
       A.error = e;

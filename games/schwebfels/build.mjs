@@ -13,8 +13,6 @@
 //                     Artifact mit mehreren Dateien, wenn die Seite sonst ueber 16 MB kaeme (jede Datei hoechstens 16 MB)
 //   assets/gen-<reich>.pack  erzeugte Figuren je Reich (Meshy-Strecke des Hauptzweigs): werden zu <dist>/gen-<reich>.js,
 //                     die das Spiel erst bei Bedarf nachlaedt; beim Veroeffentlichen als Zusatzdatei gleichen Namens mitgeben
-//   GEN_KERN=<voelker>  Koerper dieser Voelker (Standard "nordmann,trollblut", die waehlbaren) zusaetzlich direkt in die
-//                     Seite, damit die eigenen Helden nicht von der Zusatzdatei abhaengen; leer = nichts einbetten
 // Die Modellpakete werden mit gzip verkleinert eingebettet; src/r3d-assets.js entpackt sie im Browser.
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { gzipSync } from "node:zlib";
@@ -31,51 +29,6 @@ const scripts = [...html.matchAll(/<script src="(src\/[^"]+)"><\/script>/g)].map
 const cdn = [...html.matchAll(/<script src="(https:[^"]+)"><\/script>/g)].map((m) => m[1]);
 const fonts = [...html.matchAll(/<link rel="stylesheet" href="(https:[^"]+)">/g)].map((m) => m[1]);
 const bodyMarkup = html.slice(html.indexOf("<body>") + 6, html.indexOf("<!-- BUILD:SCRIPTS -->")).trim();
-
-// Modellpaket lesen und Teile davon neu packen (Format wie src/r3d-assets.js: "SBP1", Kopflaenge, JSON-Kopf, Daten;
-// {"$": [art, versatz, anzahl, ...]} verweist in die Daten)
-const ELEM = { f32: 4, u8: 1, i8: 1, u16: 2, i16: 2, u32: 4, q16: 2, uv16: 2, img: 1 };
-function readPack(buf) {
-  if (buf.readUInt32LE(0) !== 0x31504253) throw new Error("Modellpaket: falsche Kennung");
-  const hl = buf.readUInt32LE(4);
-  const header = JSON.parse(buf.subarray(8, 8 + hl).toString("utf8"));
-  let base = 8 + hl;
-  base += (4 - (base % 4)) % 4;
-  return { header, blob: buf.subarray(base) };
-}
-// entries: { schluessel: [paket, eintrag] } -> neues Paket { gen: { schluessel: eintrag } }
-function subPack(entries) {
-  const parts = [];
-  let off = 0;
-  const remap = (pk, o) => {
-    if (Array.isArray(o)) return o.map((x) => remap(pk, x));
-    if (o && typeof o === "object") {
-      if (o.$) {
-        const d = o.$.slice();
-        const n = d[2] * ELEM[d[0]];
-        off += (4 - (off % 4)) % 4;
-        parts.push([off, pk.blob.subarray(d[1], d[1] + n)]);
-        d[1] = off;
-        off += n;
-        return { $: d };
-      }
-      const r = {};
-      for (const k in o) r[k] = remap(pk, o[k]);
-      return r;
-    }
-    return o;
-  };
-  const gen = {};
-  for (const k in entries) gen[k] = remap(entries[k][0], entries[k][1]);
-  const head = Buffer.from(JSON.stringify({ v: 1, gen }), "utf8");
-  const base = 8 + head.length + ((4 - ((8 + head.length) % 4)) % 4);
-  const outBuf = Buffer.alloc(base + off);
-  outBuf.writeUInt32LE(0x31504253, 0);
-  outBuf.writeUInt32LE(head.length, 4);
-  head.copy(outBuf, 8);
-  for (const [o, b] of parts) b.copy(outBuf, base + o);
-  return outBuf;
-}
 
 // DIST=<ordner> schreibt woandershin (z. B. fuer Tests mit eigenem Figurenpaket)
 const out = process.env.DIST ? path.resolve(process.env.DIST) : path.join(dir, "dist");
@@ -111,8 +64,6 @@ try {
 // Erzeugte Figuren aus der Bild-zu-3D-Strecke (assets/gen-<reich>.pack, aus assets-src/gen/ gebaut): je Reich eine
 // eigene Datei dist/gen-<reich>.js, die das Spiel erst bei Bedarf nachlaedt (die Seite bleibt unter 16 MB)
 const genFiles = [];
-const kernRaces = (process.env.GEN_KERN ?? "nordmann,trollblut").split(",").map((x) => x.trim()).filter(Boolean);
-const kern = {};
 for (const f of readdirSync(path.join(dir, "assets"))) {
   const m = /^gen-([a-z0-9]+)\.pack$/.exec(f);
   if (!m) continue;
@@ -121,14 +72,6 @@ for (const f of readdirSync(path.join(dir, "assets"))) {
   const js = "globalThis.SB_GEN_" + m[1].toUpperCase() + '="' + gzipSync(buf, { level: 9 }).toString("base64") + '";\n';
   writeFileSync(path.join(out, "gen-" + m[1] + ".js"), js);
   genFiles.push(path.relative(dir, path.join(out, "gen-" + m[1] + ".js")) + " " + (js.length / 1024).toFixed(0) + " KB (eigene Datei, beim Veroeffentlichen als gen-" + m[1] + ".js unter files angeben)");
-  const pk = readPack(buf);
-  for (const k in pk.header.gen || {}) if (kernRaces.some((r) => k.startsWith(r + "-"))) kern[k] = [pk, pk.header.gen[k]];
-}
-// Kern: Koerper der waehlbaren Voelker als eigenes kleines Paket direkt in der Seite (src/r3d-assets.js: SB_GENKERN)
-if (Object.keys(kern).length) {
-  const sub = subPack(kern);
-  packJs += "<script>globalThis.SB_GENKERN=\"" + gzipSync(sub, { level: 9 }).toString("base64") + "\";</script>";
-  console.log("Neue Figuren direkt in der Seite:", Object.keys(kern).sort().join(", "));
 }
 // Gemalte Heimatinseln (src/hub-painted.js): Bilder als Data-URI, mit SPLIT als eigene Datei
 {

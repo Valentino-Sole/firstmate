@@ -75,7 +75,7 @@ Vorbild ist Dark Age of Camelot: Dort verteilt jede Klasse Punkte auf eigene Spe
 - **Angriff** (je Grundart): mehr Schaden, Kritchance und Kritstärke, Rüstung durchdringen, Gnadenstoß gegen geschwächte Gegner, Doppelschlag; Spitze: Sturmangriff (Krieger), Meucheln (Schurke), Pfeilsalve (Jäger), Wilde Macht (Magier).
 - **Verteidigung**: Lebenspunkte, Block, Ausweichen, Barriere, Magie meiden, Zähigkeit, Gegenschlag, Lebensraub, Reinigung gegen Betäubung und Gift; Spitze: Schmerz ignorieren, Verschwinden, Zweiter Atem, Bannkreis.
 - **Klassenpfad**: stärkt die eigene Spezialfähigkeit (Schaden, Kritchance, eine Besonderheit je Klasse wie stärkeres Gift, mehr Heilung, höhere Betäubungschance); Spitze: Großmeister, die Spezialfähigkeit kommt schon bei jeder dritten Aktion.
-- Talente wirken in jedem Kampf und sind im 3D-Kampf zu sehen: Schutzkugel der Barriere, Lichtsäule beim zweiten Atem, Rauch beim Verschwinden, Einblendungen für Gegenschlag, Doppelschlag, Gnadenstoß und Lebensraub.
+- Talente wirken in jedem Kampf und sind im 3D-Kampf zu sehen: Schutzkugel der Barriere, Lichtsäule beim zweiten Atem, Rauch beim Verschwinden, Einblendungen für Gegenschlag, Doppelschlag, Gnadenstoß und Lebensraub. Abschluss-Talente haben seit 0.74 eine eigene Spezialattacke mit Bewegung und Effekt (Sturmangriff, Meucheln, Pfeilsalve, Wilde Macht, Bannkreis, Kraftschrei, Verschwinden, Großmeister); am Kampfausgang ändert das nichts.
 - Computerhelden und Wanderkämpfer verteilen ihre Punkte selbst; Wanderkämpfer bekommen höchstens so viele Punkte, wie der Held ausgegeben hat.
 
 ## 5. Balance

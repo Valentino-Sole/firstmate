@@ -223,7 +223,6 @@
     it.vis = E.makeVis(it, (it.vis && it.vis.c) || realm, arch);
     return it;
   };
-  E.visArch = (vis) => (vis && vis.f && vis.f.split(".").length === 3 ? vis.f.split(".")[1] : null);
   E.makeItem = function (r, opts) {
     const L = Math.max(1, Math.round(opts.level || 1));
     const arch = opts.arch || (opts.cls && D.CLASSES[opts.cls] ? D.CLASSES[opts.cls].arch : "krieger");
@@ -1057,11 +1056,6 @@
     const span = mode === "echtzeit" ? 86400000 : E.C.DAY_CYCLE_MS;
     for (let dt = step; dt <= span; dt += step) if (E.isNight(mode, now + dt) !== cur) return dt;
     return Infinity;
-  };
-  E.nextMidnight = function (now) {
-    const d = new Date(now || E.now());
-    d.setHours(24, 0, 0, 0);
-    return d.getTime();
   };
   E.tick = function (S, now) {
     now = now || E.now();

@@ -34,21 +34,13 @@
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  // Neue Figuren gelten immer (der Vergleich mit den alten ist seit Version 5.6 abgeschafft)
-  const genOn = () => true;
-  // Volk und Geschlecht mit fertig modellierter Figur (Meshy): Haut, Haare und Gesicht gehoeren zum Modell, die alte
-  // Wahl entfaellt. Massgeblich sind die geladenen Figurendaten.
-  UI.meshyLook = (race, gender) => {
-    const G = (UI.use3d && SB.assets.data && SB.assets.data.gen) || {};
-    return !!G[race + "-" + (gender === "w" ? "frau" : "mann")];
-  };
   // Reiche mit Figurendatei (gen-<reich>.js neben der Seite): Midgard (Frostwicht, Glutzwerg), Albion (Albier,
   // Kreidezwerg) und Hibernia (Sidhe, Moorling); Nordmann und Trollblut stecken in der Seite
   UI.GEN_REALMS = ["midgard", "albion", "hibernia"];
   // Jedes Volk hat einen Meshy-Koerper. Solange er noch laedt, steht ein Platzhalter da (pending), nie die alte Figur;
   // das Laden der Datei seines Reiches wird dabei angestossen.
   const withGen = (d) => {
-    if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    if (!SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
     if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] }, GEAR_V ? { gv: GEAR_V } : {});
     const realm = D.RACES[d.race] && D.RACES[d.race].realm;
@@ -59,7 +51,7 @@
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.heroGear(S) });
   // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
   // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
-  // Die Koerper der waehlbaren Voelker stecken in der Seite (build.mjs, GEN_KERN) und sind sofort bereit, sobald ihre
+  // Die Koerper von Nordmann und Trollblut stecken in der Seite (build.mjs, SB_GENPACK) und sind sofort bereit, sobald ihre
   // Hautbilder dekodiert sind; die Datei gen-<reich>.js bringt die uebrigen (Figurenprobe). UI.genStatus fuer die Anzeige.
   UI.genStatus = { kern: "", datei: "" };
   const genChanged = () => {
@@ -180,7 +172,7 @@
   UI.loadGenFigures = function (realm) {
     UI.loadMonsters(UI.offerArchs());
     UI.loadKulissen();
-    if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    if (!UI.use3d || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
     if (GEN_FIG[realm]) return GEN_FIG[realm];
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {
@@ -440,14 +432,7 @@
     if (p[0] === "eq") return S.equip[p[1]];
     if (p[0] === "shop") return S.shops[p[1]] && S.shops[p[1]].items[+p[2]];
     if (p[0] === "offer") return S.quest.offers[+p[1]] && S.quest.offers[+p[1]].item;
-    if (p[0] === "tmp") return UI.tmpItems[+p[1]];
     return null;
-  };
-  UI.tmpItems = [];
-  UI.tmpRef = function (item) {
-    UI.tmpItems.push(item);
-    if (UI.tmpItems.length > 40) UI.tmpItems.shift();
-    return "tmp:" + (UI.tmpItems.length - 1);
   };
   UI.slotName = (it) => D.SLOT_INFO[it.slot].name;
   UI.isUpgrade = function (it) {

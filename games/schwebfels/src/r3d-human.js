@@ -458,7 +458,6 @@
      Eigener Koerper mit gemalter Textur und eigenen Gelenken, gleiches Skelett und gleiche Bewegungen wie
      alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
   const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
-  HU.hasGen = (key) => !!GEN()[key];
   // Texturen der erzeugten Koerper vorab dekodieren; erst danach gelten sie als bereit (sonst dunkle Portraets)
   const GREADY = {};
   HU.genReady = (key) => GREADY[key] === true;

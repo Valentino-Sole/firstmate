@@ -518,11 +518,6 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 .choice small { display: block; font-weight: 500; font-size: 11.5px; color: var(--fog); }
 .choice .crest { width: 28px; height: 28px; }
 .cls-choices { grid-template-columns: repeat(4, 1fr); }
-.swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
-.sw { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #000; cursor: pointer; box-shadow: 0 0 0 2px transparent; }
-.sw.on { box-shadow: 0 0 0 2px var(--gold-hi); }
-.sw.glowsw { box-shadow: 0 0 8px currentColor, 0 0 0 1px rgba(255, 255, 255, 0.5); }
-.sw.glowsw.on { box-shadow: 0 0 0 2px var(--gold-hi), 0 0 10px rgba(255, 255, 255, 0.6); }
 .cform .desc { font-size: 13.5px; color: #d6cab0; margin: 6px 0 0; }
 .cform input#heroName { width: 100%; box-sizing: border-box; font-size: 18px; padding: 10px 12px; border-radius: 4px; border: 1px solid var(--gold-dim); background: #0a080c; color: var(--parch); }
 
@@ -692,6 +687,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Portrait wird im Hintergrund gezeichnet: Umriss steht wie das spaetere Bild */
+.snap-wait { display: contents; }
 
 </style>
 </head>
@@ -876,6 +874,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Die Prüfung des Schildes", x: "Der Ordensmeister schickt dir seinen besten Prüfer. Leider ist der Prüfer seit zweihundert Jahren tot und steckt noch in seiner Rüstung.", foes: [{ name: "Die Leere Rüstung", arch: "todesritter", color: "#7f8a96", accent: "#9fe3ff" }] },
         { lv: 15, t: "Der gebrochene Eid", x: "Ein Bruder deines Ordens hat seinen Eid gebrochen und dient nun der Tiefe. Auf seinem Schild prangt noch immer dein Wappen.", foes: [{ name: "Knappe der Tiefe", arch: "ghul", color: "#d9cfb8", accent: "#c0392b" }, { name: "Ser Galvan der Gefallene", arch: "todesritter", color: "#3a2a2a", accent: "#ff5a3d", boss: true }] },
         { lv: 30, t: "Der Schild des Reiches", x: "Man nennt dich jetzt den Schild Albions. Das ist eine große Ehre und eine noch größere Zielscheibe. Unter den Klippen erwacht etwas, das es persönlich nimmt.", foes: [{ name: "Der Wurm unter den Klippen", arch: "drache", color: "#e8e2d6", accent: "#c0392b", boss: true, final: true }] },
+        { lv: 38, t: "Der Schwur der Sieben", x: "Sieben Ritter schworen einst, Albion bis zum letzten Atemzug zu schützen. Sechs sind tot. Der siebte hat beschlossen, dass Atemzüge überschätzt werden.", foes: [{ mon: "grabritter" }, { name: "Ser Aldric, der Letzte der Sieben", arch: "todesritter", color: "#5a5f68", accent: "#ffd27a", boss: true }] },
+        { lv: 48, t: "Der Schild bricht nicht", x: "Die Tiefe schickt einen Koloss aus Kreide und Eisen gegen die Mauern. Er ist größer als die Mauern. Du hast einen Schild. Das muss reichen.", foes: [{ name: "Der Kreidekoloss", arch: "golem", color: "#e8e2d6", accent: "#c0392b", boss: true, final: true }] },
       ],
     },
     meuchler: {
@@ -886,6 +886,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Der Schattenmarkt", x: "Unter Kreidefurt handelt jemand mit gestohlenen Namen. Du sollst herausfinden, wer, und ihm seinen eigenen abnehmen.", foes: [{ name: "Der Namenlose Händler", arch: "kultist", color: "#3a3346", accent: "#ffcf5a" }] },
         { lv: 15, t: "Der Dolch der Königin", x: "Ein Dolch, der einst eine Königin tötete, ist wieder aufgetaucht. Er sucht sich seinen Träger selbst aus, und zwar ohne zu fragen.", foes: [{ name: "Klingengeist", arch: "schemen", color: "#9fb7d9", accent: "#c8ced6" }, { name: "Der Dolchträger", arch: "kultist", color: "#5a1414", accent: "#ff5a3d", boss: true }] },
         { lv: 30, t: "Niemandes Held", x: "Wenn du alles richtig machst, wird nie jemand erfahren, dass du Albion gerettet hast. Der Schattenkanzler weiß es. Noch.", foes: [{ name: "Der Schattenkanzler", arch: "kultist", color: "#1a1622", accent: "#c47bff", boss: true, final: true }] },
+        { lv: 38, t: "Die Gilde der Stillen", x: "Die Gilde der Stillen nimmt keine neuen Mitglieder auf. Sie entfernt alte. Heute stehst du auf ihrer Liste, gleich unter dem König.", foes: [{ mon: "blutkultist" }, { name: "Meisterin Nachtigall", arch: "kultist", color: "#1a1622", accent: "#c47bff", boss: true }] },
+        { lv: 48, t: "Der letzte Auftrag", x: "Ein Auftrag ohne Namen, ohne Lohn und ohne Rückweg. Das Ziel trägt dein Gesicht. Das ist entweder ein Spiegel oder ein sehr schlechtes Zeichen.", foes: [{ name: "Der Mann ohne Gesicht", arch: "schemen", color: "#14121c", accent: "#ff5a3d", boss: true, final: true }] },
       ],
     },
     langbogner: {
@@ -896,6 +898,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Der weiße Hirsch", x: "Ein weißer Hirsch erscheint nur Schützen, die ihn verdienen. Er führt dich zu der Bestie, die ihn seit Wochen jagt.", foes: [{ name: "Blasszahn", arch: "wolf", color: "#e9e0c8", accent: "#c0392b" }] },
         { lv: 15, t: "Der Pfeil, der nicht zurückkam", x: "Dein Lehrmeister verschwand mit seinem letzten Pfeil im Nebel. Den Pfeil hast du wiedergefunden. Er steckt in etwas sehr Großem.", foes: [{ name: "Moorschleicher", arch: "schlund", color: "#4a5a2a", accent: "#d9f27a" }, { name: "Der Pfeilfresser", arch: "troll", color: "#5f7a6a", accent: "#ffcf5a", boss: true }] },
         { lv: 30, t: "Ein Schuss für das Reich", x: "Man sagt, ein einziger Pfeil könne eine Schlacht entscheiden. Heute wirst du es herausfinden.", foes: [{ name: "Die Himmelsbestie", arch: "fledermaus", color: "#2f2a3a", accent: "#ff7a3d", boss: true, final: true }] },
+        { lv: 38, t: "Die Wilde Jagd", x: "In Sturmnächten reitet die Wilde Jagd über Albion. Wer sie sieht, muss mitreiten. Du hast beschlossen, lieber auf sie zu schießen.", foes: [{ mon: "schattenwolf" }, { name: "Herne der Jäger", arch: "baum", color: "#3a2a1f", accent: "#ffd27a", boss: true }] },
+        { lv: 48, t: "Der Pfeil durch die Sonne", x: "Ein Drache hat sich vor die Sonne gelegt und will sie ausbrüten. Man braucht einen Pfeil, der durch die Sonne fliegt. Du hast einen. Hoffentlich.", foes: [{ name: "Der Sonnenschwelwurm", arch: "drache", color: "#8a2f1f", accent: "#ffe27a", boss: true, final: true }] },
       ],
     },
     lichtweber: {
@@ -906,6 +910,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Die dunkle Bibliothek", x: "In der Klosterbibliothek ist ein Buch erwacht. Es liest jetzt die Mönche, nicht umgekehrt.", foes: [{ name: "Das Lesende Buch", arch: "schemen", color: "#c9b89a", accent: "#ffcf5a" }] },
         { lv: 15, t: "Licht gegen Licht", x: "Ein Bruder hat entdeckt, dass Licht auch brennen kann, und hat Gefallen daran gefunden.", foes: [{ name: "Glutkultist", arch: "kultist", color: "#5a1414", accent: "#ff7a3d" }, { name: "Bruder Glutauge", arch: "kultist", color: "#c9a441", accent: "#ff5a1a", boss: true }] },
         { lv: 30, t: "Die zweite Sonne", x: "Um den Riss im Splitter zu schließen, brauchst du mehr Licht, als ein Mensch tragen kann. Etwas aus der Leere will genau das verhindern.", foes: [{ name: "Der Leerenschemen", arch: "schemen", color: "#1f1b2e", accent: "#c47bff", boss: true, final: true }] },
+        { lv: 38, t: "Das verlöschende Licht", x: "In Albion verlöschen die Kerzen von selbst. Im Spiegelsaal der Akademie lacht ein Schatten, der dein Licht trinkt und dabei immer heller wird.", foes: [{ mon: "fahlerschemen" }, { name: "Der Schattenspiegel", arch: "schemen", color: "#2a2a3a", accent: "#e9f6ff", boss: true }] },
+        { lv: 48, t: "Die Morgenröte", x: "Die Nacht will nicht mehr enden. Der Ewige Abend hat sich vor den Morgen gestellt. Du bist das Licht, das ihn daran erinnert, dass jeder Abend endet.", foes: [{ name: "Der Ewige Abend", arch: "schemen", color: "#1f1b2e", accent: "#ffd27a", boss: true, final: true }] },
       ],
     },
     sturmhuene: {
@@ -916,6 +922,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Der Bär, der keiner war", x: "Der Brauch verlangt, dass ein Hüne einmal im Leben einen Bären niederringt. Dein Bär stellte sich als verfluchter Troll heraus. Brauch ist Brauch.", foes: [{ name: "Der Fluchbär", arch: "troll", color: "#5a4a3a", accent: "#9fe3ff" }] },
         { lv: 15, t: "Der Hammer im Eis", x: "Im Gletscher steckt seit Jahrhunderten ein Hammer. Wer ihn herauszieht, muss es mit dem aufnehmen, der ihn hineingesteckt hat.", foes: [{ name: "Eiswächter", arch: "golem", color: "#bfe8ff", accent: "#4fa9ff" }, { name: "Frostriese Hrimkald", arch: "golem", color: "#dfe9f2", accent: "#2f5fa8", boss: true }] },
         { lv: 30, t: "Gegen den Sturm", x: "Die Skalden sagen, irgendwann kämpft jeder Sturmhüne gegen den Sturm selbst. Heute ist irgendwann.", foes: [{ name: "Der Sturmwurm", arch: "drache", color: "#2f3f9f", accent: "#9fe3ff", boss: true, final: true }] },
+        { lv: 38, t: "Der Frostriese", x: "Thrym der Frostriese hat Midgards Hammer gestohlen und will ihn nur gegen eine Braut zurückgeben. Die Jarle haben dich geschickt. Im Kleid.", foes: [{ mon: "bergtroll" }, { name: "Thrym der Frostriese", arch: "troll", color: "#9fbfd8", accent: "#2f5fa8", boss: true }] },
+        { lv: 48, t: "Das letzte Gewitter", x: "Ein Wurm aus Donner zieht über Midgard und schlägt in jeden Hof ein. Er sucht den, der dem Sturm einst ins Gesicht gelacht hat. Er hat dich gefunden.", foes: [{ name: "Der Donnerwurm", arch: "drache", color: "#2f3f9f", accent: "#ffe27a", boss: true, final: true }] },
       ],
     },
     nebelschleicher: {
@@ -926,6 +934,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Das gestohlene Horn", x: "Jemand hat das Trinkhorn eines Jarls gestohlen. Der Jarl will es zurück, du willst wissen, wer es gewagt hat, ohne dich zu fragen.", foes: [{ name: "Hehlerkönig Skarn", arch: "goblin", color: "#5d5d66", accent: "#e0b04a" }] },
         { lv: 15, t: "Gift für einen Gott", x: "Jemand will einen der schweigenden Götter vergiften. Du findest, das ist dein Fachgebiet und keiner sollte dir dabei reinpfuschen.", foes: [{ name: "Runenfresser", arch: "kultist", color: "#2f4f6f", accent: "#7fffb0" }, { name: "Der Giftmischer", arch: "kultist", color: "#1a2a1a", accent: "#4fffb0", boss: true }] },
         { lv: 30, t: "Der unsichtbare Krieg", x: "Den größten Krieg Midgards führt niemand mit Schwertern. Er findet in der Dunkelheit statt, und du bist das Dunkelste darin.", foes: [{ name: "Nachtschlund", arch: "wolf", color: "#1f1b2e", accent: "#c47bff", boss: true, final: true }] },
+        { lv: 38, t: "Das Gift der Nornen", x: "Die Nornen spinnen das Schicksal Midgards, und eine von ihnen tränkt den Faden in Gift. Du sollst den Faden durchschneiden, bevor er reißt.", foes: [{ mon: "kristallweberin" }, { name: "Die Nebelnorne", arch: "kultist", color: "#2a3a3a", accent: "#7fff5a", boss: true }] },
+        { lv: 48, t: "Im Nebel verloren", x: "Der Nebel hat einen König, und der König will deinen Platz. Im Nebel gibt es keine Richtung, keinen Laut und keine zweite Chance.", foes: [{ name: "Der Nebelkönig", arch: "schemen", color: "#9aa6b2", accent: "#7fff5a", boss: true, final: true }] },
       ],
     },
     wolfsjaeger: {
@@ -936,6 +946,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Die Fährte im Schnee", x: "Ein Rudel Grauwölfe reißt die Herden von Frostfurt. Dein Wolf weigert sich mitzukommen. Das ist ein schlechtes Zeichen.", foes: [{ name: "Grauwolf", arch: "wolf", color: "#8a8a8a", accent: "#ffcf5a" }, { name: "Grauwolf-Alpha", arch: "wolf", color: "#5a5a5a", accent: "#ff5a3d", boss: true }] },
         { lv: 15, t: "Der Jäger wird gejagt", x: "Etwas folgt deiner Spur. Es hat acht Beine, und es ist schneller als dein Wolf.", foes: [{ name: "Die Eisspinne", arch: "spinne", color: "#a8e6ff", accent: "#ffffff", boss: true }] },
         { lv: 30, t: "Der Wolf am Ende der Welt", x: "In den Liedern frisst ein Wolf am Ende der Welt die Sonne. Die Lieder hatten recht, nur das Datum stimmte nicht.", foes: [{ name: "Fenrak, der Weltwolf", arch: "wolf", color: "#2a2633", accent: "#9fe3ff", boss: true, final: true }] },
+        { lv: 38, t: "Die Jagd auf Skoll", x: "Skoll jagt die Sonne über den Himmel, seit es den Himmel gibt. Diesmal ist er schneller geworden. Jemand muss ihn aufhalten, und alle sehen dich an.", foes: [{ mon: "frostwolf" }, { name: "Skoll der Sonnenjäger", arch: "wolf", color: "#5a4a3a", accent: "#ffb13b", boss: true }] },
+        { lv: 48, t: "Hati, der Mondjäger", x: "Skolls Bruder Hati jagt den Mond. Er hat gehört, was du mit Skoll gemacht hast, und er hat beschlossen, vorher dich zu jagen.", foes: [{ name: "Hati der Mondjäger", arch: "wolf", color: "#2a2633", accent: "#e9f6ff", boss: true, final: true }] },
       ],
     },
     runenwirker: {
@@ -946,6 +958,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Die fressende Rune", x: "Ein Runenstein bei Frostfurt hat angefangen, andere Runen zu fressen. Er wird dabei größer und hungriger.", foes: [{ name: "Der Runenfresser", arch: "golem", color: "#5a6a8f", accent: "#9fe3ff" }] },
         { lv: 15, t: "Das Gedicht der Seherin", x: "Die Seherin Ylva spricht nur noch in Versen, und jeder Vers ist ein Fluch. Irgendetwas spricht durch sie.", foes: [{ name: "Versgespenst", arch: "schemen", color: "#cfe0ff", accent: "#8f7cff" }, { name: "Seherin Ylva, besessen", arch: "kultist", color: "#2f5fa8", accent: "#cfe3ff", boss: true }] },
         { lv: 30, t: "Die letzte Rune", x: "Es gibt eine Rune, die nie geschrieben wurde. Wer sie schreibt, kann den Splitter heilen. Wer sie liest, verschwindet.", foes: [{ name: "Der Ungeschriebene", arch: "schemen", color: "#14121c", accent: "#9fe3ff", boss: true, final: true }] },
+        { lv: 38, t: "Die Runen der Riesen", x: "Die Riesen kannten Runen, die Berge bewegen. Ein Golem aus diesen Runen bewacht ihr Archiv. Er liest gern, nur nicht vor.", foes: [{ mon: "reifgolem" }, { name: "Runengolem Ur", arch: "golem", color: "#5a5f68", accent: "#9fe3ff", boss: true }] },
+        { lv: 48, t: "Das Wort am Anfang", x: "Vor allen Runen gab es ein Wort. Wer es ausspricht, schreibt die Welt neu. Die Tiefe hat es gefunden und spricht es langsam aus, Silbe für Silbe.", foes: [{ name: "Die Erste Rune", arch: "schemen", color: "#14121c", accent: "#9fe3ff", boss: true, final: true }] },
       ],
     },
     hainwaechter: {
@@ -956,6 +970,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Wurzelfäule", x: "Ein junger Hirte des Hains ist krank geworden. Er erkennt dich nicht mehr, und er schlägt um sich.", foes: [{ name: "Faulender Hirte", arch: "baum", color: "#5a4a2a", accent: "#d9f27a" }] },
         { lv: 15, t: "Das Silbergeweih", x: "Der Hirschkönig des Hains wurde von der Tiefe berührt. Seine Krone aus Silber ist schwarz geworden.", foes: [{ name: "Moderwolf", arch: "wolf", color: "#3a4a2a", accent: "#d9f27a" }, { name: "Der Schwarzgeweihte", arch: "baum", color: "#2a2a2a", accent: "#c0c8d0", boss: true }] },
         { lv: 30, t: "Der Hain steht", x: "Alles, was wächst, schaut heute auf dich. Der Moderkönig kommt, um den ältesten Baum zu fällen.", foes: [{ name: "Der Moderkönig", arch: "baum", color: "#2f2a1f", accent: "#7fffb0", boss: true, final: true }] },
+        { lv: 38, t: "Der gefallene Wächter", x: "Eibenrinde war der älteste Wächter des Hains, bis die Tiefe ihm etwas ins Ohr flüsterte. Jetzt bewacht er den Hain vor allen, die ihn retten wollen.", foes: [{ mon: "dornenhirte" }, { name: "Wächter Eibenrinde", arch: "baum", color: "#3a2f1f", accent: "#c47bff", boss: true }] },
+        { lv: 48, t: "Die Fäule im Weltenbaum", x: "Der Weltenbaum hält Hibernia zusammen. In seinem Stamm sitzt eine Fäule, die so alt ist wie er. Du musst hinein, bevor die Fäule hinauskommt.", foes: [{ name: "Die Fäule im Weltenbaum", arch: "baum", color: "#2a2416", accent: "#7fff5a", boss: true, final: true }] },
       ],
     },
     schattentaenzer: {
@@ -966,6 +982,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Der Tanz der Irrlichter", x: "Im Irrlichtsumpf tanzen Lichter, die Wanderer in den Schlamm locken. Du findest, sie tanzen schlecht.", foes: [{ name: "Irrlichtschwarm", arch: "schemen", color: "#9effc8", accent: "#2a7a5a" }] },
         { lv: 15, t: "Die Klinge aus Mondsilber", x: "Ein Feenritter fordert dich zum Duell um eine Klinge aus Mondsilber. Er kämpft fair. Du eher nicht.", foes: [{ name: "Feenknappe", arch: "goblin", color: "#9fb7d9", accent: "#ffffff" }, { name: "Feenritter Aodh", arch: "todesritter", color: "#c8d8e0", accent: "#7fffb0", boss: true }] },
         { lv: 30, t: "Der letzte Tanz", x: "Die Nachtkönigin hat Hibernias Schatten gestohlen. Ohne Schatten kein Tanz, und ohne Tanz bist du nur jemand in dunkler Kleidung.", foes: [{ name: "Die Nachtkönigin", arch: "schemen", color: "#1a1622", accent: "#b48cff", boss: true, final: true }] },
+        { lv: 38, t: "Der Tanz der Spiegel", x: "Im Spiegelsaal der Feen tanzt dein Schatten ohne dich. Er ist besser als du. Er weiß es. Jetzt will er deinen Körper ausprobieren.", foes: [{ mon: "irrlichtschemen" }, { name: "Dein eigener Schatten", arch: "schemen", color: "#1a1622", accent: "#b48cff", boss: true }] },
+        { lv: 48, t: "Der Hof der Nacht", x: "Der Nachtfürst lädt zum letzten Ball. Wer aufhört zu tanzen, bleibt für immer. Du hast vor, aufzuhören, aber erst, wenn er liegt.", foes: [{ name: "Der Nachtfürst", arch: "schemen", color: "#14121c", accent: "#ff5a8a", boss: true, final: true }] },
       ],
     },
     mondschuetze: {
@@ -976,6 +994,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Pfeile aus Mondlicht", x: "Eine Riesenfledermaus jagt die Mondfalter des Hains. Ohne Falter keine Mondpfeile, ohne Mondpfeile keine Mondschützen.", foes: [{ name: "Die Falterfresserin", arch: "fledermaus", color: "#2f3a5a", accent: "#8ff0ff" }] },
         { lv: 15, t: "Der rote Mond", x: "Seit sieben Nächten ist der Mond rot. Die Priesterinnen sagen, jemand trinke ihn. Klingt absurd, bis du den Schemen am Mondsee siehst.", foes: [{ name: "Mondtrinker", arch: "schemen", color: "#ff9a8a", accent: "#ff5a5a" }, { name: "Der Blutmondschemen", arch: "schemen", color: "#5a1414", accent: "#ff3a3a", boss: true }] },
         { lv: 30, t: "Den Mond zurückholen", x: "Der Mondfresser hat den halben Mond verschlungen. Du hast einen Bogen, einen Pfeil und eine sehr schlechte Idee.", foes: [{ name: "Der Mondfresser", arch: "drache", color: "#1f1b2e", accent: "#e9f6ff", boss: true, final: true }] },
+        { lv: 38, t: "Der Sternenfalke", x: "Ein Falke aus Sternenlicht stiehlt die Pfeile aus den Köchern der Mondschützen. Deine hat er noch nicht. Er hat es aber vor.", foes: [{ mon: "aasflatterer" }, { name: "Der Sternenfalke", arch: "fledermaus", color: "#2f2a3a", accent: "#e9f6ff", boss: true }] },
+        { lv: 48, t: "Der Mond fällt", x: "Ein Wurm hat sich um den Mond gewickelt und zieht ihn herunter. Wenn er aufschlägt, gibt es kein Hibernia mehr. Ein Pfeil, ein Auge, ein Atemzug.", foes: [{ name: "Der Mondwurm", arch: "drache", color: "#1f1b2e", accent: "#e9f6ff", boss: true, final: true }] },
       ],
     },
     dornenrufer: {
@@ -986,6 +1006,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         { lv: 8, t: "Der Garten der Stille", x: "Im Garten der Druiden wächst ein Pilz, der jedes Geräusch frisst. Die Druiden können nicht einmal mehr um Hilfe rufen.", foes: [{ name: "Stillsporling", arch: "pilz", color: "#8f5fb8", accent: "#d9f27a" }] },
         { lv: 15, t: "Der Dorn im Herzen", x: "Ein Dornenhirte hat sich gegen die Druiden gewandt. Seine Dornen wachsen durch Stein und durch Erinnerungen.", foes: [{ name: "Dornensaat", arch: "pilz", color: "#5c8f2f", accent: "#e6ff5a" }, { name: "Der Dornenhirte", arch: "baum", color: "#3a2f1f", accent: "#c0392b", boss: true }] },
         { lv: 30, t: "Neues Wachstum", x: "Um den letzten Hain zu retten, musst du etwas Uraltes zu Kompost verarbeiten. Es ist nicht einverstanden.", foes: [{ name: "Uralter Moderhirte", arch: "baum", color: "#2a2416", accent: "#9fffc8", boss: true, final: true }] },
+        { lv: 38, t: "Der Garten der Gifte", x: "Mutter Giftmorchel züchtet einen Garten, in dem jede Blume tötet. Sie hält das für Gartenkunst. Die Nachbarn sehen das anders, solange sie noch sehen.", foes: [{ mon: "giftmorchel" }, { name: "Mutter Giftmorchel", arch: "pilz", color: "#5a3a6a", accent: "#d9f27a", boss: true }] },
+        { lv: 48, t: "Die erste Saat", x: "Aus dem ersten Samen wuchs einst alles Leben Hibernias. Die Tiefe hat ihn ausgegraben und pflanzt ihn neu, falsch herum.", foes: [{ name: "Der Uralte Same", arch: "pilz", color: "#2a3a1f", accent: "#9fffc8", boss: true, final: true }] },
       ],
     },
   };
@@ -1003,6 +1025,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       { lv: 12, t: "Das Schwert im Moor", x: "Ein Bauer fand im Eschenmoor ein Schwert, das leuchtet, sobald Midgarder in der Nähe sind. Jetzt wollen es alle haben. Leider will es auch das Moor zurück.", foes: [{ mon: "faulschlund" }, { mon: "sumpftroll" }, { name: "Moorkönig Gramwasser", arch: "troll", color: "#3a4a2a", accent: "#d9f27a", boss: true }] },
       { lv: 18, t: "Der schlafende König", x: "Unter dem Steinkreis schläft ein König, der wiederkehren soll, wenn Albion ihn braucht. Jemand versucht, ihn vor der Zeit zu wecken, mit sehr verbotenen Mitteln.", foes: [{ mon: "blutkultist" }, { mon: "blutkultist" }, { name: "Morgauth die Weckerin", arch: "kultist", color: "#3a1422", accent: "#ff3a5a", boss: true }] },
       { lv: 25, t: "Wenn der Splitter bricht", x: "Der Splitter, der Albion trägt, bekommt Risse. Aus ihnen steigt die Tiefe selbst empor, hungrig und alt. Du stehst an der Kante, und hinter dir liegt alles, was du geschworen hast zu schützen.", foes: [{ mon: "grabritter" }, { mon: "knochenfuerst" }, { name: "Der Erste Riss", arch: "drache", color: "#1a1622", accent: "#ff5a3d", boss: true, final: true }] },
+      { lv: 32, t: "Asche über Kreidenfels", x: "Seit der Splitter Risse hat, regnet es über Kreidenfels Asche statt Regen. In den Gräbern am Pilgerweg predigt ein Priester, die Tiefe sei kein Feind, sondern ein neuer Himmel. Seine Gemeinde wächst, und sie atmet nicht mehr.", foes: [{ mon: "blutkultist" }, { mon: "knochenfuerst" }, { name: "Aschenpriester Varnholt", arch: "kultist", color: "#3a3030", accent: "#ff7a3d", boss: true }] },
+      { lv: 36, t: "Die Leere Wacht", x: "Auf den Klippen marschiert eine Wache, die vor dreihundert Jahren gefallen ist. Sie bewacht das Tor zur Tiefe und hält dich für den Feind. Ihr Hauptmann war einst ein Held Albions. Er erinnert sich an alles, nur nicht daran.", foes: [{ mon: "grabritter" }, { mon: "eisengolem" }, { name: "Ser Mordrec von der Leeren Wacht", arch: "todesritter", color: "#4a4f58", accent: "#9fe3ff", boss: true }] },
+      { lv: 40, t: "Das Feuer unter der Abtei", x: "Unter der Versunkenen Abtei brennt ein Feuer, das kein Wasser löscht. Die Mönche nennen, was darin schläft, die Mutter aller Schwelwürmer. Sie schläft nicht mehr.", foes: [{ mon: "schwelwurm" }, { name: "Die Schwelwurm-Ahnin", arch: "drache", color: "#5a1f12", accent: "#ffb13b", boss: true }] },
+      { lv: 45, t: "Abstieg ins Nebelmeer", x: "Um die Tiefe aufzuhalten, musst du hinunter, wohin noch kein Albier gegangen ist: unter die Inseln, in das Nebelmeer. Dort unten spricht eine Stimme in deiner eigenen Sprache und kennt deinen Namen.", foes: [{ mon: "leerenschemen" }, { mon: "obsidiangolem" }, { name: "Die Stimme der Tiefe", arch: "schemen", color: "#14121c", accent: "#c47bff", boss: true }] },
+      { lv: 50, t: "Das Herz der Tiefe", x: "Am Grund des Nebelmeers schlägt ein Herz so groß wie eine Insel. Mit jedem Schlag sinkt Albion ein Stück. Hinter dir stehen alle, die du je beschützt hast. Vor dir steht der Erste König der Tiefe.", foes: [{ mon: "todesritter" }, { mon: "sturmdrache" }, { name: "Der Erste König der Tiefe", arch: "todesritter", color: "#1a1622", accent: "#ff5a3d", boss: true, final: true }] },
     ],
     midgard: [
       { lv: 1, t: "Kälte formt Helden", x: "Die Jarle schicken dich nach Schwebfels. Nicht als Wächter, sondern als Beweis, dass der Norden noch Zähne hat. Am Hafen warten bereits hungrige Wölfe auf diesen Beweis.", foes: [{ mon: "grauwolf" }, { mon: "grauwolf" }] },
@@ -1010,6 +1037,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       { lv: 12, t: "Die Trolle der Wolfsklamm", x: "In der Wolfsklamm haben Trolle eine Brücke gebaut und verlangen Zoll: einen Helden pro Woche. Die Klamm hat beschlossen, dass du diese Woche dran bist.", foes: [{ mon: "sumpftroll" }, { mon: "netzlauerer" }, { name: "Brückenvogt Knorr", arch: "troll", color: "#6a7f9a", accent: "#ffcf5a", boss: true }] },
       { lv: 18, t: "Das Horn der Letzten Wacht", x: "Wer das Horn der Letzten Wacht bläst, ruft alle Gefallenen Midgards zu einer letzten Schlacht. Es liegt im Eis des Sturmkaps, bewacht von etwas, das nicht friert.", foes: [{ mon: "frostwolf" }, { mon: "kristallweberin" }, { name: "Die Eiswache", arch: "golem", color: "#cfe8ff", accent: "#4fa9ff", boss: true }] },
       { lv: 25, t: "Ragnafrost", x: "Der Splitter Midgards vereist von innen. In seinem Herzen erwacht ein Wurm aus der Tiefe, älter als die Götter. Die Skalden werden davon singen, so oder so.", foes: [{ mon: "bergtroll" }, { mon: "eisengolem" }, { name: "Der Wurm im Eis", arch: "drache", color: "#bfe8ff", accent: "#2f5fa8", boss: true, final: true }] },
+      { lv: 32, t: "Nach dem Ragnafrost", x: "Das Eis taut, und mit dem Schmelzwasser kommen die Toten zurück. Ein Jarl, der vor hundert Wintern ertrank, verlangt seinen Thron zurück. Leider sitzt darauf jetzt dein Jarl, und der ist nicht begeistert.", foes: [{ mon: "draugrfuerst" }, { mon: "frostwolf" }, { name: "Jarl Hrafnkel der Wiederkehrer", arch: "ghul", color: "#7a8a8f", accent: "#9fe3ff", boss: true }] },
+      { lv: 36, t: "Die Schmiede der Riesen", x: "In den Bergen hämmert es Tag und Nacht. Die Riesen schmieden Ketten, lang genug, um einen Splitter in die Tiefe zu ziehen. Ihr Schmied ist stolz auf seine Arbeit und hört ungern Kritik.", foes: [{ mon: "bergtroll" }, { mon: "eisengolem" }, { name: "Riesenschmied Grimnar", arch: "troll", color: "#5a4a4a", accent: "#ffb13b", boss: true }] },
+      { lv: 40, t: "Das Nest der Eiswyrme", x: "Die Eiswyrme brüten. Wenn ihre Jungen schlüpfen, wird Midgard nie wieder einen Sommer sehen. Die Wyrmmutter weiß, dass du kommst. Sie freut sich auf das Futter.", foes: [{ mon: "eiswyrm" }, { name: "Die Eiswyrm-Mutter", arch: "drache", color: "#cfe8ff", accent: "#2f5fa8", boss: true }] },
+      { lv: 45, t: "Unter dem Weltenbaum", x: "Die Tiefe nagt an den Wurzeln des Weltenbaums, der die Splitter Midgards hält. Du steigst hinab zwischen die Wurzeln. Etwas hat dort sehr lange gefressen und ist immer noch hungrig.", foes: [{ mon: "leerenspinne" }, { mon: "schattenwolf" }, { name: "Nidhögg der Wurzelnager", arch: "drache", color: "#2a2633", accent: "#7fffb0", boss: true }] },
+      { lv: 50, t: "Götterdämmerung", x: "Die Skalden haben das Ende der Welt besungen. Jetzt ist es da, und es hat einen Schlund. Die Götter schweigen. Also sprichst du für sie.", foes: [{ mon: "sturmdrache" }, { mon: "obsidiangolem" }, { name: "Der Schlund unter der Welt", arch: "schlund", color: "#1a1418", accent: "#ff5a3d", boss: true, final: true }] },
     ],
     hibernia: [
       { lv: 1, t: "Der Hain vergisst nicht", x: "Die Druiden schicken dich nach Schwebfels, weil die Bäume unruhig sind. Bäume sind nie ohne Grund unruhig. Im Nebelhain wachsen Sporlinge, und sie wachsen viel zu schnell.", foes: [{ mon: "sporling" }, { mon: "sporling" }] },
@@ -1017,6 +1049,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       { lv: 12, t: "Dornenzeit", x: "Ein Hirte, einst Hüter des Dornentals, ist verderbt. Wo er geht, wachsen Dornen durch Stein. Die Druiden wollen ihn heilen. Du sollst ihn nur lange genug festhalten.", foes: [{ mon: "sporenschrecken" }, { mon: "knochenlaeufer" }, { name: "Hirte Dubhán", arch: "baum", color: "#3a2f1f", accent: "#ff7a3d", boss: true }] },
       { lv: 18, t: "Mondfinsternis", x: "Der Mond über Hibernia ist seit sieben Nächten rot. Die Mondpriesterinnen behaupten, jemand trinke ihn. Klingt absurd, bis du den Schemen am Mondsee siehst.", foes: [{ mon: "irrlichtschemen" }, { mon: "blutkultist" }, { name: "Der Rote Trinker", arch: "schemen", color: "#5a1414", accent: "#ff3a3a", boss: true }] },
       { lv: 25, t: "Der letzte Hain", x: "Der Splitter Hibernias verdorrt. Unter den Wurzeln des ältesten Baumes kriecht die Tiefe herauf. Wenn der letzte Hain fällt, vergisst Hibernia alles, auch dich.", foes: [{ mon: "moderhirte" }, { mon: "giftmorchel" }, { name: "Die Wurzel der Tiefe", arch: "baum", color: "#14121c", accent: "#c47bff", boss: true, final: true }] },
+      { lv: 32, t: "Die Asche des letzten Hains", x: "Der letzte Hain hat überlebt, aber in seiner Asche nistet etwas mit zu vielen Beinen. Die Druiden flüstern ihren Namen nur, wenn die Sonne scheint, und die Sonne scheint selten.", foes: [{ mon: "nebeldruide" }, { mon: "irrlichtschemen" }, { name: "Die Grüne Witwe", arch: "spinne", color: "#2f4a2a", accent: "#d9f27a", boss: true }] },
+      { lv: 36, t: "Die Feenkönigin in Ketten", x: "Die Feenkönigin ist verschwunden, und ohne sie verlieren die Hügel ihre Farben. Ein Fürst aus Dornen hält sie gefangen und behauptet, er beschütze sie nur. Vor dir.", foes: [{ mon: "giftmorchel" }, { mon: "moderhirte" }, { name: "Fürst Dornenherz", arch: "baum", color: "#3a2a1f", accent: "#ff5a8a", boss: true }] },
+      { lv: 40, t: "Die ertrinkende See", x: "Der Mondsee steigt, obwohl es nicht regnet. Aus der Tiefe singt Muirgen, die einst eine Heilige war. Wer ihr Lied hört, geht freiwillig ins Wasser. Halte dir die Ohren zu.", foes: [{ mon: "urschlund" }, { mon: "irrlichtschemen" }, { name: "Muirgen die Tiefe", arch: "schemen", color: "#1f3a4a", accent: "#9fffe0", boss: true }] },
+      { lv: 45, t: "Das Grab der Smaragdschlange", x: "Unter Glenfeyn liegt ein Grab, das niemand öffnen soll. Jemand hat es geöffnet. Was herauskam, ist grün, glänzt und hat dich bereits gerochen.", foes: [{ mon: "leerenspinne" }, { name: "Der Smaragdwyrm-Ahn", arch: "drache", color: "#1f5a3a", accent: "#7fffb0", boss: true }] },
+      { lv: 50, t: "Wenn die Sterne fallen", x: "Die Sterne über Hibernia fallen, einer nach dem anderen, in die Tiefe. Unten wartet die Mutter der Tiefe und sammelt sie wie Beeren. Wenn sie den letzten hat, wird es für immer Nacht.", foes: [{ mon: "leerenschemen" }, { mon: "urschlund" }, { name: "Die Mutter der Tiefe", arch: "baum", color: "#14121c", accent: "#c47bff", boss: true, final: true }] },
     ],
   };
 
@@ -1124,7 +1161,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       d: [["hp", "Zähigkeit", 1, 3, { hp: 0.04 }], ["eva", "Ausweichen", 2, 3, { evade: 0.02 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["ls", "Jagdinstinkt", 3, 2, { lifesteal: 0.04 }], ["cap", "Zweiter Atem", 4, 1, { secondWind: 0.2 }, "Aktive Fähigkeit: Wenn es eng wird, findest du neue Kraft."]],
     },
     magier: {
-      o: [["dmg", "Zerstörung", 1, 3, { dmg: 0.04 }], ["crit", "Fokussierte Macht", 2, 3, { crit: 0.02 }], ["cm", "Entfesselung", 2, 2, { critMult: 0.2 }], ["exe", "Vernichtung", 3, 2, { execute: 0.1 }], ["cap", "Wilde Macht", 4, 1, { critMult: 0.5, crit: 0.04 }, "Aktive Fähigkeit: Rohe Magie macht kritische Zauber verheerend."]],
+      o: [["dmg", "Zerstörung", 1, 3, { dmg: 0.04 }], ["crit", "Fokussierte Macht", 2, 3, { crit: 0.02 }], ["cm", "Entfesselung", 2, 2, { critMult: 0.2 }], ["exe", "Vernichtung", 3, 2, { execute: 0.1 }], ["cap", "Wilde Macht", 4, 1, { critMult: 0.5, crit: 0.04, wild: 1 }, "Aktive Fähigkeit: Rohe Magie macht kritische Zauber verheerend."]],
       d: [["hp", "Lebenskraft", 1, 3, { hp: 0.05 }], ["ward", "Barriere", 2, 3, { ward: 0.03 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["tgh", "Standhaftigkeit", 3, 2, { toughness: 0.04 }], ["cap", "Bannkreis", 4, 1, { ward: 0.08, purge: 1 }, "Aktive Fähigkeit: Ein Kreis aus Runen schützt dich zu Kampfbeginn."]],
     },
   };
@@ -1747,7 +1784,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     it.vis = E.makeVis(it, (it.vis && it.vis.c) || realm, arch);
     return it;
   };
-  E.visArch = (vis) => (vis && vis.f && vis.f.split(".").length === 3 ? vis.f.split(".")[1] : null);
   E.makeItem = function (r, opts) {
     const L = Math.max(1, Math.round(opts.level || 1));
     const arch = opts.arch || (opts.cls && D.CLASSES[opts.cls] ? D.CLASSES[opts.cls].arch : "krieger");
@@ -2126,7 +2162,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         if (n <= 0) continue;
         budget -= n;
         for (const k in t.eff) {
-          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" ? 1 : n);
+          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" || k === "wild" ? 1 : n);
           eff._names[k] = t.name;
         }
       }
@@ -2349,6 +2385,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const crit = (!att.opened && AT.assassinate) || r() < E.critChance(att.attrs.glueck, def.level, cBonus);
       if (crit) dmg *= (att.prof.critMult || 2) + (special ? AT.spCritMult || 0 : 0);
       if (!att.opened && AT.assassinate) tags.push("assassinate");
+      // Wilde Macht (Abschluss-Talent der Magier): kritische Zauber zeigt der Kampf als Explosion
+      if (crit && AT.wild) tags.push("wild");
       dmg *= 1 - (DT.toughness || 0);
       if (att.mainKey === "verstand") dmg *= 1 - (DT.magicRes || 0);
       dmg = Math.max(1, Math.round(dmg));
@@ -2454,6 +2492,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
       def.dazed = false;
       const ev = { a: turn, kind: special ? "special" : "attack", sp: special ? special.id : null, spName: special ? special.name : null, hits: out };
+      // fuer die Darstellung der Abschluss-Talente: Grossmeister (Spezialangriff oefter), Pfeilsalve (zusaetzliche Treffer)
+      if (special && att.T.spEvery) ev.master = true;
+      if (special && att.T.spHits) ev.volley = att.T.spHits;
       if (healed > 0 && att.hp > 0) {
         att.hp = Math.min(att.maxHp, att.hp + healed);
         ev.lifesteal = healed;
@@ -2576,11 +2617,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const span = mode === "echtzeit" ? 86400000 : E.C.DAY_CYCLE_MS;
     for (let dt = step; dt <= span; dt += step) if (E.isNight(mode, now + dt) !== cur) return dt;
     return Infinity;
-  };
-  E.nextMidnight = function (now) {
-    const d = new Date(now || E.now());
-    d.setHours(24, 0, 0, 0);
-    return d.getTime();
   };
   E.tick = function (S, now) {
     now = now || E.now();
@@ -2925,7 +2961,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const L = ch.lv + (f.boss ? 1 : 0);
       // Mehrere Gegner nacheinander: jeder einzelne ist schwaecher, die Kette bleibt eine Herausforderung
       const n = ch.foes.length;
-      const p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
+      let p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
+      // zweiter Akt (ab Stufe 40): Endkaempfe mit Gewicht, der Held soll merken, dass es um alles geht
+      if (ch.lv >= 40) p *= f.final ? (n >= 2 ? 1.12 : 1.05) : 1.05;
       return E.monsterFighter(mon, L, E.adaptPower(hero, L, p), { boss: !!f.boss, final: !!f.final });
     });
   };
@@ -5175,12 +5213,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
       }
       data.gen = data.gen || {};
-      // Koerper der waehlbaren Voelker direkt aus der Seite (build.mjs, GEN_KERN); der Rest kommt mit gen-<reich>.js
-      if (globalThis.SB_GENKERN) {
-        const k = parse(await unzip(b64(globalThis.SB_GENKERN))).gen || {};
-        for (const key in k) if (!data.gen[key]) data.gen[key] = k[key];
-        globalThis.SB_GENKERN = null;
-      }
       A.data = data;
     } catch (e) {
       A.error = e;
@@ -7688,7 +7720,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
      Eigener Koerper mit gemalter Textur und eigenen Gelenken, gleiches Skelett und gleiche Bewegungen wie
      alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
   const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
-  HU.hasGen = (key) => !!GEN()[key];
   // Texturen der erzeugten Koerper vorab dekodieren; erst danach gelten sie als bereit (sonst dunkle Portraets)
   const GREADY = {};
   HU.genReady = (key) => GREADY[key] === true;
@@ -8078,10 +8109,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         return ["Sit_and_Drink"].concat(RG.candidates(m, "sit", gender));
       case "hammer":
         return ["Heavy_Hammer_Swing", "Charged_Axe_Chop"].concat(MELEE);
+      // Abschluss-Talente im Kampf (src/r3d-scenes.js): Sturmangriff im Lauf, Meucheln als Stich, Kraftschrei bei
+      // Zweitem Atem und Schmerz ignorieren
+      case "charge":
+        return ["running", "Walk_Fight_Forward"].concat(RG.candidates(m, "walk", gender));
+      case "stab":
+        return ["Thrust_Slash"].concat(RG.candidates(m, "attack", gender));
+      case "power":
+        return ["Cheer_with_Both_Hands_Up", "Victory_Cheer"].concat(RG.candidates(m, "victory", gender));
     }
     return RG.candidates(m, "idle", gender);
   };
-  const KIND = { idle: "loop", walk: "loop", sit: "loop", drink: "loop", hammer: "loop", victory: "free", defeat: "hold" };
+  const KIND = { idle: "loop", walk: "loop", sit: "loop", drink: "loop", hammer: "loop", charge: "loop", victory: "free", power: "free", defeat: "hold" };
   const BODY_HIT = { hit: 1, evade: 1 };
   // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden, from:
   // Sekunden } }. Bei den Schuessen ist die automatische Marke die schnellste Handbewegung (der Griff zum Koecher); das
@@ -16839,11 +16878,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   let snapScene = null;
   let snapCam = null;
   const snapCache = new Map();
+  R.snapshotKey = (desc, size, bust) => JSON.stringify(desc) + "|" + (size || 160) + "|" + (bust ? 1 : 0);
+  // schon gezeichnetes Portrait (ohne zu zeichnen), sonst null
+  R.snapshotCached = (desc, size, bust) => snapCache.get(R.snapshotKey(desc, size, bust)) || null;
   R.snapshot = function (desc, size, bust) {
     if (!R.ready()) return null;
     init();
     size = size || 160;
-    const key = JSON.stringify(desc) + "|" + size + "|" + (bust ? 1 : 0);
+    const key = R.snapshotKey(desc, size, bust);
     if (snapCache.has(key)) return snapCache.get(key);
     try {
       if (!snapR) {
@@ -17213,8 +17255,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         m.headY *= s;
         box3 = new T.Box3().setFromObject(m.obj);
       }
-      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte)
-      const front = side < 0 ? box3.max.x - home.x : home.x - box3.min.x;
+      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte). Nur fuer
+      // Bestien; bei Menschenartigen zaehlte sonst die vorgestreckte Waffe mit (Held blieb vor dem Troll 3 m weg stehen)
+      const front = m.parts && m.parts.beast ? (side < 0 ? box3.max.x - home.x : home.x - box3.min.x) : 0;
       const sh = KUL ? new T.Mesh(new T.CircleGeometry(1, 24), softShadowMat()) : new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
       sh.rotation.x = -PI / 2;
       sh.position.set(home.x, 0.03, home.z);
@@ -17283,6 +17326,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         f.m.speed = speed;
         f.m.update(dt * speed);
         f.shadow.position.x = f.m.obj.position.x;
+        if (f.runes) {
+          f.runes.userData.spin.rotation.y += dt * speed * 0.8;
+          f.runes.position.x = f.m.obj.position.x;
+        }
         if (f.aura) f.aura.position.copy(f.m.obj.position);
         if (f.bubble) {
           f.bubble.position.x = f.m.obj.position.x;
@@ -17566,6 +17613,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const m = f.bubble.userData.mat;
       tween(0.3, (u) => (m.opacity = 0.18 + 0.4 * Math.sin(u * PI)));
       if (left <= 0) {
+        dropRunes(f);
         const b = f.bubble;
         f.bubble = null;
         burst(b.position.clone(), "#cfeaff", 18, 2.2);
@@ -17586,6 +17634,113 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         if (u >= 1) scene.remove(c);
       });
     }
+    /* Abschluss-Talente (Wunsch des Kapitaens: eigene sichtbare Spezialattacken): Bewegungen aus den gekauften
+       Meshy-Clips (charge, stab, power in src/r3d-rigged.js), Figuren ohne Clips nehmen die naechste gebaute Bewegung */
+    const clipAct = (f, name, fb) => (f.m.parts && f.m.parts.clips ? name : fb);
+    // Staubwolke am Boden (Sturmangriff)
+    function dust(x, z, color) {
+      burst(new T.Vector3(x, 0.15, z), color || "#cbb89a", 6, 1.2, 0.6);
+    }
+    // Druckwelle: flacher Ring am Boden, der schnell auseinanderlaeuft, dazu ein Lichtblitz
+    function shockwave(f, color) {
+      const r = new T.Mesh(G.torus(0.5, 0.12, PI * 2, 6, 48), glow(color, 0.9).clone());
+      r.rotation.x = PI / 2;
+      r.position.set(f.m.obj.position.x, 0.1, f.m.obj.position.z);
+      scene.add(r);
+      burst(new T.Vector3(f.m.obj.position.x, 0.4, f.m.obj.position.z), color, 22, 3, 0.8);
+      return tween(0.55, (u) => {
+        r.scale.setScalar(1 + u * 7);
+        r.material.opacity = 0.9 * (1 - u) * (1 - u);
+        if (u >= 1) scene.remove(r);
+      });
+    }
+    // Explosion (Wilde Macht): wachsende leuchtende Kugel, Lichtsaeule, Funkenregen
+    function explosion(f, color) {
+      const c = new T.Vector3(f.m.obj.position.x, (f.m.headY || 1.8) * 0.55, f.m.obj.position.z);
+      const sm = new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0.8, blending: T.AdditiveBlending, depthWrite: false });
+      const b = new T.Mesh(G.sph(0.5, 20, 14), sm);
+      b.position.copy(c);
+      scene.add(b);
+      burst(c, color, 30, 4.5, 0.5);
+      burst(c, "#ffffff", 12, 2.5, 0.5);
+      lightColumn(f, color);
+      shake = Math.max(shake, 0.5);
+      zoom = Math.max(zoom, 0.7);
+      return tween(0.6, (u) => {
+        b.scale.setScalar(1 + u * 4);
+        sm.opacity = 0.8 * (1 - u);
+        if (u >= 1) scene.remove(b);
+      });
+    }
+    // Pfeilregen (Pfeilsalve): Pfeile fallen von oben auf den Gegner
+    function arrowRain(f, n, color) {
+      const wm = pm("wood", "#c9b89a");
+      const tm = pm("metal", "#c8ced6");
+      const arrows = [];
+      for (let i = 0; i < n; i++) {
+        const a = grp();
+        a.add(mesh(G.cyl(0.028, 0.028, 1.0, 4), wm));
+        a.add(mesh(G.cone(0.06, 0.18, 4), tm, { p: [0, -0.58, 0], r: [PI, 0, 0] }));
+        const tr = spark(color, 0.45);
+        tr.position.y = 0.3;
+        a.add(tr);
+        const x = f.m.obj.position.x + (Math.random() - 0.5) * 1.8;
+        const z = f.m.obj.position.z + (Math.random() - 0.5) * 1.2;
+        a.position.set(x - 0.8 * f.side, 7 + Math.random() * 2, z);
+        a.rotation.z = -0.12 * f.side;
+        a.userData = { x, z, d: Math.random() * 0.35 };
+        scene.add(a);
+        arrows.push(a);
+      }
+      return tween(0.85, (u) => {
+        for (const a of arrows) {
+          const k = Math.max(0, Math.min(1, (u - a.userData.d) / 0.5));
+          a.position.y = 8 - 7.6 * k * k;
+          a.position.x = a.userData.x - 0.8 * f.side * (1 - k);
+          if (k >= 1 && !a.userData.hit) {
+            a.userData.hit = true;
+            burst(new T.Vector3(a.userData.x, 0.3, a.userData.z), color, 3, 0.8, 0.3);
+          }
+        }
+        if (u >= 1) arrows.forEach((a) => scene.remove(a));
+      });
+    }
+    // Runenkreis (Bannkreis): leuchtender Kreis mit kreisenden Runen am Boden, bis die Barriere bricht
+    function runeCircle(f, color) {
+      const g = grp([f.m.obj.position.x, 0.06, f.m.obj.position.z]);
+      const gm = glow(color, 0.8).clone();
+      const ringM = new T.Mesh(G.torus(1.25, 0.035, PI * 2, 4, 64), gm);
+      ringM.rotation.x = PI / 2;
+      g.add(ringM);
+      const inner = new T.Mesh(G.torus(0.95, 0.02, PI * 2, 4, 64), gm);
+      inner.rotation.x = PI / 2;
+      g.add(inner);
+      const runes = grp();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * PI * 2;
+        const r = mesh(G.box(0.16, 0.02, 0.06), gm, { p: [Math.cos(a) * 1.1, 0.02, Math.sin(a) * 1.1], r: [0, -a, 0] });
+        runes.add(r);
+        runes.add(mesh(G.box(0.03, 0.02, 0.16), gm, { p: [Math.cos(a) * 1.1, 0.02, Math.sin(a) * 1.1], r: [0, -a + 0.6, 0] }));
+      }
+      g.add(runes);
+      g.add(R.haloSprite(color, 3, 0.35, [0, 0.2, 0]));
+      g.scale.setScalar(0.01);
+      scene.add(g);
+      g.userData.spin = runes;
+      g.userData.mat = gm;
+      tween(0.5, (u) => g.scale.setScalar(0.01 + u));
+      return g;
+    }
+    function dropRunes(f) {
+      const g = f.runes;
+      if (!g) return;
+      f.runes = null;
+      tween(0.4, (u) => {
+        g.scale.setScalar(1 + u * 0.6);
+        g.userData.mat.opacity = 0.8 * (1 - u);
+        if (u >= 1) scene.remove(g);
+      });
+    }
     async function playTalent(ev) {
       const A = F[ev.a];
       const color = TAL_COLOR[ev.id] || "#ffd27a";
@@ -17595,20 +17750,39 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
       if (ev.id === "ward") {
         A.wardLeft = ev.ward;
+        // Bannkreis (Abschluss-Talent): Runenkreis unter dem Zaubernden, der bis zum Bruch der Barriere leuchtet
+        if (ev.name === "Bannkreis") {
+          A.m.play(clipAct(A, "cast", "cast"), 0.7);
+          if (A.runes) scene.remove(A.runes);
+          A.runes = runeCircle(A, color);
+          await wait(0.45);
+        }
         setBubble(A, true);
         floatText(A, "Barriere " + SB.util.fmt(ev.ward), "talent");
       } else if (ev.id === "secondWind") {
+        // Schmerz ignorieren und Zweiter Atem: Kraftschrei mit erhobenen Armen, gruene Lichtsaeule, Funken steigen auf
+        A.m.play(clipAct(A, "power", "victory"), 1.1);
         lightColumn(A, color);
+        shockwave(A, color);
+        rising(A, color, 22);
         hp[ev.a] = ev.hp[ev.a];
         floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
         report(ev.a, ev, -1);
+        await wait(0.45);
       } else if (ev.id === "vanish") {
-        burst(A.m.obj.position.clone().setY(1), color, 22, 1.8, 0.4);
+        // Verschwinden: Rauchwolke und Schattenring, die Figur taucht etwas weiter hinten wieder auf
+        const p0 = A.m.obj.position.clone();
+        burst(p0.clone().setY(1), color, 26, 1.8, 0.4);
+        burst(p0.clone().setY(0.4), "#2a2236", 18, 1.4, 0.2);
+        ring(A, color, false);
         A.m.obj.visible = false;
-        await wait(0.35);
+        await wait(0.4);
+        A.m.obj.position.x = A.home.x + A.side * 0.5;
         A.m.obj.visible = true;
+        burst(A.m.obj.position.clone().setY(1), color, 12, 1.2, 0.3);
         A.m.play("evade", 0.4);
         floatText(A, "Verschwunden!", "evade");
+        tween(0.4, (u) => (A.m.obj.position.x = A.home.x + A.side * 0.5 * (1 - u)));
       } else if (ev.id === "purge") {
         lightColumn(A, color);
         clearStars(A);
@@ -17646,6 +17820,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           shake = 0.25;
           zoom = Math.max(zoom, 0.6);
           floatText(Bf, "Kritisch!", "critlabel");
+        }
+        if (hit.tags && hit.tags.indexOf("wild") >= 0) {
+          explosion(Bf, A.m.projColor || "#c47bff");
+          floatText(A, "Wilde Macht!", "talent");
         }
         burst(new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z), hit.res === "crit" ? "#ffb13b" : "#ffe8d0", hit.res === "crit" ? 16 : 8, 1.8);
         if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit");
@@ -17695,6 +17873,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         zoom = 0.5;
         if (opts.sfx) opts.sfx("special");
         if (SFX.kind === "aura") setAura(A, SFX.color);
+        if (ev.master) {
+          // Grossmeister (Abschluss-Talent des Klassenpfads): goldener Kreis und Funken, der Spezialangriff kommt oefter
+          ring(A, "#ffd27a", true);
+          rising(A, "#ffe9a8", 18);
+          floatText(A, "Großmeister!", "talent");
+        }
         await wait(0.4);
       }
       const isHero = A.desc.kind !== "monster";
@@ -17711,7 +17895,21 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           const aim = (A.side < 0 ? PI / 2 : -PI / 2) - turn;
           tween(0.3, (u) => (A.m.obj.rotation.y = yaw0 + (aim - yaw0) * (1 - (1 - u) * (1 - u))));
         }
+        // Pfeilsalve (Abschluss-Talent der Jaeger): die zusaetzlichen Treffer fallen als Pfeilregen vom Himmel
+        const rainFrom = ev.volley && bowLike ? ev.hits.length - ev.volley : ev.hits.length;
         for (let i = 0; i < ev.hits.length; i++) {
+          if (i >= rainFrom) {
+            if (i === rainFrom) {
+              banner("Pfeilsalve", A.side);
+              A.m.play("shoot", 0.6);
+              await wait(0.6);
+              if (opts.sfx) opts.sfx("bow");
+              await arrowRain(Bf, 8 + 4 * ev.volley, special ? SFX.color : "#ffe9b0");
+            }
+            await impact(ev, A, Bf, ev.hits[i], i);
+            await wait(0.12);
+            continue;
+          }
           const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
           A.m.play(bowLike ? "shoot" : "cast", D);
           await wait(archer ? D : 0.3);
@@ -17738,22 +17936,57 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const target = Bf.home.x - Bf.side * gap;
         const ST = A.m.strike;
         const from = A.home.x;
-        if (special && SFX.kind === "smoke") {
+        const tags0 = (ev.hits[0] && ev.hits[0].tags) || [];
+        const opener = tags0.indexOf("opener") >= 0;
+        const assassin = tags0.indexOf("assassinate") >= 0;
+        let behind = false;
+        if (assassin) {
+          // Meucheln (Abschluss-Talent der Schurken): in einer Rauchwolke verschwinden, hinter dem Gegner auftauchen
+          banner("Meucheln", A.side);
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 20, 1.6, 0.5);
+          burst(A.m.obj.position.clone().setY(0.4), "#2a2236", 14, 1.2, 0.2);
+          A.m.obj.visible = false;
+          await wait(0.3);
+          behind = true;
+          A.m.obj.position.x = Bf.home.x + Bf.side * 1.3;
+          A.m.obj.rotation.y += PI;
+          A.m.obj.visible = true;
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 14, 1.2, 0.4);
+        } else if (special && SFX.kind === "smoke") {
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
           A.m.obj.visible = false;
           await wait(0.15);
           A.m.obj.position.x = target;
           A.m.obj.visible = true;
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
+        } else if (opener) {
+          // Sturmangriff (Abschluss-Talent der Krieger): im vollen Lauf auf den Gegner, Staub hinter jedem Schritt
+          banner("Sturmangriff", A.side);
+          A.m.play(clipAct(A, "charge", "walk"), 0.5);
+          let last = 0;
+          await tween(0.42, (u) => {
+            A.m.obj.position.x = from + (target - from) * u * u;
+            if (u - last > 0.12) {
+              last = u;
+              dust(A.m.obj.position.x, A.m.obj.position.z);
+            }
+          });
         } else {
           A.m.play(special && ev.sp === "zermalmen" ? "special" : "walk", 0.3);
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         for (let i = 0; i < ev.hits.length; i++) {
           const big = special && i === 0;
-          A.m.play(big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
+          const stab = assassin && i === 0;
+          A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
           if (opts.sfx) opts.sfx("swing");
           await wait(ST ? (big ? ST.shit : ST.hit) : 0.22);
+          if (opener && i === 0) {
+            shockwave(Bf, "#ffd27a");
+            shake = Math.max(shake, 0.45);
+            zoom = Math.max(zoom, 0.6);
+          }
+          if (stab) slash(Bf, "#b48cff", 1);
           if (special && (SFX.kind === "slash" || SFX.kind === "aura")) slash(Bf, SFX.color, i % 2);
           else if (special && SFX.kind === "shock") {
             ring(Bf, SFX.color, true);
@@ -17764,7 +17997,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           // Bestien: Biss und Satz zurueck ausspielen lassen
           await wait(ST ? 0.3 : 0.16);
         }
-        await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
+        if (behind) {
+          // nach dem Meucheln in den Schatten zurueck auf den eigenen Platz
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 12, 1.2, 0.4);
+          A.m.obj.visible = false;
+          await wait(0.2);
+          A.m.obj.position.x = from;
+          A.m.obj.rotation.y -= PI;
+          A.m.obj.visible = true;
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 10, 1.0, 0.4);
+        } else await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
       }
       if (ev.heal) {
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.heal;
@@ -17808,6 +18050,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         clearStars(old);
         setBubble(old, false);
         setBubble(F[0], false);
+        dropRunes(old);
+        dropRunes(F[0]);
         F[0].wardLeft = 0;
         setAura(old, null);
         setPoison(old, false);
@@ -19487,21 +19731,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  // Neue Figuren gelten immer (der Vergleich mit den alten ist seit Version 5.6 abgeschafft)
-  const genOn = () => true;
-  // Volk und Geschlecht mit fertig modellierter Figur (Meshy): Haut, Haare und Gesicht gehoeren zum Modell, die alte
-  // Wahl entfaellt. Massgeblich sind die geladenen Figurendaten.
-  UI.meshyLook = (race, gender) => {
-    const G = (UI.use3d && SB.assets.data && SB.assets.data.gen) || {};
-    return !!G[race + "-" + (gender === "w" ? "frau" : "mann")];
-  };
   // Reiche mit Figurendatei (gen-<reich>.js neben der Seite): Midgard (Frostwicht, Glutzwerg), Albion (Albier,
   // Kreidezwerg) und Hibernia (Sidhe, Moorling); Nordmann und Trollblut stecken in der Seite
   UI.GEN_REALMS = ["midgard", "albion", "hibernia"];
   // Jedes Volk hat einen Meshy-Koerper. Solange er noch laedt, steht ein Platzhalter da (pending), nie die alte Figur;
   // das Laden der Datei seines Reiches wird dabei angestossen.
   const withGen = (d) => {
-    if (!genOn() || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    if (!SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
     if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] }, GEAR_V ? { gv: GEAR_V } : {});
     const realm = D.RACES[d.race] && D.RACES[d.race].realm;
@@ -19512,7 +19748,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.heroGear(S) });
   // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
   // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
-  // Die Koerper der waehlbaren Voelker stecken in der Seite (build.mjs, GEN_KERN) und sind sofort bereit, sobald ihre
+  // Die Koerper von Nordmann und Trollblut stecken in der Seite (build.mjs, SB_GENPACK) und sind sofort bereit, sobald ihre
   // Hautbilder dekodiert sind; die Datei gen-<reich>.js bringt die uebrigen (Figurenprobe). UI.genStatus fuer die Anzeige.
   UI.genStatus = { kern: "", datei: "" };
   const genChanged = () => {
@@ -19633,7 +19869,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   UI.loadGenFigures = function (realm) {
     UI.loadMonsters(UI.offerArchs());
     UI.loadKulissen();
-    if (!UI.use3d || !genOn() || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    if (!UI.use3d || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
     if (GEN_FIG[realm]) return GEN_FIG[realm];
     const HU = SB.R3D.human;
     const kern = SB.assets.ready.then(() => {
@@ -19715,12 +19951,56 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: monVisual(m), look: UI.monLook(m), mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  /* Portraits ohne Wartezeit: schon gezeichnete kommen sofort, neue zeichnet das Spiel nacheinander im Hintergrund
+     (eines je Takt, nicht waehrend eines Kampfes) und setzt sie dann an ihre Stelle. Vorher entstanden alle Portraits
+     eines Fensters, bevor es aufging; die Arena mit vier Gegnern stand so spuerbar still (im Testbrowser 13 Sekunden). */
+  const SNAPQ = new Map();
+  let SNAPN = 0;
+  let snapTimer = 0;
+  const silhouetteOf = (desc) => I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
+  function snapNext() {
+    snapTimer = 0;
+    if (!SNAPQ.size) return;
+    if (UI.inBattle) {
+      snapTimer = setTimeout(snapNext, 400);
+      return;
+    }
+    const [key, job] = SNAPQ.entries().next().value;
+    SNAPQ.delete(key);
+    const url = SB.R3D.snapshot(job.desc, job.size, job.bust);
+    if (url) for (const el of document.querySelectorAll('[data-snap="' + job.id + '"]')) el.outerHTML = '<img alt="" src="' + url + '">';
+    if (SNAPQ.size) snapTimer = setTimeout(snapNext, 16);
+  }
   UI.portrait = function (desc, size, bust) {
     // noch ladende Meshy-Figur (Held oder Monster): Umriss statt Bild, das Portrait entsteht nach dem Laden neu
     const waiting = desc.pending || (desc.kind === "monster" && (desc.visual || desc.look) && !desc.mv && !(SB.R3D.beasts && SB.R3D.beasts.hasOwn && SB.R3D.beasts.hasOwn(desc.look)));
-    const url = UI.use3d && !waiting ? SB.R3D.snapshot(desc, size || 128, bust) : null;
-    if (url) return '<img alt="" src="' + url + '">';
-    return I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
+    if (!UI.use3d || waiting) return silhouetteOf(desc);
+    const R = SB.R3D;
+    size = size || 128;
+    if (!R.snapshotCached || UI.syncPortraits) {
+      const url = R.snapshot(desc, size, bust);
+      return url ? '<img alt="" src="' + url + '">' : silhouetteOf(desc);
+    }
+    const hit = R.snapshotCached(desc, size, bust);
+    if (hit) return '<img alt="" src="' + hit + '">';
+    const key = R.snapshotKey(desc, size, bust);
+    let job = SNAPQ.get(key);
+    if (!job) {
+      job = { id: "sn" + ++SNAPN, desc, size, bust };
+      SNAPQ.set(key, job);
+    }
+    if (!snapTimer) snapTimer = setTimeout(snapNext, 16);
+    return '<span class="snap-wait" data-snap="' + job.id + '">' + silhouetteOf(desc) + "</span>";
+  };
+  // sofort gezeichnet (Kampfanzeige, Auswahl der Gestalt): dort muss das Bild gleich da sein
+  UI.portraitNow = function (desc, size, bust) {
+    const o = UI.syncPortraits;
+    UI.syncPortraits = true;
+    try {
+      return UI.portrait(desc, size, bust);
+    } finally {
+      UI.syncPortraits = o;
+    }
   };
   UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id])), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
@@ -19737,7 +20017,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (n > 1) {
       h += '<div class="choices">';
       for (let i = 0; i < n; i++) {
-        const pic = desc && UI.use3d ? UI.portrait(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
+        const pic = desc && UI.use3d ? UI.portraitNow(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
         h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">' + (pic.indexOf("<img") === 0 ? pic : "") + "Gestalt " + (i + 1) + "</button>";
       }
       h += "</div>";
@@ -19849,14 +20129,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     if (p[0] === "eq") return S.equip[p[1]];
     if (p[0] === "shop") return S.shops[p[1]] && S.shops[p[1]].items[+p[2]];
     if (p[0] === "offer") return S.quest.offers[+p[1]] && S.quest.offers[+p[1]].item;
-    if (p[0] === "tmp") return UI.tmpItems[+p[1]];
     return null;
-  };
-  UI.tmpItems = [];
-  UI.tmpRef = function (item) {
-    UI.tmpItems.push(item);
-    if (UI.tmpItems.length > 40) UI.tmpItems.shift();
-    return "tmp:" + (UI.tmpItems.length - 1);
   };
   UI.slotName = (it) => D.SLOT_INFO[it.slot].name;
   UI.isUpgrade = function (it) {
@@ -21839,7 +22112,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const multi = foes.length > 1;
       const sub = (f) => "Stufe " + f.level + (f.kind === "monster" ? " · " + (D.ARCH_NAMES[f.arch] || D.MONSTER_TYPES[f.mainKey].profile) : " · " + D.CLASSES[f.cls].name);
       const plate = (f, side) =>
-        '<div class="plate ' + side + '"><span class="porthole">' + UI.portrait(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
+        '<div class="plate ' + side + '"><span class="porthole">' + UI.portraitNow(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
       root.innerHTML =
         '<div class="bstage"></div><div class="plates">' + plate(hero, "left") + '<div class="btitle">' + esc(opts.title || "") + (multi ? '<div class="wave">Gegner <b id="waveNo">1</b> von ' + foes.length + "</div>" : "") + "</div>" + plate(foes[0], "right") + "</div>" +
         '<div class="bcontrols"><button class="btn ghost small" data-speed="1">1×</button><button class="btn ghost small" data-speed="2">2×</button><button class="btn ghost small" data-speed="4">4×</button><button class="btn small" data-skip="1">Überspringen</button></div>';
@@ -21885,7 +22158,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         }
       }
       function fallbackStage(foe) {
-        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portrait(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portrait(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
+        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portraitNow(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portraitNow(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
       }
