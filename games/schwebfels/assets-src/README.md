@@ -280,7 +280,11 @@ Wichtige Regeln der Strecke:
   den Meshy an Unterarm oder Hand gehängt hat (Schärpenenden, Gürtelbänder neben der herabhängenden Hand), wieder vom
   Arm: Armgewicht, das nur über einen langen Umweg über die Oberfläche zum Unterarm führt, geht an Rumpf oder Bein; wo
   Hand und Hüfte zu einem Netz verschmolzen sind, gehört jede Ecke ganz zum näheren Teil, und die Berührnaht fällt weg.
-  Nur für Heldenkörper gedacht; an Monstern mit wilden Formen reißt es die Netze auf.
+  Nur für Heldenkörper gedacht; an Monstern mit wilden Formen reißt es die Netze auf. `--stoff-vom-arm` (0.75, für den
+  Blutkultisten, zusammen mit `--arme-loesen`): Armgewicht weiten Stoffs (gehaltener Umhang, weite Ärmel) geht je nach
+  Abstand vom Arm an Hüfte, Bauch, Brust oder Oberschenkel, bis 12 cm bleibt es am Arm, ab 24 cm ganz am Körper,
+  dazwischen anteilig (bei 1,8 m Höhe; `STOFF_R0`, `STOFF_R1` zum Ausprobieren). Geprüft mit Bildfolgen der Bewegungen
+  im Kampf; vorher stand beim Blutkultisten eine Umhanghälfte als Flügel ab.
 - Waffen und Schilde: `python weapon.py <aus>/waffen/axt_bart.npz axt.glb --base axt` legt den Griffpunkt in den
   Ursprung, Klinge oder Schaft entlang +Y und Schneide oder Axtblatt entlang X, wie bei den gebauten Waffen. Das
   Griffende erkennt es an der breitesten Stelle (Parierstange nahe am Griff, Axt- oder Hammerkopf weit davon); sitzt
