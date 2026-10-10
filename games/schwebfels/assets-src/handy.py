@@ -1,8 +1,8 @@
 """Handy-Fassung: das ganze Spiel als eine einzige HTML-Datei von hoechstens etwa 30 MB.
 
 Aufruf (Blender als Python-Modul, siehe CLAUDE.md "Werkzeuge in einer neuen Sitzung"):
-  python handy.py <dist-ordner> <ausgabe.html> [--held 6000] [--monster 4000] [--tex 512] [--tex-monster 384]
-                  [--kulisse 1024] [--ganz]
+  python handy.py <dist-ordner> <ausgabe.html> [--held 6000] [--monster 2600] [--tex 512] [--tex-monster 256]
+                  [--tex-ausr 144] [--kulisse 800] [--klang-kbps 24] [--klang-varianten 2] [--ohne-klang] [--ganz]
 
 <dist-ordner> ist ein Bau wie zum Veroeffentlichen: schwebfels.html mit Inselbildern, daneben die Figurendateien
 gen-*.js, kulissen.js und klang.js. Die Seite laedt diese Dateien sonst einzeln nach; auf dem Handy liegt aber nur die eine
@@ -19,10 +19,21 @@ Damit die Datei klein genug bleibt:
  - Farbbilder werden kleiner (--tex, --tex-monster), Normalenkarten fallen weg (das Spiel kommt ohne aus).
  - Jedes Figurenpaket wird mit gzip verkleinert (das Spiel entpackt es selbst).
  - Kampfkulissen und Heime werden auf --kulisse Pixel Breite verkleinert.
+ - Ausruestung (gen-ausr<reich><art>.js): Albion und Hibernia tragen dieselben Formen wie Midgard, nur neu bemalt. Je
+   Heldenart kommen die drei Reiche in ein Paket, jede Form (Ecken, Dreiecke, Gewichte) nur einmal, die Bilder je Reich
+   auf --tex-ausr Pixel; die Namen der beiden anderen Reiche verweisen darauf ("@ausrmidgard<art>", A.loadGen in
+   src/r3d-assets.js). Ohne das kaeme die Datei mit 0.75 auf 71 MB.
+ - Das Grundpaket der Seite verliert die Kleidung der gebauten Figuren (Haare, Baerte, Hemden, Roben; strip_legacy),
+   die hier nie zu sehen ist: rund 4 MB.
+ - Klangbank (klang.js): Kampfklaenge einkanalig mit 24 kbit/s und zwei Varianten je Klang, die Lieder nach dem Kampf
+   stereo mit 48 kbit/s, zusammen knapp 0,9 MB statt 2,6 MB (--klang-kbps, --klang-varianten, --ohne-klang).
+Mit 0.75 ergeben die Standardwerte 28,9 MB (vorher 40 MB), mit der Klangbank (0.77) geschaetzt 29,8 MB. Die Ausruestung ist der groesste Block (gut 11 MB, davon
+knapp 9 MB Formen); bessere Kompression der Formen (Ebenen trennen, Differenzen) brachte mit gzip nichts.
 --ganz bettet alles unveraendert ein (etwa 120 MB, fuer Rechner mit viel Speicher).
 """
 import argparse
 import base64
+import hashlib
 import glob
 import gzip
 import io
@@ -30,6 +41,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 
 import numpy as np
@@ -294,6 +306,36 @@ def rebake(pos, uv, idx, si, sw, tex, target, size, keep=None, head=False):
     return P2, np.array(UV2), np.array(I2), order, w4, Image.fromarray(rgb), near
 
 
+def pack_bytes(head, P):
+    h = json.dumps(head, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    head_b = b"SBP1" + struct.pack("<I", len(h)) + h
+    head_b += b"\0" * ((-len(head_b)) % 4)
+    return head_b + b"".join(P.parts)
+
+
+def strip_legacy(b):
+    """Grundpaket der Seite ohne die Kleidung der gebauten Figuren (Haare, Baerte, Hemden, Roben, Stiefel ...).
+
+    In der Handy-Fassung hat jedes Volk einen Meshy-Koerper und jede Ausruestungsform ein Meshy-Teil; die gebauten
+    Figuren erscheinen nur, wenn eine Figurendatei fehlt, und die liegen hier alle in der Datei. Fehlende Teile
+    ueberspringt das Spiel ohne Fehler (src/r3d-gear.js, src/r3d-human.js). Koerper, Profile, Materialien und der
+    gebaute Schlund bleiben, alles unveraendert."""
+    head, data = read_pack(b)
+    P = Pack()
+
+    def cp(o):
+        if is_ref(o):
+            r = o["$"]
+            return {"$": [r[0], P._add(bytes(raw(data, o))), r[2]] + r[3:]}
+        if isinstance(o, dict):
+            return {k: cp(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [cp(v) for v in o]
+        return o
+
+    return pack_bytes({k: ({} if k == "pieces" else cp(v)) for k, v in head.items()}, P)
+
+
 class Repack:
     def __init__(self, data, opt, monster):
         self.data = data
@@ -305,7 +347,15 @@ class Repack:
     def copy(self, ref):
         r = ref["$"]
         b = raw(self.data, ref)
-        off = self.P._add(b)
+        cache = getattr(self, "cache", None)
+        if cache is None:
+            off = self.P._add(b)
+        else:
+            # gleiche Daten nur einmal (Ausruestung: gleiche Formen in drei Reichen)
+            k = (r[0], hashlib.sha1(b).hexdigest())
+            if k not in cache:
+                cache[k] = self.P._add(b)
+            off = cache[k]
         return {"$": [r[0], off, r[2]] + r[3:]}
 
     def image(self, ref, limit):
@@ -329,7 +379,7 @@ class Repack:
         """Alles unveraendert uebernehmen; Bilder verkleinern, Normalenkarten weglassen."""
         if is_ref(o):
             if o["$"][0] == "img":
-                return self.image(o, self.opt.tex_monster if self.monster else self.opt.tex)
+                return self.image(o, getattr(self, "limit", None) or (self.opt.tex_monster if self.monster else self.opt.tex))
             return self.copy(o)
         if isinstance(o, dict):
             return {k: self.walk(v) for k, v in o.items() if not (k == "ntex" and not self.opt.ganz)}
@@ -407,14 +457,7 @@ class Repack:
                 out[sec] = {k: self.mesh(e, self.opt.monster, True) for k, e in v.items()}
             else:
                 out[sec] = self.walk(v)
-        bio = io.BytesIO()
-        h = json.dumps(out, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        head_b = b"SBP1" + struct.pack("<I", len(h)) + h
-        head_b += b"\0" * ((-len(head_b)) % 4)
-        bio.write(head_b)
-        for p in self.P.parts:
-            bio.write(p)
-        return bio.getvalue()
+        return pack_bytes(out, self.P)
 
 
 def shrink_pack(b, opt, monster, name):
@@ -424,6 +467,33 @@ def shrink_pack(b, opt, monster, name):
     z = gzip.compress(nb, 9, mtime=0)
     t, im = R.stat["tris"], R.stat["img"]
     print("%-22s %6.2f MB -> %5.2f MB (gzip)  Dreiecke %6d -> %6d  Bilder %5.2f -> %5.2f MB" % (name, len(b) / 1e6, len(z) / 1e6, t[0], t[1], im[0] / 1e6, im[1] / 1e6))
+    return z
+
+
+def shrink_ausr(files, opt):
+    """Die drei Reiche einer Heldenart in ein Paket, gleiche Daten nur einmal; gibt das gzip-Paket zurueck."""
+    P = Pack()
+    cache = {}
+    out = None
+    size = 0
+    img = [0, 0]
+    for f in files:
+        b = base64.b64decode(re.match(r'globalThis\.SB_GEN_\w+="([A-Za-z0-9+/=]+)"', open(f, encoding="utf-8").read()).group(1))
+        if b[:2] == b"\x1f\x8b":
+            b = gzip.decompress(b)
+        size += len(b)
+        head, data = read_pack(b)
+        R = Repack(data, opt, False)
+        R.P, R.cache, R.limit = P, cache, opt.tex_ausr
+        part = {sec: (R.walk(v) if sec in ("pieces", "weapons") else v) for sec, v in head.items() if sec in ("v", "pieces", "weapons")}
+        if out is None:
+            out = {"v": part.get("v", 1), "gen": {}, "clips": {}, "pieces": {}, "beasts": {}, "weapons": {}, "props": {}}
+        out["pieces"].update(part.get("pieces") or {})
+        out["weapons"].update(part.get("weapons") or {})
+        img[0] += R.stat["img"][0]
+        img[1] += R.stat["img"][1]
+    z = gzip.compress(pack_bytes(out, P), 9, mtime=0)
+    print("%-22s %6.2f MB -> %5.2f MB (gzip, %d Reiche zusammen)  Bilder %5.2f -> %5.2f MB" % (os.path.basename(files[0]).replace("midgard", "*"), size / 1e6, len(z) / 1e6, len(files), img[0] / 1e6, img[1] / 1e6))
     return z
 
 
@@ -445,17 +515,48 @@ def shrink_kulissen(js, opt):
     return "globalThis.SB_KULISSEN=" + json.dumps(out, separators=(",", ":")) + ";"
 
 
+def shrink_klang(js, opt):
+    """Klangbank fuers Handy: Klaenge einkanalig mit --klang-kbps bei 22,05 kHz und hoechstens --klang-varianten je
+    Klang, die Lieder nach dem Kampf stereo mit 48 kbit/s; gleiches Paketformat wie assets/klang.pack (SBP1)."""
+    m = re.match(r'globalThis\.SB_KLANG="([A-Za-z0-9+/=]+)";', js)
+    b = base64.b64decode(m.group(1))
+    hl = struct.unpack("<I", b[4:8])[0]
+    head = json.loads(b[8:8 + hl])
+    base = 8 + hl + (4 - (8 + hl) % 4) % 4
+    blobs, out, off = [], {}, 0
+    for k, recs in head["klang"].items():
+        lied = k.startswith("lied.")
+        out[k] = []
+        for r in recs if lied else recs[:opt.klang_varianten]:
+            src = b[base + r["$"][1]:base + r["$"][1] + r["$"][2]]
+            fmt = ["-ac", "2", "-ar", "44100", "-b:a", "48k"] if lied else ["-ac", "1", "-ar", "22050", "-b:a", "%dk" % opt.klang_kbps]
+            z = subprocess.run(["ffmpeg", "-v", "error", "-i", "-"] + fmt + ["-c:a", "libmp3lame", "-f", "mp3", "-"], input=src, capture_output=True)
+            if z.returncode or not z.stdout:
+                raise SystemExit("ffmpeg (mit libmp3lame) fehlt oder scheitert an " + k + "; ohne Klangbank bauen: --ohne-klang")
+            out[k].append({"$": ["img", off, len(z.stdout), "audio/mpeg"]})
+            pad = (4 - len(z.stdout) % 4) % 4
+            blobs.append(z.stdout + b"\0" * pad)
+            off += len(z.stdout) + pad
+    hj = json.dumps({"klang": out}, separators=(",", ":")).encode()
+    pk = struct.pack("<II", 0x31504253, len(hj)) + hj + b"\0" * ((4 - (8 + len(hj)) % 4) % 4) + b"".join(blobs)
+    return 'globalThis.SB_KLANG="' + base64.b64encode(pk).decode() + '";'
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dist")
     ap.add_argument("out")
     ap.add_argument("--held", type=int, default=6000, help="Dreiecke je Heldenkoerper")
-    ap.add_argument("--monster", type=int, default=4000, help="Dreiecke je Monster oder Bestie")
+    ap.add_argument("--monster", type=int, default=2600, help="Dreiecke je Monster oder Bestie")
     ap.add_argument("--tex", type=int, default=512)
-    ap.add_argument("--tex-monster", type=int, default=384)
+    ap.add_argument("--tex-monster", type=int, default=256)
+    ap.add_argument("--tex-ausr", type=int, default=144, help="Farbbilder der Ausruestung")
     ap.add_argument("--qualitaet", type=int, default=72)
-    ap.add_argument("--kulisse", type=int, default=1024)
+    ap.add_argument("--kulisse", type=int, default=800)
     ap.add_argument("--qualitaet-kulisse", type=int, default=62)
+    ap.add_argument("--klang-kbps", type=int, default=24, help="Bitrate der Kampfklaenge (einkanalig, 22,05 kHz)")
+    ap.add_argument("--klang-varianten", type=int, default=2, help="Varianten je Kampfklang")
+    ap.add_argument("--ohne-klang", action="store_true", help="Klangbank weglassen (dann die erzeugten Klaenge)")
     ap.add_argument("--ganz", action="store_true")
     opt = ap.parse_args()
 
@@ -468,7 +569,29 @@ def main():
     if m:
         z = shrink_pack(gzip.decompress(base64.b64decode(m.group(1))), opt, False, "Kernpaket")
         page = page[:m.start(1)] + base64.b64encode(z).decode() + page[m.end(1):]
+    if not opt.ganz:
+        m = re.search(r'globalThis\.SB_PACK="([A-Za-z0-9+/=]+)"', page)
+        b = base64.b64decode(m.group(1))
+        nb = strip_legacy(gzip.decompress(b) if b[:2] == b"\x1f\x8b" else b)
+        z = base64.b64encode(gzip.compress(nb, 9, mtime=0)).decode()
+        print("Grundpaket           %6.2f MB -> %5.2f MB (ohne Kleidung der gebauten Figuren)" % (len(m.group(1)) / 1e6, len(z) / 1e6))
+        page = page[:m.start(1)] + z + page[m.end(1):]
+    done = set()
+    if not opt.ganz:
+        arts = sorted({m.group(2) for m in (re.match(r"gen-ausr(albion|midgard|hibernia)(\w+)\.js$", os.path.basename(f)) for f in glob.glob(os.path.join(opt.dist, "gen-ausr*.js"))) if m})
+        for art in arts:
+            files = [os.path.join(opt.dist, "gen-ausr%s%s.js" % (r, art)) for r in ("midgard", "albion", "hibernia")]
+            files = [f for f in files if os.path.exists(f)]
+            z = shrink_ausr(files, opt)
+            first = "ausr" + re.match(r"gen-ausr(\w+)\.js$", os.path.basename(files[0])).group(1)
+            scripts.append("<script>/* %s */\nglobalThis.SB_GEN_%s=\"%s\";\n</script>" % (os.path.basename(files[0]), first.upper(), base64.b64encode(z).decode()))
+            for f in files[1:]:
+                other = re.match(r"gen-(\w+)\.js$", os.path.basename(f)).group(1)
+                scripts.append("<script>globalThis.SB_GEN_%s=\"@%s\";</script>" % (other.upper(), first))
+            done.update(files)
     for f in sorted(glob.glob(os.path.join(opt.dist, "gen-*.js"))):
+        if f in done:
+            continue
         js = open(f, encoding="utf-8").read()
         mm = re.match(r'globalThis\.(SB_GEN_\w+)="([A-Za-z0-9+/=]+)"', js)
         name = os.path.basename(f)
@@ -482,11 +605,12 @@ def main():
         js = shrink_kulissen(open(kf, encoding="utf-8").read(), opt)
         print("kulissen.js            %6.2f MB -> %5.2f MB" % (os.path.getsize(kf) / 1e6, len(js) / 1e6))
         scripts.append("<script>/* kulissen.js */\n" + js + "\n</script>")
-    # Klangbank (MP3, schon klein): unveraendert hinein, src/audio.js findet SB_KLANG dann ohne Nachladen
+    # Klangbank: verkleinert hinein (mit --ganz unveraendert), src/audio.js findet SB_KLANG dann ohne Nachladen
     kl = os.path.join(opt.dist, "klang.js")
-    if os.path.exists(kl):
-        js = open(kl, encoding="utf-8").read()
-        print("klang.js               %6.2f MB" % (len(js) / 1e6))
+    if os.path.exists(kl) and not opt.ohne_klang:
+        js0 = open(kl, encoding="utf-8").read()
+        js = js0 if opt.ganz else shrink_klang(js0, opt)
+        print("klang.js               %6.2f MB -> %5.2f MB" % (len(js0) / 1e6, len(js) / 1e6))
         scripts.append("<script>/* klang.js */\n" + js + "\n</script>")
     for s in scripts:
         assert "</script" not in s[8:-9]
@@ -501,6 +625,9 @@ def main():
     with open(opt.out, "w", encoding="utf-8") as f:
         f.write(page)
     print("Handy-Fassung %s: %.1f MB" % (opt.out, os.path.getsize(opt.out) / 1e6))
+    if not opt.ganz and os.path.getsize(opt.out) > 30e6:
+        print("WARNUNG: ueber 30 MB, der Chat uebertraegt die Datei nicht. Kleiner bauen, etwa mit --klang-kbps 16, "
+              "--klang-varianten 1 oder --ohne-klang")
 
 
 if __name__ == "__main__":
