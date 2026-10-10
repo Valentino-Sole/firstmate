@@ -19,10 +19,15 @@ Damit die Datei klein genug bleibt:
  - Farbbilder werden kleiner (--tex, --tex-monster), Normalenkarten fallen weg (das Spiel kommt ohne aus).
  - Jedes Figurenpaket wird mit gzip verkleinert (das Spiel entpackt es selbst).
  - Kampfkulissen und Heime werden auf --kulisse Pixel Breite verkleinert.
+ - Ausruestung (gen-ausr<reich><art>.js): Albion und Hibernia tragen dieselben Formen wie Midgard, nur neu bemalt. Je
+   Heldenart kommen die drei Reiche in ein Paket, jede Form (Ecken, Dreiecke, Gewichte) nur einmal, die Bilder je Reich
+   auf --tex-ausr Pixel; die Namen der beiden anderen Reiche verweisen darauf ("@ausrmidgard<art>", A.loadGen in
+   src/r3d-assets.js). Ohne das kaeme die Datei mit 0.75 auf 71 MB.
 --ganz bettet alles unveraendert ein (etwa 120 MB, fuer Rechner mit viel Speicher).
 """
 import argparse
 import base64
+import hashlib
 import glob
 import gzip
 import io
@@ -305,7 +310,15 @@ class Repack:
     def copy(self, ref):
         r = ref["$"]
         b = raw(self.data, ref)
-        off = self.P._add(b)
+        cache = getattr(self, "cache", None)
+        if cache is None:
+            off = self.P._add(b)
+        else:
+            # gleiche Daten nur einmal (Ausruestung: gleiche Formen in drei Reichen)
+            k = (r[0], hashlib.sha1(b).hexdigest())
+            if k not in cache:
+                cache[k] = self.P._add(b)
+            off = cache[k]
         return {"$": [r[0], off, r[2]] + r[3:]}
 
     def image(self, ref, limit):
@@ -329,7 +342,7 @@ class Repack:
         """Alles unveraendert uebernehmen; Bilder verkleinern, Normalenkarten weglassen."""
         if is_ref(o):
             if o["$"][0] == "img":
-                return self.image(o, self.opt.tex_monster if self.monster else self.opt.tex)
+                return self.image(o, getattr(self, "limit", None) or (self.opt.tex_monster if self.monster else self.opt.tex))
             return self.copy(o)
         if isinstance(o, dict):
             return {k: self.walk(v) for k, v in o.items() if not (k == "ntex" and not self.opt.ganz)}
@@ -427,6 +440,40 @@ def shrink_pack(b, opt, monster, name):
     return z
 
 
+def shrink_ausr(files, opt):
+    """Die drei Reiche einer Heldenart in ein Paket, gleiche Daten nur einmal; gibt das gzip-Paket zurueck."""
+    P = Pack()
+    cache = {}
+    out = None
+    size = 0
+    img = [0, 0]
+    for f in files:
+        b = base64.b64decode(re.match(r'globalThis\.SB_GEN_\w+="([A-Za-z0-9+/=]+)"', open(f, encoding="utf-8").read()).group(1))
+        if b[:2] == b"\x1f\x8b":
+            b = gzip.decompress(b)
+        size += len(b)
+        head, data = read_pack(b)
+        R = Repack(data, opt, False)
+        R.P, R.cache, R.limit = P, cache, opt.tex_ausr
+        part = {sec: (R.walk(v) if sec in ("pieces", "weapons") else v) for sec, v in head.items() if sec in ("v", "pieces", "weapons")}
+        if out is None:
+            out = {"v": part.get("v", 1), "gen": {}, "clips": {}, "pieces": {}, "beasts": {}, "weapons": {}, "props": {}}
+        out["pieces"].update(part.get("pieces") or {})
+        out["weapons"].update(part.get("weapons") or {})
+        img[0] += R.stat["img"][0]
+        img[1] += R.stat["img"][1]
+    bio = io.BytesIO()
+    h = json.dumps(out, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    head_b = b"SBP1" + struct.pack("<I", len(h)) + h
+    head_b += b"\0" * ((-len(head_b)) % 4)
+    bio.write(head_b)
+    for p in P.parts:
+        bio.write(p)
+    z = gzip.compress(bio.getvalue(), 9, mtime=0)
+    print("%-22s %6.2f MB -> %5.2f MB (gzip, %d Reiche zusammen)  Bilder %5.2f -> %5.2f MB" % (os.path.basename(files[0]).replace("midgard", "*"), size / 1e6, len(z) / 1e6, len(files), img[0] / 1e6, img[1] / 1e6))
+    return z
+
+
 def shrink_kulissen(js, opt):
     m = re.match(r"\s*globalThis\.SB_KULISSEN\s*=\s*(\{.*\})\s*;?\s*$", js, re.S)
     k = json.loads(m.group(1))
@@ -453,6 +500,7 @@ def main():
     ap.add_argument("--monster", type=int, default=4000, help="Dreiecke je Monster oder Bestie")
     ap.add_argument("--tex", type=int, default=512)
     ap.add_argument("--tex-monster", type=int, default=384)
+    ap.add_argument("--tex-ausr", type=int, default=256, help="Farbbilder der Ausruestung")
     ap.add_argument("--qualitaet", type=int, default=72)
     ap.add_argument("--kulisse", type=int, default=1024)
     ap.add_argument("--qualitaet-kulisse", type=int, default=62)
@@ -468,7 +516,22 @@ def main():
     if m:
         z = shrink_pack(gzip.decompress(base64.b64decode(m.group(1))), opt, False, "Kernpaket")
         page = page[:m.start(1)] + base64.b64encode(z).decode() + page[m.end(1):]
+    done = set()
+    if not opt.ganz:
+        arts = sorted({m.group(2) for m in (re.match(r"gen-ausr(albion|midgard|hibernia)(\w+)\.js$", os.path.basename(f)) for f in glob.glob(os.path.join(opt.dist, "gen-ausr*.js"))) if m})
+        for art in arts:
+            files = [os.path.join(opt.dist, "gen-ausr%s%s.js" % (r, art)) for r in ("midgard", "albion", "hibernia")]
+            files = [f for f in files if os.path.exists(f)]
+            z = shrink_ausr(files, opt)
+            first = "ausr" + re.match(r"gen-ausr(\w+)\.js$", os.path.basename(files[0])).group(1)
+            scripts.append("<script>/* %s */\nglobalThis.SB_GEN_%s=\"%s\";\n</script>" % (os.path.basename(files[0]), first.upper(), base64.b64encode(z).decode()))
+            for f in files[1:]:
+                other = re.match(r"gen-(\w+)\.js$", os.path.basename(f)).group(1)
+                scripts.append("<script>globalThis.SB_GEN_%s=\"@%s\";</script>" % (other.upper(), first))
+            done.update(files)
     for f in sorted(glob.glob(os.path.join(opt.dist, "gen-*.js"))):
+        if f in done:
+            continue
         js = open(f, encoding="utf-8").read()
         mm = re.match(r'globalThis\.(SB_GEN_\w+)="([A-Za-z0-9+/=]+)"', js)
         name = os.path.basename(f)
