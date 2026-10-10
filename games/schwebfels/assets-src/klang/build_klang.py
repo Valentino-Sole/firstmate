@@ -41,6 +41,10 @@ Q = {
     "MAG": "oga-magic/",
     "SPL": "oga-spells/",
     "C100": "oga-100/",
+    "MVS": "oga-medieval-victory/",
+    "MVD": "oga-medieval-defeat/",
+    "FAN": "oga-fanfare/",
+    "KGO": "oga-gameover/",
 }
 
 
@@ -209,6 +213,20 @@ BANK = {
     "schritt.stein": [V(L("IMP:footstep_concrete_00%d.ogg" % i)) for i in range(5)],
 }
 
+# Kurze Lieder nach dem Kampf (Stereo): Teile (Kurzname:Datei, von, bis) werden mit kurzer Ueberblendung aneinander
+# gesetzt, am Ende ausgeblendet (aus, Sekunden) und auf gleiche Lautheit gebracht. Schnittstellen liegen auf
+# Phrasenenden der Stuecke (Schlussakkord auf dem Grundton, gemessen, siehe QUELLEN.md).
+LIEDER = {
+    # Mittelalterlicher Sieg (RandomMind): erste Phrase bis zum Schlussakkord in C-Dur, klingt bis 6,8 s aus
+    "lied.sieg.fest": dict(teile=[("MVS:victory.wav", 0, 6.82)], aus=0.5),
+    # Fanfare (Spring Spring): erste Phrase (endet auf der Dominante A) direkt in den Schlussakkord D (ab 7,22 s)
+    "lied.sieg.fanfare": dict(teile=[("FAN:fanfare.ogg", 0, 2.34), ("FAN:fanfare.ogg", 7.22, 10.4)], aus=0.6),
+    # Mittelalterliche Niederlage (RandomMind): zwei Phrasen bis zum Grundton b-Moll, sanft ausgeblendet
+    "lied.niederlage.fest": dict(teile=[("MVD:defeat.wav", 0, 7.17)], aus=1.2),
+    # Tragisch (Kistol): Streicher bis zum Ende der ersten Phrase, offen auf der Dominante
+    "lied.niederlage.tragisch": dict(teile=[("KGO:gameover.flac", 0, 3.1)], aus=0.9),
+}
+
 CACHE = {}
 
 
@@ -272,13 +290,55 @@ def mp3(x):
     return r.stdout
 
 
+def load2(path):
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", os.path.join(ROOT, path), "-ac", "2", "-ar", str(SR), "-f", "f32le", "-"], capture_output=True)
+    if raw.returncode or not raw.stdout:
+        raise SystemExit("Datei fehlt oder ist kaputt: " + path + " " + raw.stderr.decode()[:200])
+    return np.frombuffer(raw.stdout, np.float32).reshape(-1, 2).copy()
+
+
+def render_lied(v):
+    xf = int(0.025 * SR)
+    out = None
+    for f, a, b in v["teile"]:
+        q, path = f.split(":", 1)
+        y = load2(Q[q] + path)[int(a * SR):int(b * SR)].copy()
+        if out is None:
+            out = y
+            continue
+        # Ueberblendung mit gleicher Leistung
+        t = np.linspace(0, np.pi / 2, xf)[:, None]
+        mix = out[-xf:] * np.cos(t) + y[:xf] * np.sin(t)
+        out = np.concatenate([out[:-xf], mix, y[xf:]])
+    fi = int(0.004 * SR)
+    out[:fi] *= np.linspace(0, 1, fi)[:, None]
+    fo = int(v["aus"] * SR)
+    out[-fo:] *= (np.cos(np.linspace(0, np.pi / 2, fo)) ** 2)[:, None]
+    # gleiche Lautheit (RMS -17 dBFS), Spitzen hoechstens 0,95
+    rms = np.sqrt((out ** 2).mean())
+    out *= 10 ** (-17 / 20) / max(rms, 1e-6)
+    pk = np.abs(out).max()
+    if pk > 0.95:
+        out *= 0.95 / pk
+    return out
+
+
+def mp3_stereo(x):
+    r = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-", "-c:a", "libmp3lame", "-b:a", "112k", "-f", "mp3", "-"],
+                       input=x.astype(np.float32).tobytes(), capture_output=True)
+    if r.returncode:
+        raise SystemExit(r.stderr.decode()[:300])
+    return r.stdout
+
+
 blobs, header, info = [], {}, {}
 off = 0
-for name, variants in BANK.items():
+ALLE = [(n, vs, render, mp3) for n, vs in BANK.items()] + [(n, [v], render_lied, mp3_stereo) for n, v in LIEDER.items()]
+for name, variants, rend, enc in ALLE:
     header[name] = []
     for i, v in enumerate(variants):
-        x = render(v)
-        b = mp3(x)
+        x = rend(v)
+        b = enc(x)
         header[name].append({"$": ["img", off, len(b), "audio/mpeg"]})
         blobs.append(b)
         pad = (4 - len(b) % 4) % 4
@@ -295,6 +355,6 @@ with open(OUT, "wb") as f:
     f.write(b"\0" * ((4 - (8 + len(hj)) % 4) % 4))
     for b in blobs:
         f.write(b)
-print("Klaenge", len(BANK), "Varianten", sum(len(v) for v in BANK.values()), "Groesse", round(os.path.getsize(OUT) / 1024), "KB")
+print("Klaenge", len(BANK), "Lieder", len(LIEDER), "Varianten", sum(len(v) for v in BANK.values()) + len(LIEDER), "Groesse", round(os.path.getsize(OUT) / 1024), "KB")
 if PREV:
     json.dump(info, open(os.path.join(PREV, "laengen.json"), "w"), ensure_ascii=False, indent=0)

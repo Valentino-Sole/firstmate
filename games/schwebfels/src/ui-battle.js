@@ -222,7 +222,10 @@
         const won = chain.winner === 0;
         if (battle) await battle.finish(won ? 0 : 1);
         else await wait(400);
-        SB.audio.play(won ? "victory" : "defeat");
+        // kurzes Lied: bei grossen Siegen (Chronik, Verlies, Arena, seltene Auftraege, Bosse) die Fanfare
+        const big = opts.setting !== "quest" || !!opts.rare || foes.some((f) => f.boss || f.final);
+        const st = (UI.S && UI.S.settings) || {};
+        SB.audio.play(won ? "victory" : "defeat", { big, wahl: won ? st.liedSieg : st.liedNiederlage });
         showResult(won);
       })();
       function showResult(win) {

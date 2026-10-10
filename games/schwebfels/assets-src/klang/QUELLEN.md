@@ -24,6 +24,14 @@ Bei Sammlungen mit mehreren Lizenzen zur Wahl (Battle Sound Effects, Spell Sound
 | `oga-battle` | Battle Sound Effects (CC0 gewählt) | artisticdude | https://opengameart.org/content/battle-sound-effects |
 | `oga-magic` | Magic Spell SFX | JaggedStone | https://opengameart.org/content/magic-spell-sfx |
 | `oga-spells` | Spell Sounds (CC0 gewählt) | Augmentality (Brandon Morris) | https://opengameart.org/content/spell-sounds |
+| `oga-medieval-victory` | Medieval: Victory Theme (Datei `victory.wav`) | RandomMind | https://opengameart.org/content/medieval-victory-theme |
+| `oga-medieval-defeat` | Medieval: Defeat Theme (Datei `defeat.wav`) | RandomMind | https://opengameart.org/content/medieval-defeat-theme |
+| `oga-fanfare` | Just a random fanfare (Download `fanfare_0.ogg`, abgelegt als `fanfare.ogg`) | Spring Spring | https://opengameart.org/content/just-a-random-fanfare |
+| `oga-gameover` | Game Over (Download `Game Over.flac`, abgelegt als `gameover.flac`) | Kistol | https://opengameart.org/content/game-over |
+
+Die vier Musikstücke unten in der Tabelle sind die Lieder nach dem Kampf (`LIEDER` in `build_klang.py`). Sie werden nur
+an Phrasenenden geschnitten: Dort liegt der Schlussakkord auf dem Grundton der Tonart (mit Tonklassen-Messung geprüft),
+die Fanfare springt von ihrer ersten Phrase (endet auf der Dominante) direkt in ihren Schlussakkord.
 
 Lizenzhinweis von Kenney: alle Spielinhalte auf den Kenney-Seiten sind CC0 (https://kenney.nl/support).
 Bei OpenGameArt steht die Lizenz auf jeder Sammlungsseite unter „License(s)“.
@@ -36,4 +44,4 @@ node build.mjs
 ```
 
 Das Werkzeug braucht `ffmpeg` (mit libmp3lame) und numpy. Die Rohdateien gehören nicht ins Repository, nur das fertige
-`assets/klang.pack` (MP3, einkanalig, 64 kbit/s, etwa 1,6 MB).
+`assets/klang.pack` (Klänge MP3 einkanalig 64 kbit/s, Lieder MP3 stereo 112 kbit/s, zusammen knapp 2 MB).

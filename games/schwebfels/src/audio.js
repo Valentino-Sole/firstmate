@@ -1,4 +1,5 @@
-/* Helden von Schwebfels - Klangeffekte und Musik, live mit WebAudio erzeugt (keine fremden Aufnahmen).
+/* Helden von Schwebfels - Klangeffekte und Musik per WebAudio: Musik live erzeugt, Kampfklaenge, Stimmen und die Lieder
+   nach dem Kampf aus freien Aufnahmen (CC0, Klangbank unten), ohne Klangbank erzeugte Ersatzklaenge.
    Musik je Ort: Insel bei Tag und bei Nacht, Taverne, Kampf, Tiefe (Dungeon), Heim, Chronik.
    Jedes Reich klingt anders: Albion hoefisch (Laute, Schalmei, Trommel im Dreiertakt),
    Midgard duester nordisch (Bordun, Fidel, Kriegstrommeln, Horn, tiefer Chor),
@@ -291,6 +292,63 @@
     return true;
   }
 
+  /* ---------- Lieder nach dem Kampf ---------- */
+  // Sieg und Niederlage: kurzes Lied aus der Klangbank (lied.sieg.*, lied.niederlage.*), die Musik tritt so lange
+  // zurueck. Wahl (Klangprobe, S.settings.liedSieg/liedNiederlage): "auto" spielt bei grossen Siegen (Chronik,
+  // Verlies, Arena, seltene Auftraege, Bosse) die Fanfare, sonst das mittelalterliche Lied; sonst fest "fest",
+  // "fanfare" oder "tragisch"
+  let liedSrc = null;
+  let duckUntil = 0;
+  const musicLevel = () => (cur ? (cur.indexOf("kampf") === 0 ? 0.75 : 0.85) : 0.0001);
+  A.liedName = function (kind, o) {
+    o = o || {};
+    let w = o.wahl || (kind === "sieg" ? "auto" : "fest");
+    if (w === "auto") w = kind === "sieg" && o.big ? "fanfare" : "fest";
+    return BANK["lied." + kind + "." + w] ? "lied." + kind + "." + w : "lied." + kind + ".fest";
+  };
+  function lied(kind, o) {
+    o = o || {};
+    const name = A.liedName(kind, o);
+    const buf = BANK[name] && BANK[name][0];
+    if (!buf) return false;
+    const c = A.ctx;
+    if (liedSrc) {
+      try {
+        liedSrc.stop();
+      } catch (e) {
+        /* schon zu Ende */
+      }
+    }
+    if (A.onSample) A.onSample(name, 0);
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    const g = c.createGain();
+    g.gain.value = o.gain != null ? o.gain : 0.8;
+    s.connect(g);
+    g.connect(sfxBus);
+    const t = c.currentTime + 0.05;
+    s.start(t);
+    liedSrc = s;
+    s.onended = () => {
+      if (liedSrc === s) liedSrc = null;
+    };
+    // Musik ausblenden und nach dem Lied wieder einblenden (A.music wartet beim Ortswechsel ebenfalls bis dahin)
+    duckUntil = t + buf.duration;
+    const mg = musicBus.gain;
+    mg.cancelScheduledValues(c.currentTime);
+    mg.setValueAtTime(mg.value, c.currentTime);
+    mg.linearRampToValueAtTime(0.0001, c.currentTime + 0.25);
+    mg.setValueAtTime(0.0001, duckUntil);
+    mg.linearRampToValueAtTime(musicLevel(), duckUntil + 1.5);
+    return true;
+  }
+  A.lied = function (kind, o) {
+    if (!A.ctx) A.unlock();
+    if (!A.ctx) return false;
+    if (bankState === "aus") loadBank();
+    return bankState === "bereit" && lied(kind, o);
+  };
+
   /* ---------- Was im Kampf wie klingt ---------- */
   // Waffe des Helden: Schwungart und Trefferart
   const WAFFE = { dolch: "leicht", kurzschwert: "leicht", sichel: "leicht", wurfmesser: "leicht", schwert: "klinge", axt: "axt", hammer: "wucht", speer: "stoss", stab: "wucht", zepter: "wucht", runenstab: "wucht" };
@@ -477,6 +535,7 @@
     if (!A.enabled || !A.ctx) return;
     try {
       if (bankState === "bereit") {
+        if ((name === "victory" || name === "defeat") && lied(name === "victory" ? "sieg" : "niederlage", c)) return;
         if (c) {
           const k = { hit: "hit", crit: "hit", block: "block", evade: "evade", swing: "swing", bow: "shoot", spell: "cast", special: "special", talent: "talent", chime: "talent", heal: "heal", poison: "poison", ko: "ko", auftritt: "auftritt", schritt: "schritt" }[name];
           if (k && KAMPF[k]) {
@@ -1039,9 +1098,12 @@
       barNo = 0;
       nextBar = c.currentTime + 0.1;
       if (cur) {
+        // laeuft noch ein Lied nach dem Kampf, kommt die Musik erst danach
+        const t0 = Math.max(c.currentTime, duckUntil);
         g.cancelScheduledValues(c.currentTime);
         g.setValueAtTime(0.0001, c.currentTime);
-        g.linearRampToValueAtTime(cur.indexOf("kampf") === 0 ? 0.75 : 0.85, c.currentTime + 1.5);
+        g.setValueAtTime(0.0001, t0);
+        g.linearRampToValueAtTime(musicLevel(), t0 + 1.5);
       }
     }, 650);
   };

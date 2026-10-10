@@ -1052,7 +1052,7 @@
       h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
-      h += '<div class="row" style="margin-top:6px"><button class="btn ghost" data-act="open" data-id="klangprobe">Klangprobe öffnen</button><span class="muted small">Kampfgeräusche, Stimmen der Völker und Gegner, Magie zum Anhören</span></div>';
+      h += '<div class="row" style="margin-top:6px"><button class="btn ghost" data-act="open" data-id="klangprobe">Klangprobe öffnen</button><span class="muted small">Kampfgeräusche, Stimmen der Völker und Gegner, Magie und Siegeslieder zum Anhören</span></div>';
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
       h += '<div class="section-title">Galerie</div><div class="row"><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button></div>';
@@ -1283,19 +1283,26 @@
   const KP = { waffe: "schwert" };
   P.klangprobe = {
     title: "Klangprobe",
-    role: "Kampfgeräusche, Stimmen und Magie zum Anhören",
+    role: "Kampfgeräusche, Stimmen, Magie und Siegeslieder zum Anhören",
     portrait: () => '<span class="iconport">' + I.ui("ton") + "</span>",
     render() {
       const row = (items, act, extra) => '<div class="row" style="gap:6px">' + items.map(([v, n]) => '<button class="tab" data-act="' + act + '" data-v="' + v + '"' + (extra || "") + ">" + esc(n) + "</button>").join("") + "</div>";
       let h = '<p class="muted small">Freie Aufnahmen (gemeinfrei) statt der bisherigen erzeugten Töne. Jeder Klang hat mehrere Varianten und klingt bei jedem Antippen etwas anders. Sag mir, was dir gefällt und was nicht.</p>';
       if (!SB.audio.enabled) h += '<p class="muted small">Die Klangeffekte sind ausgeschaltet. Schalte sie oben rechts ein, um etwas zu hören.</p>';
       h += '<div class="section-title">Kleine Kampfszenen</div><div style="display:grid;gap:6px">' + KP_SZENEN.map((sz, i) => '<button class="btn ghost small" style="justify-content:flex-start" data-act="kpSzene" data-i="' + i + '">' + esc(sz[0]) + "</button>").join("") + "</div>";
+      // Lieder nach dem Kampf: anhoeren und waehlen, welches das Spiel spielt (S.settings.liedSieg, liedNiederlage)
+      const st = S().settings;
+      const wahl = (kind, items, cur) => '<div class="row" style="gap:6px">' + items.map(([v, n]) => '<button class="tab' + (cur === v ? " on" : "") + '" data-act="kpLiedWahl" data-k="' + kind + '" data-v="' + v + '">' + esc(n) + "</button>").join("") + "</div>";
+      h += '<div class="section-title">Sieg und Niederlage</div><div class="muted small">Kurze Lieder am Ende des Kampfes, die Musik tritt so lange zurück.</div>';
+      h += '<div class="row" style="gap:6px">' + [["sieg", "fest", "Sieg: mittelalterlich"], ["sieg", "fanfare", "Sieg: Fanfare"], ["niederlage", "fest", "Niederlage: mittelalterlich"], ["niederlage", "tragisch", "Niederlage: tragisch"]].map(([k, v, n]) => '<button class="tab" data-act="kpLied" data-k="' + k + '" data-v="' + v + '">▶ ' + esc(n) + "</button>").join("") + "</div>";
+      h += '<div class="muted small" style="margin-top:8px">Im Spiel nach einem Sieg:</div>' + wahl("sieg", [["auto", "Abwechselnd (Fanfare bei Bossen, Chronik, Verlies, Arena)"], ["fest", "Immer mittelalterlich"], ["fanfare", "Immer Fanfare"]], st.liedSieg || "auto");
+      h += '<div class="muted small" style="margin-top:8px">Im Spiel nach einer Niederlage:</div>' + wahl("niederlage", [["fest", "Mittelalterlich"], ["tragisch", "Tragisch"]], st.liedNiederlage || "fest");
       h += '<div class="section-title">Gegner</div><div class="muted small">Tippe auf einen Gegner: Auftritt, Angriff, Schmerz und Niederlage nacheinander.</div>' + row(KP_ARCHS, "kpGegner");
       h += '<div class="section-title">Völker</div><div class="muted small">Kampfruf und Schmerzlaut, jeweils Frau und Mann.</div>' + row(KP_RACES, "kpVolk");
       h += '<div class="section-title">Waffe trifft Material</div>' + row(KP_WAFFEN.map(([v, n]) => [v, (KP.waffe === v ? "● " : "") + n]), "kpWaffe") + '<div style="height:6px"></div>' + row(KP_ZIELE, "kpZiel");
       h += '<div class="section-title">Magie</div>' + row(KP_MAGIE, "kpMagie") + '<div style="height:6px"></div>' + row([["magie.heilung", "Heilung"], ["magie.barriere", "Barriere"], ["magie.teleport", "Verschwinden"], ["magie.reinigung", "Reinigung"]], "kpBank");
       h += '<div class="section-title">Vorher und nachher</div><div class="muted small">Links der bisherige erzeugte Ton, rechts die neue Aufnahme.</div>';
-      h += [["hit", "Treffer", "mat.fleisch"], ["crit", "Kritisch", "krit"], ["swing", "Schwung", "schwung.klinge"], ["bow", "Bogen", "bogen.schuss"], ["spell", "Zauber", "magie.licht.wirken"], ["block", "Block", "block.schild"]]
+      h += [["hit", "Treffer", "mat.fleisch"], ["crit", "Kritisch", "krit"], ["swing", "Schwung", "schwung.klinge"], ["bow", "Bogen", "bogen.schuss"], ["spell", "Zauber", "magie.licht.wirken"], ["block", "Block", "block.schild"], ["victory", "Sieg", "lied.sieg.fest"], ["defeat", "Niederlage", "lied.niederlage.fest"]]
         .map(([o, n, k]) => '<div class="row" style="gap:6px"><span style="min-width:90px">' + n + '</span><button class="tab" data-act="kpAlt" data-v="' + o + '">vorher</button><button class="tab" data-act="kpBank" data-v="' + k + '">nachher</button></div>')
         .join("");
       return h;
@@ -1356,6 +1363,13 @@
     kpEv("hit", { a, d: { kind: "monster", arch: "krieger" }, side: 1, how: "magie", quiet: true }, 600);
   };
   A.kpBank = (el) => SB.audio.probe(el.dataset.v);
+  A.kpLied = (el) => SB.audio.lied(el.dataset.k, { wahl: el.dataset.v });
+  A.kpLiedWahl = (el) => {
+    S().settings[el.dataset.k === "sieg" ? "liedSieg" : "liedNiederlage"] = el.dataset.v;
+    UI.save();
+    UI.renderPanel();
+    SB.audio.lied(el.dataset.k, { wahl: el.dataset.v === "auto" ? "fest" : el.dataset.v });
+  };
   A.kpAlt = (el) => SB.audio.probeOld(el.dataset.v);
 
   A.quality = (el) => {
