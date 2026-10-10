@@ -54,7 +54,9 @@
         // Doppelklingen: Kombination statt Wirbel (der Wirbel traegt die Figur weit aus ihrem Platz)
         return (m.dual ? ["Double_Combo_Attack", "Thrust_Slash", "Double_Blade_Spin"] : W1[w] || []).concat(MELEE);
       case "special":
-        return (A === "magier" ? ["Charged_Spell_Cast_1", "Charged_Spell_Cast", "Charged_Ground_Slam"] : A === "jaeger" ? ["Draw_and_Shoot_from_Back", "Archery_Shot"] : A === "schurke" ? ["Triple_Combo_Attack", "Double_Combo_Attack", "Double_Blade_Spin"] : ["Sword_Judgment", "Triple_Combo_Attack", "Charged_Slash"]).concat(MELEE);
+        // Jaeger mit Speer: Sprung und Stoss nach vorn (Nahkampf; der Bodenschlag legte den Speer flach auf den Boden),
+        // mit Bogen oder Armbrust: Schuss
+        return (A === "magier" ? ["Charged_Spell_Cast_1", "Charged_Spell_Cast", "Charged_Ground_Slam"] : A === "jaeger" ? (w === "speer" ? ["Sword_Judgment", "Thrust_Slash"] : ["Draw_and_Shoot_from_Back", "Archery_Shot"]) : A === "schurke" ? ["Triple_Combo_Attack", "Double_Combo_Attack", "Double_Blade_Spin"] : ["Sword_Judgment", "Triple_Combo_Attack", "Charged_Slash"]).concat(MELEE);
       case "shoot":
         return (w === "speer" ? ["Thrust_Slash"] : ["Archery_Shot", "Draw_and_Shoot_from_Back"]).concat(["Charged_Spell_Cast"], MELEE);
       case "cast":
