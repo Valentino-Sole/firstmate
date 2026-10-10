@@ -157,7 +157,7 @@ test("Seltene Hordenauftraege: mehrere Gegner nacheinander, Lebenspunkte werden 
 test("Chronik: Kapitel von Reich und Klasse, freigeschaltet nach Stufe und Reihenfolge", () => {
   const { E, S, now } = fresh("runenwirker");
   let ch = E.storyChapters(S);
-  assert.equal(ch.length, 8);
+  assert.equal(ch.length, 15); // 10 Reichs- und 5 Klassenkapitel (zweiter Akt seit 0.74)
   assert.equal(ch.filter((c) => c.available).length, 1);
   S.bought.verstand = 800;
   S.bought.konstitution = 800;
@@ -261,18 +261,24 @@ test("Dungeons: gesperrt bis Stufe, Fortschritt nach Sieg", () => {
   assert.equal(E.dungeonFight(S, 0, now()).ok, true);
 });
 
-test("Wunschbrunnen: freier Wurf kostet nie Perlen, Perlenwurf nur auf Wunsch, Zeitgeber bis Mitternacht", () => {
-  const { E, S, now } = fresh();
+test("Wunschbrunnen: freier Wurf alle 8 Stunden, kostet nie Perlen, Perlenwurf nur auf Wunsch", () => {
+  const { E, S, now, advance } = fresh();
   S.perlen = 0;
   const r0 = E.tossWell(S, now(), true);
   assert.equal(r0.ok, false, "ohne Perlen kein Perlenwurf");
-  assert.equal(S.daily.wellFree, 1, "der freie Wurf bleibt erhalten");
-  const r1 = E.tossWell(S);
+  assert.equal(E.wellFree(S, now()), true, "der freie Wurf bleibt erhalten");
+  const r1 = E.tossWell(S, now());
   assert.equal(r1.ok, true);
   assert.equal(r1.paid, false);
-  assert.equal(E.tossWell(S).ok, false, "danach nur noch mit Perle");
-  const mid = E.nextMidnight(now());
-  assert.ok(mid > now() && mid - now() <= 86400000);
+  assert.equal(E.tossWell(S, now()).ok, false, "danach nur noch mit Perle");
+  assert.equal(S.wellNext - now(), E.C.WELL_FREE_MS, "nächster freier Wurf in 8 Stunden");
+  advance(E.C.WELL_FREE_MS - 1000);
+  assert.equal(E.wellFree(S, now()), false, "vor Ablauf der 8 Stunden kein freier Wurf");
+  advance(1000);
+  assert.equal(E.tossWell(S, now()).paid, false, "nach 8 Stunden wieder frei");
+  const old = E.migrate(Object.assign(JSON.parse(JSON.stringify(S)), { wellNext: undefined, daily: Object.assign({}, S.daily, { wellFree: 0 }) }));
+  assert.equal(old.wellNext, 0, "alte Spielstände werfen gleich wieder frei");
+  assert.equal(old.daily.wellFree, undefined);
 });
 
 test("Stufenaufstieg schenkt Perlen und Abzeichen", () => {
@@ -379,6 +385,35 @@ test("Arena: vier Herausforderer, Staerke passend gestaffelt, Auswahl bleibt bis
     E.resolveArena(S, res.fight, now());
     assert.equal(S.arena.rivals, null, "nach dem Kampf neue Auswahl");
   }
+});
+
+test("Arena: genaue Siegchance, Ehre nach Schwierigkeit, einmal kostenlos neu wuerfeln", () => {
+  const { E, D, S, now, SB } = fresh("schildritter");
+  S.level = 20;
+  const rr = SB.util.rng("reroll");
+  for (const sl of D.SLOTS) S.equip[sl] = E.makeItem(rr, { level: 20, cls: "schildritter", slot: sl, rarity: "selten" });
+  S.gold = 100000;
+  const hard = E.arenaHonor(0.3), easy = E.arenaHonor(0.86);
+  assert.ok(hard.win >= 2.5 * easy.win, "schwere Gegner bringen deutlich mehr Ehre");
+  assert.ok(hard.loss < easy.loss, "gegen schwere Gegner kostet die Niederlage weniger");
+  assert.equal(E.arenaTier(0.86).key, "leicht");
+  assert.equal(E.arenaTier(0.3).key, "schwer");
+  const r1 = E.arenaRivals(S, now());
+  const hero = E.heroFighter(S, now());
+  for (const r of r1) assert.equal(r.chance, E.arenaChance(hero, E.rivalFighter(r), r), "gespeicherte und angezeigte Chance gleich");
+  assert.equal(E.arenaRerollCost(S), 0, "erstes Neuwuerfeln kostenlos");
+  const g = S.gold;
+  assert.equal(E.arenaReroll(S, now()).ok, true);
+  assert.equal(S.gold, g);
+  const r2 = E.arenaRivals(S, now());
+  assert.ok(r2.every((r) => !r1.find((x) => x.id === r.id)), "andere Gegner");
+  const cost = E.arenaRerollCost(S);
+  assert.ok(cost > 0, "zweites Neuwuerfeln kostet Gold");
+  E.arenaReroll(S, now());
+  assert.equal(S.gold, g - cost);
+  const res = E.arenaFight(S, E.arenaRivals(S, now())[0], now());
+  E.resolveArena(S, res.fight, now());
+  assert.equal(E.arenaRerollCost(S), 0, "nach dem Kampf wieder kostenlos");
 });
 
 test("Tag und Nacht: Modi, Wechselzeit, Mondtor nur nachts", () => {
@@ -601,3 +636,83 @@ function SB_rng(E, seed) {
 function loadUtilRng(seed) {
   return load().util.rng(seed);
 }
+
+test("Helm ausblenden aendert nur die Darstellung, nicht die Werte", () => {
+  const { E, S } = fresh("sturmhuene");
+  const it = E.makeItem(() => 0.5, { level: 5, slot: "helm", base: "helm", arch: "krieger", realm: "midgard", rarity: "selten" });
+  S.equip.helm = it;
+  const werte = () => {
+    const x = E.heroSummary(S);
+    return JSON.stringify([x.attrs, x.hp, x.dmgMin, x.dmgMax, x.armor, x.crit, x.block, x.evade]);
+  };
+  const vor = werte();
+  E.setLook(S, { hideHelm: true });
+  assert.equal(E.heroFighter(S).gear.helm, null);
+  assert.equal(werte(), vor);
+  E.setLook(S, { hideHelm: false });
+  assert.ok(E.heroFighter(S).gear.helm);
+});
+
+test("Heldenstaerke misst Talente und Ausruestung; Modellheld ohne Talente hat Staerke 1", () => {
+  const SB = load();
+  const E = SB.engine;
+  assert.equal(E.heroStrength(E.modelHeroFighter(31, "sturmhuene", 1), 31), 1);
+  const tal = E.applyTalents(E.modelHeroFighter(31, "sturmhuene", 1), E.talentEffects("sturmhuene", E.autoTalents("sturmhuene", 31, "a"), 31));
+  assert.ok(E.heroStrength(tal, 31) > 1.1);
+  assert.ok(E.heroStrength(E.modelHeroFighter(31, "sturmhuene", 1.25), 31) > 1.2);
+});
+
+test("schwere Abzeichen zaehlen mit und werden beim Erreichen vergeben", () => {
+  const { E, S } = fresh();
+  assert.equal(JSON.stringify(E.achProgress(S, "halsbrecher25")), "[0,25]");
+  S.stats.hardWins = 25;
+  E.checkAch(S);
+  assert.ok(S.ach.halsbrecher25);
+  S.stats.streak = 20;
+  E.checkAch(S);
+  assert.ok(S.ach.unbesiegt20);
+});
+
+test("Verliesbosse tauchen selten in der Taverne auf, ab Stufe 10 und ohne Endbosse", () => {
+  const { E, S } = fresh("sturmhuene");
+  const DUNGEONS = load().data.DUNGEONS;
+  const zaehle = (lv) => {
+    S.level = lv;
+    let boss = 0, alle = 0;
+    for (let i = 0; i < 400; i++) {
+      E.refreshOffers(S);
+      for (const o of S.quest.offers) {
+        alle++;
+        if (!o.boss) continue;
+        boss++;
+        const mon = E.questMonster(o);
+        assert.ok(mon && mon.name, "Boss " + o.monster + " aufloesbar");
+        const [, dun, floor] = /^(.+)-(\d+)$/.exec(o.monster);
+        assert.ok(!DUNGEONS.find((d) => d.id === dun).bosses[+floor].final, "kein Endboss in der Taverne");
+        assert.ok(o.item, "Verliesboss bringt immer einen Gegenstand");
+        const foes = E.questFoes(o, E.heroFighter(S));
+        assert.equal(foes.length, 1);
+        assert.ok(foes[0].boss);
+      }
+      assert.ok(S.quest.offers.filter((o) => o.boss).length <= 1, "hoechstens ein Verliesboss je Auswahl");
+    }
+    return boss / alle;
+  };
+  assert.equal(zaehle(8), 0);
+  const q = zaehle(24);
+  assert.ok(q > 0.02 && q < 0.08, "Anteil " + q);
+});
+
+test("Chronik geht nach Stufe 30 weiter: zweiter Akt bis Stufe 50, Kapitel der Reihe nach", () => {
+  const { E, S } = fresh("runenwirker");
+  S.level = 50;
+  const ch = E.storyChapters(S);
+  assert.equal(Math.max(...ch.map((c) => c.lv)), 50);
+  assert.equal(ch.filter((c) => c.kind === "realm").length, 10);
+  assert.equal(ch.filter((c) => c.kind === "class").length, 5);
+  // ohne die Kapitel davor ist der zweite Akt verschlossen
+  assert.ok(!ch.find((c) => c.lv === 32).available);
+  for (const c of ch) S.story.done[c.key] = 1;
+  const hero = E.heroFighter(S);
+  for (const c of E.storyChapters(S)) for (const f of E.storyFoes(S, c, hero)) assert.ok(f.maxHp > 0 && f.name, c.t);
+});

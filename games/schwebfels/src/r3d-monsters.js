@@ -829,14 +829,34 @@
   }
   R.buildMonster = function (m) {
     if (!T) init();
-    // Version 5: modellierte Bestie, falls fuer diese Familie vorhanden
-    if (R.beasts && R.beasts.has && R.beasts.has(m.arch, m.visual)) {
+    // Monsterkonzept v06: eigene Meshy-Figur fuer genau dieses Monster (Monster-ID oder Name als visual); ohne eigene
+    // die geliehene Figur eines Monsters derselben Familie (look, UI.monLook)
+    const own = (k) => !!k && ((R.rigged && R.rigged.is && R.rigged.is(k)) || (R.beasts && R.beasts.hasOwn && R.beasts.hasOwn(k)));
+    if (!own(m.visual) && own(m.look)) m = Object.assign({}, m, { visual: m.look, borrowed: true });
+    let gen = null;
+    if (m.visual && R.rigged && R.rigged.is && R.rigged.is(m.visual)) {
       try {
-        return R.beasts.build(m);
+        gen = R.rigged.buildMonster(m, m.visual);
+      } catch (e) {
+        console.warn("Monsterfigur nicht moeglich, alte Figur", e);
+      }
+    }
+    // Version 5: modellierte Bestie, falls fuer diese Familie vorhanden
+    if (!gen && R.beasts && R.beasts.has && R.beasts.has(m.arch, m.visual)) {
+      try {
+        gen = R.beasts.build(m);
       } catch (e) {
         console.warn("Modellierte Bestie nicht moeglich, alte Figur", e);
       }
     }
+    if (gen) {
+      // Bosse leuchten wie die gebauten in ihrer Akzentfarbe
+      if (m.boss && gen.obj) gen.obj.add(R.haloSprite(m.accent || "#ff5a3d", Math.max(2.4, (gen.height || 2) * 1.3), 0.16, [0, (gen.height || 2) * 0.45, 0]));
+      return gen;
+    }
+    // Version 0.66: Gegner mit Meshy-Figur (eigene oder geliehene) zeigen nie mehr die alte gebaute Figur; solange ihre
+    // Familie laedt, steht ein Platzhalter da (geladen wird vor jedem Kampf und in den Fenstern mit Monsterbildern)
+    if ((m.visual || m.look) && R.buildPending) return R.buildPending(m);
     const root = grp();
     const P = {};
     const arch = B[m.arch] ? m.arch : ALIAS[m.arch] || "ghul";

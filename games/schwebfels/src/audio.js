@@ -190,7 +190,7 @@
   };
 
   /* ---------- Klangbank: freie Aufnahmen (CC0, assets-src/klang/QUELLEN.md) ---------- */
-  // Das Paket (globalThis.SB_KLANG, Base64) wird nach dem ersten Antippen im Hintergrund dekodiert. Bis dahin und
+  // Das Paket (globalThis.SB_KLANG, Base64, aus klang.js) wird nach dem ersten Antippen im Hintergrund geladen und dekodiert. Bis dahin und
   // ohne Paket klingen die erzeugten Effekte oben.
   const BANK = {};
   let bankState = "aus";
@@ -207,8 +207,27 @@
     for (const k in head.klang) out[k] = head.klang[k].map((r) => u8.slice(base + r.$[1], base + r.$[1] + r.$[2]).buffer);
     return out;
   }
+  // Die Klangbank liegt als klang.js neben der Seite (build.mjs); fehlt sie, bleibt es bei den erzeugten Effekten
+  // und nach einer Minute wird es erneut versucht
+  function fetchBank() {
+    bankState = "laden";
+    const el = document.createElement("script");
+    el.src = "klang.js";
+    el.onload = () => {
+      bankState = "aus";
+      if (globalThis.SB_KLANG) loadBank();
+      else bankState = "fehler";
+    };
+    el.onerror = () => {
+      el.remove();
+      bankState = "fehler";
+      setTimeout(() => bankState === "fehler" && (bankState = "aus"), 60000);
+    };
+    document.head.appendChild(el);
+  }
   function loadBank() {
-    if (bankState !== "aus" || !A.ctx || !globalThis.SB_KLANG) return;
+    if (bankState !== "aus" || !A.ctx) return;
+    if (!globalThis.SB_KLANG) return fetchBank();
     bankState = "laden";
     let raw;
     try {
@@ -317,7 +336,16 @@
     const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
     return (h * 60 + 360) % 360;
   }
-  function schoolOf(d) {
+  // Zauberarten der Kampfbuehne (SPELL_FX in r3d-scenes.js) und Drachenatem je Element
+  const ZAUBER = {
+    arcane: "licht", lights: "licht", rune: "frost", thorns: "dorn", mist: "dorn",
+    spores: "gift", sporerain: "gift", glob: "gift",
+    void: "dunkel", blood: "dunkel", hex: "dunkel", wisp: "dunkel", tendril: "dunkel",
+  };
+  const ATEM = { fire: "feuer", storm: "blitz", ice: "frost", acid: "gift", shadow: "dunkel" };
+  function schoolOf(d, sp) {
+    if (sp && sp.kind === "breath" && ATEM[sp.el]) return ATEM[sp.el];
+    if (sp && ZAUBER[sp.kind]) return ZAUBER[sp.kind];
     if (!d) return "licht";
     if (!isMon(d)) return SCHULE[d.cls] || "licht";
     if (d.arch === "pilz") return "gift";
@@ -368,7 +396,7 @@
       const how = c.how || "nah";
       const mat = materialOf(c.d);
       const p = pan(c.side);
-      if (how === "magie") sample("magie." + schoolOf(c.a) + ".treffer", { gain: 0.65, pan: p }) || sample("magie.licht.treffer", { gain: 0.6, pan: p });
+      if (how === "magie") sample("magie." + schoolOf(c.a, c.spell) + ".treffer", { gain: 0.65, pan: p }) || sample("magie.licht.treffer", { gain: 0.6, pan: p });
       else sample("schlag." + (how === "pfeil" || how === "speer" ? "spitze" : SCHLAG[attackOf(c.a)] || "faust"), { gain: 0.7, pan: p });
       sample("mat." + mat, { gain: how === "magie" ? 0.35 : 0.6, pan: p });
       if (crit) sample("krit", { gain: 0.75, pan: p });
@@ -390,8 +418,8 @@
       sample("pfeil.flug", { gain: 0.35, pan: 0, delay: 0.08 });
     },
     cast(c) {
-      const sc = schoolOf(c.a);
-      if (!isMon(c.a) && c.a && c.a.cls === "runenwirker") sample("magie.runen.wirken", { gain: 0.4, pan: pan(c.side) });
+      const sc = schoolOf(c.a, c.spell);
+      if ((c.spell && c.spell.kind === "rune") || (!isMon(c.a) && c.a && c.a.cls === "runenwirker")) sample("magie.runen.wirken", { gain: 0.4, pan: pan(c.side) });
       sample("magie." + sc + ".wirken", { gain: 0.6, pan: pan(c.side) }) || sample("magie.licht.wirken", { gain: 0.55, pan: pan(c.side) });
       sayVoice(c.a, "angriff", c.side, isMon(c.a) ? (c.a.arch === "drache" ? 0.9 : 0.6) : 0.25);
     },

@@ -1,0 +1,35 @@
+{
+ "_hinweis": [
+  "Plan fuer den Qualitaetstest des Kapitaens: python werkstatt.py plan qualitaetstest.json",
+  "Vorher ohne Kosten pruefen: python werkstatt.py plan qualitaetstest.json --trocken (zeigt Kosten, bestellt nichts).",
+  "Bilder in assets-src/gen/konzepte/ ablegen (nicht im Repository). Jedes Bild zeigt genau ein Modell; Tafeln mit mehreren Teilen vorher zuschneiden: python zuschnitt.py tafel10.png konzepte --name tafel10 (Uebersicht mit Nummern pruefen, sonst --box; bei unruhigem Hintergrund --freistellen, so empfiehlt es Meshy).",
+  "Fuer wechselbare Brustpanzer die Figur in schlichter Grundkleidung zeigen (Meshy liefert Kleidung aus einem Guss).",
+  "Liegt die Schaetzung ueber dem Budget, wird nichts bestellt. Ein erneuter Aufruf setzt fort: Fertiges und begonnene Auftraege (etwa nach einem Abbruch beim Warten) werden nicht neu bezahlt.",
+  "Zeigt eine Tafel dasselbe Modell von mehreren Seiten, die weiteren Ansichten mit \"ansichten\": [\"konzepte/..._seite.png\", \"konzepte/..._ruecken.png\"] angeben (hoechstens 3, gleicher Preis); \"bild\" bleibt die Vorderansicht.",
+  "Meshy bewahrt Auftraege nur 3 Tage auf: einen begonnenen Lauf innerhalb von 3 Tagen abschliessen (Rigging und Bewegungen bauen auf den Auftraegen auf).",
+  "Brustpanzer: harnisch.0 ist der Brustharnisch, harnisch.1 der Plattenpanzer; der erste gilt auch fuer die uebrigen Harnische.",
+  "Teile und Waffen lassen sich mit \"seltenheit\" (etwa \"episch,legendaer\") auf Seltenheiten beschraenken, zum Beispiel fuer die fuenf Stufen von Tafel 10; das passende Teil geht dann vor."
+ ],
+ "budget": 400,
+ "figuren": [
+  {"name": "nordmann_f", "bild": "konzepte/tafel02_nordmann_frau.png", "race": "nordmann", "gender": "f", "klasse": "sturmhuene", "waffe": "axt"},
+  {"name": "kreidezwerg_m", "bild": "konzepte/tafel01_kreidezwerg_mann.png", "race": "kreidezwerg", "gender": "m", "klasse": "schildritter", "waffe": "schwert"}
+ ],
+ "teile": [
+  {"name": "brustharnisch", "bild": "konzepte/tafel10_brustharnisch.png", "slot": "brust", "forms": "harnisch.0,harnisch", "ref": "nordmann_f"},
+  {"name": "plattenpanzer", "bild": "konzepte/tafel10_plattenpanzer.png", "slot": "brust", "forms": "harnisch.1", "ref": "nordmann_f"},
+  {"name": "panzerhandschuh", "bild": "konzepte/tafel10_handschuh.png", "slot": "handschuhe", "forms": "", "ref": "nordmann_f", "paar": true},
+  {"name": "eisenstiefel", "bild": "konzepte/tafel10_stiefel.png", "slot": "stiefel", "forms": "", "ref": "nordmann_f", "paar": true},
+  {"name": "hoernerhelm", "bild": "konzepte/tafel10_helm.png", "slot": "helm", "forms": "", "ref": "nordmann_f"}
+ ],
+ "waffen": [
+  {"name": "streitaxt", "bild": "konzepte/tafel14_axt.png", "base": "axt"}
+ ],
+ "bestien": [
+  {"name": "wolf", "bild": "konzepte/tafel19_wolf.png", "archs": "wolf", "hoehe": 1.15}
+ ],
+ "requisiten": [
+  {"name": "runenstein", "bild": "konzepte/midgard_runenstein.png", "realm": "midgard", "rolle": "wahrzeichen"},
+  {"name": "schneetanne", "bild": "konzepte/midgard_tanne.png", "realm": "midgard", "rolle": "baum"}
+ ]
+}

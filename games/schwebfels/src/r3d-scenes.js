@@ -1281,9 +1281,12 @@
           v.hold = "drink";
           v.drinkPh = rr() * 7;
           const mm = mug();
-          mm.position.set(0, -0.06, 0.07);
-          mm.rotation.x = -0.4;
-          v.parts.handR.add(mm);
+          // modellierte Figuren greifen den Krug in der Faust (Achse entlang der Griffachse), alte halten ihn darunter
+          if (!(v.parts.handR && v.parts.handR.userData.grip)) {
+            mm.position.set(0, -0.06, 0.07);
+            mm.rotation.x = -0.4;
+          }
+          if (v.parts.handR) v.parts.handR.add(mm);
           patio.add(v.obj);
           life.push({ update: (dt) => v.update(dt) });
           seat++;
@@ -1473,8 +1476,8 @@
       const lantern2 = grp([0, 0, 0]);
       lantern2.add(mesh(G.sph(0.09, 8, 6), emis("#cfe0ff", 1.4)));
       lantern2.add(R.haloSprite("#cfe0ff", 0.9, 0.7));
-      lantern2.position.set(0, -0.12, 0.08);
-      selene.parts.handL.add(lantern2);
+      if (!(selene.parts.handL && selene.parts.handL.userData.grip)) lantern2.position.set(0, -0.12, 0.08);
+      if (selene.parts.handL) selene.parts.handL.add(lantern2);
       g.add(selene.obj);
       // Lichtbruecke aus schwebenden Steinen
       const bridge = grp();
@@ -2060,6 +2063,11 @@
     const dist = opts.distance || 7.2;
     camera.position.set(0, 1.5 + (dist - 7.2) * 0.08, dist);
     camera.lookAt(0, opts.lookY || 1.15, 0);
+    // Kamerafahrt: ganze Figur (Grundstellung), nah (Kopf und Oberkoerper) oder Kopf; weich angefahren
+    const camHome = { pos: camera.position.clone(), look: new T.Vector3(0, opts.lookY || 1.15, 0) };
+    const camGoal = { pos: camHome.pos.clone(), look: camHome.look.clone() };
+    const camLook = camHome.look.clone();
+    let camMode = "ganz";
     scene.add(new T.HemisphereLight("#dfe6ff", "#3a3028", 1.2));
     const key = new T.DirectionalLight("#fff0d8", 2.4);
     key.position.set(3, 5, 4);
@@ -2108,6 +2116,10 @@
       const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       rotY += (goalY - rotY) * Math.min(1, dt * 8);
+      const k = Math.min(1, dt * 3.5);
+      camera.position.lerp(camGoal.pos, k);
+      camLook.lerp(camGoal.look, k);
+      camera.lookAt(camLook);
       if (model) {
         model.obj.rotation.y = rotY;
         model.update(dt);
@@ -2117,6 +2129,25 @@
       renderer.render(scene, camera);
     }
     raf = requestAnimationFrame(frame);
+    // Ziel der Kamera aus den Massen der Figur (sichtbare Hoehe bei 30 Grad Blickwinkel: 0,54 x Abstand)
+    function aim() {
+      if (!model || model.pending || camMode === "ganz") {
+        camGoal.pos.copy(camHome.pos);
+        camGoal.look.copy(camHome.look);
+        return;
+      }
+      // Kopfhoehe der Figur (nicht die Spitze eines langen Stabs oder Bogens ueber dem Kopf)
+      const box3 = new T.Box3().setFromObject(model.obj);
+      const sc = model.obj.scale.y || 1;
+      const top = model.headY ? Math.min(box3.max.y, (model.headY + 0.18) * sc) : box3.max.y;
+      const h = Math.max(0.5, top - box3.min.y);
+      const show = camMode === "kopf" ? Math.max(0.45, h * 0.26) : Math.max(1.0, h * 0.62);
+      // Kopf etwas oberhalb der Bildmitte, damit Titel und Kante ihn nicht anschneiden
+      const y = top - show * (camMode === "kopf" ? 0.45 : 0.3);
+      const d = (show / 0.54) * 1.15;
+      camGoal.look.set(0, y, 0);
+      camGoal.pos.set(0, y + d * 0.06, d);
+    }
     return {
       set(desc, celebrate) {
         if (model) scene.remove(model.obj);
@@ -2134,6 +2165,12 @@
           motes.material.color.set(c);
         }
         if (celebrate) model.play("victory", 1.1);
+        aim();
+      },
+      // "ganz", "nah" (Kopf und Oberkoerper) oder "kopf"
+      focus(mode) {
+        camMode = mode || "ganz";
+        aim();
       },
       play(name, dur) {
         if (model) model.play(name, dur);
@@ -2238,9 +2275,11 @@
       g.add(f);
     } else if (id === "trophaeen") {
       g.add(mesh(G.box(1.6, 1.1, 0.08), pm("wood", "#3a2a1e"), { p: [0, 1.6, 0] }));
-      const heads = [["wolf", "#7a7470", "#ffcf5a"], ["drache", "#8a2f1f", "#ffcf5a"], ["troll", "#4f6a4a", "#ffcf5a"]];
-      heads.forEach(([arch, c, a], i) => {
-        const m = R.buildMonster({ arch, color: c, accent: a });
+      // Grauwolf, Schwelwurm und Sumpftroll als kleine Figuren (Meshy-Modelle; das Heim laedt ihre Familien nach)
+      const heads = [["wolf", "grauwolf", "#7a7470", "#ffcf5a"], ["drache", "schwelwurm", "#8a2f1f", "#ffcf5a"], ["troll", "sumpftroll", "#4f6a4a", "#ffcf5a"]];
+      heads.forEach(([arch, id, c, a], i) => {
+        const m = R.buildMonster({ arch, visual: id, look: id, color: c, accent: a });
+        if (m.pending) return;
         m.update(0.01);
         const box = new T.Box3().setFromObject(m.obj);
         const s = 0.45 / Math.max(0.1, box.max.y - box.min.y);
@@ -2286,7 +2325,8 @@
       if (tier === 0) {
         const tent = new T.Mesh(new T.ConeGeometry(4.2, 4.2, 4, 1, true, PI * 0.5, PI * 1.0), pm("cloth", "#6a5a42", { ds: true }));
         tent.position.set(0, 2.1, 0);
-        tent.rotation.y = PI / 4 + PI;
+        // offene Seite zur Kamera: die beiden Zeltbahnen liegen hinten und links wie die Waende der festen Haeuser
+        tent.rotation.y = PI / 4;
         room.add(tent);
       } else if (tier === 3) {
         const wall = new T.Mesh(new T.CylinderGeometry(4.2, 4.2, 4.2, 18, 1, true, PI * 0.5, PI), tiled("stone", "#5e5a54", 6, 2, { side: T.DoubleSide }));
@@ -2391,6 +2431,8 @@
     }
     raf = requestAnimationFrame(frame);
     return {
+      // fuer Tests: Szene, Kamera und Held
+      _view: () => ({ scene, camera, hero }),
       update(s) {
         state = Object.assign({}, state, s);
         build();
@@ -2413,16 +2455,167 @@
     };
   };
 
+  /* ---------- Gemaltes Heim (Housing v08 des Kapitaens) ----------
+     Das Raumbild des Reiches im vollen Ausbau (kulissen.js, Schluessel heim-<reich>), davor der Held als 3D-Figur.
+     Die sieben Stationen sind anklickbar; was noch nicht eingerichtet ist, liegt im Halbdunkel, gekaufte Stationen tragen
+     ihre Stufe. Lage der Stationen in Prozent des Bildes (Mitte x, y und halbe Breite, Hoehe); feet: Standort des Helden,
+     heroH: Groesse des Helden in Bildhoehen. Gleiche Schnittstelle wie createHome (update, cheer, dispose). */
+  const HOME_PAINT = {
+    albion: { feet: [50, 70], heroH: 0.3, st: { trophaeen: [16, 24, 9, 12], lager: [36, 28, 10, 16], herd: [63, 30, 9, 19], altar: [84, 34, 8, 19], kessel: [23, 46, 7, 9], truhe: [21, 66, 11, 10], staender: [81, 69, 11, 17] } },
+    midgard: { feet: [47, 64], heroH: 0.29, st: { herd: [21, 28, 10, 22], altar: [40, 28, 7, 15], trophaeen: [58, 18, 10, 9], staender: [57, 40, 8, 12], lager: [82, 42, 12, 16], kessel: [20, 55, 9, 10], truhe: [79, 68, 10, 10] } },
+    hibernia: { feet: [49, 56], heroH: 0.29, st: { staender: [33, 24, 8, 14], altar: [49, 25, 8, 15], trophaeen: [66, 19, 9, 10], herd: [81, 28, 9, 18], kessel: [86, 52, 8, 12], lager: [22, 55, 15, 17], truhe: [64, 64, 10, 9] } },
+  };
+  R.homePainted = (realm) => !!(HOME_PAINT[realm] && globalThis.SB_KULISSEN && globalThis.SB_KULISSEN["heim-" + realm]);
+  R.createPaintedHome = function (el, opts) {
+    init();
+    opts = opts || {};
+    const D = SB.data;
+    const box = document.createElement("div");
+    box.className = "hp-stage";
+    el.appendChild(box);
+    const img = document.createElement("img");
+    img.alt = "";
+    img.draggable = false;
+    box.appendChild(img);
+    const layer = document.createElement("div");
+    layer.className = "hp-layer";
+    box.appendChild(layer);
+    // Held: eigene durchsichtige Leinwand an seinem Standort
+    const heroBox = document.createElement("div");
+    heroBox.className = "hp-hero";
+    box.appendChild(heroBox);
+    const renderer = makeRenderer(heroBox, { alpha: true, maxDpr: 2, exposure: 1.15 });
+    renderer.setClearColor(0x000000, 0);
+    const scene = new T.Scene();
+    scene.environment = envMap(renderer);
+    scene.add(new T.HemisphereLight("#ffe9c8", "#2a2018", 1.2));
+    const key = new T.DirectionalLight("#ffd29a", 2.2);
+    key.position.set(2, 4, 3);
+    scene.add(key);
+    const rim = new T.DirectionalLight("#9fb8ff", 1.0);
+    rim.position.set(-3, 3, -2);
+    scene.add(rim);
+    const camera = new T.PerspectiveCamera(28, 0.7, 0.1, 50);
+    let hero = null;
+    let state = { furn: {}, realm: "albion" };
+    let raf = 0;
+    let last = performance.now();
+    function fit() {
+      const W = Math.max(1, el.clientWidth);
+      const H = Math.max(1, el.clientHeight);
+      // Bild ganz zeigen (3:2), mittig
+      const w = Math.min(W, H * 1.5);
+      const h = w / 1.5;
+      box.style.width = w + "px";
+      box.style.height = h + "px";
+      box.style.left = (W - w) / 2 + "px";
+      box.style.top = (H - h) / 2 + "px";
+      const P = HOME_PAINT[state.realm] || HOME_PAINT.albion;
+      const hh = h * P.heroH * 1.12;
+      const hw = hh * 0.75;
+      heroBox.style.width = hw + "px";
+      heroBox.style.height = hh + "px";
+      heroBox.style.left = (w * P.feet[0]) / 100 - hw / 2 + "px";
+      heroBox.style.top = (h * P.feet[1]) / 100 - hh + "px";
+      renderer.setSize(hw, hh, false);
+      renderer.domElement.style.width = hw + "px";
+      renderer.domElement.style.height = hh + "px";
+      camera.aspect = hw / hh;
+      camera.updateProjectionMatrix();
+    }
+    function aim() {
+      if (!hero) return;
+      // ganze Figur, Fuesse am unteren Rand, leicht von oben wie der Blick in den Raum
+      const b = new T.Box3().setFromObject(hero.obj);
+      const top = hero.headY ? Math.min(b.max.y, hero.headY + 0.25) : b.max.y;
+      const ht = Math.max(0.6, top);
+      const d = (ht * 1.06) / (2 * Math.tan((14 * PI) / 180));
+      camera.position.set(0, ht * 0.5 + d * 0.32, d);
+      camera.lookAt(0, ht * 0.5, 0);
+    }
+    function stations() {
+      const P = HOME_PAINT[state.realm] || HOME_PAINT.albion;
+      layer.innerHTML = "";
+      for (const f of D.FURNITURE) {
+        const r = P.st[f.id];
+        if (!r) continue;
+        const lv = state.furn[f.id];
+        const owned = lv != null;
+        const css = "left:" + (r[0] - r[2]) + "%;top:" + (r[1] - r[3]) + "%;width:" + 2 * r[2] + "%;height:" + 2 * r[3] + "%";
+        if (!owned) {
+          const v = document.createElement("div");
+          v.className = "hp-veil";
+          v.style.cssText = css;
+          layer.appendChild(v);
+        }
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "hp-spot" + (owned ? " owned" : "");
+        b.style.cssText = css;
+        const name = owned ? f.levels[Math.min(lv, f.levels.length - 1)] : f.name + ": noch nicht eingerichtet";
+        b.title = name;
+        b.setAttribute("aria-label", name);
+        b.innerHTML = '<span class="hp-tag">' + (owned ? (f.levels.length > 1 ? ["I", "II", "III"][Math.min(lv, 2)] + " " : "") + name : "?") + "</span>";
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          if (opts.onPick) opts.onPick(f.id);
+        };
+        layer.appendChild(b);
+      }
+    }
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    function frame(now) {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden) return;
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
+      last = now;
+      if (hero) hero.update(dt);
+      renderer.render(scene, camera);
+    }
+    raf = requestAnimationFrame(frame);
+    return {
+      painted: true,
+      _view: () => ({ scene, camera, hero, box }),
+      update(s) {
+        const realmChanged = s.realm && s.realm !== state.realm;
+        state = Object.assign({}, state, s);
+        if (realmChanged || !img.src) img.src = globalThis.SB_KULISSEN["heim-" + state.realm] || "";
+        stations();
+        fit();
+        if (s.hero) {
+          if (hero) scene.remove(hero.obj);
+          hero = R.buildHero(s.hero);
+          hero.obj.rotation.y = 0.35;
+          scene.add(hero.obj);
+          aim();
+        }
+      },
+      cheer() {
+        if (hero) hero.play("victory", 1.2);
+      },
+      dispose() {
+        cancelAnimationFrame(raf);
+        ro.disconnect();
+        killRenderer(renderer);
+        box.remove();
+      },
+    };
+  };
+
   /* ---------- Portraits ---------- */
   let snapR = null;
   let snapScene = null;
   let snapCam = null;
   const snapCache = new Map();
+  R.snapshotKey = (desc, size, bust) => JSON.stringify(desc) + "|" + (size || 160) + "|" + (bust ? 1 : 0);
+  // schon gezeichnetes Portrait (ohne zu zeichnen), sonst null
+  R.snapshotCached = (desc, size, bust) => snapCache.get(R.snapshotKey(desc, size, bust)) || null;
   R.snapshot = function (desc, size, bust) {
     if (!R.ready()) return null;
     init();
     size = size || 160;
-    const key = JSON.stringify(desc) + "|" + size + "|" + (bust ? 1 : 0);
+    const key = R.snapshotKey(desc, size, bust);
     if (snapCache.has(key)) return snapCache.get(key);
     try {
       if (!snapR) {
@@ -2491,6 +2684,96 @@
     dungeon: { t: 0.0, grass: "#2e2a36", grass2: "#3a3444", dirt: "#2a2630", rock: "#2a2633", props: "cave" },
     story: { t: 0.92, grass: "#34483a", grass2: "#44503a", dirt: "#4a4438", rock: "#55524c", props: "stones" },
   };
+  /* ---------- Gemalte Kampfkulisse (Kampfkulissen v07) ----------
+     Das Bild liegt als Hintergrund hinter den 3D-Figuren und wird in jedem Bild so eingepasst, dass die Fuesse der
+     Kaempfer dort stehen, wo die Tafel sie vorsieht (Held bei 27 %, Gegner bei 72 % der Breite, Boden bei 79 % der
+     Hoehe); so geht es bei Kamerafahrt und Wackeln mit. Es deckt immer die ganze Kampfflaeche, notfalls (Hochformat)
+     weicht die Fusslinie etwas ab. Licht je Reich nach der Bildbeleuchtung. */
+  const KUL_FEET = { a: 0.27, b: 0.72, y: 0.79 };
+  const KUL_LIGHT = {
+    // Kreidehoehen: warme Abendsonne von links hinten, kuehle Schatten
+    albion: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd49a", sunI: 2.6, sunP: [-7, 8, 2], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1 },
+    // Runenpass: kuehles Daemmerlicht und Nordlicht, rechts ein kleines Feuer
+    midgard: { sky: "#d4e2ff", ground: "#4a5570", hemi: 1.25, sun: "#dfe9ff", sunI: 2.0, sunP: [-4, 9, 5], front: "#f2f6ff", frontI: 1.15, warm: ["#ff9a3d", [6.5, 1.4, -1.5], 9], fog: "#4a5a7a", nightDim: 0.8 },
+    // Mondhain: silbernes Mondlicht von hinten, warmes Laternenlicht von vorn
+    hibernia: { sky: "#cdd6ff", ground: "#3c3a2c", hemi: 1.15, sun: "#d4dcff", sunI: 2.0, sunP: [3, 9, -4], front: "#ffe2b8", frontI: 1.25, fog: "#2c3550", nightDim: 0.5 },
+    // Ring der Reiche: warme Nachmittagssonne von rechts, Feuerschalen an den Seiten
+    arena: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd8a0", sunI: 2.5, sunP: [6, 8, 3], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1 },
+    // Verliese liegen unter der Erde oder im Sturm: keine Nacht, Licht in der Farbe des Ortes
+    pilzgrotte: { sky: "#cfeec0", ground: "#2f3a24", hemi: 1.15, sun: "#d8ffc0", sunI: 1.7, sunP: [-3, 9, 4], front: "#f0ffe0", frontI: 1.15, warm: ["#ffc35a", [6, 1.6, -2], 6], fog: "#2c3a28", nightDim: 0 },
+    glockenstadt: { sky: "#cfdcf0", ground: "#3a4250", hemi: 1.2, sun: "#dfe8ff", sunI: 1.9, sunP: [4, 9, -3], front: "#eef2ff", frontI: 1.15, fog: "#5a6a80", nightDim: 0 },
+    rostwerk: { sky: "#ffd8b8", ground: "#3a2a20", hemi: 1.05, sun: "#ffc890", sunI: 1.8, sunP: [-5, 7, 3], front: "#fff0e0", frontI: 1.1, warm: ["#ff7a2a", [-6, 1.2, -1], 12], fog: "#3a2a20", nightDim: 0 },
+    frostspitzen: { sky: "#e0ecff", ground: "#5a6a80", hemi: 1.3, sun: "#f4f8ff", sunI: 2.3, sunP: [-4, 9, 4], front: "#f2f6ff", frontI: 1.1, fog: "#b8c8e0", nightDim: 0 },
+    laternengruft: { sky: "#ffe8c0", ground: "#3a3020", hemi: 1.1, sun: "#ffd890", sunI: 1.8, sunP: [0, 9, 2], front: "#ffe8c8", frontI: 1.2, fog: "#3a3020", nightDim: 0 },
+    sturmkern: { sky: "#d8d0ff", ground: "#2a2440", hemi: 1.15, sun: "#d8ccff", sunI: 2.0, sunP: [3, 9, 2], front: "#eee8ff", frontI: 1.15, fog: "#3a3060", nightDim: 0 },
+  };
+  function backdrop(scene, url, night) {
+    const st = { tex: null, iw: 1, ih: 1 };
+    scene.background = col("#141822");
+    const img = new Image();
+    img.onload = () => {
+      st.iw = img.naturalWidth;
+      st.ih = img.naturalHeight;
+      let tex;
+      if (night > 0.02) {
+        // Nacht dunkelt das Bild ab wie die gemalte Heimatinsel
+        const c = document.createElement("canvas");
+        c.width = st.iw;
+        c.height = st.ih;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        const k = 1 - 0.32 * night;
+        g.globalCompositeOperation = "multiply";
+        g.fillStyle = "rgb(" + Math.round(255 * k * 0.92) + "," + Math.round(255 * k * 0.95) + "," + Math.round(255 * Math.min(1, k + 0.06)) + ")";
+        g.fillRect(0, 0, st.iw, st.ih);
+        tex = new T.CanvasTexture(c);
+      } else {
+        tex = new T.Texture(img);
+        tex.needsUpdate = true;
+      }
+      tex.colorSpace = T.SRGBColorSpace;
+      st.tex = tex;
+      scene.background = tex;
+    };
+    img.src = url;
+    const A = new T.Vector3();
+    const B = new T.Vector3();
+    st.fit = (camera, sep, w, h) => {
+      const tex = st.tex;
+      if (!tex) return;
+      A.set(-sep, 0, 0.4).project(camera);
+      B.set(sep, 0, 0.4).project(camera);
+      // Bildschirmpixel, y von unten
+      const ax = (A.x * 0.5 + 0.5) * w;
+      const bx = (B.x * 0.5 + 0.5) * w;
+      const fy = (A.y * 0.5 + 0.5) * h;
+      const sc = Math.max((bx - ax) / ((KUL_FEET.b - KUL_FEET.a) * st.iw), w / st.iw, h / st.ih);
+      const W = st.iw * sc;
+      const H = st.ih * sc;
+      const x0 = Math.min(0, Math.max(w - W, (ax + bx) / 2 - ((KUL_FEET.a + KUL_FEET.b) / 2) * W));
+      const y0 = Math.min(0, Math.max(h - H, fy - (1 - KUL_FEET.y) * H));
+      tex.repeat.set(w / W, h / H);
+      tex.offset.set(-x0 / W, -y0 / H);
+    };
+    return st;
+  }
+  // weicher Schatten unter den Figuren auf dem Gemaelde (das Bild hat keine Schatten der Kaempfer)
+  let softShadow = null;
+  function softShadowMat() {
+    if (softShadow) return softShadow;
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const g = c.getContext("2d");
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, "rgba(0,0,0,0.85)");
+    gr.addColorStop(0.35, "rgba(0,0,0,0.62)");
+    gr.addColorStop(0.7, "rgba(0,0,0,0.25)");
+    gr.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    return (softShadow = new T.MeshBasicMaterial({ map: new T.CanvasTexture(c), transparent: true, depthWrite: false, toneMapped: false }));
+  }
+
   R.createBattle = function (el, opts) {
     init();
     opts = opts || {};
@@ -2501,8 +2784,16 @@
     const setting = SETTINGS[opts.setting] ? opts.setting : "quest";
     const S = SETTINGS[setting];
     const rng = R.rng(setting.length * 17 + 3);
-    const sky = skyDome();
-    scene.add(sky);
+    // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
+    const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
+    // Gemalte Kampfkulisse (kulissen.js neben der Seite): fuer Auftraege und Chronik das Bild des Reiches (Kampfkulissen v07
+    // des Kapitaens), fuer die Arena und jedes Verlies ein eigenes; Bildhintergrund mit den 3D-Figuren davor, ohne Bild
+    // die gebaute Insel
+    const KK = TH ? TH.id : setting === "arena" ? "arena" : setting === "dungeon" ? opts.dungeon : null;
+    const KUL = KK && globalThis.SB_KULISSEN ? globalThis.SB_KULISSEN[KK] : null;
+    const KL = KUL_LIGHT[KK] || KUL_LIGHT.albion;
+    const sky = KUL ? null : skyDome();
+    if (sky) scene.add(sky);
     scene.fog = new T.Fog("#22283a", 22, 90);
     const hemi = new T.HemisphereLight("#d8e2ee", "#3a3028", 1);
     scene.add(hemi);
@@ -2514,10 +2805,26 @@
     scene.add(front);
     const N = nightMats();
     const info = R.dayInfo(setting === "dungeon" ? 0.02 : opts.dayTime != null ? opts.dayTime : S.t);
-    // Auftraege und Chronik spielen in der Landschaft der eigenen Heimatinsel
-    const TH = opts.realm && (setting === "quest" || setting === "story") ? R.realmTheme(opts.realm) : null;
     const P = palette(info, TH ? TH.sky : null);
-    if (setting === "dungeon") {
+    if (KUL) {
+      // Licht passend zum Gemaelde (Richtung und Farbe der Bildbeleuchtung), nachts etwas gedaempft
+      const L = KL;
+      const dim = 1 - 0.25 * info.night * L.nightDim;
+      scene.fog.color.set(L.fog);
+      hemi.color.set(L.sky);
+      hemi.groundColor.set(L.ground);
+      hemi.intensity = L.hemi * dim;
+      sun.color.set(L.sun);
+      sun.intensity = L.sunI * dim;
+      sun.position.set(...L.sunP);
+      front.color.set(L.front);
+      front.intensity = L.frontI;
+      if (L.warm) {
+        const wl = new T.PointLight(L.warm[0], L.warm[2], 14, 1.6);
+        wl.position.set(...L.warm[1]);
+        scene.add(wl);
+      }
+    } else if (setting === "dungeon") {
       const tint = col(opts.tint || "#8f7cff");
       sky.userData.recolor(col("#05040a"), tint.clone().multiplyScalar(0.18), col("#020205"));
       scene.fog.color.copy(tint.clone().multiplyScalar(0.12));
@@ -2536,22 +2843,30 @@
       sun.intensity = P.sunI + 0.3;
     }
     N.win.emissiveIntensity = 0.3 + info.night;
-    const stars = starField(rng, 500);
-    stars.material.opacity = setting === "dungeon" ? 0 : Math.max(0, info.night - 0.2);
-    scene.add(stars);
-    const aur = aurora();
-    scene.add(aur);
-    if (setting !== "dungeon") {
-      const sea = cloudSea(-16, 260);
-      sea.material.color.copy(P.bot);
-      scene.add(sea);
-    }
-    const GD = TH ? TH.ground : S;
-    const stage = island(8, 7, rng, { grass: GD.grass, grass2: GD.grass2, dirt: GD.dirt, rock: GD.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : TH ? TH.ground.vineGlow : "#7fffc8" });
-    scene.add(stage);
     const flickers = [];
     const extras = [];
-    if (S.props === "arena") {
+    let stars = null;
+    let aur = null;
+    let bg = null;
+    if (KUL) bg = backdrop(scene, KUL, info.night * KL.nightDim);
+    else {
+      stars = starField(rng, 500);
+      stars.material.opacity = setting === "dungeon" ? 0 : Math.max(0, info.night - 0.2);
+      scene.add(stars);
+      aur = aurora();
+      scene.add(aur);
+      if (setting !== "dungeon") {
+        const sea = cloudSea(-16, 260);
+        sea.material.color.copy(P.bot);
+        scene.add(sea);
+      }
+      const GD = TH ? TH.ground : S;
+      const stage = island(8, 7, rng, { grass: GD.grass, grass2: GD.grass2, dirt: GD.dirt, rock: GD.rock, plaza: [0, 0.4, 6], hills: 0.6, vineGlow: setting === "dungeon" ? opts.tint || "#8f7cff" : TH ? TH.ground.vineGlow : "#7fffc8" });
+      scene.add(stage);
+    }
+    if (KUL) {
+      // das Gemaelde bringt Baeume, Steine und Landmarken selbst mit
+    } else if (S.props === "arena") {
       const wall = new T.CylinderGeometry(9, 9.4, 2.6, 40, 1, true, PI * 0.42, PI * 1.16);
       scene.add(mesh(wall, tiled("stone", "#6a645a", 8, 1, { side: T.DoubleSide, flatShading: true }), { p: [0, 1.3, 0] }));
       const realms = ["albion", "midgard", "hibernia"];
@@ -2610,13 +2925,29 @@
         scene.add(s);
       }
     } else {
+      // erzeugte Requisiten des Reiches (Meshy-Strecke, src/r3d-rigged.js) statt der gebauten, ein Wahrzeichen hinten in
+      // der Mitte zwischen den Kaempfern; je Dekomodell hoechstens zwei Stueck, damit sich nichts sichtbar wiederholt
+      const GP = TH && R.rigged && R.rigged.propsFor ? R.rigged.propsFor(TH.id) : null;
+      const gen = (list, s) => {
+        const o = R.rigged.prop(list[Math.floor(rng() * list.length) % list.length]);
+        o.scale.setScalar(s);
+        o.rotation.y = rng() * PI * 2;
+        return o;
+      };
+      if (GP && GP.wahrzeichen.length) {
+        const w = R.rigged.prop(GP.wahrzeichen[0]);
+        w.position.set(0, 0, -5.6);
+        w.rotation.y = 0.2;
+        scene.add(w);
+      }
       for (let i = 0; i < 7; i++) {
-        const tr = TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
+        if (GP && GP.wahrzeichen.length && i === 3) continue;
+        const tr = GP && GP.baum.length ? gen(GP.baum, 0.8 + rng() * 0.3) : TH ? R.realmTree(TH.id, rng) : i % 3 === 0 ? pine(rng) : gnarledTree(rng);
         tr.position.set(-7 + i * 2.3 + rng(), 0, -4 - rng() * 2);
         scene.add(tr);
       }
-      for (let i = 0; i < 6; i++) {
-        const s = TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
+      for (let i = 0; i < (GP && GP.deko.length ? Math.min(6, 2 * GP.deko.length) : 6); i++) {
+        const s = GP && GP.deko.length ? gen(GP.deko, 0.8 + rng() * 0.4) : TH ? R.realmDeco(TH.id, rng, i) : i % 2 ? shrooms(rng) : rock(rng);
         s.position.set(-6 + rng() * 12, 0.05, -1.5 - rng() * 2.5);
         scene.add(s);
       }
@@ -2626,10 +2957,11 @@
       weather.scale.setScalar(0.6);
       scene.add(weather);
     }
-    const flies = fireflies(rng, 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a");
-    scene.add(flies);
-    const wisps = mistWisps(rng, 8, 9, 0.2);
-    scene.add(wisps);
+    // Gluehwuermchen und Nebelfetzen gehoeren zur gebauten Insel (im Mondhain leuchten wenige)
+    const flies = !KUL || KK === "hibernia" || KK === "pilzgrotte" ? fireflies(rng, KUL ? 18 : 50, 8, 0.4, 3.5, setting === "dungeon" ? opts.tint || "#c47bff" : "#d9ff8a") : null;
+    if (flies) scene.add(flies);
+    const wisps = KUL ? null : mistWisps(rng, 8, 9, 0.2);
+    if (wisps) scene.add(wisps);
 
     // Kaempfer
     const overlay = document.createElement("div");
@@ -2643,20 +2975,28 @@
       const home = new T.Vector3(side * sep, 0, 0.4);
       m.obj.position.copy(home);
       m.obj.rotation.y = side < 0 ? PI / 2 - 0.5 : -PI / 2 + 0.5;
-      const box3 = new T.Box3().setFromObject(m.obj);
+      let box3 = new T.Box3().setFromObject(m.obj);
       const hgt = box3.max.y - box3.min.y;
-      if (hgt > 3.8) {
-        const s = 3.8 / hgt;
+      // Bestien (grosse Drachen) duerfen hoeher sein als Menschenartige; die Kamera hat dafuer Platz nach oben
+      const maxH = m.parts && m.parts.beast ? 4.4 : 3.8;
+      if (hgt > maxH) {
+        const s = maxH / hgt;
         m.obj.scale.multiplyScalar(s);
         m.headY *= s;
+        box3 = new T.Box3().setFromObject(m.obj);
       }
-      const sh = new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
+      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte). Nur fuer
+      // Bestien; bei Menschenartigen zaehlte sonst die vorgestreckte Waffe mit (Held blieb vor dem Troll 3 m weg stehen)
+      const front = m.parts && m.parts.beast ? (side < 0 ? box3.max.x - home.x : home.x - box3.min.x) : 0;
+      const sh = KUL ? new T.Mesh(new T.CircleGeometry(1, 24), softShadowMat()) : new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
       sh.rotation.x = -PI / 2;
       sh.position.set(home.x, 0.03, home.z);
-      sh.scale.setScalar(desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9);
+      // Schatten nach der Grundflaeche (grosse Drachen), hoechstens 3 m
+      const foot = Math.max(box3.max.x - box3.min.x, box3.max.z - box3.min.z) * 0.38;
+      sh.scale.setScalar(Math.min(3, Math.max(foot, desc.kind === "monster" && (desc.arch === "drache" || desc.arch === "golem" || desc.arch === "troll" || desc.arch === "spinne") ? 1.5 : 0.9)));
       scene.add(sh);
       scene.add(m.obj);
-      return { m, home, side, shadow: sh, desc };
+      return { m, home, side, shadow: sh, desc, front };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
     // Schritte auf dem Boden des Schauplatzes; der Gegner meldet sich beim Erscheinen (der Drache bruellt)
@@ -2669,7 +3009,7 @@
     let shake = 0;
     let zoom = 0;
     const camBase = new T.Vector3(0, 2.7, 9.0);
-    const lookY = 1.45;
+    let lookY = 1.45;
     const tweens = [];
     function resize() {
       w = Math.max(1, el.clientWidth);
@@ -2683,6 +3023,15 @@
       const tanH = Math.tan((camera.fov * PI) / 360) * camera.aspect;
       camBase.z = Math.max(9.0, halfW / tanH);
       camBase.y = 2.7 + (camBase.z - 9) * 0.1;
+      if (KUL && !portrait) {
+        // Kulisse: Kaempfer stehen wie auf der Tafel (27 % und 72 % der Breite), damit das ganze Gemaelde zu sehen ist,
+        // und die Kamera neigt sich so, dass die Fuesse auf der Bodenlinie der Tafel (79 % der Hoehe) stehen
+        camBase.z = Math.max(camBase.z, 0.4 + sep / ((KUL_FEET.b - KUL_FEET.a) * tanH));
+        camBase.y = 2.7 + (camBase.z - 9) * 0.1;
+        const tanV = Math.tan((camera.fov * PI) / 360);
+        const pitch = Math.atan(camBase.y / (camBase.z - 0.4)) - Math.atan((2 * KUL_FEET.y - 1) * tanV);
+        lookY = camBase.y - camBase.z * Math.tan(pitch);
+      }
       camera.updateProjectionMatrix();
     }
     const ro = new ResizeObserver(resize);
@@ -2710,6 +3059,10 @@
         f.m.speed = speed;
         f.m.update(dt * speed);
         f.shadow.position.x = f.m.obj.position.x;
+        if (f.runes) {
+          f.runes.userData.spin.rotation.y += dt * speed * 0.8;
+          f.runes.position.x = f.m.obj.position.x;
+        }
         if (f.aura) f.aura.position.copy(f.m.obj.position);
         if (f.bubble) {
           f.bubble.position.x = f.m.obj.position.x;
@@ -2726,10 +3079,10 @@
       scene.traverse((o) => {
         if (o.userData.flick) o.scale.y = 1 + Math.sin(t * 13 + o.userData.flick) * 0.15;
       });
-      flies.userData.update(t, setting === "dungeon" ? 0.9 : 0.3 + 0.6 * info.night);
+      if (flies) flies.userData.update(t, setting === "dungeon" ? 0.9 : 0.3 + 0.6 * info.night);
       if (weather) weather.userData.update(dt, t, info);
-      wisps.userData.update(dt, scene.fog.color, 0.12);
-      aur.userData.update(t, setting === "dungeon" ? 0 : smooth(0.5, 0.95, info.night) * 0.7);
+      if (wisps) wisps.userData.update(dt, scene.fog.color, 0.12);
+      if (aur) aur.userData.update(t, setting === "dungeon" ? 0 : smooth(0.5, 0.95, info.night) * 0.7);
       camera.position.copy(camBase);
       camera.position.z -= zoom * 1.6;
       camera.position.y -= zoom * 0.3;
@@ -2740,6 +3093,7 @@
         camera.position.y += (Math.random() - 0.5) * 0.28;
       }
       camera.lookAt(0, lookY, 0);
+      if (bg) bg.fit(camera, sep, w, h);
       renderer.render(scene, camera);
     }
     raf = requestAnimationFrame(frame);
@@ -2870,8 +3224,10 @@
       f.aura = null;
       if (!color) return;
       const a = grp();
-      a.add(R.haloSprite(color, 3.4, 0.35, [0, 1.2, 0]));
-      a.add(mesh(G.torus(0.8, 0.03, PI * 2, 4, 40), glow(color, 0.6), { p: [0, 0.08, 0], r: [PI / 2, 0, 0] }));
+      // mit der Groesse des Kaempfers (grosse Drachen)
+      const H = Math.max(1.8, f.m.height || 1.8);
+      a.add(R.haloSprite(color, 3.4 * (H / 1.8), 0.35, [0, 1.2 * (H / 1.8), 0]));
+      a.add(mesh(G.torus(0.8, 0.03, PI * 2, 4, 40), glow(color, 0.6), { p: [0, 0.08, 0], r: [PI / 2, 0, 0], s: Math.max(1, f.shadow.scale.x / 0.9) }));
       scene.add(a);
       f.aura = a;
     }
@@ -2904,17 +3260,33 @@
         f.stars = null;
       }
     }
+    // Abschusspunkt: Pfeil am Bogen (Griff in der linken Faust), Bolzen an der Spitze der Armbrust; sonst wie bisher
+    // vor der Brust
+    const VTMP = new T.Vector3();
+    function launchPoint(A, kind) {
+      // Bestien speien aus dem Kopf (grosse Drachen haben ihn weit vorn)
+      const hd = A.m.parts && A.m.parts.beast && A.m.parts.B && A.m.parts.B.head;
+      if (hd) return hd.getWorldPosition(new T.Vector3());
+      const W = A.m.parts && A.m.parts.weapon;
+      if (!W || (kind !== "arrow" && kind !== "bolt")) return null;
+      W.updateWorldMatrix(true, true);
+      // Bolzen liegt etwa 9 cm ueber dem Griff auf dem Schaft
+      if (kind === "bolt") return R.rigged && R.rigged.weaponExtent ? W.localToWorld(new T.Vector3(R.rigged.weaponExtent(W).tip, 0.09, 0)) : null;
+      return W.getWorldPosition(new T.Vector3());
+    }
     async function projectile(A, Bf, kind, color) {
-      const start = new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
+      const start = launchPoint(A, kind) || new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
       const end = new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z);
+      const shaft = kind === "arrow" || kind === "spear" || kind === "bolt";
       let obj;
-      if (kind === "arrow" || kind === "spear") {
+      if (shaft) {
         obj = grp();
-        const L = kind === "spear" ? 1.6 : 1.0;
-        obj.add(mesh(G.cyl(0.022, 0.022, L, 5), pm("wood", "#c9b89a"), { r: [0, 0, PI / 2] }));
-        obj.add(mesh(G.cone(0.06, 0.2, 5), pm("metal", "#c8ced6"), { p: [L / 2 + 0.08, 0, 0], r: [0, 0, -PI / 2] }));
-        obj.add(spark(color, 0.6));
-        if (A.side > 0) obj.rotation.y = PI;
+        const L = kind === "spear" ? 1.6 : kind === "bolt" ? 0.45 : 0.85;
+        const r = kind === "bolt" ? 0.028 : 0.02;
+        obj.add(mesh(G.cyl(r, r, L, 5), pm("wood", "#c9b89a"), { r: [0, 0, PI / 2] }));
+        obj.add(mesh(G.cone(kind === "bolt" ? 0.05 : 0.055, 0.16, 5), pm("metal", "#c8ced6"), { p: [L / 2 + 0.07, 0, 0], r: [0, 0, -PI / 2] }));
+        if (kind !== "spear") obj.add(mesh(G.cone(0.05, 0.12, 3), pm("cloth", "#e8e2d4"), { p: [-L / 2 + 0.05, 0, 0], r: [0, 0, -PI / 2] }));
+        obj.add(spark(color, 0.5));
       } else {
         obj = grp();
         obj.add(mesh(G.sph(kind === "star" ? 0.3 : 0.18, 12, 10), new T.MeshBasicMaterial({ color: col("#ffffff") })));
@@ -2923,11 +3295,21 @@
       obj.position.copy(start);
       scene.add(obj);
       const trail = [];
-      await tween(kind === "arrow" ? 0.26 : 0.36, (u) => {
+      const arc = kind === "bolt" ? 0.12 : kind === "arrow" ? 0.35 : kind === "spear" ? 0.5 : 0.3;
+      const prev = start.clone();
+      const XAX = new T.Vector3(1, 0, 0);
+      await tween(kind === "bolt" ? 0.2 : kind === "arrow" ? 0.26 : 0.36, (u) => {
+        prev.copy(obj.position);
         obj.position.lerpVectors(start, end, u);
-        obj.position.y += Math.sin(u * PI) * (kind === "arrow" || kind === "spear" ? 0.5 : 0.3);
+        obj.position.y += Math.sin(u * PI) * arc;
+        // Schaft entlang der Flugbahn (vorher nur seitlich gedreht, der Pfeil flog waagerecht durch den Bogen)
+        if (shaft) {
+          const v = VTMP.copy(obj.position).sub(prev);
+          if (v.lengthSq() > 1e-8) obj.quaternion.setFromUnitVectors(XAX, v.normalize());
+          else if (u === 0) obj.quaternion.setFromUnitVectors(XAX, VTMP.copy(end).sub(start).normalize());
+        }
         if (Math.random() < 0.7) {
-          const p = spark(color, kind === "arrow" ? 0.15 : 0.35);
+          const p = spark(color, shaft ? 0.15 : 0.35);
           p.position.copy(obj.position);
           scene.add(p);
           trail.push(p);
@@ -2937,6 +3319,763 @@
       scene.remove(obj);
       trail.forEach((p) => scene.remove(p));
       burst(end, color, kind === "star" ? 18 : 9, kind === "star" ? 3 : 1.6);
+    }
+    /* ---------- Eigene Zauber und Treffer je Kaempfer (0.75) ----------
+       Vorher flog bei jedem Zauberer dieselbe Kugel, nur die Farbe wechselte. Jetzt hat jede Magierklasse und jedes
+       zaubernde Monster einen eigenen Zauber, Drachen speien ihr Element (auch die Endbossdrachen, nach Name und Farbe),
+       Monster im Nahkampf treffen je Familie anders, Helden schlagen und schiessen in der Farbe ihrer Klasse.
+       Gegner ohne eigene Figur (Chronik, Verliese) zaubern wie die Figur, die sie sich leihen, in ihrer eigenen Farbe. */
+    const SPELL_FX = {
+      lichtweber: { kind: "arcane", color: "#b45aff", c2: "#f2dcff" },
+      runenwirker: { kind: "rune", color: "#6fc0ff", c2: "#e6f6ff" },
+      dornenrufer: { kind: "thorns", color: "#7fd06a", c2: "#d6ff9a" },
+      sporling: { kind: "spores", color: "#e6dc6a", c2: "#9cc04a" },
+      sporenschrecken: { kind: "sporerain", color: "#c890ff", c2: "#f0d4ff" },
+      giftmorchel: { kind: "glob", color: "#8aff4a", c2: "#2f7a1a" },
+      hohlkultist: { kind: "void", color: "#9a5aff", c2: "#120818" },
+      blutkultist: { kind: "blood", color: "#c8121e", c2: "#ff6a5a" },
+      runenhexe: { kind: "hex", color: "#ff4ad0", c2: "#ffd6f4" },
+      nebeldruide: { kind: "mist", color: "#d8ece6", c2: "#7fd0a8" },
+      fahlerschemen: { kind: "wisp", color: "#dbe8ff", c2: "#7f9cc8" },
+      irrlichtschemen: { kind: "lights", color: "#6ff0ff", c2: "#fff27a" },
+      leerenschemen: { kind: "tendril", color: "#7a3aff", c2: "#16082a" },
+      schwelwurm: { kind: "breath", el: "fire" },
+      sturmdrache: { kind: "breath", el: "storm" },
+      eiswyrm: { kind: "breath", el: "ice" },
+      smaragdwyrm: { kind: "breath", el: "acid" },
+    };
+    // Helden: Klinge und Geschoss in der Farbe ihrer Klasse
+    const HERO_TINT = {
+      schildritter: "#ffe2a0", sturmhuene: "#bfe6ff", hainwaechter: "#c8ffb0",
+      meuchler: "#ff7a7a", nebelschleicher: "#a8b8ff", schattentaenzer: "#d0a0ff",
+      langbogner: "#ffd27a", wolfsjaeger: "#cfeeff", mondschuetze: "#e8ecff",
+    };
+    const ELEMENTS = [
+      ["ice", /eis|frost|reif|kristall|gletscher|schnee|winter/],
+      ["storm", /sturm|donner|blitz|gewitter|tempest|himmel|wolke/],
+      ["fire", /feuer|glut|flamm|asche|schwel|brand|lava|sonne|esse/],
+      ["acid", /gift|moor|sumpf|smaragd|faul|seuche|moder|spor/],
+      ["shadow", /schatten|leere|nacht|dunkel|fluch|tod|grab|hohl/],
+    ];
+    const hueOf = (c) => {
+      const x = col(c || "#ff5a3d");
+      const hsl = {};
+      x.getHSL(hsl);
+      return hsl;
+    };
+    function elemOf(name, accent) {
+      for (const [e, re] of ELEMENTS) if (re.test(name)) return e;
+      const h = hueOf(accent);
+      if (h.s < 0.2) return h.l > 0.6 ? "storm" : "shadow";
+      const d = h.h * 360;
+      return d < 45 || d >= 330 ? "fire" : d < 70 ? "storm" : d < 165 ? "acid" : d < 255 ? "ice" : "shadow";
+    }
+    function spellOf(f) {
+      const d = f.desc || {};
+      if (d.kind !== "monster") return SPELL_FX[d.cls] || { kind: "orb", color: f.m.projColor || "#c47bff" };
+      const own = SPELL_FX[d.visual];
+      if (own) return own;
+      const lent = SPELL_FX[d.look];
+      if (d.arch === "drache") return { kind: "breath", el: ELEMENTS.some(([, re]) => re.test(d.visual || "")) ? elemOf(d.visual || "", d.accent) : lent ? lent.el : elemOf("", d.accent), tint: d.accent };
+      if (lent) return Object.assign({}, lent, d.accent ? { color: d.accent } : {});
+      return { kind: "orb", color: f.m.projColor || d.accent || "#c47bff" };
+    }
+    const chestOf = (f, k) => new T.Vector3(f.m.obj.position.x, (f.m.headY || 1.8) * (k || 0.6), f.m.obj.position.z);
+    const castFrom = (A) => launchPoint(A, "spell") || new T.Vector3(A.m.obj.position.x + A.side * -0.6, (A.m.headY || 1.8) * 0.68, A.m.obj.position.z);
+    const rnd = (s) => (Math.random() - 0.5) * s;
+    const rvec = (s) => new T.Vector3(rnd(s), rnd(s), rnd(s));
+    function puff(color, size, op, normal) {
+      const s = new T.Sprite(new T.SpriteMaterial({ map: dot(), color: col(color), transparent: true, opacity: op == null ? 1 : op, blending: normal ? T.NormalBlending : T.AdditiveBlending, depthWrite: false }));
+      s.scale.setScalar(size);
+      return s;
+    }
+    // kleines Partikelsystem: spawn(u, add) legt waehrend dur neue Teilchen an, jedes lebt life Sekunden
+    function emit(dur, life, spawn) {
+      const parts = [];
+      let last = 0;
+      const total = dur + life;
+      const add = (pos, color, size, v, lf, o) => {
+        o = o || {};
+        const s = puff(color, size, o.op, o.normal);
+        s.position.copy(pos);
+        scene.add(s);
+        parts.push(Object.assign({ s, v: v || new T.Vector3(), life: lf, age: 0, size, op: o.op == null ? 1 : o.op, c1: o.to ? col(color) : null, c2: o.to ? col(o.to) : null }, o));
+      };
+      return tween(total, (u) => {
+        const t = u * total;
+        const dt = Math.max(0, t - last);
+        last = t;
+        if (t <= dur) spawn(t / dur, add);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const p = parts[i];
+          p.age += dt;
+          const k = p.age / p.life;
+          if (k >= 1) {
+            scene.remove(p.s);
+            parts.splice(i, 1);
+            continue;
+          }
+          p.s.position.addScaledVector(p.v, dt);
+          if (p.g) p.v.y -= p.g * dt;
+          if (p.drag) p.v.multiplyScalar(Math.max(0, 1 - p.drag * dt));
+          p.s.scale.setScalar(p.size * (1 + (p.grow || 0) * k));
+          p.s.material.opacity = p.op * Math.min(1, k * 6) * (1 - k);
+          if (p.c1) p.s.material.color.copy(p.c1).lerp(p.c2, k);
+        }
+        if (u >= 1) parts.forEach((p) => scene.remove(p.s));
+      });
+    }
+    // Ein Koerper fliegt von a nach b (Bogenhoehe arc), step(obj, u) fuer eigene Bewegung, trail(pos) fuer Spuren
+    function fly(obj, a, b, dur, arc, step) {
+      obj.position.copy(a);
+      scene.add(obj);
+      return tween(dur, (u) => {
+        obj.position.lerpVectors(a, b, u);
+        obj.position.y += Math.sin(u * PI) * arc;
+        if (step) step(obj, u);
+        if (u >= 1) scene.remove(obj);
+      });
+    }
+    function flashAt(pos, color, size) {
+      const s = puff(color, size || 2.2, 0.9);
+      s.position.copy(pos);
+      scene.add(s);
+      tween(0.3, (u) => {
+        s.material.opacity = 0.9 * (1 - u);
+        s.scale.setScalar((size || 2.2) * (1 + u));
+        if (u >= 1) scene.remove(s);
+      });
+    }
+    function groundRing(f, color, r0, r1, dur) {
+      const r = new T.Mesh(G.torus(1, 0.05, PI * 2, 6, 48), new T.MeshBasicMaterial({ color: col(color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+      r.rotation.x = PI / 2;
+      r.position.set(f.m.obj.position.x, 0.08, f.m.obj.position.z);
+      scene.add(r);
+      return tween(dur || 0.5, (u) => {
+        r.scale.setScalar(r0 + (r1 - r0) * u);
+        r.material.opacity = 1 - u;
+        if (u >= 1) scene.remove(r);
+      });
+    }
+    // Drachenodem: Feuer, Eis, Gift, Schatten als Strom aus dem Maul, Blitz als zuckende Entladung
+    const BREATH = {
+      fire: { c: ["#fff3b0", "#ffb040", "#ff6a1a"], end: "#9a1a0a", smoke: "#2e2420", size: 0.5 },
+      ice: { c: ["#ffffff", "#d4f0ff", "#8ad0ff"], end: "#4a9ae0", size: 0.42 },
+      acid: { c: ["#eaffb0", "#9aff4a", "#4ac02a"], end: "#1e5a10", size: 0.6 },
+      shadow: { c: ["#e6c8ff", "#8a4aff", "#4a1a8a"], end: "#120818", size: 0.55 },
+    };
+    // Blitz als Kette duenner leuchtender Glieder (Linien zeichnet WebGL nur einen Pixel breit)
+    function boltChain(n, color, r) {
+      const m = new T.MeshBasicMaterial({ color: col(color), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      const segs = [];
+      for (let i = 0; i < n; i++) {
+        const s = new T.Mesh(G.cyl(r, r, 1, 5, true), m);
+        scene.add(s);
+        segs.push(s);
+      }
+      const Y = new T.Vector3(0, 1, 0);
+      return {
+        m,
+        set(pts) {
+          segs.forEach((s, i) => {
+            const a = pts.at(i);
+            const b = pts.at(i + 1);
+            const d = VTMP.copy(b).sub(a);
+            const L = d.length();
+            s.position.copy(a).addScaledVector(d, 0.5);
+            s.scale.set(1, Math.max(0.001, L), 1);
+            s.quaternion.setFromUnitVectors(Y, d.normalize());
+          });
+        },
+        done() {
+          segs.forEach((s) => scene.remove(s));
+        },
+      };
+    }
+    function boltPath(from, to, n, jag) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const p = from.clone().lerp(to, i / n);
+        if (i > 0 && i < n) p.add(rvec(jag));
+        pts.push(p);
+      }
+      return pts;
+    }
+    function lightning(A, Bf) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const N = 12;
+      const core = boltChain(N, "#ffffff", 0.025);
+      const glowC = boltChain(N, "#7f9cff", 0.08);
+      const side = boltChain(N, "#c8d4ff", 0.018);
+      const glows = [];
+      for (let i = 0; i <= N; i += 2) {
+        const s = puff("#9ab4ff", 0.9, 0.7);
+        scene.add(s);
+        glows.push(s);
+      }
+      let n = 0;
+      tween(0.6, (u) => {
+        if (n++ % 3 === 0) {
+          const pts = boltPath(from, to, N, 0.7);
+          core.set(pts);
+          glowC.set(pts);
+          side.set(boltPath(from, to, N, 0.9));
+          glows.forEach((s, i) => s.position.copy(pts.at(i * 2)));
+        }
+        const o = u < 0.75 ? (Math.random() < 0.75 ? 1 : 0.3) : (1 - u) * 4;
+        core.m.opacity = o;
+        glowC.m.opacity = 0.45 * o;
+        side.m.opacity = 0.7 * o;
+        glows.forEach((s) => (s.material.opacity = 0.6 * o));
+        if (u >= 1) {
+          core.done();
+          glowC.done();
+          side.done();
+          glows.forEach((s) => scene.remove(s));
+        }
+      });
+      return wait(0.1).then(() => {
+        flashAt(to, "#c8d4ff", 2.8);
+        burst(to, "#eef0ff", 18, 2.8);
+        shake = Math.max(shake, 0.2);
+      });
+    }
+    function breath(A, Bf, fx) {
+      if (fx.el === "storm") return lightning(A, Bf);
+      const B = BREATH[fx.el] || BREATH.fire;
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const dir = to.clone().sub(from);
+      const dist = dir.length();
+      dir.normalize();
+      const sp = dist / 0.36;
+      const big = Math.sqrt(Math.max(1, (A.m.height || 1.8) / 1.8));
+      emit(0.7, 0.5, (u, add) => {
+        for (let i = 0; i < 4; i++) {
+          const c = B.c[Math.floor(Math.random() * B.c.length)];
+          add(from, c, B.size * big * (0.45 + Math.random() * 0.4), dir.clone().multiplyScalar(sp * (0.8 + Math.random() * 0.35)).add(rvec(sp * 0.22)), 0.36 + Math.random() * 0.14, { grow: 1.8, to: B.end });
+        }
+        if (fx.el === "fire" && Math.random() < 0.5) add(from.clone().addScaledVector(dir, dist * (0.4 + Math.random() * 0.5)), B.smoke, 0.7 * big, new T.Vector3(rnd(0.4), 0.9, rnd(0.4)), 0.9, { normal: true, op: 0.45, grow: 1.4 });
+        if (fx.el === "acid" && Math.random() < 0.4) add(from.clone().addScaledVector(dir, dist * Math.random()), "#7fff3a", 0.12, new T.Vector3(rnd(0.3), -0.2, rnd(0.3)), 0.6, { g: 6 });
+      });
+      if (fx.el === "ice") {
+        for (let i = 0; i < 6; i++) {
+          const sh = mesh(G.octa(0.09 + Math.random() * 0.06), new T.MeshBasicMaterial({ color: col(i % 2 ? "#ffffff" : "#a8e0ff") }));
+          sh.scale.set(0.6, 1.8, 0.6);
+          const off = rvec(0.6);
+          wait(i * 0.08).then(() => fly(sh, from.clone(), to.clone().add(off), 0.32, 0.05, (o) => (o.rotation.z += 0.3)));
+        }
+      }
+      return wait(0.36).then(() => {
+        flashAt(to, B.c[1], 2.4);
+        if (fx.el === "fire") emit(0.5, 0.6, (u, add) => add(to.clone().add(rvec(0.8)), Math.random() < 0.5 ? "#ffb040" : "#ff6a1a", 0.18, new T.Vector3(rnd(1), 1.2 + Math.random(), rnd(1)), 0.6));
+        else if (fx.el === "ice") frostSpikes(Bf);
+        else if (fx.el === "acid") puddle(Bf, "#6aff2a");
+        else emit(0.3, 0.7, (u, add) => add(to.clone().add(rvec(0.9)), "#2a1040", 0.6, new T.Vector3(0, 0.6, 0), 0.7, { normal: true, op: 0.6, grow: 1 }));
+      });
+    }
+    function frostSpikes(f) {
+      const g = grp([f.m.obj.position.x, 0, f.m.obj.position.z]);
+      const m = new T.MeshBasicMaterial({ color: col("#cfeeff"), transparent: true, opacity: 0.9 });
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * PI * 2;
+        const h = 0.5 + Math.random() * 0.7;
+        g.add(mesh(G.cone(0.1, h, 5), m, { p: [Math.cos(a) * 0.55, h / 2, Math.sin(a) * 0.55], r: [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4] }));
+      }
+      g.scale.set(1, 0.01, 1);
+      scene.add(g);
+      tween(1.1, (u) => {
+        g.scale.y = u < 0.15 ? u / 0.15 : 1;
+        m.opacity = u < 0.7 ? 0.9 : 0.9 * (1 - u) / 0.3;
+        if (u >= 1) {
+          scene.remove(g);
+          burst(new T.Vector3(f.m.obj.position.x, 0.6, f.m.obj.position.z), "#e6f6ff", 12, 2);
+        }
+      });
+    }
+    function puddle(f, color) {
+      const p = new T.Mesh(G.cyl(0.9, 0.9, 0.02, 24), new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0.55, blending: T.AdditiveBlending, depthWrite: false }));
+      p.position.set(f.m.obj.position.x, 0.03, f.m.obj.position.z);
+      p.scale.setScalar(0.2);
+      scene.add(p);
+      tween(1.4, (u) => {
+        p.scale.setScalar(Math.min(1, 0.2 + u * 3));
+        p.material.opacity = 0.55 * (1 - u);
+        if (u >= 1) scene.remove(p);
+      });
+      emit(0.6, 0.6, (u, add) => add(new T.Vector3(f.m.obj.position.x + rnd(1.2), 0.1, f.m.obj.position.z + rnd(1.2)), color, 0.2, new T.Vector3(0, 0.8, 0), 0.6));
+    }
+    // Lichtweber: lila Strahl mit kreisenden Funken
+    function arcane(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const len = from.distanceTo(to);
+      const dir = to.clone().sub(from).normalize();
+      const side = new T.Vector3(0, 1, 0).cross(dir).normalize();
+      const up = dir.clone().cross(side).normalize();
+      const tube = (r, c) => {
+        const m = new T.Mesh(G.cyl(r, r, 1, 10, true), new T.MeshBasicMaterial({ color: col(c), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir);
+        scene.add(m);
+        return m;
+      };
+      const outer = tube(0.1, fx.color);
+      const core = tube(0.035, fx.c2);
+      tween(0.55, (u) => {
+        const L = len * Math.min(1, u / 0.18);
+        for (const m of [outer, core]) {
+          m.position.copy(from).addScaledVector(dir, L / 2);
+          m.scale.set(1, Math.max(0.001, L), 1);
+        }
+        const o = u < 0.7 ? 1 : (1 - u) / 0.3;
+        outer.material.opacity = 0.75 * o;
+        core.material.opacity = o;
+        outer.scale.x = outer.scale.z = 1 + 0.35 * Math.sin(u * 40);
+        if (u >= 1) {
+          scene.remove(outer);
+          scene.remove(core);
+        }
+      });
+      emit(0.45, 0.25, (u, add) => {
+        for (let i = 0; i < 3; i++) {
+          const k = Math.random();
+          const a = k * 16 + u * 24;
+          add(from.clone().lerp(to, k).addScaledVector(side, Math.cos(a) * 0.16).addScaledVector(up, Math.sin(a) * 0.16), Math.random() < 0.5 ? fx.color : fx.c2, 0.14, dir.clone().multiplyScalar(1.2), 0.25);
+        }
+      });
+      return wait(0.12).then(() => {
+        flashAt(to, fx.color, 1.8);
+        burst(to, fx.c2, 12, 1.8);
+      });
+    }
+    // Runenwirker: kreisende Runenscheibe, zerspringt in Runenfunken
+    function rune(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const g = grp();
+      const m = new T.MeshBasicMaterial({ color: col(fx.color), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      const m2 = new T.MeshBasicMaterial({ color: col(fx.c2), transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      g.add(new T.Mesh(G.torus(0.4, 0.035, PI * 2, 4, 48), m));
+      g.add(new T.Mesh(G.torus(0.25, 0.025, PI * 2, 4, 40), m2));
+      for (let i = 0; i < 3; i++) g.add(mesh(G.box(0.045, 0.62, 0.01), m2, { r: [0, 0, (i * PI) / 3] }));
+      for (let i = 0; i < 6; i++) g.add(mesh(G.box(0.05, 0.12, 0.01), m, { p: [Math.cos((i * PI) / 3) * 0.48, Math.sin((i * PI) / 3) * 0.48, 0], r: [0, 0, (i * PI) / 3] }));
+      const hs = puff(fx.color, 1.5, 0.7);
+      g.add(hs);
+      const t = fly(g, from, to, 0.4, 0.25, (o, u) => {
+        o.rotation.z = u * 9;
+        o.scale.setScalar(0.7 + 0.5 * u);
+      });
+      emit(0.4, 0.4, (u, add) => {
+        for (let i = 0; i < 2; i++) add(g.position.clone().add(rvec(0.5)), i ? fx.c2 : fx.color, 0.2, rvec(0.6), 0.4);
+      });
+      return t.then(() => {
+        flashAt(to, fx.color, 2);
+        for (let i = 0; i < 6; i++) {
+          const piece = mesh(G.box(0.03, 0.18, 0.01), m2.clone(), {});
+          piece.position.copy(to);
+          const v = rvec(3);
+          scene.add(piece);
+          tween(0.5, (u) => {
+            piece.position.addScaledVector(v, 0.02);
+            piece.rotation.z += 0.3;
+            piece.material.opacity = 1 - u;
+            if (u >= 1) scene.remove(piece);
+          });
+        }
+      });
+    }
+    // Dornenrufer: Faecher aus Dornen
+    function thorns(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const bark = pm("bark", "#5a4a2a");
+      const Y = new T.Vector3(0, 1, 0);
+      let last = null;
+      for (let i = 0; i < 5; i++) {
+        const th = grp();
+        th.add(mesh(G.cone(0.08, 0.75, 5), bark, {}));
+        th.add(mesh(G.cone(0.035, 0.3, 4), new T.MeshBasicMaterial({ color: col(fx.c2) }), { p: [0, 0.3, 0] }));
+        th.add(puff(fx.color, 0.6, 0.8));
+        const off = new T.Vector3(0, (i - 2) * 0.18, rnd(0.4));
+        const a = from.clone().add(new T.Vector3(0, (i - 2) * 0.12, 0));
+        const b = to.clone().add(off);
+        const dir = b.clone().sub(a).normalize();
+        th.quaternion.setFromUnitVectors(Y, dir);
+        last = wait(i * 0.05).then(() => fly(th, a, b, 0.28, 0.12));
+      }
+      emit(0.4, 0.3, (u, add) => add(from.clone().lerp(to, u).add(rvec(0.4)), fx.c2, 0.1, rvec(0.6), 0.3));
+      return last.then(() => {
+        burst(to, fx.c2, 14, 2);
+        emit(0.2, 0.8, (u, add) => add(to.clone().add(rvec(0.4)), Math.random() < 0.5 ? "#6aa040" : "#a8d870", 0.16, new T.Vector3(rnd(2), 1 + Math.random(), rnd(2)), 0.8, { g: 3, normal: true }));
+      });
+    }
+    // Sporling: langsame Sporenwolke
+    function spores(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const g = grp();
+      for (let i = 0; i < 6; i++) {
+        const s = puff(i % 2 ? fx.color : fx.c2, 0.45 + Math.random() * 0.25, 0.55, true);
+        s.position.copy(rvec(0.35));
+        g.add(s);
+      }
+      emit(0.6, 0.6, (u, add) => add(g.position.clone().add(rvec(0.4)), fx.color, 0.08, new T.Vector3(rnd(0.3), -0.3, rnd(0.3)), 0.6));
+      return fly(g, from, to, 0.6, 0.15, (o, u) => (o.rotation.z = u * 2)).then(() => {
+        emit(0.3, 1.0, (u, add) => add(to.clone().add(rvec(1)), Math.random() < 0.5 ? fx.color : fx.c2, 0.6, rvec(0.6), 1.0, { normal: true, op: 0.5, grow: 1.2 }));
+      });
+    }
+    // Sporenschrecken: Sporen steigen auf und regnen auf den Gegner
+    function sporeRain(A, Bf, fx) {
+      const top = chestOf(Bf, 1).add(new T.Vector3(0, 2.2, 0));
+      emit(0.35, 0.5, (u, add) => {
+        for (let i = 0; i < 2; i++) add(chestOf(A, 0.8).add(rvec(0.7)), fx.color, 0.3, new T.Vector3(rnd(0.5), 3.5, rnd(0.5)), 0.5);
+      });
+      return wait(0.3).then(() => {
+        emit(0.45, 0.6, (u, add) => {
+          for (let i = 0; i < 5; i++) add(top.clone().add(new T.Vector3(rnd(1.8), rnd(0.4), rnd(1.8))), Math.random() < 0.6 ? fx.color : fx.c2, 0.32, new T.Vector3(rnd(0.3), -4.2, rnd(0.3)), 0.65);
+          if (Math.random() < 0.4) add(top.clone().add(new T.Vector3(rnd(1.4), -1.4, rnd(1.4))), fx.c2, 0.7, new T.Vector3(0, -1.2, 0), 0.7, { normal: true, op: 0.35, grow: 1 });
+        });
+        return wait(0.35).then(() => groundRing(Bf, fx.color, 0.3, 1.6, 0.6));
+      });
+    }
+    // Giftmorchel: Giftklumpen im hohen Bogen, Pfuetze
+    function glob(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf, 0.45);
+      const g = grp();
+      g.add(mesh(G.sph(0.18, 12, 10), new T.MeshBasicMaterial({ color: col(fx.c2) })));
+      g.add(puff(fx.color, 0.7, 0.8));
+      emit(0.5, 0.6, (u, add) => {
+        if (Math.random() < 0.6) add(g.position.clone(), fx.color, 0.1, new T.Vector3(0, -0.5, 0), 0.6, { g: 8 });
+      });
+      return fly(g, from, to, 0.5, 1.2, (o, u) => o.scale.set(1 + 0.2 * Math.sin(u * 30), 1 - 0.2 * Math.sin(u * 30), 1)).then(() => {
+        burst(to, fx.color, 14, 2.2);
+        puddle(Bf, fx.color);
+      });
+    }
+    // Hohlkultist: schwarze Leerenkugel, die Licht ansaugt, und Einsturz
+    function voidOrb(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const g = grp();
+      g.add(mesh(G.sph(0.2, 14, 10), new T.MeshBasicMaterial({ color: col(fx.c2) })));
+      g.add(puff(fx.color, 0.9, 0.9));
+      emit(0.45, 0.25, (u, add) => {
+        for (let i = 0; i < 2; i++) {
+          const off = rvec(1.2);
+          add(g.position.clone().add(off), fx.color, 0.14, off.multiplyScalar(-3.5), 0.25);
+        }
+      });
+      return fly(g, from, to, 0.45, 0.1).then(() => {
+        const r = new T.Mesh(G.torus(1, 0.06, PI * 2, 6, 40), new T.MeshBasicMaterial({ color: col(fx.color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        r.position.copy(to);
+        scene.add(r);
+        tween(0.35, (u) => {
+          r.scale.setScalar(1.6 * (1 - u) + 0.05);
+          r.material.opacity = 1 - u * 0.5;
+          if (u >= 1) {
+            scene.remove(r);
+            emit(0.15, 0.6, (k, add) => add(to.clone(), "#1a0a28", 0.5, rvec(3), 0.6, { normal: true, op: 0.7, grow: 1 }));
+            burst(to, fx.color, 10, 2);
+          }
+        });
+      });
+    }
+    // Blutkultist: Doppelspirale aus Blutstropfen
+    function bloodBolt(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const dir = to.clone().sub(from).normalize();
+      const side = new T.Vector3(0, 1, 0).cross(dir).normalize();
+      const up = dir.clone().cross(side).normalize();
+      const heads = [0, 1].map(() => {
+        const s = puff(fx.color, 0.55, 1, true);
+        scene.add(s);
+        return s;
+      });
+      emit(0.4, 0.35, (u, add) => {
+        heads.forEach((s, j) => {
+          const a = u * 18 + j * PI;
+          s.position.copy(from).lerp(to, u).addScaledVector(side, Math.cos(a) * 0.22).addScaledVector(up, Math.sin(a) * 0.22);
+          add(s.position, j ? fx.c2 : fx.color, 0.26, new T.Vector3(0, -0.4, 0), 0.4, { normal: j === 0 });
+          if (j === 0 && Math.random() < 0.5) add(s.position, "#ff2a3a", 0.5, new T.Vector3(), 0.25);
+        });
+      });
+      return wait(0.4).then(() => {
+        heads.forEach((s) => scene.remove(s));
+        flashAt(to, fx.c2, 1.6);
+        emit(0.12, 0.7, (u, add) => {
+          for (let i = 0; i < 8; i++) add(to.clone(), "#8a0a12", 0.2, new T.Vector3(rnd(3.4), 1 + Math.random() * 1.8, rnd(3.4)), 0.75, { g: 7, normal: true });
+        });
+      });
+    }
+    // Runenhexe: Fluchzeichen ueber dem Gegner, dann ein Schlag von oben
+    function hex(A, Bf, fx) {
+      const top = chestOf(Bf, 1).add(new T.Vector3(0, 0.9, 0));
+      const g = grp();
+      g.position.copy(top);
+      const m = new T.MeshBasicMaterial({ color: col(fx.color), transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide });
+      g.add(new T.Mesh(G.torus(0.6, 0.035, PI * 2, 4, 48), m));
+      g.add(new T.Mesh(G.torus(0.72, 0.02, PI * 2, 4, 48), m));
+      g.add(puff(fx.color, 2.2, 0.5));
+      for (let i = 0; i < 5; i++) g.add(mesh(G.box(0.025, 1.12, 0.01), m, { r: [0, 0, (i * PI * 2) / 5 + PI / 10], p: [Math.cos((i * PI * 2) / 5) * 0.17, Math.sin((i * PI * 2) / 5) * 0.17, 0] }));
+      g.scale.setScalar(0.01);
+      scene.add(g);
+      emit(0.3, 0.4, (u, add) => add(chestOf(A, 0.9).add(rvec(0.5)), fx.color, 0.14, new T.Vector3(0, 1.5, 0), 0.4));
+      tween(0.75, (u) => {
+        g.scale.setScalar(1.2 * Math.min(1, u / 0.35));
+        g.rotation.z = u * 4;
+        m.opacity = u < 0.6 ? 1 : (1 - u) / 0.4;
+        if (u >= 1) scene.remove(g);
+      });
+      return wait(0.38).then(() => {
+        const b = new T.Mesh(G.cyl(0.12, 0.22, 1, 8, true), new T.MeshBasicMaterial({ color: col(fx.c2), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        const y0 = 0;
+        b.position.set(top.x, (top.y + y0) / 2, top.z);
+        b.scale.set(1, top.y - y0, 1);
+        scene.add(b);
+        tween(0.3, (u) => {
+          b.material.opacity = 1 - u;
+          b.scale.x = b.scale.z = 1 + u;
+          if (u >= 1) scene.remove(b);
+        });
+        flashAt(chestOf(Bf), fx.color, 2.2);
+        groundRing(Bf, fx.color, 0.4, 1.8, 0.5);
+      });
+    }
+    // Nebeldruide: Nebelwelle am Boden entlang
+    function mist(A, Bf, fx) {
+      const a = new T.Vector3(A.m.obj.position.x - A.side * 0.4, 0.3, A.m.obj.position.z);
+      const b = new T.Vector3(Bf.m.obj.position.x, 0.3, Bf.m.obj.position.z);
+      emit(0.55, 0.9, (u, add) => {
+        for (let i = 0; i < 2; i++) add(a.clone().lerp(b, Math.min(1, u * 1.1)).add(new T.Vector3(rnd(0.3), Math.random() * 0.5, rnd(1))), Math.random() < 0.7 ? fx.color : fx.c2, 0.7, new T.Vector3(rnd(0.3), 0.15, rnd(0.3)), 0.9, { normal: true, op: 0.38, grow: 0.8 });
+      });
+      return wait(0.55).then(() => {
+        emit(0.35, 0.8, (u, add) => add(chestOf(Bf, 0.5).add(rvec(0.9)), fx.c2, 0.15, new T.Vector3(rnd(0.5), 1.2, rnd(0.5)), 0.8));
+      });
+    }
+    // Fahler Schemen: geisterhafter Funke auf einer Spirale mit langem Schweif
+    function wisp(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const head = puff(fx.color, 0.55, 1);
+      scene.add(head);
+      emit(0.5, 0.5, (u, add) => add(head.position, fx.c2, 0.32, new T.Vector3(0, 0.2, 0), 0.5, { op: 0.6 }));
+      return tween(0.5, (u) => {
+        const a = u * 12;
+        head.position.copy(from).lerp(to, u).add(new T.Vector3(0, Math.sin(a) * 0.35 * (1 - u), Math.cos(a) * 0.35 * (1 - u)));
+        if (u >= 1) scene.remove(head);
+      }).then(() => {
+        flashAt(to, fx.color, 2);
+        groundRing(Bf, fx.c2, 0.3, 1.4, 0.45);
+      });
+    }
+    // Irrlichtschemen: drei tanzende Lichter
+    function lights(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const all = [0, 1, 2].map((j) => {
+        const s = puff(j === 1 ? fx.c2 : fx.color, 0.6, 1);
+        scene.add(s);
+        return wait(j * 0.08).then(() =>
+          tween(0.45, (u) => {
+            s.position.copy(from).lerp(to, u).add(new T.Vector3(0, Math.sin(u * 14 + j * 2) * 0.4, Math.cos(u * 10 + j) * 0.4));
+            if (u >= 1) {
+              scene.remove(s);
+              burst(to, j === 1 ? fx.c2 : fx.color, 6, 1.4);
+            }
+          })
+        );
+      });
+      emit(0.6, 0.3, (u, add) => add(from.clone().lerp(to, u).add(rvec(0.5)), fx.color, 0.1, rvec(0.4), 0.3));
+      return all[0];
+    }
+    // Leerenschemen: windende Ranke aus Leere vom Schemen zum Gegner
+    function tendril(A, Bf, fx) {
+      const from = castFrom(A);
+      const to = chestOf(Bf);
+      const n = 22;
+      const beads = [];
+      for (let i = 0; i < n; i++) {
+        const s = puff(i % 3 ? fx.color : "#c8a0ff", 0.28 - (i / n) * 0.12, 0.9);
+        s.visible = false;
+        scene.add(s);
+        beads.push(s);
+      }
+      const dark = [];
+      for (let i = 0; i < n; i += 2) {
+        const s = puff(fx.c2, 0.32, 0.7, true);
+        s.visible = false;
+        scene.add(s);
+        dark.push(s);
+      }
+      tween(0.7, (u) => {
+        const reach = u < 0.4 ? u / 0.4 : u > 0.75 ? 1 - (u - 0.75) / 0.25 : 1;
+        beads.forEach((s, i) => {
+          const k = i / (n - 1);
+          s.visible = k <= reach;
+          s.position.copy(from).lerp(to, k * reach).add(new T.Vector3(0, Math.sin(k * 9 + u * 18) * 0.25 * Math.sin(k * PI), Math.cos(k * 7 + u * 14) * 0.2 * Math.sin(k * PI)));
+        });
+        dark.forEach((s, j) => {
+          s.visible = beads.at(j * 2).visible;
+          s.position.copy(beads.at(j * 2).position);
+        });
+        if (u >= 1) beads.concat(dark).forEach((s) => scene.remove(s));
+      });
+      return wait(0.3).then(() => {
+        emit(0.2, 0.6, (u, add) => add(to.clone().add(rvec(0.5)), "#140820", 0.5, rvec(1), 0.6, { normal: true, op: 0.7, grow: 1 }));
+        flashAt(to, fx.color, 1.6);
+      });
+    }
+    function castFx(A, Bf, fx) {
+      switch (fx.kind) {
+        case "breath": return breath(A, Bf, fx);
+        case "arcane": return arcane(A, Bf, fx);
+        case "rune": return rune(A, Bf, fx);
+        case "thorns": return thorns(A, Bf, fx);
+        case "spores": return spores(A, Bf, fx);
+        case "sporerain": return sporeRain(A, Bf, fx);
+        case "glob": return glob(A, Bf, fx);
+        case "void": return voidOrb(A, Bf, fx);
+        case "blood": return bloodBolt(A, Bf, fx);
+        case "hex": return hex(A, Bf, fx);
+        case "mist": return mist(A, Bf, fx);
+        case "wisp": return wisp(A, Bf, fx);
+        case "lights": return lights(A, Bf, fx);
+        case "tendril": return tendril(A, Bf, fx);
+        default: return projectile(A, Bf, "orb", fx.color);
+      }
+    }
+    // Nahkampf-Treffer: Helden in der Farbe ihrer Klasse, Monster je Familie
+    function claw(f, color) {
+      for (let j = 0; j < 3; j++) {
+        const arc = new T.Mesh(G.torus(0.55, 0.03, PI * 0.55, 4, 20), new T.MeshBasicMaterial({ color: col(color), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        arc.position.set(f.m.obj.position.x, (f.m.headY || 1.8) * 0.6 + (j - 1) * 0.16, f.m.obj.position.z + 0.6);
+        arc.rotation.set(0, 0, -0.9);
+        scene.add(arc);
+        tween(0.28, (u) => {
+          arc.rotation.z -= 0.08;
+          arc.material.opacity = 1 - u;
+          if (u >= 1) scene.remove(arc);
+        });
+      }
+    }
+    function bite(f, color) {
+      const y = (f.m.headY || 1.8) * 0.6;
+      for (const s of [-1, 1]) {
+        const arc = new T.Mesh(G.torus(0.5, 0.045, PI * 0.8, 4, 20), new T.MeshBasicMaterial({ color: col("#ffffff"), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+        arc.position.set(f.m.obj.position.x, y + s * 0.5, f.m.obj.position.z + 0.6);
+        arc.rotation.set(0, 0, s > 0 ? PI * 1.1 : PI * 0.1);
+        scene.add(arc);
+        tween(0.25, (u) => {
+          arc.position.y = y + s * 0.5 * (1 - u);
+          arc.material.opacity = 1 - u * 0.8;
+          if (u >= 1) scene.remove(arc);
+        });
+      }
+      emit(0.1, 0.6, (u, add) => {
+        for (let i = 0; i < 4; i++) add(new T.Vector3(f.m.obj.position.x, y, f.m.obj.position.z + 0.4), color, 0.12, new T.Vector3(rnd(3), 1 + Math.random(), rnd(3)), 0.6, { g: 7 });
+      });
+    }
+    function rocks(f, color) {
+      groundRing(f, "#c8b89a", 0.3, 2.2, 0.5);
+      dust(f.m.obj.position.x, f.m.obj.position.z, "#a89880");
+      const m = pm("stone", color || "#7a7068");
+      for (let i = 0; i < 6; i++) {
+        const r = mesh(G.box(0.14, 0.12, 0.12), m, {});
+        r.position.set(f.m.obj.position.x + rnd(0.8), 0.1, f.m.obj.position.z + rnd(0.8));
+        const v = new T.Vector3(rnd(3), 3 + Math.random() * 2, rnd(3));
+        scene.add(r);
+        tween(0.7, (u) => {
+          r.position.addScaledVector(v, 0.016);
+          v.y -= 0.2;
+          r.rotation.x += 0.2;
+          if (u >= 1) scene.remove(r);
+        });
+      }
+      shake = Math.max(shake, 0.3);
+    }
+    function gust(f, color) {
+      groundRing(f, color, 0.4, 2, 0.4);
+      emit(0.25, 0.5, (u, add) => {
+        const a = u * 20;
+        add(chestOf(f, 0.6).add(new T.Vector3(Math.cos(a) * 0.6, rnd(0.6), Math.sin(a) * 0.6)), "#e6e6f0", 0.22, new T.Vector3(-Math.sin(a) * 2, 0.8, Math.cos(a) * 2), 0.5, { op: 0.6 });
+        add(chestOf(f, 0.6).add(rvec(0.6)), "#2a2430", 0.14, new T.Vector3(rnd(2), -0.5, rnd(2)), 0.5, { normal: true, g: 2 });
+      });
+    }
+    function venom(f, color) {
+      claw(f, "#ffffff");
+      flashAt(chestOf(f, 0.62), color, 1.4);
+      emit(0.4, 0.7, (u, add) => add(chestOf(f, 0.65).add(rvec(0.5)), color, 0.22, new T.Vector3(0, -0.4, 0), 0.7, { g: 4 }));
+    }
+    function soulSlash(f, color) {
+      slash(f, color, 0);
+      slash(f, "#ffffff", 1);
+      flashAt(chestOf(f, 0.6), color, 1.6);
+      emit(0.3, 0.8, (u, add) => add(chestOf(f, 0.5).add(rvec(0.7)), color, 0.32, new T.Vector3(rnd(0.3), 1.6, rnd(0.3)), 0.8, { op: 0.85 }));
+    }
+    function splinter(f, color) {
+      slash(f, "#d8c8a0", 0);
+      emit(0.15, 0.8, (u, add) => {
+        for (let i = 0; i < 5; i++) add(chestOf(f, 0.6), Math.random() < 0.5 ? "#8a6a3a" : color, 0.22, new T.Vector3(rnd(3), 1.2 + Math.random() * 1.5, rnd(3)), 0.8, { g: 5, normal: true });
+      });
+    }
+    function sparksX(f, color) {
+      slash(f, color, 0);
+      slash(f, color, 1);
+      burst(chestOf(f, 0.6), color, 10, 2.2);
+    }
+    function meleeFx(A, Bf, i) {
+      const d = A.desc || {};
+      if (d.kind !== "monster") {
+        const c = HERO_TINT[d.cls] || "#ffffff";
+        slash(Bf, c, i % 2);
+        if (A.m.arch === "krieger") burst(chestOf(Bf, 0.62), c, 8, 1.6);
+        if (A.m.arch === "schurke") wait(0.08).then(() => slash(Bf, "#ffffff", (i + 1) % 2));
+        return;
+      }
+      const name = String(d.visual || "") + " " + String(d.look || "");
+      const el = ELEMENTS.find(([, re]) => re.test(name));
+      const e = el ? el[0] : null;
+      const acc = d.accent || "#ffffff";
+      switch (d.arch) {
+        case "ghul": claw(Bf, "#b8d08a"); emit(0.2, 0.7, (u, add) => add(chestOf(Bf, 0.5).add(rvec(0.5)), "#3a4a2a", 0.4, new T.Vector3(0, 0.5, 0), 0.7, { normal: true, op: 0.5, grow: 1 })); break;
+        case "schlund": bite(Bf, "#9aff5a"); break;
+        case "goblin": sparksX(Bf, e === "ice" ? "#cfeeff" : "#ffe27a"); break;
+        case "wolf": claw(Bf, e === "ice" ? "#cfeeff" : e === "shadow" ? "#b48cff" : /fee/.test(name) ? "#7fffe0" : "#ffffff"); break;
+        case "golem": rocks(Bf, e === "ice" ? "#bfe0f0" : /obsidian/.test(name) ? "#2a2430" : /eisen/.test(name) ? "#8a8e96" : "#7a7068"); if (/eisen/.test(name)) burst(chestOf(Bf, 0.5), "#ffd27a", 12, 2.4); break;
+        case "fledermaus": gust(Bf, acc); break;
+        case "spinne": venom(Bf, e === "shadow" ? "#b48cff" : /kristall/.test(name) ? "#bfe9ff" : "#9aff4a"); break;
+        case "krebs":
+          sparksX(Bf, "#cfe6ff");
+          emit(0.12, 0.6, (u, add) => {
+            for (let k = 0; k < 4; k++) add(chestOf(Bf, 0.6), "#7fc8ff", 0.13, new T.Vector3(rnd(3), 1.5 + Math.random(), rnd(3)), 0.6, { g: 7 });
+          });
+          if (e === "storm") lightningShort(Bf);
+          break;
+        case "troll": shockwave(Bf, "#c8b89a"); dust(Bf.m.obj.position.x, Bf.m.obj.position.z, "#a89880"); shake = Math.max(shake, 0.35); slash(Bf, "#ffffff", i % 2); break;
+        case "todesritter": soulSlash(Bf, "#7fb8ff"); break;
+        case "baum": splinter(Bf, "#7fc04a"); break;
+        default: slash(Bf, acc, i % 2);
+      }
+    }
+    function lightningShort(f) {
+      const top = chestOf(f, 1).add(new T.Vector3(0, 0.8, 0));
+      const c = boltChain(6, "#eef0ff", 0.025);
+      const g = boltChain(6, "#7f9cff", 0.07);
+      const pts = boltPath(top, chestOf(f, 0.3), 6, 0.35);
+      c.set(pts);
+      g.set(pts);
+      tween(0.3, (u) => {
+        const o = Math.random() < 0.7 ? 1 - u : 0.2;
+        c.m.opacity = o;
+        g.m.opacity = 0.5 * o;
+        if (u >= 1) {
+          c.done();
+          g.done();
+        }
+      });
     }
     const hp = [opts.hp ? opts.hp[0] : 1, opts.hp ? opts.hp[1] : 1];
     const report = (side, ev, idx) => {
@@ -2964,6 +4103,7 @@
       const m = f.bubble.userData.mat;
       tween(0.3, (u) => (m.opacity = 0.18 + 0.4 * Math.sin(u * PI)));
       if (left <= 0) {
+        dropRunes(f);
         const b = f.bubble;
         f.bubble = null;
         burst(b.position.clone(), "#cfeaff", 18, 2.2);
@@ -2984,6 +4124,113 @@
         if (u >= 1) scene.remove(c);
       });
     }
+    /* Abschluss-Talente (Wunsch des Kapitaens: eigene sichtbare Spezialattacken): Bewegungen aus den gekauften
+       Meshy-Clips (charge, stab, power in src/r3d-rigged.js), Figuren ohne Clips nehmen die naechste gebaute Bewegung */
+    const clipAct = (f, name, fb) => (f.m.parts && f.m.parts.clips ? name : fb);
+    // Staubwolke am Boden (Sturmangriff)
+    function dust(x, z, color) {
+      burst(new T.Vector3(x, 0.15, z), color || "#cbb89a", 6, 1.2, 0.6);
+    }
+    // Druckwelle: flacher Ring am Boden, der schnell auseinanderlaeuft, dazu ein Lichtblitz
+    function shockwave(f, color) {
+      const r = new T.Mesh(G.torus(0.5, 0.12, PI * 2, 6, 48), glow(color, 0.9).clone());
+      r.rotation.x = PI / 2;
+      r.position.set(f.m.obj.position.x, 0.1, f.m.obj.position.z);
+      scene.add(r);
+      burst(new T.Vector3(f.m.obj.position.x, 0.4, f.m.obj.position.z), color, 22, 3, 0.8);
+      return tween(0.55, (u) => {
+        r.scale.setScalar(1 + u * 7);
+        r.material.opacity = 0.9 * (1 - u) * (1 - u);
+        if (u >= 1) scene.remove(r);
+      });
+    }
+    // Explosion (Wilde Macht): wachsende leuchtende Kugel, Lichtsaeule, Funkenregen
+    function explosion(f, color) {
+      const c = new T.Vector3(f.m.obj.position.x, (f.m.headY || 1.8) * 0.55, f.m.obj.position.z);
+      const sm = new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0.8, blending: T.AdditiveBlending, depthWrite: false });
+      const b = new T.Mesh(G.sph(0.5, 20, 14), sm);
+      b.position.copy(c);
+      scene.add(b);
+      burst(c, color, 30, 4.5, 0.5);
+      burst(c, "#ffffff", 12, 2.5, 0.5);
+      lightColumn(f, color);
+      shake = Math.max(shake, 0.5);
+      zoom = Math.max(zoom, 0.7);
+      return tween(0.6, (u) => {
+        b.scale.setScalar(1 + u * 4);
+        sm.opacity = 0.8 * (1 - u);
+        if (u >= 1) scene.remove(b);
+      });
+    }
+    // Pfeilregen (Pfeilsalve): Pfeile fallen von oben auf den Gegner
+    function arrowRain(f, n, color) {
+      const wm = pm("wood", "#c9b89a");
+      const tm = pm("metal", "#c8ced6");
+      const arrows = [];
+      for (let i = 0; i < n; i++) {
+        const a = grp();
+        a.add(mesh(G.cyl(0.028, 0.028, 1.0, 4), wm));
+        a.add(mesh(G.cone(0.06, 0.18, 4), tm, { p: [0, -0.58, 0], r: [PI, 0, 0] }));
+        const tr = spark(color, 0.45);
+        tr.position.y = 0.3;
+        a.add(tr);
+        const x = f.m.obj.position.x + (Math.random() - 0.5) * 1.8;
+        const z = f.m.obj.position.z + (Math.random() - 0.5) * 1.2;
+        a.position.set(x - 0.8 * f.side, 7 + Math.random() * 2, z);
+        a.rotation.z = -0.12 * f.side;
+        a.userData = { x, z, d: Math.random() * 0.35 };
+        scene.add(a);
+        arrows.push(a);
+      }
+      return tween(0.85, (u) => {
+        for (const a of arrows) {
+          const k = Math.max(0, Math.min(1, (u - a.userData.d) / 0.5));
+          a.position.y = 8 - 7.6 * k * k;
+          a.position.x = a.userData.x - 0.8 * f.side * (1 - k);
+          if (k >= 1 && !a.userData.hit) {
+            a.userData.hit = true;
+            burst(new T.Vector3(a.userData.x, 0.3, a.userData.z), color, 3, 0.8, 0.3);
+          }
+        }
+        if (u >= 1) arrows.forEach((a) => scene.remove(a));
+      });
+    }
+    // Runenkreis (Bannkreis): leuchtender Kreis mit kreisenden Runen am Boden, bis die Barriere bricht
+    function runeCircle(f, color) {
+      const g = grp([f.m.obj.position.x, 0.06, f.m.obj.position.z]);
+      const gm = glow(color, 0.8).clone();
+      const ringM = new T.Mesh(G.torus(1.25, 0.035, PI * 2, 4, 64), gm);
+      ringM.rotation.x = PI / 2;
+      g.add(ringM);
+      const inner = new T.Mesh(G.torus(0.95, 0.02, PI * 2, 4, 64), gm);
+      inner.rotation.x = PI / 2;
+      g.add(inner);
+      const runes = grp();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * PI * 2;
+        const r = mesh(G.box(0.16, 0.02, 0.06), gm, { p: [Math.cos(a) * 1.1, 0.02, Math.sin(a) * 1.1], r: [0, -a, 0] });
+        runes.add(r);
+        runes.add(mesh(G.box(0.03, 0.02, 0.16), gm, { p: [Math.cos(a) * 1.1, 0.02, Math.sin(a) * 1.1], r: [0, -a + 0.6, 0] }));
+      }
+      g.add(runes);
+      g.add(R.haloSprite(color, 3, 0.35, [0, 0.2, 0]));
+      g.scale.setScalar(0.01);
+      scene.add(g);
+      g.userData.spin = runes;
+      g.userData.mat = gm;
+      tween(0.5, (u) => g.scale.setScalar(0.01 + u));
+      return g;
+    }
+    function dropRunes(f) {
+      const g = f.runes;
+      if (!g) return;
+      f.runes = null;
+      tween(0.4, (u) => {
+        g.scale.setScalar(1 + u * 0.6);
+        g.userData.mat.opacity = 0.8 * (1 - u);
+        if (u >= 1) scene.remove(g);
+      });
+    }
     async function playTalent(ev) {
       const A = F[ev.a];
       const color = TAL_COLOR[ev.id] || "#ffd27a";
@@ -2993,20 +4240,39 @@
       if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime", { id: ev.id, a: A.desc, side: A.side });
       if (ev.id === "ward") {
         A.wardLeft = ev.ward;
+        // Bannkreis (Abschluss-Talent): Runenkreis unter dem Zaubernden, der bis zum Bruch der Barriere leuchtet
+        if (ev.name === "Bannkreis") {
+          A.m.play(clipAct(A, "cast", "cast"), 0.7);
+          if (A.runes) scene.remove(A.runes);
+          A.runes = runeCircle(A, color);
+          await wait(0.45);
+        }
         setBubble(A, true);
         floatText(A, "Barriere " + SB.util.fmt(ev.ward), "talent");
       } else if (ev.id === "secondWind") {
+        // Schmerz ignorieren und Zweiter Atem: Kraftschrei mit erhobenen Armen, gruene Lichtsaeule, Funken steigen auf
+        A.m.play(clipAct(A, "power", "victory"), 1.1);
         lightColumn(A, color);
+        shockwave(A, color);
+        rising(A, color, 22);
         hp[ev.a] = ev.hp[ev.a];
         floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
         report(ev.a, ev, -1);
+        await wait(0.45);
       } else if (ev.id === "vanish") {
-        burst(A.m.obj.position.clone().setY(1), color, 22, 1.8, 0.4);
+        // Verschwinden: Rauchwolke und Schattenring, die Figur taucht etwas weiter hinten wieder auf
+        const p0 = A.m.obj.position.clone();
+        burst(p0.clone().setY(1), color, 26, 1.8, 0.4);
+        burst(p0.clone().setY(0.4), "#2a2236", 18, 1.4, 0.2);
+        ring(A, color, false);
         A.m.obj.visible = false;
-        await wait(0.35);
+        await wait(0.4);
+        A.m.obj.position.x = A.home.x + A.side * 0.5;
         A.m.obj.visible = true;
+        burst(A.m.obj.position.clone().setY(1), color, 12, 1.2, 0.3);
         A.m.play("evade", 0.4);
         floatText(A, "Verschwunden!", "evade");
+        tween(0.4, (u) => (A.m.obj.position.x = A.home.x + A.side * 0.5 * (1 - u)));
       } else if (ev.id === "purge") {
         lightColumn(A, color);
         clearStars(A);
@@ -3016,7 +4282,7 @@
     }
 
     async function impact(ev, A, Bf, hit, idx, how) {
-      const ctx = { a: A.desc, d: Bf.desc, side: Bf.side, how: how || "nah" };
+      const ctx = { a: A.desc, d: Bf.desc, side: Bf.side, how: how || "nah", spell: how === "magie" ? spellOf(A) : null };
       const def = 1 - ev.a;
       if (hit.tags) for (const t of hit.tags) if (TAG_TEXT[t]) floatText(t === "double" || t === "opener" || t === "assassinate" ? A : Bf, t === "execute" && A.m.arch === "magier" ? "Vernichtung!" : TAG_TEXT[t], "talent");
       if (hit.absorbed) {
@@ -3045,6 +4311,10 @@
           shake = 0.25;
           zoom = Math.max(zoom, 0.6);
           floatText(Bf, "Kritisch!", "critlabel");
+        }
+        if (hit.tags && hit.tags.indexOf("wild") >= 0) {
+          explosion(Bf, A.m.projColor || "#c47bff");
+          floatText(A, "Wilde Macht!", "talent");
         }
         burst(new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z), hit.res === "crit" ? "#ffb13b" : "#ffe8d0", hit.res === "crit" ? 16 : 8, 1.8);
         if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit", ctx);
@@ -3094,6 +4364,12 @@
         zoom = 0.5;
         if (opts.sfx) opts.sfx("special", { sp: ev.sp, kind: SFX.kind, a: A.desc, side: A.side });
         if (SFX.kind === "aura") setAura(A, SFX.color);
+        if (ev.master) {
+          // Grossmeister (Abschluss-Talent des Klassenpfads): goldener Kreis und Funken, der Spezialangriff kommt oefter
+          ring(A, "#ffd27a", true);
+          rising(A, "#ffe9a8", 18);
+          floatText(A, "Großmeister!", "talent");
+        }
         await wait(0.4);
       }
       const isHero = A.desc.kind !== "monster";
@@ -3101,32 +4377,91 @@
       const bowLike = isHero && (wb === "bogen" || wb === "armbrust" || wb === "speer");
       const spell = (isHero && A.m.arch === "magier") || (!isHero && A.m.ranged);
       if (bowLike || spell) {
+        // Bogen und Armbrust: in Schussstellung drehen (die Bogenclips schiessen zur Seite des Bogenarms), anheben,
+        // zielen; das Geschoss fliegt erst beim Loslassen und vom Bogen oder der Armbrust aus
+        const archer = bowLike && wb !== "speer" && A.m.parts && A.m.parts.rig && R.rigged;
+        const yaw0 = A.m.obj.rotation.y;
+        const turn = archer ? R.rigged.SHOT_TURN.Archery_Shot : 0;
+        if (archer) {
+          const aim = (A.side < 0 ? PI / 2 : -PI / 2) - turn;
+          tween(0.3, (u) => (A.m.obj.rotation.y = yaw0 + (aim - yaw0) * (1 - (1 - u) * (1 - u))));
+        }
+        // Pfeilsalve (Abschluss-Talent der Jaeger): die zusaetzlichen Treffer fallen als Pfeilregen vom Himmel
+        const rainFrom = ev.volley && bowLike ? ev.hits.length - ev.volley : ev.hits.length;
         for (let i = 0; i < ev.hits.length; i++) {
-          A.m.play(bowLike ? "shoot" : "cast", 0.5);
-          await wait(bowLike ? 0.3 : 0.3);
-          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell", { a: A.desc, side: A.side });
+          if (i >= rainFrom) {
+            if (i === rainFrom) {
+              banner("Pfeilsalve", A.side);
+              A.m.play("shoot", 0.6);
+              await wait(0.6);
+              if (opts.sfx) opts.sfx("special", { sp: "pfeilhagel", kind: "arrows", a: A.desc, side: A.side });
+              await arrowRain(Bf, 8 + 4 * ev.volley, special ? SFX.color : "#ffe9b0");
+            }
+            await impact(ev, A, Bf, ev.hits[i], i, "pfeil");
+            await wait(0.12);
+            continue;
+          }
+          const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
+          A.m.play(bowLike ? "shoot" : "cast", D);
+          await wait(archer ? D : 0.3);
+          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell", { a: A.desc, side: A.side, spell: bowLike ? null : spellOf(A) });
           if (special && SFX.kind === "beam") {
             await beam(A, Bf, SFX.color);
           } else if (special && SFX.kind === "roots") {
             roots(Bf, SFX.color);
             await wait(0.35);
-          } else {
-            const kind = bowLike ? (wb === "speer" ? "spear" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
-            await projectile(A, Bf, kind, special ? SFX.color : A.m.projColor || "#c47bff");
-          }
+          } else if (bowLike || (special && SFX.kind === "orbs")) {
+            const kind = bowLike ? (wb === "speer" ? "spear" : wb === "armbrust" ? "bolt" : "arrow") : "star";
+            await projectile(A, Bf, kind, special ? SFX.color : HERO_TINT[A.desc.cls] || A.m.projColor || "#c47bff");
+          } else await castFx(A, Bf, spellOf(A));
           await impact(ev, A, Bf, ev.hits[i], i, bowLike ? (wb === "speer" ? "speer" : "pfeil") : "magie");
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
+        if (archer) {
+          const yaw1 = A.m.obj.rotation.y;
+          tween(0.35, (u) => (A.m.obj.rotation.y = yaw1 + (yaw0 - yaw1) * u));
+        }
       } else {
-        const target = Bf.home.x - Bf.side * (Bf.desc.kind === "monster" ? 1.9 : 1.5);
+        // Bestien halten fuer ihren Ansprung weiter vor dem Helden (standOff), sonst steht die Schnauze schon am Gegner
+        const gap = Bf.desc.kind === "monster" ? Math.max(1.9, Bf.front + 0.7) : Math.max(1.5, A.m.standOff || 0);
+        const target = Bf.home.x - Bf.side * gap;
+        const ST = A.m.strike;
         const from = A.home.x;
-        if (special && SFX.kind === "smoke") {
+        const tags0 = (ev.hits[0] && ev.hits[0].tags) || [];
+        const opener = tags0.indexOf("opener") >= 0;
+        const assassin = tags0.indexOf("assassinate") >= 0;
+        let behind = false;
+        if (assassin) {
+          // Meucheln (Abschluss-Talent der Schurken): in einer Rauchwolke verschwinden, hinter dem Gegner auftauchen
+          banner("Meucheln", A.side);
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 20, 1.6, 0.5);
+          burst(A.m.obj.position.clone().setY(0.4), "#2a2236", 14, 1.2, 0.2);
+          A.m.obj.visible = false;
+          await wait(0.3);
+          behind = true;
+          A.m.obj.position.x = Bf.home.x + Bf.side * 1.3;
+          A.m.obj.rotation.y += PI;
+          A.m.obj.visible = true;
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 14, 1.2, 0.4);
+        } else if (special && SFX.kind === "smoke") {
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
           A.m.obj.visible = false;
           await wait(0.15);
           A.m.obj.position.x = target;
           A.m.obj.visible = true;
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
+        } else if (opener) {
+          // Sturmangriff (Abschluss-Talent der Krieger): im vollen Lauf auf den Gegner, Staub hinter jedem Schritt
+          banner("Sturmangriff", A.side);
+          A.m.play(clipAct(A, "charge", "walk"), 0.5);
+          let last = 0;
+          await tween(0.42, (u) => {
+            A.m.obj.position.x = from + (target - from) * u * u;
+            if (u - last > 0.12) {
+              last = u;
+              dust(A.m.obj.position.x, A.m.obj.position.z);
+            }
+          });
         } else {
           A.m.play(special && ev.sp === "zermalmen" ? "special" : "walk", 0.3);
           if (opts.sfx && A.desc.kind !== "monster") {
@@ -3136,19 +4471,37 @@
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         for (let i = 0; i < ev.hits.length; i++) {
-          A.m.play(special && i === 0 ? "special" : "attack", special ? 0.5 : 0.42);
+          const big = special && i === 0;
+          const stab = assassin && i === 0;
+          A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
           if (opts.sfx) opts.sfx("swing", { a: A.desc, side: A.side });
-          await wait(0.22);
+          await wait(ST ? (big ? ST.shit : ST.hit) : 0.22);
+          if (opener && i === 0) {
+            shockwave(Bf, "#ffd27a");
+            shake = Math.max(shake, 0.45);
+            zoom = Math.max(zoom, 0.6);
+          }
+          if (stab) slash(Bf, "#b48cff", 1);
           if (special && (SFX.kind === "slash" || SFX.kind === "aura")) slash(Bf, SFX.color, i % 2);
           else if (special && SFX.kind === "shock") {
             ring(Bf, SFX.color, true);
             shake = 0.3;
           } else if (special && SFX.kind === "roots") roots(Bf, SFX.color);
-          else slash(Bf, "#ffffff", i % 2);
+          else meleeFx(A, Bf, i);
           await impact(ev, A, Bf, ev.hits[i], i);
-          await wait(0.16);
+          // Bestien: Biss und Satz zurueck ausspielen lassen
+          await wait(ST ? 0.3 : 0.16);
         }
-        await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
+        if (behind) {
+          // nach dem Meucheln in den Schatten zurueck auf den eigenen Platz
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 12, 1.2, 0.4);
+          A.m.obj.visible = false;
+          await wait(0.2);
+          A.m.obj.position.x = from;
+          A.m.obj.rotation.y -= PI;
+          A.m.obj.visible = true;
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 10, 1.0, 0.4);
+        } else await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
       }
       if (ev.heal) {
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.heal;
@@ -3181,6 +4534,7 @@
 
     const api = {
       _F: F,
+      _scene: scene,
       play,
       setSpeed(s) {
         speed = s;
@@ -3191,6 +4545,8 @@
         clearStars(old);
         setBubble(old, false);
         setBubble(F[0], false);
+        dropRunes(old);
+        dropRunes(F[0]);
         F[0].wardLeft = 0;
         setAura(old, null);
         setPoison(old, false);

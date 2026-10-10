@@ -24,8 +24,8 @@ const errors = [];
 const cdnMap = process.env.CDN_CACHE ? JSON.parse(readFileSync(process.env.CDN_CACHE, "utf8")) : null;
 const browser = await pw.chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"] });
 
-async function newPage(vp) {
-  const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+async function newPage(vp, dpr = 1) {
+  const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: dpr });
   const page = await ctx.newPage();
   // Optional: CDN_CACHE zeigt auf eine JSON-Datei {url: lokaler Pfad}, z. B. fuer Umgebungen,
   // in denen der Testbrowser das CDN nicht direkt erreicht.
@@ -46,7 +46,8 @@ async function newPage(vp) {
 const shot = (page, name) => page.screenshot({ path: path.join(out, name + ".png") });
 const step = (t) => console.log("→ " + t);
 const open = async (page, id) => {
-  await page.click('#dock [data-id="' + id + '"]');
+  // mit Software-WebGL dauert das erste Bild neuer Portraits (Arena: vier Gegner) bis zu einer halben Minute
+  await page.click('#dock [data-id="' + id + '"]', { timeout: 120000 });
   await page.waitForSelector('#panel[data-id="' + id + '"]');
   await page.waitForTimeout(700);
 };
@@ -77,9 +78,12 @@ await page.click('[data-cact="realm"][data-v="midgard"]');
 await page.click('[data-cact="cls"][data-v="sturmhuene"]');
 await page.click('[data-cact="race"][data-v="trollblut"]');
 await page.click('[data-cact="gender"][data-v="m"]');
-await page.click('[data-cact="looks"][data-k="tattoo"][data-v="runen"]');
-await page.click('[data-cact="look"][data-k="tattooColor"][data-v="#4fffb0"]');
-await page.click('[data-cact="look"][data-k="eyes"][data-v="#9fe3ff"]');
+// mit fertig modellierter Figur (Meshy-Paket eingebettet) gibt es keine Wahl von Taetowierung und Augen
+if (await page.locator('[data-cact="looks"][data-k="tattoo"][data-v="runen"]').count()) {
+  await page.click('[data-cact="looks"][data-k="tattoo"][data-v="runen"]');
+  await page.click('[data-cact="look"][data-k="tattooColor"][data-v="#4fffb0"]');
+  await page.click('[data-cact="look"][data-k="eyes"][data-v="#9fe3ff"]');
+}
 await page.fill("#heroName", "Tilda Sturmfang");
 await page.waitForTimeout(800);
 await shot(page, "02-erstellung-midgard");
@@ -99,6 +103,18 @@ await shot(page, "04-taverne");
 await page.click('#hint [data-act="hintNext"]').catch(() => {});
 await page.click('[data-act="questStart"][data-i="0"]');
 await page.waitForTimeout(500);
+// Der Reisebalken im Auftrag laeuft mit der Uhr weiter, ohne dass das Fenster neu aufgebaut wird
+{
+  const bar = () => page.evaluate(() => parseFloat(document.querySelector('#panel .quest .progress i').style.width));
+  const w0 = await bar();
+  // Uhr um die halbe Reisezeit vorstellen (nur fuer diese Probe)
+  await page.evaluate(() => { const a = SB.ui.S.quest.active; const d = (a.end - a.start) / 2; const real = SB.engine.now; SB.engine.now = () => real() + d; window.__uhrZurueck = () => { SB.engine.now = real; }; });
+  // die Uhr tickt jede Sekunde; unter Last (Figurendaten werden im Hintergrund geladen) kann ein Takt spaeter kommen
+  await page.waitForFunction((w) => parseFloat(document.querySelector("#panel .quest .progress i").style.width) > w + 30, w0, { timeout: 6000 }).catch(() => {});
+  const w1 = await bar();
+  await page.evaluate(() => window.__uhrZurueck());
+  if (!(w1 > w0 + 30)) throw new Error("Reisebalken steht still: " + w0 + " -> " + w1);
+}
 await page.click('[data-act="questSkip"]');
 await page.waitForSelector('[data-act="questFight"]');
 await page.click('[data-act="questFight"]');
@@ -108,10 +124,11 @@ step("Charakterbogen");
 await open(page, "held");
 await page.waitForTimeout(900);
 await shot(page, "06-charakter");
-const plus = await page.$('[data-act="attr"]:not([disabled])');
-if (plus) await plus.click();
-const invItem = await page.$('[data-ref^="inv:"]');
-if (invItem) {
+// Locator statt Element: das Panel wird nach dem Klick neu gezeichnet, ein vorher geholtes Element waere dann weg
+const plus = page.locator('[data-act="attr"]:not([disabled])').first();
+if (await plus.count()) await plus.click();
+const invItem = page.locator('[data-ref^="inv:"]').first();
+if (await invItem.count()) {
   await invItem.click();
   await page.waitForTimeout(300);
   await shot(page, "06b-vergleich");
@@ -119,7 +136,9 @@ if (invItem) {
 }
 await page.click('[data-act="tab"][data-tab="aussehen"]');
 await page.waitForTimeout(900);
-await page.click('[data-act="lookn"][data-k="scar"][data-v="kreuz"]');
+// Spiegel: Narbe nur bei Figuren ohne fertiges Modell waehlbar
+if (await page.locator('[data-act="lookn"][data-k="scar"][data-v="kreuz"]').count()) await page.click('[data-act="lookn"][data-k="scar"][data-v="kreuz"]');
+else if (!(await page.locator(".mirror-form p.desc").count())) errors.push("Spiegel ohne Wahl und ohne Hinweis");
 await page.waitForTimeout(700);
 await shot(page, "07-aussehen");
 await page.click('[data-act="tab"][data-tab="geschichte"]');
@@ -153,8 +172,8 @@ await page.evaluate(() => {
 });
 await open(page, "steinkreis");
 await shot(page, "10-chronik");
-const sf = await page.$('[data-act="storyFight"]:not([disabled])');
-if (!sf) errors.push("Kein Chronik-Kapitel verfügbar");
+const sf = page.locator('[data-act="storyFight"]:not([disabled])').first();
+if (!(await sf.count())) errors.push("Kein Chronik-Kapitel verfügbar");
 else {
   await sf.click();
   await playBattle(page, "11-chronik");
@@ -359,16 +378,21 @@ await page.context().close();
 
 /* ---- Mobil ---- */
 step("Mobil");
-const mob = await newPage({ width: 390, height: 844 });
+// doppelte Pixeldichte wie bei ueblichen Handys: dort hielt die 3D-Ansicht das Formular frueher breiter als den Bildschirm
+const mob = await newPage({ width: 390, height: 844 }, 2);
 await mob.goto(url);
 await mob.waitForSelector("#create:not([hidden])");
 await mob.waitForTimeout(1200);
 await shot(mob, "30-mobil-erstellung");
+const createWide = await mob.evaluate(() => [...document.querySelectorAll("#create .cform, #create [data-cact]")].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1).length);
+if (createWide) errors.push("Mobil: " + createWide + " Teile der Heldenerschaffung ragen über den Bildschirm");
 await mob.click('[data-cact="realm"][data-v="hibernia"]');
 await mob.waitForTimeout(400);
 await mob.fill("#heroName", "Pim");
 await mob.click('[data-cact="start"]');
-await mob.waitForSelector("#topbar .me-sub");
+// Start mit Meshy-Figuren in Software-WebGL bei doppelter Pixeldichte: allein 10 bis 17 Sekunden, nach dem langen
+// Durchlauf auch ueber 30
+await mob.waitForSelector("#topbar .me-sub", { timeout: 120000 });
 await mob.click('#modal [data-act="closeDialog"]');
 await mob.waitForTimeout(2000);
 await shot(mob, "31-mobil-insel");

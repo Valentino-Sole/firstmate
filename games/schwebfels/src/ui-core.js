@@ -34,23 +34,176 @@
     mondhaendler: { race: "sidhe", realm: "hibernia", gender: "w", cls: "lichtweber", look: { skin: "#dfe6f2", hair: "#e8eef8", hairStyle: 2, eyes: "#cfe0ff", tattoo: "mond", tattooColor: "#ffcf5a" }, gear: { helm: { base: "kappe", tint: "#1e2448", style: 0 }, ruestung: { base: "robe", tint: "#2a3260", style: 1 } } },
   };
   UI.isNight = () => !!UI.S && E.isNight(UI.S.settings.dayCycle || "zyklus");
-  // Version 5 (Probe): neue Heldenkoerper aus der Bild-zu-3D-Strecke, sobald ihre Datei geladen ist (Einstellungen: abschaltbar)
+  // Reiche mit Figurendatei (gen-<reich>.js neben der Seite): Midgard (Frostwicht, Glutzwerg), Albion (Albier,
+  // Kreidezwerg) und Hibernia (Sidhe, Moorling); Nordmann und Trollblut stecken in der Seite
+  UI.GEN_REALMS = ["midgard", "albion", "hibernia"];
+  // Jedes Volk hat einen Meshy-Koerper. Solange er noch laedt, steht ein Platzhalter da (pending), nie die alte Figur;
+  // das Laden der Datei seines Reiches wird dabei angestossen.
   const withGen = (d) => {
-    if (!UI.S || UI.S.settings.genFigures === false || !SB.R3D.human || !SB.R3D.human.genReady) return d;
+    if (!SB.R3D.human || !SB.R3D.human.genReady) return d;
     const k = d.race + "-" + (d.gender === "w" ? "frau" : "mann");
-    return SB.R3D.human.genReady(k) ? Object.assign(d, { gen: k, genGear: [] }) : d;
+    if (SB.R3D.human.genReady(k)) return Object.assign(d, { gen: k, genGear: [] }, GEAR_V ? { gv: GEAR_V } : {});
+    const realm = D.RACES[d.race] && D.RACES[d.race].realm;
+    if (realm && UI.use3d && !GEN_FIG[realm]) UI.loadGenFigures(realm);
+    return Object.assign(d, { pending: k });
   };
-  UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.gearVisual(S.equip) });
-  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper
-  UI.loadGenFigures = function (realm) {
-    if (!UI.use3d || !UI.S || UI.S.settings.genFigures === false) return;
-    SB.assets
-      .loadGen(realm)
+  UI.withGen = withGen;
+  UI.heroDesc = (S) => withGen({ kind: "hero", race: S.race, cls: S.cls, realm: S.realm, gender: S.gender, look: S.look, gear: E.heroGear(S) });
+  // Figurendatei des Reiches im Hintergrund laden; danach zeigen alle Ansichten die neuen Koerper.
+  // Liefert "bereit", "aus" (abgeschaltet, ohne 3D oder Reich ohne Figuren), "fehlt" (keine Datei neben der Seite) oder "fehler".
+  // Die Koerper von Nordmann und Trollblut stecken in der Seite (build.mjs, SB_GENPACK) und sind sofort bereit, sobald ihre
+  // Hautbilder dekodiert sind; die Datei gen-<reich>.js bringt die uebrigen (Figurenprobe). UI.genStatus fuer die Anzeige.
+  UI.genStatus = { kern: "", datei: "" };
+  const genChanged = () => {
+    if (UI.onGen) UI.onGen();
+    if (UI.S) UI.refresh();
+    // offenes Fenster neu zeichnen: Portraits und Figuren, die bis eben Platzhalter waren
+    if (UI.panelId) UI.renderPanel();
+  };
+  // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
+  // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); bis dahin steht ein Platzhalter da.
+  // Ein gescheitertes Laden wird nach einer Pause erneut versucht (schwaches Netz am Handy).
+  // UI.monReady[familie] fliesst als mv in die Beschreibung, damit Portraits nach dem Laden neu entstehen.
+  const MON_LOAD = {};
+  // Familien, deren Figuren nicht in eine Datei passen (Grenze 16 MB): weitere Dateien gen-mon<familie>2.js
+  const MON_MORE = { drache: ["drache2"] };
+  UI.monReady = {};
+  const RETRY_MS = 15000;
+  const MON_PANELS = { taverne: 1, figurenprobe: 1, steinkreis: 1, mondtor: 1, tiefen: 1, heim: 1, held: 1 };
+  UI.loadMonsterArch = function (arch) {
+    if (!UI.use3d || !arch) return Promise.resolve(false);
+    if (MON_LOAD[arch]) return MON_LOAD[arch];
+    MON_LOAD[arch] = SB.assets.ready
+      .then(() => Promise.all([SB.assets.loadGen("mon" + arch)].concat((MON_MORE[arch] || []).map((x) => SB.assets.loadGen("mon" + x).catch(() => null)))))
       .then(() => SB.R3D.human.preloadGen())
+      .then(() => {
+        // Farb- und Reliefbilder der Bestien dieser Familie abwarten (sonst stuende sie im ersten Bild schwarz da)
+        const B = (SB.assets.data && SB.assets.data.beasts) || {};
+        const waits = [];
+        for (const k in B) {
+          const t = B[k].tex && SB.assets.texture("beast." + k, B[k].tex, { srgb: true });
+          const n = B[k].ntex && SB.assets.texture("beast." + k + ".n", B[k].ntex, { srgb: false });
+          for (const x of [t, n]) if (x && x.userData.ready) waits.push(x.userData.ready);
+        }
+        return Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 3000))]);
+      })
       .then(
-        () => UI.S && UI.refresh(),
-        (e) => console.warn("Neue Figuren nicht geladen", e)
+        () => {
+          UI.monReady[arch] = true;
+          if (MON_PANELS[UI.panelId]) UI.renderPanel();
+          return true;
+        },
+        (e) => {
+          if (!(e && e.missing)) console.warn("Monsterfiguren " + arch + " nicht geladen", e);
+          setTimeout(() => delete MON_LOAD[arch], RETRY_MS);
+          return false;
+        }
       );
+    return MON_LOAD[arch];
+  };
+  // mehrere Familien; mit ms hoechstens so lange warten (danach kaempft notfalls ein Platzhalter)
+  UI.loadMonsters = function (archs, ms) {
+    const all = Promise.all([...new Set((archs || []).filter(Boolean))].map(UI.loadMonsterArch));
+    return ms ? Promise.race([all, new Promise((r) => setTimeout(r, ms))]) : all;
+  };
+  // Gemalte Kampfkulissen der Reiche, der Arena und der Verliese (kulissen.js neben der Seite, gut 3 MB): einmal im
+  // Hintergrund laden, nach einem Fehlschlag spaeter erneut
+  let KUL_LOAD = null;
+  UI.loadKulissen = function () {
+    if (!UI.use3d) return Promise.resolve(false);
+    if (globalThis.SB_KULISSEN) return Promise.resolve(true);
+    if (!KUL_LOAD)
+      KUL_LOAD = new Promise((ok) => {
+        const el = document.createElement("script");
+        el.src = "kulissen.js";
+        el.onload = () => ok(!!globalThis.SB_KULISSEN);
+        el.onerror = () => {
+          el.remove();
+          setTimeout(() => (KUL_LOAD = null), RETRY_MS);
+          ok(false);
+        };
+        document.head.appendChild(el);
+      });
+    return KUL_LOAD;
+  };
+  // Familien der Gegner in den aktuellen Auftraegen der Taverne
+  UI.offerArchs = function () {
+    const S = UI.S;
+    const out = [];
+    for (const o of (S && S.quest && S.quest.offers) || []) for (const w of o.waves || [{ monster: o.monster }]) {
+      const m = SB.engine.monById(w.monster);
+      if (m) out.push(m.arch);
+    }
+    return out;
+  };
+  // Ausruestung aus Meshy-Modellen je Reich und Heldenart (gen-ausr<reich><art>.js neben der Seite): Ruestungsteile und
+  // Waffen fuer Gegenstaende dieser Gestaltungskultur. Erst die Art des eigenen Helden, dann die uebrigen im Hintergrund.
+  // GEAR_V zaehlt die geladenen Dateien; es steht in der Beschreibung der Figur, damit Portraits und Ansichten neu entstehen.
+  const GEAR_ARCHS = ["krieger", "schurke", "jaeger", "magier", "umhang"];
+  UI.GEAR_FILES = { albion: GEAR_ARCHS, midgard: GEAR_ARCHS, hibernia: GEAR_ARCHS };
+  let GEAR_V = 0;
+  const GEAR_LOAD = {};
+  UI.loadGear = function (realm) {
+    const own = UI.S && D.CLASSES[UI.S.cls] ? D.CLASSES[UI.S.cls].arch : null;
+    const rank = (x) => (x === own ? 2 : x === "umhang" ? 1 : 0);
+    const list = (UI.GEAR_FILES[realm] || []).slice().sort((a, b) => rank(b) - rank(a));
+    return list.reduce(
+      (prev, arch) =>
+        prev.then(() => {
+          const id = "ausr" + realm + arch;
+          if (GEAR_LOAD[id]) return GEAR_LOAD[id];
+          return (GEAR_LOAD[id] = SB.assets.loadGen(id).then(
+            () => {
+              GEAR_V++;
+              genChanged();
+            },
+            (e) => {
+              if (!(e && e.missing)) console.warn("Ausruestung nicht geladen", id, e);
+              setTimeout(() => delete GEAR_LOAD[id], RETRY_MS);
+            }
+          ));
+        }),
+      Promise.resolve()
+    );
+  };
+  // je Reich nur einmal (Arena und Kampf fragen fremde Reiche an, ohne dass die Anzeige sich im Kreis neu zeichnet);
+  // nach einem Fehlschlag erst nach einer Pause erneut
+  const GEN_FIG = {};
+  UI.loadGenFigures = function (realm) {
+    UI.loadMonsters(UI.offerArchs());
+    UI.loadKulissen();
+    if (!UI.use3d || UI.GEN_REALMS.indexOf(realm) < 0) return Promise.resolve("aus");
+    if (GEN_FIG[realm]) return GEN_FIG[realm];
+    const HU = SB.R3D.human;
+    const kern = SB.assets.ready.then(() => {
+      if (!Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length) return false;
+      UI.genStatus.kern = UI.genStatus.kern || "laedt";
+      return HU.preloadGen().then(() => {
+        UI.genStatus.kern = "bereit";
+        genChanged();
+        return true;
+      });
+    });
+    UI.genStatus.datei = UI.genStatus.datei === "bereit" ? "bereit" : "laedt";
+    return (GEN_FIG[realm] = kern
+      .then(() => SB.assets.loadGen(realm))
+      .then(() => HU.preloadGen())
+      .then(
+        () => {
+          UI.genStatus.datei = "bereit";
+          if (!UI.genStatus.kern) UI.genStatus.kern = "bereit";
+          genChanged();
+          return UI.loadGear(realm).then(() => "bereit");
+        },
+        (e) => {
+          UI.genStatus.datei = e && e.missing ? "fehlt" : "fehler";
+          if (e && e.missing) console.info("Keine Figurendatei fuer " + realm + ", spaeter neuer Versuch");
+          else console.warn("Neue Figuren nicht geladen", e);
+          setTimeout(() => delete GEN_FIG[realm], RETRY_MS);
+          genChanged();
+          return UI.genStatus.kern === "bereit" ? "bereit" : UI.genStatus.datei;
+        }
+      ));
   };
   // Monster tragen die Spuren ihrer Heimat: Frost in Midgard, Moos in Hibernia
   UI.foeRealm = function (m) {
@@ -60,28 +213,131 @@
     if (m && m.id && /^(nacht-|story-)/.test(m.id)) return S ? S.realm : null;
     return null;
   };
+  // Gegner ohne Eintrag in D.MONSTERS (Chronik, Verliese, Nachtjagd) tragen ebenfalls eine Meshy-Figur: eine eigene
+  // unter dem Schluessel ihres Namens (Endbosse, etwa "derwurmimeis"), sonst die naechstliegende Figur ihrer Familie,
+  // zuerst nach dem Namen ("Der Dornenhirte" -> dornenhirte), dann nach Farbe und Akzent
+  const slug = (s) => String(s || "").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]/g, "");
+  const rgb = (c) => {
+    const n = parseInt(String(c || "#808080").slice(1, 7), 16) || 0;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const LOOK = {};
+  UI.monKey = slug;
+  // nur Monster aus D.MONSTERS haben eine eigene Figur unter ihrer ID (Verliesbosse loest E.monById zwar auch auf,
+  // sie leihen sich aber eine Figur ihrer Familie)
+  const ownFigure = (id) => !!id && SB.data.MONSTERS.some((m) => m.id === id);
+  UI.monLook = function (f) {
+    if (!f || ownFigure(f.id)) return null;
+    const key = f.arch + "|" + f.name + "|" + f.color + "|" + f.accent;
+    if (key in LOOK) return LOOK[key];
+    const fam = SB.data.MONSTERS.filter((m) => m.arch === f.arch);
+    const nm = slug(f.name);
+    let best = fam.filter((m) => nm.indexOf(slug(m.name)) >= 0).sort((a, b) => slug(b.name).length - slug(a.name).length)[0];
+    if (!best) {
+      const c = rgb(f.color);
+      const a = rgb(f.accent);
+      const d = (m) => {
+        const x = rgb(m.color);
+        const y = rgb(m.accent);
+        let s = 0;
+        for (let i = 0; i < 3; i++) s += (c[i] - x[i]) ** 2 + 0.35 * (a[i] - y[i]) ** 2;
+        return s;
+      };
+      best = fam.slice().sort((p, q) => d(p) - d(q))[0];
+    }
+    return (LOOK[key] = best ? best.id : null);
+  };
+  // visual: eigene Figur (Monster-ID oder Name), look: geliehene Figur, falls es keine eigene gibt
+  const monVisual = (f) => (ownFigure(f.id) ? f.id : slug(f.name) || f.id);
   UI.fighterDesc = function (f) {
-    if (f.kind === "monster") return { kind: "monster", arch: f.arch, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
+    if (f.kind === "monster") return { kind: "monster", arch: f.arch, visual: monVisual(f), look: UI.monLook(f), mv: UI.monReady[f.arch] ? 1 : 0, color: f.color, accent: f.accent, boss: !!f.boss, final: !!f.final, realm: UI.foeRealm(f) };
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
-  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: monVisual(m), look: UI.monLook(m), mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  /* Portraits ohne Wartezeit: schon gezeichnete kommen sofort, neue zeichnet das Spiel nacheinander im Hintergrund
+     (eines je Takt, nicht waehrend eines Kampfes) und setzt sie dann an ihre Stelle. Vorher entstanden alle Portraits
+     eines Fensters, bevor es aufging; die Arena mit vier Gegnern stand so spuerbar still (im Testbrowser 13 Sekunden). */
+  const SNAPQ = new Map();
+  let SNAPN = 0;
+  let snapTimer = 0;
+  const silhouetteOf = (desc) => I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
+  function snapNext() {
+    snapTimer = 0;
+    if (!SNAPQ.size) return;
+    if (UI.inBattle) {
+      snapTimer = setTimeout(snapNext, 400);
+      return;
+    }
+    const [key, job] = SNAPQ.entries().next().value;
+    SNAPQ.delete(key);
+    const url = SB.R3D.snapshot(job.desc, job.size, job.bust);
+    if (url) for (const el of document.querySelectorAll('[data-snap="' + job.id + '"]')) el.outerHTML = '<img alt="" src="' + url + '">';
+    if (SNAPQ.size) snapTimer = setTimeout(snapNext, 16);
+  }
   UI.portrait = function (desc, size, bust) {
-    const url = UI.use3d ? SB.R3D.snapshot(desc, size || 128, bust) : null;
-    if (url) return '<img alt="" src="' + url + '">';
-    return I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
+    // noch ladende Meshy-Figur (Held oder Monster): Umriss statt Bild, das Portrait entsteht nach dem Laden neu
+    const waiting = desc.pending || (desc.kind === "monster" && (desc.visual || desc.look) && !desc.mv && !(SB.R3D.beasts && SB.R3D.beasts.hasOwn && SB.R3D.beasts.hasOwn(desc.look)));
+    if (!UI.use3d || waiting) return silhouetteOf(desc);
+    const R = SB.R3D;
+    size = size || 128;
+    if (!R.snapshotCached || UI.syncPortraits) {
+      const url = R.snapshot(desc, size, bust);
+      return url ? '<img alt="" src="' + url + '">' : silhouetteOf(desc);
+    }
+    const hit = R.snapshotCached(desc, size, bust);
+    if (hit) return '<img alt="" src="' + hit + '">';
+    const key = R.snapshotKey(desc, size, bust);
+    let job = SNAPQ.get(key);
+    if (!job) {
+      job = { id: "sn" + ++SNAPN, desc, size, bust };
+      SNAPQ.set(key, job);
+    }
+    if (!snapTimer) snapTimer = setTimeout(snapNext, 16);
+    return '<span class="snap-wait" data-snap="' + job.id + '">' + silhouetteOf(desc) + "</span>";
   };
-  UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id]), 128, true) : "");
+  // sofort gezeichnet (Kampfanzeige, Auswahl der Gestalt): dort muss das Bild gleich da sein
+  UI.portraitNow = function (desc, size, bust) {
+    const o = UI.syncPortraits;
+    UI.syncPortraits = true;
+    try {
+      return UI.portrait(desc, size, bust);
+    } finally {
+      UI.syncPortraits = o;
+    }
+  };
+  UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id])), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
+  // Fertig modellierte Figuren (Meshy) fuer Volk und Geschlecht: dann waehlt das Aussehen nur die Gestalt, denn Haut,
+  // Haare und Gesicht gehoeren zum Modell. Die Wahl steckt in look.hairStyle (wie bei den Inselbewohnern).
+  UI.gestalten = function (race, gender) {
+    const RG = SB.R3D && SB.R3D.rigged;
+    return RG && RG.variants ? RG.variants(race, gender).slice(0, D.HAIR_STYLES.length) : [];
+  };
+  // desc (Volk, Geschlecht, Klasse): mit 3D zeigt jede Wahl ein kleines Portrait der Figur
+  UI.gestaltHtml = function (L, n, act, desc) {
+    const cur = Math.abs(L.hairStyle | 0) % n;
+    let h = "<h4>Gestalt</h4>";
+    if (n > 1) {
+      h += '<div class="choices">';
+      for (let i = 0; i < n; i++) {
+        const pic = desc && UI.use3d ? UI.portraitNow(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
+        h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">' + (pic.indexOf("<img") === 0 ? pic : "") + "Gestalt " + (i + 1) + "</button>";
+      }
+      h += "</div>";
+    }
+    return h + '<p class="muted small">Diese Figur ist fertig modelliert: Haut, Haare und Gesicht gehören zu ihrer Gestalt.</p>';
+  };
 
   /* ---------- Speichern ---------- */
   let saveTimer = 0;
+  // ohne Helden nichts speichern (etwa „Neuer Held“, solange ein verzoegertes Speichern noch aussteht)
   UI.save = function () {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => SB.store.save(UI.S), 300);
+    saveTimer = setTimeout(() => UI.S && SB.store.save(UI.S), 300);
   };
   UI.saveNow = function () {
     clearTimeout(saveTimer);
-    SB.store.save(UI.S);
+    if (UI.S) SB.store.save(UI.S);
   };
 
   /* ---------- Formatierung ---------- */
@@ -176,14 +432,7 @@
     if (p[0] === "eq") return S.equip[p[1]];
     if (p[0] === "shop") return S.shops[p[1]] && S.shops[p[1]].items[+p[2]];
     if (p[0] === "offer") return S.quest.offers[+p[1]] && S.quest.offers[+p[1]].item;
-    if (p[0] === "tmp") return UI.tmpItems[+p[1]];
     return null;
-  };
-  UI.tmpItems = [];
-  UI.tmpRef = function (item) {
-    UI.tmpItems.push(item);
-    if (UI.tmpItems.length > 40) UI.tmpItems.shift();
-    return "tmp:" + (UI.tmpItems.length - 1);
   };
   UI.slotName = (it) => D.SLOT_INFO[it.slot].name;
   UI.isUpgrade = function (it) {
@@ -351,6 +600,7 @@
   /* ---------- Menueleiste (links am Desktop, unten am Handy) ---------- */
   const MENU = [
     ["held", "held", "Charakter"],
+    ["heim", "heim", "Heim"],
     ["taverne", "taverne", "Taverne"],
     ["steinkreis", "steinkreis", "Chronik"],
     ["arena", "arena", "Arena"],
@@ -361,7 +611,6 @@
     ["stall", "stall", "Stall"],
     ["ruhmeshalle", "ruhm", "Rangliste"],
     ["gildenhalle", "gilde", "Gilde"],
-    ["heim", "heim", "Heim"],
     ["brunnen", "brunnen", "Brunnen"],
     ["mondtor", "mond", "Mondtor"],
   ];
@@ -410,10 +659,10 @@
     const b = {};
     const a = S.quest.active;
     if (a && a.end <= now) b.taverne = "!";
-    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare) ? "★" : "3";
+    else if (!E.busy(S, now) && S.quest.offers.some((o) => E.energy(S, now) >= o.energy)) b.taverne = S.quest.offers.some((o) => o.rare || o.boss) ? "★" : "3";
     if (S.guard && S.guard.end <= now) b.leuchtturm = "✓";
     if (!E.busy(S, now) && S.arena.next <= now) b.arena = "!";
-    if (S.daily.wellFree > 0) b.brunnen = "1";
+    if (E.wellFree(S)) b.brunnen = "1";
     if (!E.busy(S, now) && S.story.next <= now && E.storyChapters(S).some((c) => c.available)) b.steinkreis = "!";
     if (!E.busy(S, now) && S.dungeons.next <= now) {
       for (let d = 0; d < D.DUNGEONS.length; d++) {
@@ -434,9 +683,16 @@
     const dock = $("#dock");
     if (!dock) return;
     const b = UI.badges();
+    // Laeuft ein Auftrag oder eine Wache, zaehlt die Restzeit neben dem Menuepunkt herunter (UI.updateTimers)
+    const S = UI.S;
+    const now = E.now();
+    const left = {};
+    if (S.quest.active && S.quest.active.end > now) left.taverne = S.quest.active.end;
+    if (S.guard && S.guard.end > now) left.leuchtturm = S.guard.end;
     dock.innerHTML =
-      '<div class="side-logo">' + esc(D.REALMS[UI.S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[UI.S.realm].name) + "</small></div>" +
-      MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
+      '<div class="side-logo">' + esc(D.REALMS[S.realm].isle) + "<small>Heimatinsel von " + esc(D.REALMS[S.realm].name) + "</small></div>" +
+      MENU.map(([id, ic, label]) => '<button class="dock-btn' + (UI.panelId === id ? " active" : "") + '" data-act="open" data-id="' + id + '">' + I.ui(ic) + "<span>" + label + "</span>" + (left[id] ? '<b class="dock-zeit num" data-until="' + left[id] + '"></b>' : b[id] ? '<span class="badge">' + b[id] + "</span>" : "") + "</button>").join("");
+    UI.updateTimers();
     if (UI.hub) UI.hub.setBadges(b);
     UI.renderFallbackStage(b);
   };
@@ -463,13 +719,13 @@
       done = a.end <= now;
       const pct = done ? 100 : ((now - a.start) / (a.end - a.start)) * 100;
       target = "taverne";
-      html = I.ui(done ? "arena" : "uhr") + '<div class="act-text"><div class="act-title">' + (done ? "Auftrag erledigt: Der Kampf wartet!" : esc(a.offer.title)) + '</div><div class="progress"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Kämpfen</span>' : '<b class="num" data-until="' + a.end + '"></b>');
+      html = I.ui(done ? "arena" : "uhr") + '<div class="act-text"><div class="act-title">' + (done ? "Auftrag erledigt: Der Kampf wartet!" : esc(a.offer.title)) + '</div><div class="progress" data-from="' + a.start + '" data-to="' + a.end + '"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Kämpfen</span>' : '<b class="num" data-until="' + a.end + '"></b>');
     } else if (S.guard) {
       const g = S.guard;
       done = g.end <= now;
       const pct = done ? 100 : ((now - g.start) / (g.end - g.start)) * 100;
       target = "leuchtturm";
-      html = I.ui("leuchtturm") + '<div class="act-text"><div class="act-title">' + (done ? "Wache beendet: Lohn abholen" : "Wache am Turm") + '</div><div class="progress"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Abholen</span>' : '<b class="num" data-until="' + g.end + '"></b>');
+      html = I.ui("leuchtturm") + '<div class="act-text"><div class="act-title">' + (done ? "Wache beendet: Lohn abholen" : "Wache am Turm") + '</div><div class="progress" data-from="' + g.start + '" data-to="' + g.end + '"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>' + (done ? '<span class="btn small">Abholen</span>' : '<b class="num" data-until="' + g.end + '"></b>');
     }
     box.hidden = !html || (UI.panelId && UI.panelId === target);
     box.innerHTML = html;
@@ -484,6 +740,11 @@
     document.querySelectorAll("[data-until]").forEach((el) => {
       const ms = +el.dataset.until - now;
       el.textContent = ms > 0 ? U.fmtTime(ms) : el.dataset.doneText || "fertig";
+    });
+    // Reise- und Wachebalken laufen sekundengenau mit der Uhr
+    document.querySelectorAll(".progress[data-from] > i").forEach((el) => {
+      const a = +el.parentNode.dataset.from, b = +el.parentNode.dataset.to;
+      el.style.width = (b > a ? Math.max(0, Math.min(100, ((now - a) / (b - a)) * 100)) : 100).toFixed(1) + "%";
     });
   };
 
@@ -580,6 +841,7 @@
   let heroView = null;
   let heroViewEl = null;
   let heroViewKey = "";
+  let heroViewStill = "";
   UI.attachHeroView = function (slot, desc, caption) {
     if (!slot) return;
     if (!UI.use3d) {
@@ -603,10 +865,14 @@
     }
     const k = JSON.stringify(desc);
     if (k !== heroViewKey) {
-      const celebrate = !!heroViewKey;
+      // Jubel nur bei neuer Ausruestung oder neuem Helden, nicht wenn Figur oder Ausruestungsmodelle fertig geladen sind
+      const still = JSON.stringify(Object.assign({}, desc, { gen: 0, genGear: 0, gv: 0, pending: 0 }));
+      const celebrate = !!heroViewKey && still !== heroViewStill;
       heroViewKey = k;
+      heroViewStill = still;
       heroView.set(desc, celebrate);
     }
+    return heroView;
   };
   UI.detachHeroView = function () {
     if (heroViewEl && heroViewEl.parentNode) heroViewEl.parentNode.removeChild(heroViewEl);
@@ -646,9 +912,12 @@
       box.hidden = true;
       return;
     }
-    if (box.dataset.step === String(S.tut) && !box.hidden) return;
+    // gleicher Schritt: nur neu zeichnen, solange Ottilies Figur noch laedt (dann steht dort ihr Umriss)
+    if (box.dataset.step === String(S.tut) && !box.hidden && box.dataset.wait !== "1") return;
     box.dataset.step = String(S.tut);
-    box.innerHTML = '<span class="porthole">' + UI.npcPortrait("ottilie") + '</span><div><p></p><button class="btn small" data-act="hintNext">' + step.btn + '</button> <button class="btn small ghost" data-act="hintSkip">Keine Tipps mehr</button></div>';
+    const ott = withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK.ottilie));
+    box.dataset.wait = ott.pending ? "1" : "";
+    box.innerHTML = '<span class="porthole">' + UI.portrait(ott, 128, true) + '</span><div><p></p><button class="btn small" data-act="hintNext">' + step.btn + '</button> <button class="btn small ghost" data-act="hintSkip">Keine Tipps mehr</button></div>';
     box.querySelector("p").textContent = step.text(S);
     box.hidden = false;
   };
@@ -715,12 +984,6 @@
       if (UI.panelId && (prev[0] !== String(qDone) || prev[1] !== String(gDone) || prev[2] !== String(aReady) || prev[3] !== String(dReady) || prev[4] !== String(sReady) || prev[6] !== S.daily.day || prev[7] !== String(night))) UI.renderPanel();
     } else {
       UI.renderTop();
-      const box = $("#activity");
-      if (box && !box.hidden) {
-        const a = S.quest.active || S.guard;
-        const bar = box.querySelector(".progress i");
-        if (a && bar) bar.style.width = Math.min(100, ((now - a.start) / (a.end - a.start)) * 100).toFixed(1) + "%";
-      }
     }
     UI.updateTimers();
     if (++musicTimer >= 5) {

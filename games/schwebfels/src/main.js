@@ -25,26 +25,57 @@
     app.innerHTML = "";
   }
 
-  M.start = function (S) {
-    UI.S = S;
-    SB.audio.setSfx(S.settings.sound !== false);
-    SB.audio.setMusic(S.settings.music !== false);
-    UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
-    shell();
+  // Heimatinsel: das gemalte Inselbild des Reiches, falls vorhanden und nicht abgewaehlt, sonst die 3D-Insel
+  M.makeHub = function (S) {
     const stage = document.getElementById("stage");
-    if (UI.use3d) {
+    if (!stage) return;
+    if (UI.hub) UI.hub.dispose();
+    UI.hub = null;
+    stage.innerHTML = "";
+    const opts = {
+      quality: S.settings.quality,
+      dayCycle: S.settings.dayCycle || "zyklus",
+      homeTier: S.house.tier,
+      realm: S.realm,
+      onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)),
+    };
+    // Heimatinsel ist das Gemaelde des Reiches; die 3D-Insel bleibt nur fuer Fassungen ohne Inselbilder (Entwicklung, Tests)
+    if (SB.hubPainted && SB.hubPainted.has(S.realm)) {
       try {
-        UI.hub = SB.R3D.createHub(stage, { quality: S.settings.quality, dayCycle: S.settings.dayCycle || "zyklus", homeTier: S.house.tier, realm: S.realm, onPick: (id) => (UI.panelId === id ? UI.closePanel() : UI.openPanel(id)) });
+        UI.hub = SB.hubPainted.create(stage, opts);
+      } catch (e) {
+        console.warn("Gemalte Insel nicht verfuegbar", e);
+        UI.hub = null;
+      }
+    }
+    if (!UI.hub && UI.use3d) {
+      try {
+        UI.hub = SB.R3D.createHub(stage, opts);
       } catch (e) {
         console.warn("3D-Insel nicht verfuegbar", e);
         UI.hub = null;
       }
     }
     if (!UI.hub) stage.innerHTML = '<div class="stage-fallback"><div class="fb-grid"></div></div>';
+  };
+
+  M.start = function (S) {
+    UI.S = S;
+    // Version 5.6: alte Wahlen aufgeraeumt (3D-Insel statt Gemaelde, neue Figuren abschalten); es gilt nur das neue Design
+    delete S.settings.island;
+    delete S.settings.inselV;
+    delete S.settings.genFigures;
+    // Version 0.66: die Pruefseite „Neu pruefen“ gibt es nicht mehr
+    delete S.settings.neuV;
+    SB.audio.setSfx(S.settings.sound !== false);
+    SB.audio.setMusic(S.settings.music !== false);
+    UI.use3d = S.settings.quality !== "aus" && SB.R3D.ready();
+    shell();
+    M.makeHub(S);
     E.tick(S);
     UI.refresh();
-    // Probe der neuen Figuren: bisher gibt es sie fuer Midgard
-    if (S.realm === "midgard") UI.loadGenFigures("midgard");
+    // Koerper der Helden des eigenen Reiches (Nordmann und Trollblut stecken schon in der Seite)
+    UI.loadGenFigures(S.realm);
     clearInterval(ticker);
     ticker = setInterval(UI.tick, 1000);
     UI.saveNow();
@@ -66,7 +97,7 @@
     SB.store.clearLocal();
     UI.S = null;
     UI.use3d = SB.R3D.ready();
-    UI.showCreate((st) => M.start(st));
+    UI.showCreate((st) => M.start(st, true));
   };
 
   M.boot = function (saved) {
@@ -74,7 +105,7 @@
     if (S) M.start(S);
     else {
       UI.use3d = SB.R3D.ready();
-      UI.showCreate((st) => M.start(st));
+      UI.showCreate((st) => M.start(st, true));
     }
     // Spielstand im claude.ai-Konto abgleichen, falls verfuegbar
     SB.store.initCloud((cloud) => {

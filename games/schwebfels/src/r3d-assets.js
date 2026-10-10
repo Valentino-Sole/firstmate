@@ -75,19 +75,73 @@
     return res(header);
   }
 
+  // build.mjs bettet die Pakete mit gzip verkleinert ein; der Browser entpackt sie selbst
+  async function unzip(u8) {
+    if (u8[0] !== 0x1f || u8[1] !== 0x8b) return u8;
+    const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+
   A.load = async function () {
     try {
       let u8;
       if (globalThis.SB_PACK) {
-        u8 = b64(globalThis.SB_PACK);
+        u8 = await unzip(b64(globalThis.SB_PACK));
         globalThis.SB_PACK = null;
       } else {
         const r = await fetch("assets/schwebfels.pack");
         if (!r.ok) throw new Error("Modellpaket nicht gefunden");
-        u8 = new Uint8Array(await r.arrayBuffer());
+        u8 = await unzip(new Uint8Array(await r.arrayBuffer()));
       }
-      A.data = parse(u8);
-      A.data.gen = A.data.gen || {};
+      const data = parse(u8);
+      // erzeugte Figuren (eigenes Paket, optional): Koerper, Skelette und gemeinsame Bewegungen
+      if (globalThis.SB_GENPACK) {
+        const g = parse(await unzip(b64(globalThis.SB_GENPACK)));
+        data.gen = g.gen || {};
+        data.clips = g.clips || {};
+        data.rigPieces = g.pieces || {};
+        data.genWeapons = g.weapons || {};
+        data.genProps = g.props || {};
+        // erzeugte Bestien (beasts/from_glb.py) neben die gebauten; gleiche Familie ersetzt die gebaute
+        data.beasts = Object.assign({}, data.beasts || {}, g.beasts || {});
+        globalThis.SB_GENPACK = null;
+        // Texturen der Figuren mit eigenem Skelett und ihrer Ruestungsteile vorab laden (Portraits gleich farbig)
+        const waits = [];
+        for (const k in data.gen) {
+          const e = data.gen[k];
+          const t = e.kind === "rig" && e.tex ? A.texture("rig." + k, e.tex, { srgb: true }) : null;
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.rigPieces) {
+          const t = A.texture("rigpiece." + k, data.rigPieces[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.genProps) {
+          const t = A.texture("prop." + k, data.genProps[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in data.genWeapons) {
+          const t = A.texture("weapon." + k, data.genWeapons[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        for (const k in g.beasts || {}) {
+          const t = A.texture("beast." + k, g.beasts[k].tex, { srgb: true });
+          if (t) waits.push(t.userData.ready);
+        }
+        // Normalenkarten (Meshy mit enable_pbr) unter dem Schluessel der Farbtextur mit ".n"
+        const nmap = (key, e) => {
+          const t = e && e.ntex ? A.texture(key + ".n", e.ntex, { srgb: false }) : null;
+          if (t) waits.push(t.userData.ready);
+        };
+        for (const k in data.gen) if (data.gen[k].kind === "rig") nmap("rig." + k, data.gen[k]);
+        for (const k in data.rigPieces) nmap("rigpiece." + k, data.rigPieces[k]);
+        for (const k in data.genWeapons) nmap("weapon." + k, data.genWeapons[k]);
+        for (const k in data.genProps) nmap("prop." + k, data.genProps[k]);
+        for (const k in g.beasts || {}) nmap("beast." + k, g.beasts[k]);
+        await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
+      }
+      data.gen = data.gen || {};
+      A.data = data;
     } catch (e) {
       A.error = e;
       console.warn("Modellpaket nicht verfuegbar, alte Figuren werden genutzt", e);
@@ -103,32 +157,58 @@
   A.loadGen = function (realm) {
     if (GEN_LOAD[realm]) return GEN_LOAD[realm];
     const key = "SB_GEN_" + realm.toUpperCase();
-    const take = () => {
+    // Base64 roh oder (Handy-Fassung, eine einzige Datei) mit gzip verkleinert
+    const take = async () => {
       const s = globalThis[key];
       if (!s) return false;
-      Object.assign(A.data.gen, parse(b64(s)).gen || {});
       globalThis[key] = null;
+      // schon eingebettete Koerper behalten (gleiche Daten, Materialien und Geometrie sind dafuer schon gebaut)
+      const p = parse(await unzip(b64(s)));
+      const g = p.gen || {};
+      for (const k in g) if (!A.data.gen[k]) A.data.gen[k] = g[k];
+      // Ausruestung (gen-ausr<reich><art>.js): Ruestungsteile und Waffen kommen zu den vorhandenen, Texturen gleich laden
+      const waits = [];
+      const addAll = (into, from, pre) => {
+        for (const k in from || {}) {
+          if (A.data[into][k]) continue;
+          A.data[into][k] = from[k];
+          for (const t of [A.texture(pre + k, from[k].tex, { srgb: true }), from[k].ntex && A.texture(pre + k + ".n", from[k].ntex, { srgb: false })])
+            if (t) waits.push(t.userData.ready);
+        }
+      };
+      A.data.rigPieces = A.data.rigPieces || {};
+      A.data.genWeapons = A.data.genWeapons || {};
+      addAll("rigPieces", p.pieces, "rigpiece.");
+      addAll("genWeapons", p.weapons, "weapon.");
+      if (waits.length) await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
+      // Monster (gen-monster.js): erzeugte Bestien kommen zu den vorhandenen Familien; Texturen gleich laden, sonst
+      // stuende die Bestie im ersten Kampfbild schwarz da
+      for (const k in p.beasts || {}) {
+        if (A.data.beasts && A.data.beasts[k] && A.data.beasts[k].tex) continue;
+        A.data.beasts = Object.assign({}, A.data.beasts, { [k]: p.beasts[k] });
+        A.texture("beast." + k, p.beasts[k].tex, { srgb: true });
+        if (p.beasts[k].ntex) A.texture("beast." + k + ".n", p.beasts[k].ntex, { srgb: false });
+      }
       return true;
     };
-    GEN_LOAD[realm] = A.ready.then(
-      () =>
-        new Promise((ok, fail) => {
-          if (!A.data) return fail(new Error("Modellpaket fehlt"));
-          if (take()) return ok(A.data.gen);
-          const el = document.createElement("script");
-          el.src = "gen-" + realm + ".js";
-          el.onload = () => {
-            try {
-              if (take()) ok(A.data.gen);
-              else fail(new Error("Figurendaten leer"));
-            } catch (e) {
-              fail(e);
-            }
-          };
-          el.onerror = () => fail(new Error("Figurendaten nicht gefunden"));
-          document.head.appendChild(el);
-        })
-    );
+    GEN_LOAD[realm] = A.ready.then(async () => {
+      if (!A.data) throw new Error("Modellpaket fehlt");
+      if (await take()) return A.data.gen;
+      await new Promise((ok, fail) => {
+        const el = document.createElement("script");
+        el.src = "gen-" + realm + ".js";
+        el.onload = ok;
+        el.onerror = () => {
+          // keine Figurendatei neben der Seite (etwa beim Entwickeln ohne Paket): erwartbar, kein Fehler im Paket
+          const e = new Error("Figurendaten nicht gefunden");
+          e.missing = true;
+          fail(e);
+        };
+        document.head.appendChild(el);
+      });
+      if (await take()) return A.data.gen;
+      throw new Error("Figurendaten leer");
+    });
     GEN_LOAD[realm].catch(() => (GEN_LOAD[realm] = null));
     return GEN_LOAD[realm];
   };

@@ -42,12 +42,12 @@ Auf der Insel ist Leben: Leute trinken vor der Taverne aus Krügen, ein Spielman
 | Vorbild | Schwebfels | Eigene Note |
 |---|---|---|
 | 2D-Comicgrafik | prozedurale **3D-Welt** mit handgemalt wirkenden Texturen | Heimatinsel des eigenen Reiches im Nebelmeer mit Steinkreis, Wasserfällen ins Nichts, Glühwürmchen, Himmelswal; **automatischer Tag-Nacht-Wechsel** (20 Minuten, echte Uhrzeit, immer Tag oder immer Nacht) mit Mond, Sternen und Polarlicht |
-| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; Gegner aus der Tierwelt der eigenen Heimatinsel; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen |
+| Taverne, Abenteuerlust | Taverne „Zur Schiefen Krähe“, **Tatendrang** | Siegchance je Auftrag; Gegner aus der Tierwelt der eigenen Heimatinsel; **seltene Hordenaufträge** mit drei Gegnern nacheinander, Lebenspunkte werden mitgenommen, kurzes Atemholen dazwischen; ab Stufe 10 selten ein **Verliesboss**, der aus einem schon geöffneten Verlies entkommen ist (je Angebot 5 %, höchstens einer je Auswahl, keine Endbosse) |
 | Bier gegen Pilze | Nebelmet gegen **Wolkenperlen** | Perlen gibt es nur im Spiel, kein Echtgeld; Perlen werden nie ungefragt ausgegeben |
 | Charakterbild mit Slots | **Charakterbogen** im gleichen Aufbau | Große Erfahrungsleiste mit „noch X EP bis Stufe Y“, in der Kopfleiste immer sichtbar; **Vergleichstabelle** beim Anlegen (Wert für Wert und die eigenen Werte danach) |
 | Aussehen | Haut, Haare, Bart, Augen (auch glühend), **Gesichtstätowierungen** in sieben Mustern und Farben (teils leuchtend, kräftig gezeichnet), Narben, Hörner | Jederzeit kostenlos änderbar |
-| Geschichte | **Chronik** im Steinkreis | Je Reich fünf Kapitel, je Klasse drei; Kapitel mit mehreren Gegnern, seltene und epische Belohnungen |
-| Arena und Ruhmeshalle | **Ring der Reiche**, **Halle der Helden** | Vier Herausforderer aus den anderen Reichen, immer passend zur eigenen Stärke (einer leicht, zwei ebenbürtig, einer schwer); echte Mitspieler haben Vorrang, sonst tritt ein Wanderkämpfer gleicher Stufe an. Ranglisten global, je Reich, für Gilden und als **Reichskrieg** (Summe der Ehre je Reich) |
+| Geschichte | **Chronik** im Steinkreis | Je Reich zehn Kapitel, je Klasse fünf (erster Akt bis Stufe 30, zweiter Akt „Die Tiefe antwortet“ mit Reichskapiteln auf 32, 36, 40, 45, 50 und Klassenkapiteln auf 38 und 48); Kapitel mit mehreren Gegnern, seltene und epische Belohnungen |
+| Arena und Ruhmeshalle | **Ring der Reiche**, **Halle der Helden** | Vier Herausforderer aus den anderen Reichen, immer passend zur eigenen Stärke (einer leicht, zwei ebenbürtig, einer schwer); echte Mitspieler haben Vorrang, sonst tritt ein Wanderkämpfer gleicher Stufe an. Einmal je Auswahl kostenlos neu würfeln, danach für etwas Gold; nach jedem Kampf wieder kostenlos. Ranglisten global, je Reich, für Gilden und als **Reichskrieg** (Summe der Ehre je Reich) |
 | Gilden | **Gildenhalle** | Gilden des eigenen Reiches beitreten oder gründen; in claude.ai sehen echte Mitspieler die Gilde |
 | Stadtwache | **Wachturm** | Schichten zu 5 Minuten |
 | Dungeons | **Das Tor zur Tiefe** | 6 Dungeons mit je 8 Bossen |
@@ -55,7 +55,7 @@ Auf der Insel ist Leben: Leute trinken vor der Taverne aus Krügen, ein Spielman
 | (kein Gegenstück) | **Talentbäume** | Je Klasse drei Zweige (Angriff, Verteidigung, Klassenpfad) mit je fünf Talenten; alle zwei Stufen ein Punkt, Stufen eines Zweigs öffnen sich mit 3, 6 und 8 Punkten darin; Zurücksetzen kostet 3 Wolkenperlen. Siehe Abschnitt 4a |
 | (kein Gegenstück) | **Mondtor** | Öffnet sich nur bei Nacht: drei Nachtjagden pro Tag gegen zwei Nachtwesen der eigenen Insel (sichere seltene Beute, kein Tatendrang) und die Händlerin Selene mit drei besonderen Stücken |
 | (kein Gegenstück) | **Heim** | Vier Ausbaustufen (Zeltlager bis Turmfeste) und sieben Einrichtungen mit dauerhaften Boni, als begehbare 3D-Ansicht |
-| Album, Erfolge | **Bestiarium**, **Abzeichen** | 20 Abzeichen mit Perlen-Belohnung |
+| Album, Erfolge | **Bestiarium**, **Abzeichen** | 33 Abzeichen mit Perlen-Belohnung, davon 12 schwere mit Fortschrittsanzeige |
 
 ## 4. Kampf
 
@@ -75,7 +75,7 @@ Vorbild ist Dark Age of Camelot: Dort verteilt jede Klasse Punkte auf eigene Spe
 - **Angriff** (je Grundart): mehr Schaden, Kritchance und Kritstärke, Rüstung durchdringen, Gnadenstoß gegen geschwächte Gegner, Doppelschlag; Spitze: Sturmangriff (Krieger), Meucheln (Schurke), Pfeilsalve (Jäger), Wilde Macht (Magier).
 - **Verteidigung**: Lebenspunkte, Block, Ausweichen, Barriere, Magie meiden, Zähigkeit, Gegenschlag, Lebensraub, Reinigung gegen Betäubung und Gift; Spitze: Schmerz ignorieren, Verschwinden, Zweiter Atem, Bannkreis.
 - **Klassenpfad**: stärkt die eigene Spezialfähigkeit (Schaden, Kritchance, eine Besonderheit je Klasse wie stärkeres Gift, mehr Heilung, höhere Betäubungschance); Spitze: Großmeister, die Spezialfähigkeit kommt schon bei jeder dritten Aktion.
-- Talente wirken in jedem Kampf und sind im 3D-Kampf zu sehen: Schutzkugel der Barriere, Lichtsäule beim zweiten Atem, Rauch beim Verschwinden, Einblendungen für Gegenschlag, Doppelschlag, Gnadenstoß und Lebensraub.
+- Talente wirken in jedem Kampf und sind im 3D-Kampf zu sehen: Schutzkugel der Barriere, Lichtsäule beim zweiten Atem, Rauch beim Verschwinden, Einblendungen für Gegenschlag, Doppelschlag, Gnadenstoß und Lebensraub. Abschluss-Talente haben seit 0.74 eine eigene Spezialattacke mit Bewegung und Effekt (Sturmangriff, Meucheln, Pfeilsalve, Wilde Macht, Bannkreis, Kraftschrei, Verschwinden, Großmeister); am Kampfausgang ändert das nichts.
 - Computerhelden und Wanderkämpfer verteilen ihre Punkte selbst; Wanderkämpfer bekommen höchstens so viele Punkte, wie der Held ausgegeben hat.
 
 ## 5. Balance
@@ -83,10 +83,15 @@ Vorbild ist Dark Age of Camelot: Dort verteilt jede Klasse Punkte auf eigene Spe
 - `tests/balance.mjs`: Klassen-Duelle im Mittel zwischen etwa 44 und 58 %; Aufträge und Dungeon-Bosse für alle zwölf Klassen.
 - `tests/progression.mjs`: simulierter Spieler; alle Grundarten erreichen Stufe 30 nach rund 12 bis 15 Spielstunden reinem Tatendrang, ohne Abwärtsspirale.
 - Hordenaufträge: gemütlich fast immer, ordentlich rund 90 %, halsbrecherisch bewusst schwer (25 bis 50 %) bei 1,5-facher Belohnung.
+- Chronik, zweiter Akt (ab Stufe 32, `tests/chronik.mjs`): Modellheld mit Talenten und etwas besserer Ausrüstung gewinnt im Mittel 98 %; ab Stufe 40 sind die Gegner 5 % stärker, Endkämpfe mit mehreren Gegnern 12 %, das schwerste Kapitel liegt bei gut 70 %.
+- Verliesbosse in der Taverne: ordentlich oder halsbrecherisch, Stufe des Helden, Lebenspunkte eines Bosses; 1,8-fache Belohnung und immer ein Gegenstand ab selten. Mit Talenten (`tests/quests.mjs`, 0.73): ordentlich rund 85 % Siege mit gut einem Drittel Leben, halsbrecherisch 47 % (Stufe 10) bis 75 % (Stufe 31).
+- Gegner in Aufträgen, Chronik und Nachtjagd holen drei Viertel des Vorsprungs des Helden vor dem Modellhelden auf (`E.ADAPT_FOLLOW`); die Stärke wird gemessen (`E.heroStrength`: Gegnerstärke, bei der der Held so abschneidet wie der Modellheld), damit Talente, Rüstung und Tränke zählen. Stufe 31 mit Talenten und guter Ausrüstung (`tests/quests.mjs 31 1.2`, 0.72): Horde gemütlich etwa 67 % Leben übrig, ordentlich 50 %, halsbrecherisch rund 85 % Siege mit gut einem Drittel Leben.
 - Chronik-Kapitel: auf der Kapitelstufe mit durchschnittlicher Ausrüstung meist 60 bis 100 %.
 - Nachtjagd: mit durchschnittlicher Ausrüstung je nach Klasse und Stufe etwa 55 bis 95 %.
-- Arena: die vier Herausforderer liegen bei etwa 75, 60, 45 und 30 % Siegchance.
-- Talente (`tests/talents.mjs`): jede Klasse mit jedem Schwerpunkt gegen alle anderen Klassen auf Stufe 20 und 40 im Mittel zwischen etwa 39 und 62 %, also so ausgeglichen wie ohne Talente; Aufträge werden mit Talenten nur leicht leichter.
+- Arena: die vier Herausforderer liegen bei etwa 86, 64, 50 und 30 % Siegchance. Die Chance kommt aus 400 Probekämpfen (vorher 30, die Anzeige lag im Mittel 7 und bis zu 27 Prozentpunkte daneben); Einstufung leicht ab 75 %, ebenbürtig ab 45 %. Messung `tests/arena.mjs` (0.75): als leicht angezeigte Gegner gewinnt man im Mittel zu 86 %, nie unter 78 %; Abweichung der Anzeige im Mittel 2 Prozentpunkte.
+- Arena-Ehre nach Siegchance c: Sieg 4 + 9 · c^-1,3 (leicht etwa 15, ebenbürtig 17 bis 29, schwer etwa 47, höchstens 60), Niederlage 2 + 8 · c (leicht 9, schwer 4). Im Mittel bringt jede Wahl ungefähr gleich viel Ehre, ein Sieg gegen einen schweren Gegner aber dreimal so viel. Gold je Sieg steigt ebenfalls mit der Schwierigkeit.
+- Boss-Beute (Verliese, Verliesbosse in der Taverne, Chronik): bis Stufe 25 wie bisher (Stockwerk meist selten, Endboss mindestens episch); ab Stufe 30 steigt der Anteil an epischen und legendären Stücken, ab Stufe 40 ist jede Boss-Beute mindestens episch. Messung `tests/beute.mjs`: Stufe 40 Verlies-Stockwerk 75 % episch und 25 % legendär, Endboss 66 % und 34 %; Stufe 50 71 % und 29 % beziehungsweise 63 % und 37 % (vorher ab 40 etwa 60 % selten, 32 % episch, 7 % legendär).
+- Talente (`tests/talents.mjs`): jede Klasse mit jedem Schwerpunkt gegen alle anderen Klassen auf Stufe 20 und 40 im Mittel zwischen etwa 39 und 62 %, also so ausgeglichen wie ohne Talente. Aufträge holten Talente bis 0.71 nicht ein (ab Stufe 30 gewann man alles mit drei Vierteln der Lebenspunkte); seit 0.72 zählen sie in der gemessenen Heldenstärke.
 - Glück verbessert die Beute (Fundchance und Seltenheit), damit es sich auch für Nicht-Schurken lohnt.
 
 ## 6. Technik

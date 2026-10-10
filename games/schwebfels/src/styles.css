@@ -69,6 +69,18 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .stage-fallback button { padding: 16px 8px; border-radius: 10px; border: 1.5px solid var(--gold-dim); background: var(--stone-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .stage-fallback button .ic { width: 34px; height: 34px; }
 
+/* Gemalte Heimatinsel (src/hub-painted.js): Bild, Abdunklung bei Nacht und bewegte Details liegen in einer Ebene, die
+   verschoben und gezoomt wird; die Beschriftungen bleiben gleich gross */
+.painted-hub { position: absolute; inset: 0; overflow: hidden; background: #0b0d16; cursor: grab; touch-action: none; user-select: none; }
+.painted-hub .ph-world { position: absolute; left: 0; top: 0; width: 1536px; height: 1024px; transform-origin: 0 0; will-change: transform; }
+.painted-hub .ph-world img, .painted-hub .ph-world canvas, .painted-hub .ph-shade { position: absolute; inset: 0; width: 1536px; height: 1024px; pointer-events: none; }
+.painted-hub .ph-shade { background: linear-gradient(#24356f, #3a4c8c); mix-blend-mode: multiply; opacity: 0; transition: opacity 2s; }
+
+.painted-hub .ph-hero { position: absolute; left: 0; top: 0; z-index: 2; cursor: pointer; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55)); }
+.painted-hub .ph-hero .r3d-canvas { display: block; }
+.painted-hub .ph-visit { position: absolute; left: 0; top: 0; z-index: 3; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 6px 8px 6px 14px; border-radius: 6px; border: 1.5px solid var(--gold); background: linear-gradient(rgba(33, 30, 37, 0.95), rgba(12, 10, 16, 0.95)); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-weight: 800; color: var(--gold-hi); cursor: default; }
+.painted-hub .ph-visit .btn { flex: none; }
+
 /* Beschriftungen auf der Insel */
 .hub-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .hub-label {
@@ -149,6 +161,7 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .dock-btn.active { border-color: var(--gold); background: linear-gradient(#5a4520, #2e2412); color: var(--gold-hi); }
 .dock-btn:active { transform: translateY(1px); }
 .dock-btn .badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--blood); color: #fff; font-size: 11px; display: grid; place-items: center; border: 1px solid #000; }
+.dock-btn .dock-zeit { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--gold-hi); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 
 /* Aktivitaet */
 #activity {
@@ -404,6 +417,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 /* Kampf */
 #battle { position: fixed; inset: 0; z-index: 70; background: var(--night); }
 #battle .bstage { position: absolute; inset: 0; }
+#battle .bload { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; text-align: center; font-size: 15px; }
+#battle .bload b { font-family: var(--font-display); font-size: 26px; font-weight: 400; color: var(--gold-hi); }
 #battle .bstage .r3d-canvas { display: block; }
 .battle-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .fx-text { position: absolute; transform: translate(-50%, -50%); font-family: var(--font-display); font-size: 36px; color: #fff; text-shadow: 0 3px 0 #000, 0 0 10px rgba(0, 0, 0, 0.7); animation: floatUp 1.1s ease-out forwards; white-space: nowrap; }
@@ -471,6 +486,8 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 #hint p { margin: 0 0 8px; font-size: 14px; }
 #hint .btn.ghost { color: var(--parch); }
 
+.realmcard[disabled] { opacity: 0.45; cursor: default; }
+
 /* Heldenerschaffung */
 #create { position: fixed; inset: 0; z-index: 50; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 540px); background: radial-gradient(ellipse at 30% 40%, #2a2a44, var(--night) 70%); overflow: hidden; }
 #create[data-realm="albion"] { background: radial-gradient(ellipse at 30% 40%, #4a1a1a, var(--night) 70%); }
@@ -481,6 +498,7 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 #create .ctitle { position: absolute; left: 24px; top: calc(18px + env(safe-area-inset-top, 0px)); z-index: 2; pointer-events: none; }
 #create .ctitle h1 { font-size: 58px; color: var(--gold-hi); text-shadow: 0 3px 0 #000, 0 0 24px rgba(201, 164, 65, 0.3); line-height: 0.95; }
 #create .ctitle p { margin: 6px 0 0; color: var(--fog); max-width: 420px; font-size: 14px; }
+#create .gen-note { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 2; width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--gold-dim); background: rgba(12, 10, 16, 0.78); color: var(--parch); font-size: 13px; text-align: center; pointer-events: none; }
 #create .cform { overflow-y: auto; padding: 18px 20px 28px; background: radial-gradient(ellipse at 50% 0%, #2a2530, var(--stone) 70%); border-left: 2px solid var(--gold-dim); }
 .step { display: flex; align-items: center; gap: 10px; margin: 16px 0 8px; }
 .step:first-child { margin-top: 0; }
@@ -492,11 +510,6 @@ body.in-battle #toasts { top: auto; left: 50%; bottom: calc(80px + env(safe-area
 .choice small { display: block; font-weight: 500; font-size: 11.5px; color: var(--fog); }
 .choice .crest { width: 28px; height: 28px; }
 .cls-choices { grid-template-columns: repeat(4, 1fr); }
-.swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
-.sw { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #000; cursor: pointer; box-shadow: 0 0 0 2px transparent; }
-.sw.on { box-shadow: 0 0 0 2px var(--gold-hi); }
-.sw.glowsw { box-shadow: 0 0 8px currentColor, 0 0 0 1px rgba(255, 255, 255, 0.5); }
-.sw.glowsw.on { box-shadow: 0 0 0 2px var(--gold-hi), 0 0 10px rgba(255, 255, 255, 0.6); }
 .cform .desc { font-size: 13.5px; color: #d6cab0; margin: 6px 0 0; }
 .cform input#heroName { width: 100%; box-sizing: border-box; font-size: 18px; padding: 10px 12px; border-radius: 4px; border: 1px solid var(--gold-dim); background: #0a080c; color: var(--parch); }
 
@@ -561,6 +574,21 @@ table.fame tr[data-act]:hover td { background: rgba(255, 255, 255, 0.05); }
 .homeview { position: relative; height: 300px; border-radius: 4px; overflow: hidden; border: 1px solid var(--gold-dim); background: #120f16; margin-bottom: 12px; }
 .homeview .r3d-canvas { display: block; cursor: grab; }
 .homeview .hv-fallback .ic { width: 40%; height: 40%; opacity: 0.5; }
+/* Gemaltes Heim: Raumbild 3:2, Held davor, Stationen anklickbar, noch nicht Eingerichtetes im Halbdunkel */
+.homeview.painted { height: auto; aspect-ratio: 3 / 2; background: #1b1e2b; }
+.hp-stage { position: absolute; }
+.hp-stage > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
+.hp-layer { position: absolute; inset: 0; }
+.hp-veil { position: absolute; border-radius: 50%; pointer-events: none; background: rgba(8, 9, 16, 0.35); -webkit-backdrop-filter: grayscale(0.9) brightness(0.42); backdrop-filter: grayscale(0.9) brightness(0.42); -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
+.hp-spot { position: absolute; border: 0; padding: 0; margin: 0; background: transparent; border-radius: 50%; cursor: pointer; }
+.hp-spot:hover, .hp-spot:focus-visible { box-shadow: inset 0 0 0 2px rgba(255, 214, 120, 0.55), 0 0 18px rgba(255, 196, 90, 0.35); outline: none; }
+.hp-tag { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: 9px; background: rgba(14, 12, 20, 0.78); color: var(--gold-hi); border: 1px solid rgba(201, 164, 65, 0.5); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.hp-spot.owned .hp-tag { opacity: 0.92; }
+.hp-spot:not(.owned) .hp-tag { color: var(--parch); }
+.hp-spot:hover .hp-tag, .hp-spot:focus-visible .hp-tag { opacity: 1; }
+.hp-hero { position: absolute; pointer-events: none; }
+.hp-hero .r3d-canvas { display: block; }
+.hp-note { margin: -6px 0 12px; }
 .housecard { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 4px; background: linear-gradient(var(--stone-3), var(--stone-2)); border: 1px solid #000; }
 .housecard h3 { font-size: 24px; color: var(--gold-hi); }
 .housecard > div:first-child { flex: 1; min-width: 180px; }
@@ -577,6 +605,10 @@ table.fame tr[data-act]:hover td { background: rgba(255, 255, 255, 0.05); }
 .ach { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 4px; background: linear-gradient(var(--stone-3), var(--stone-2)); margin-bottom: 6px; }
 .ach .ic { width: 30px; height: 30px; }
 .ach.locked { opacity: 0.5; }
+.ach.locked.hard { opacity: 0.72; }
+.ach-prog { height: 4px; margin-top: 5px; border-radius: 2px; background: var(--stone); overflow: hidden; }
+.ach-prog i { display: block; height: 100%; background: var(--gold); }
+.helm-toggle { margin: 2px 0 8px; }
 input[type="range"] { width: 100%; accent-color: var(--gold); }
 
 /* Handy und schmale Fenster: Menue als Leiste unten */
@@ -593,6 +625,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   .dock-btn { flex-direction: column; width: 64px; padding: 6px 2px 5px; gap: 2px; font-size: 10.5px; text-align: center; }
   .dock-btn .ic { width: 24px; height: 24px; }
   .dock-btn .badge { position: absolute; top: -2px; right: 0; margin: 0; }
+  .dock-btn .dock-zeit { position: absolute; top: -4px; right: -2px; margin: 0; font-size: 10px; padding: 0 4px; border-radius: 7px; background: rgba(10, 8, 12, 0.85); border: 1px solid var(--gold-dim); line-height: 15px; }
   #panel { left: 6px; right: 6px; top: calc(var(--top-h) + 4px); bottom: calc(var(--dock-h) + 8px); }
   #activity { left: 50%; bottom: calc(var(--dock-h) + 14px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
   #toasts { left: 50%; }
@@ -602,7 +635,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   .res { gap: 4px; }
   .chip { padding: 3px 7px; font-size: 13px; }
   .chip.hon, .daychip span { display: none; }
-  #create { grid-template-columns: 1fr; grid-template-rows: 36vh 1fr; }
+  /* minmax(0, ...): die 3D-Ansicht uebernimmt die Breite ihres Feldes; mit 1fr koennte sie das Feld (und das Formular)
+     breiter als den Bildschirm halten, etwa auf Handys mit hoher Pixeldichte */
+  #create { grid-template-columns: minmax(0, 1fr); grid-template-rows: 36vh minmax(0, 1fr); }
+  #create .gen-note { bottom: 6px; padding: 3px 10px; font-size: 11.5px; }
   #create .cform { border-left: 0; border-top: 2px solid var(--gold-dim); }
   #create .ctitle h1 { font-size: 34px; }
   #create .ctitle p { display: none; }
@@ -643,3 +679,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Portrait wird im Hintergrund gezeichnet: Umriss steht wie das spaetere Bild */
+.snap-wait { display: contents; }

@@ -17,6 +17,8 @@ npx serve .            # dann index.html öffnen
 
 # Einzeldatei bauen: dist/schwebfels.html und dist/artifact.html
 node build.mjs
+# Modellpakete als eigene Dateien neben der Seite (dist/packs/), falls die Seite sonst über 16 MB käme
+SPLIT=1 node build.mjs
 
 # Tests der Spiellogik
 node --test tests/engine.test.mjs
@@ -26,8 +28,15 @@ node tests/balance.mjs
 node tests/progression.mjs all 30
 node tests/talents.mjs
 
-# Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium)
+# Browser-Durchlauf mit Bildschirmfotos (Playwright, Chromium); das Handy mit doppelter Pixeldichte wie echte Geräte
 node build.mjs && node tests/e2e.mjs screens
+
+# Figuren mit eigenem Skelett (Meshy-Strecke) mit einer eigenen Prüffigur
+node tests/rigged.mjs
+
+# Rauchtest: alle Völker, Klassen, Monster, Gegenstände und Szenen; meldet auch stille Ausweichdarstellungen
+# und prüft, dass im Heim jeder Stufe der Held von der Kamera aus zu sehen ist
+node tests/smoke.mjs
 ```
 
 Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` auf eine JSON-Datei `{ "url": "lokaler/pfad" }` zeigen; die Anfragen werden dann aus diesen Dateien bedient.
@@ -40,12 +49,14 @@ Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` a
 | `src/engine.js` | Spiellogik ohne DOM: Gegenstände, Kampf mit Talentwirkungen, Talentbäume, Mehrfachkämpfe, Aufträge, Chronik, Arena mit Stärkeabgleich, Ranglisten, Gilden, Heim, Dungeons, Läden, Tag und Nacht, Mondtor, Übernahme alter Spielstände |
 | `src/icons.js` | Eigene Vektor-Symbole für Gegenstände, Reiche und Oberfläche |
 | `src/r3d-models.js` | 3D-Helden: gemalte Texturen, Gesichter mit Tattoos und Narben, Reichsrüstungen, Prunkwaffen, Animationen |
+| `src/r3d-assets.js`, `src/r3d-human.js` | Modellpakete laden (gzip), modellierte Helden aus `assets/schwebfels.pack` mit Bewegungen per Formel |
+| `src/r3d-rigged.js` | Figuren mit eigenem Skelett aus `assets/gen.pack` (Meshy-Strecke): abgespielte Bewegungen je Kampfstil und Waffe, Schlag im Takt des Kampfes, Rüstungsteile, erzeugte Waffen und ihre Gegenstandsbilder |
 | `src/r3d-monsters.js` | 15 Monstergattungen mit eigenen Animationen, Frost und Moos je nach Heimat |
 | `src/r3d-scenes.js` | 3D-Schauplätze: Heimatinsel mit Tag-Nacht-Wechsel, Bewohnern und Mondtor, Heldenansicht, Heim, Kampfbühnen, Portraits |
 | `src/r3d-realms.js` | Die drei Heimatinseln: Landschaft, Gebäude, Wetter und Wahrzeichen je Reich |
 | `src/ui-*.js` | Oberfläche: Menüleiste, Orte, Kampfablauf, Heldenerschaffung |
 | `src/store.js` | Speichern im Browser, Spielstand-Code, optional claude.ai-Konto, Helden- und Gildenprofile |
-| `src/audio.js` | Musik je Ort und Reich per WebAudio; Klangbank aus freien Aufnahmen (`assets/klang.pack`, eingebettet als `SB_KLANG`) mit Varianten, Streuung und Stereo; Kampfereignisse mit Zusammenhang (`SB.audio.play(name, { a, d, side, how })`) wählen Schwung nach Waffe, Treffer nach Waffe und Material, Magie nach Schule, Stimmen nach Gegnertyp oder Volk; ohne Bank die erzeugten Effekte |
+| `src/audio.js` | Musik je Ort und Reich per WebAudio; Klangbank aus freien Aufnahmen (`assets/klang.pack`, von `build.mjs` als `dist/klang.js` neben die Seite gelegt und beim ersten Ton nachgeladen) mit Varianten, Streuung und Stereo; Kampfereignisse mit Zusammenhang (`SB.audio.play(name, { a, d, side, how, spell })`) wählen Schwung nach Waffe, Treffer nach Waffe und Material, Magie nach Schule, Stimmen nach Gegnertyp oder Volk; ohne Bank die erzeugten Effekte |
 | `assets-src/klang/` | `build_klang.py` baut die Klangbank aus den CC0-Sammlungen in `QUELLEN.md` (Schneiden, Tonhöhe, Schichten, Angleichen, MP3) |
 | `src/main.js` | Start, Reichswahl für alte Spielstände, Spielstand-Wechsel |
 

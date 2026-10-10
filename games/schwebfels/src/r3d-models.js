@@ -1064,8 +1064,10 @@
     });
   }
 
-  // Version 5: modellierte Helden aus dem Modellpaket, sonst die alte prozedurale Figur
+  // Version 5: modellierte Helden aus dem Modellpaket, sonst die alte prozedurale Figur; Version 0.66: laedt der
+  // Meshy-Koerper noch (desc.pending, UI.withGen), steht ein Platzhalter da
   R.buildHero = function (desc) {
+    if (desc.pending) return R.buildPending(desc);
     if (R.human && R.human.ok()) {
       try {
         return R.human.build(desc);
@@ -1574,8 +1576,10 @@
       speed: 1,
       flashT: 0,
       play(name, dur) {
-        dur = (dur || 0.5) / (model.speed || 1);
-        if (model.inner) model.inner.play(name, dur * (model.speed || 1));
+        // Dauer in Spielzeit: die Kampfbuehne treibt update() schon mit dt * Tempo an (vorher zusaetzlich durch das
+        // Tempo geteilt, bei doppeltem Tempo liefen Bewegungen vierfach schnell und der Schlag kam vor dem Treffer)
+        dur = dur || 0.5;
+        if (model.inner) model.inner.play(name, dur);
         return new Promise((res) => {
           if (model.anim && model.anim.res) model.anim.res();
           model.anim = { name, t: 0, dur, res };
@@ -1618,7 +1622,7 @@
           }
         }
         if (kind === "hero") (parts.rig && R.human ? R.human.pose : poseHero)(model, name, u, dt);
-        else if (R.poseMonster) R.poseMonster(model, name, u, dt);
+        else if (kind === "monster" && R.poseMonster) R.poseMonster(model, name, u, dt);
         if (model.inner) model.inner.update(dt);
         const t = model.t;
         root.traverse((o) => {
@@ -1635,6 +1639,20 @@
     return model;
   }
   R.makeModel = makeModel;
+  // Platzhalter, solange ein Meshy-Koerper oder ein Monstermodell noch laedt: ein schwacher Nebelschein in der Farbe
+  // des Reiches oder des Monsters, etwa so hoch wie eine Figur (statt der alten gebauten Figur)
+  R.buildPending = function (desc) {
+    const D = SB.data;
+    const col = desc.kind === "monster" ? desc.accent || desc.color || "#cfd8e6" : (D.REALMS[desc.realm] || {}).accent || "#cfd8e6";
+    const root = grp();
+    root.add(haloSprite(col, 1.7, 0.3, [0, 1.0, 0]));
+    root.add(haloSprite("#ffffff", 0.6, 0.22, [0, 1.2, 0]));
+    const model = makeModel(root, { pending: true }, "pending");
+    model.pending = true;
+    model.headY = 1.8;
+    model.height = 2;
+    return model;
+  };
   R.headGeo = headGeo;
   const ease = (u) => u * u * (3 - 2 * u);
   const bell = (u) => Math.sin(PI * u);

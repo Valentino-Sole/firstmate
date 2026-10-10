@@ -104,6 +104,8 @@
     SHOP_REFRESH: 15 * 60 * 1000,
     INV_SIZE: 12,
     WELL_PAID_MAX: 10,
+    // freier Wurf am Wunschbrunnen alle 8 Stunden (Wunsch des Kapitaens: ein Grund, wieder vorbeizuschauen)
+    WELL_FREE_MS: 8 * 60 * 60 * 1000,
     SPECIAL_EVERY: 4,
     MAX_ACTIONS: 90,
     NPC_COUNT: 150,
@@ -221,7 +223,6 @@
     it.vis = E.makeVis(it, (it.vis && it.vis.c) || realm, arch);
     return it;
   };
-  E.visArch = (vis) => (vis && vis.f && vis.f.split(".").length === 3 ? vis.f.split(".")[1] : null);
   E.makeItem = function (r, opts) {
     const L = Math.max(1, Math.round(opts.level || 1));
     const arch = opts.arch || (opts.cls && D.CLASSES[opts.cls] ? D.CLASSES[opts.cls].arch : "krieger");
@@ -320,7 +321,7 @@
       inv: [],
       quest: { seed: U.hash(opts.name + now), offers: [], active: null },
       guard: null,
-      arena: { next: 0, wins: 0, losses: 0 },
+      arena: { next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] },
       dungeons: { progress: {}, next: 0 },
       story: { done: {}, next: 0 },
       house: { tier: 0, furn: {} },
@@ -331,8 +332,9 @@
       mounts: { owned: [] },
       bestiary: {},
       ach: {},
-      stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 },
-      daily: { day: U.dayKey(now), wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
+      stats: { quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0, hardWins: 0, streak: 0, legendaries: 0 },
+      daily: { day: U.dayKey(now), brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 },
+      wellNext: 0,
       npcSeed: U.hash("npc:" + opts.name + now),
       npcHonor: {},
       settings: { sound: true, music: true, quality: "hoch", fastFights: false, dayCycle: "zyklus" },
@@ -382,7 +384,7 @@
     if (!D.CLASSES[S.cls] || !D.RACES[S.race]) return null;
     S.realm = D.CLASSES[S.cls].realm;
     S.settings = Object.assign({ sound: true, music: true, quality: "hoch", fastFights: false, dayCycle: "zyklus" }, S.settings || {});
-    S.stats = Object.assign({ quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0 }, S.stats || {});
+    S.stats = Object.assign({ quests: 0, wins: 0, losses: 0, arenaWins: 0, bosses: 0, goldEarned: 0, items: 0, hordes: 0, hardWins: 0, streak: 0, legendaries: 0 }, S.stats || {});
     S.bestiary = S.bestiary || {};
     S.ach = S.ach || {};
     S.buffs = S.buffs || [];
@@ -394,8 +396,11 @@
     S.guild = S.guild || null;
     S.seen = S.seen || {};
     S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
+    // Version 0.67: freier Brunnenwurf alle 8 Stunden statt einmal am Tag (wer heute schon geworfen hat, darf gleich)
+    if (typeof S.wellNext !== "number") S.wellNext = 0;
+    delete S.daily.wellFree;
     S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
-    S.arena = Object.assign({ next: 0, wins: 0, losses: 0 }, S.arena || {});
+    S.arena = Object.assign({ next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
     for (const s of D.SLOTS) if (!(s in S.equip)) S.equip[s] = null;
@@ -476,6 +481,12 @@
     return out;
   };
   // Glueck verbessert die Beute: hoehere Chance auf seltenere Gegenstaende und auf Funde ueberhaupt
+  /* Beute von Bossen (Verliese, Verliesbosse in der Taverne, Chronik): ab Stufe 30 steigt der Anteil an epischen und
+     legendaeren Gegenstaenden, ab Stufe 40 ist sie mindestens episch. Vorher (bis 0.74) blieb sie in jeder Stufe gleich,
+     ab 40 waren rund 60 % selten (blau), 32 % episch und 7 % legendaer. tests/beute.mjs misst die Anteile. */
+  E.bossLoot = function (L, final, base, extra) {
+    return { minRarity: final || L >= 40 ? "episch" : "selten", boost: base + Math.max(0, L - 25) * 0.06 + (extra || 0) };
+  };
   E.lootBoost = function (S) {
     const luck = E.heroAttrs(S).glueck;
     const L = S.level;
@@ -596,7 +607,7 @@
         if (n <= 0) continue;
         budget -= n;
         for (const k in t.eff) {
-          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" ? 1 : n);
+          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" || k === "wild" ? 1 : n);
           eff._names[k] = t.name;
         }
       }
@@ -645,6 +656,13 @@
     }
     return g;
   };
+  // Darstellung des Helden: wie gearVisual, nur ohne Helm, wenn der Spieler ihn im Charakterfenster ausgeblendet hat
+  // (die Werte bleiben, andere Spieler und Kaempfe zeigen ihn ebenfalls nicht)
+  E.heroGear = function (S) {
+    const g = E.gearVisual(S.equip);
+    if (S.look && S.look.hideHelm) g.helm = null;
+    return g;
+  };
   E.heroFighter = function (S, now) {
     const C = E.classOf(S);
     const attrs = E.heroAttrs(S, now);
@@ -654,7 +672,7 @@
     const L = S.level;
     const f = {
       kind: "hero", name: S.name, level: L, cls: S.cls, realm: S.realm, race: S.race, gender: S.gender, look: S.look,
-      gear: E.gearVisual(S.equip), mainKey: C.main, attrs, prof,
+      gear: E.heroGear(S), mainKey: C.main, attrs, prof,
       maxHp: Math.round(attrs.konstitution * prof.hpMult * (L + 1)),
       wMin: (w ? w.min : 0) + E.baseDmg(L)[0],
       wMax: (w ? w.max : 1) + E.baseDmg(L)[1],
@@ -812,6 +830,8 @@
       const crit = (!att.opened && AT.assassinate) || r() < E.critChance(att.attrs.glueck, def.level, cBonus);
       if (crit) dmg *= (att.prof.critMult || 2) + (special ? AT.spCritMult || 0 : 0);
       if (!att.opened && AT.assassinate) tags.push("assassinate");
+      // Wilde Macht (Abschluss-Talent der Magier): kritische Zauber zeigt der Kampf als Explosion
+      if (crit && AT.wild) tags.push("wild");
       dmg *= 1 - (DT.toughness || 0);
       if (att.mainKey === "verstand") dmg *= 1 - (DT.magicRes || 0);
       dmg = Math.max(1, Math.round(dmg));
@@ -917,6 +937,9 @@
       }
       def.dazed = false;
       const ev = { a: turn, kind: special ? "special" : "attack", sp: special ? special.id : null, spName: special ? special.name : null, hits: out };
+      // fuer die Darstellung der Abschluss-Talente: Grossmeister (Spezialangriff oefter), Pfeilsalve (zusaetzliche Treffer)
+      if (special && att.T.spEvery) ev.master = true;
+      if (special && att.T.spHits) ev.volley = att.T.spHits;
       if (healed > 0 && att.hp > 0) {
         att.hp = Math.min(att.maxHp, att.hp + healed);
         ev.lifesteal = healed;
@@ -1040,6 +1063,7 @@
     for (let dt = step; dt <= span; dt += step) if (E.isNight(mode, now + dt) !== cur) return dt;
     return Infinity;
   };
+  // Tageswechsel (Nebelmet, Arena-Erfahrung, Brunnen, Nachtjagd) um Mitternacht nach der Uhr des Geraets
   E.nextMidnight = function (now) {
     const d = new Date(now || E.now());
     d.setHours(24, 0, 0, 0);
@@ -1049,8 +1073,8 @@
     now = now || E.now();
     const day = U.dayKey(now);
     if (S.daily.day !== day) {
-      S.daily = { day, wellFree: 1, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 };
-      toast("Ein neuer Tag auf Schwebfels. Der Wunschbrunnen glitzert wieder.", "info");
+      S.daily = { day, brews: 0, arenaXp: 0, wellPaid: 0, nightHunts: 0 };
+      toast("Ein neuer Tag auf Schwebfels.", "info");
     }
     for (const k of ["schmiede", "arkanum"]) if (!S.shops[k] || now - S.shops[k].ts > E.C.SHOP_REFRESH) E.refreshShop(S, k, true);
     E.activeBuffs(S, now);
@@ -1093,7 +1117,10 @@
     S.inv.push(item);
     S.stats.items++;
     if (item.rarity === "episch") E.grantAch(S, "episch");
-    if (item.rarity === "legendaer") E.grantAch(S, "legendaer");
+    if (item.rarity === "legendaer") {
+      S.stats.legendaries = (S.stats.legendaries || 0) + 1;
+      E.grantAch(S, "legendaer");
+    }
     return true;
   };
   function giveItem(S, item, rew) {
@@ -1110,7 +1137,9 @@
     { id: "mittel", name: "Mittel", sec: [40, 70], energy: 10 },
     { id: "lang", name: "Lang", sec: [80, 120], energy: 14 },
   ];
-  const DIFF = [null, { name: "Gemütlich", power: 0.88, reward: 0.85 }, { name: "Ordentlich", power: 0.97, reward: 1.0 }, { name: "Halsbrecherisch", power: 1.06, reward: 1.35 }];
+  // Schwierigkeit 0.72: ordentlich 1.0 (vorher 0.97), halsbrecherisch 1.15 (vorher 1.06); zusammen mit der gemessenen
+  // Heldenstaerke (heroStrength) ist halsbrecherisch wieder ein Wagnis (Stufe 31 mit Talenten: Horde etwa 70 bis 85 %)
+  const DIFF = [null, { name: "Gemütlich", power: 0.88, reward: 0.85 }, { name: "Ordentlich", power: 1.0, reward: 1.0 }, { name: "Halsbrecherisch", power: 1.15, reward: 1.35 }];
   E.DIFF = DIFF;
   E.TIERS = TIERS;
   // Gegner passend zur Stufe; mit Reich bevorzugt die Geschoepfe der eigenen Heimatinsel
@@ -1124,10 +1153,55 @@
     if (list.length < 3) list = D.MONSTERS.slice().sort((a, b) => Math.abs((a.lv[0] + Math.min(a.lv[1], 60)) / 2 - L) - Math.abs((b.lv[0] + Math.min(b.lv[1], 60)) / 2 - L)).slice(0, 6);
     return list;
   };
+  // Verliesbosse in der Taverne (Wunsch des Kapitaens: selten ein Boss aus den Verliesen, damit es nicht eintoenig
+  // wird): je Angebot mit dieser Wahrscheinlichkeit, hoechstens einer je Auswahl, nur Bosse aus Verliesen, die die Stufe
+  // schon oeffnet, ohne die Endbosse (die bleiben dem Verlies vorbehalten). Er kaempft wie ein Gegner der Stufe mit den
+  // Lebenspunkten eines Bosses; Belohnung wie ein seltener Auftrag und mehr, immer mit Gegenstand.
+  E.C.BOSS_OFFER = 0.05;
+  E.C.BOSS_OFFER_LV = 10;
+  E.tavernBosses = (L) => {
+    const out = [];
+    for (const D0 of D.DUNGEONS) if (L >= D0.unlock) D0.bosses.forEach((b, f) => !b.final && out.push(E.dungeonMon(D0.id + "-" + f)));
+    return out;
+  };
+  function makeBossOffer(S, r, tier, diff, boss) {
+    const L = S.level;
+    const D0 = D.DUNGEONS.find((d) => d.id === boss.dungeon);
+    const tpl = U.pick(r, D.BOSS_QUESTS);
+    const place = U.pick(r, D.PLACES);
+    const person = U.pick(r, D.PERSONS);
+    const fill = (s) => s.replace(/\{m\}/g, boss.name).replace(/\{d\}/g, D0.name).replace(/\{o\}/g, place).replace(/\{p\}/g, person);
+    const energy = tier.energy + 4;
+    const ef = energy / 10;
+    const dm = DIFF[diff].reward * 1.8;
+    const bonus = E.bestiaryBonus(S);
+    // Stufe des Helden, auch halsbrecherisch (Boss-Lebenspunkte und hoehere Staerke reichen als Wagnis)
+    const mlevel = Math.max(1, L);
+    const offer = {
+      id: U.uid(), tpl: tpl.t, title: fill(tpl.t), text: U.cap(fill(tpl.x)), place, tier: tier.id,
+      sec: U.ri(r, tier.sec[0], tier.sec[1]) + 20, energy, diff, rare: false, boss: D0.id, monster: boss.id, mlevel,
+      waves: [{ monster: boss.id, mlevel, power: DIFF[diff].power, boss: true }],
+      xp: Math.max(5, Math.round(E.xpNeed(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
+      gold: Math.max(3, Math.round(E.goldBase(L) * ef * dm * U.rf(r, 0.85, 1.15) * bonus * (1 + E.goldBonus(S)))),
+      item: E.makeItem(r, Object.assign({ level: L + 1, cls: S.cls, slot: U.pick(r, D.SLOTS) }, E.bossLoot(L, false, 0.25 * diff + 1.2, E.lootBoost(S)))),
+      perle: r() < 0.35 + 0.05 * diff ? 1 : 0,
+      seed: Math.floor(r() * 1e9),
+    };
+    return offer;
+  }
   E.makeOffer = function (S, r, idx, used) {
     const L = S.level;
     const tier = TIERS[idx % 3 === 0 ? U.ri(r, 0, 1) : idx % 3 === 1 ? 1 : U.ri(r, 1, 2)];
     const diff = U.wpick(r, [{ d: 1, w: 38 }, { d: 2, w: 42 }, { d: 3, w: 20 }]).d;
+    if (L >= E.C.BOSS_OFFER_LV && !used.boss && r() < E.C.BOSS_OFFER) {
+      const bosses = E.tavernBosses(L).filter((b) => used.mons.indexOf(b.id) < 0);
+      if (bosses.length) {
+        const boss = U.pick(r, bosses);
+        used.boss = true;
+        used.mons.push(boss.id);
+        return makeBossOffer(S, r, tier, Math.max(2, diff), boss);
+      }
+    }
     const rare = L >= 3 && r() < 0.08 + 0.04 * diff;
     const pool = E.monstersFor(L, S.realm);
     let mon = U.pick(r, pool);
@@ -1195,17 +1269,66 @@
     a.end = now;
     return { ok: true };
   };
-  E.monById = (id) => D.MONSTERS.find((m) => m.id === id);
-  E.questMonster = (o) => E.monById(o.monster);
-  E.heroStrength = function (hero, L) {
-    const m = E.modelHeroFighter(L, hero.cls, 1);
-    const main = hero.attrs[hero.mainKey] / m.attrs[m.mainKey];
-    const hp = hero.maxHp / m.maxHp;
-    const wpn = (hero.wMin + hero.wMax) / (m.wMin + m.wMax);
-    return U.clamp(Math.cbrt(main * hp * wpn), 0.4, 2.0);
+  // Verliesbosse haben die Kennung <verlies>-<stockwerk> (wie in E.bossFor)
+  E.dungeonMon = function (id) {
+    const m = /^(.+)-(\d+)$/.exec(id || "");
+    const D0 = m && D.DUNGEONS.find((d) => d.id === m[1]);
+    const b = D0 && D0.bosses[+m[2]];
+    return b ? { id, name: b.name, arch: b.arch, color: b.color, accent: b.accent, dungeon: D0.id } : null;
   };
-  /* Auftragsgegner wachsen mit dem Helden, aber nur halb so schnell wie seine tatsaechliche Staerke */
-  E.adaptPower = (hero, L, p) => (hero ? p * (0.5 + 0.5 * E.heroStrength(hero, L)) : p);
+  E.monById = (id) => D.MONSTERS.find((m) => m.id === id) || E.dungeonMon(id);
+  E.questMonster = (o) => E.monById(o.monster);
+  /* Staerke des Helden als Faktor auf die Gegnerstaerke: gesucht ist die Staerke zweier fester Pruefgegner, bei der
+     der Held so abschneidet wie der Modellheld seiner Klasse (gewoehnliche Ausruestung, keine Talente) bei Staerke 1.
+     Gemessen statt geschaetzt, damit Talente (Doppelschlag, Lebensraub, zweiter Atem ...), Ruestung und Traenke
+     mitzaehlen; vorher zaehlten nur Hauptwert, Lebenspunkte und Waffe, und ab Stufe 30 gewann man selbst
+     halsbrecherische Horden immer mit drei Vierteln der Lebenspunkte. Je Kaempferwerten einmal gerechnet. */
+  const EDGE = {};
+  E.heroStrength = function (hero, L) {
+    if (!hero || !hero.cls || !D.CLASSES[hero.cls]) return 1;
+    const tal = hero.tal ? Object.keys(hero.tal).filter((k) => k !== "_names").sort().map((k) => k + ":" + hero.tal[k]).join(",") : "";
+    const ck = [hero.cls, L, hero.maxHp, hero.wMin, hero.wMax, hero.armor, JSON.stringify(hero.attrs), JSON.stringify(hero.prof), tal].join("|");
+    if (EDGE[ck]) return EDGE[ck];
+    const mons = E.monstersFor(L).slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+    const refs = [mons[0], mons[Math.floor(mons.length / 2)]].filter(Boolean);
+    const plain = E.modelHeroFighter(L, hero.cls, 1);
+    const N = 16;
+    const score = (f, p) => {
+      let s = 0;
+      for (const mon of refs)
+        for (let i = 0; i < N; i++) {
+          const r = E.simulate(f, E.monsterFighter(mon, L, p), "edge" + mon.id + i);
+          if (r.winner === 0) s += 0.5 + (0.5 * Math.max(0, r.hp[0])) / f.maxHp;
+        }
+      return s / (refs.length * N);
+    };
+    const target = score(plain, 1);
+    let lo = 1;
+    let hi = 1;
+    if (score(hero, 1) > target) {
+      hi = 1.25;
+      while (score(hero, hi) > target && hi < 3) {
+        lo = hi;
+        hi *= 1.25;
+      }
+    } else {
+      lo = 0.8;
+      while (score(hero, lo) < target && lo > 0.4) {
+        hi = lo;
+        lo *= 0.8;
+      }
+    }
+    for (let it = 0; it < 6; it++) {
+      const mid = (lo + hi) / 2;
+      if (score(hero, mid) > target) lo = mid;
+      else hi = mid;
+    }
+    return (EDGE[ck] = U.clamp(Math.round(((lo + hi) / 2) * 100) / 100, 0.4, 3));
+  };
+  /* Gegner in Auftraegen, Chronik und Nachtjagd wachsen mit dem Helden: um drei Viertel seines Vorsprungs vor dem
+     Modellhelden (vorher die Haelfte, und Talente zaehlten nicht); bessere Ausruestung und Talente lohnen sich weiter */
+  E.ADAPT_FOLLOW = 0.75;
+  E.adaptPower = (hero, L, p) => (hero ? p * (1 - E.ADAPT_FOLLOW + E.ADAPT_FOLLOW * E.heroStrength(hero, L)) : p);
   E.questFoes = function (o, hero) {
     return o.waves.map((w) => E.monsterFighter(E.monById(w.monster), w.mlevel, E.adaptPower(hero, w.mlevel, w.power), { boss: !!w.boss }));
   };
@@ -1239,12 +1362,17 @@
         S.stats.hordes++;
         E.grantAch(S, "horde");
       }
+      if (o.boss) S.stats.tavernBosses = (S.stats.tavernBosses || 0) + 1;
+      if (o.diff === 3) S.stats.hardWins++;
+      S.stats.streak++;
+      if (fight.hero && fight.chain.hpLeft <= fight.hero.maxHp * 0.05) E.grantAch(S, "knapp");
       E.grantAch(S, "ersterSieg");
     } else {
       rew.xp = Math.round(o.xp * 0.25);
       rew.gold = Math.round(o.gold * 0.25);
       E.gainGold(S, rew.gold);
       S.stats.losses++;
+      S.stats.streak = 0;
     }
     S.stats.quests++;
     E.gainXp(S, rew.xp);
@@ -1284,7 +1412,9 @@
       const L = ch.lv + (f.boss ? 1 : 0);
       // Mehrere Gegner nacheinander: jeder einzelne ist schwaecher, die Kette bleibt eine Herausforderung
       const n = ch.foes.length;
-      const p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
+      let p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
+      // zweiter Akt (ab Stufe 40): Endkaempfe mit Gewicht, der Held soll merken, dass es um alles geht
+      if (ch.lv >= 40) p *= f.final ? (n >= 2 ? 1.12 : 1.05) : 1.05;
       return E.monsterFighter(mon, L, E.adaptPower(hero, L, p), { boss: !!f.boss, final: !!f.final });
     });
   };
@@ -1317,7 +1447,7 @@
     S.perlen += rew.perlen;
     E.gainGold(S, rew.gold);
     const r = U.rng(U.hash(S.name + ch.key));
-    giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: final ? "episch" : "selten", boost: 1 + E.lootBoost(S) }), rew);
+    giveItem(S, E.makeItem(r, Object.assign({ level: S.level + 1, cls: S.cls }, E.bossLoot(S.level, final, 1, E.lootBoost(S)))), rew);
     E.gainXp(S, rew.xp);
     for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
     S.stats.wins++;
@@ -1605,8 +1735,16 @@
   /* ---------------- Arena: Ring der Reiche ---------------- */
   /* Vier Herausforderer aus den anderen Reichen, deren Staerke zum Helden passt:
      einer leicht, zwei ausgeglichen, einer schwer. Echte Mitspieler und Helden der Ranglisten haben Vorrang,
-     fehlt ein passender, tritt ein Wanderkaempfer gleicher Stufe an. Die Auswahl bleibt bis zum naechsten Kampf. */
-  E.ARENA_TARGETS = [{ c: 0.78, label: "Leicht" }, { c: 0.58, label: "Ausgeglichen" }, { c: 0.46, label: "Ausgeglichen" }, { c: 0.32, label: "Schwer" }];
+     fehlt ein passender, tritt ein Wanderkaempfer gleicher Stufe an. Die Auswahl bleibt bis zum naechsten Kampf.
+     Die Siegchance kommt aus 400 Probekaempfen (E.arenaChance; 30 lagen im Mittel 7, hoechstens 27 Prozentpunkte
+     daneben, tests/arena.mjs), die Einstufung daraus (E.arenaTier) und die Ehre auch: je schwerer, desto mehr. */
+  E.ARENA_TARGETS = [{ c: 0.86, label: "Leicht" }, { c: 0.64, label: "Ausgeglichen" }, { c: 0.5, label: "Ausgeglichen" }, { c: 0.3, label: "Schwer" }];
+  E.ARENA_N = 400;
+  E.arenaChance = (hero, foe, opp) => E.estimateWin(hero, [foe], E.ARENA_N, "arena" + opp.id + opp.level);
+  E.arenaTier = (c) => (c >= 0.75 ? { key: "leicht", label: "Leicht" } : c >= 0.45 ? { key: "fair", label: "Ebenbürtig" } : { key: "schwer", label: "Schwer" });
+  // Ehre nach Siegchance: leicht etwa 15 fuer den Sieg und 9 fuer die Niederlage, schwer (30 %) 47 und 4; im Mittel
+  // bringt jede Wahl ungefaehr gleich viel, ein Sieg gegen einen schweren Gegner aber dreimal so viel
+  E.arenaHonor = (c) => ({ win: U.clamp(Math.round(4 + 9 * Math.pow(Math.max(0.05, c), -1.3)), 6, 60), loss: Math.round(2 + 8 * c) });
   E.wanderFighter = function (w) {
     const f = E.modelHeroFighter(w.level, w.cls, w.q);
     Object.assign(f, { name: w.name, race: w.race, realm: w.realm, gender: w.gender, look: w.look, gear: E.npcGear(w), kind: "hero" });
@@ -1616,7 +1754,7 @@
   E.rivalFighter = (opp) => opp.fighter || (opp.kind === "wander" ? E.wanderFighter(opp) : E.npcFighter(opp));
   E.arenaRivals = function (S, now, remote) {
     now = now || E.now();
-    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm + ":" + JSON.stringify(S.talents || {});
+    const stamp = S.arena.wins + ":" + S.arena.losses + ":" + S.level + ":" + S.realm + ":" + JSON.stringify(S.talents || {}) + ":" + (S.arena.roll || 0);
     const all = E.allHeroes(S, now, remote);
     const me = all.find((h) => h.kind === "me");
     const byId = {};
@@ -1629,21 +1767,30 @@
     const hero = E.heroFighter(S, now);
     const L = S.level;
     const span = Math.max(3, Math.round(L * 0.12));
-    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + L * 31);
-    const est = (f, salt) => E.estimateWin(hero, [f], 24, "ar" + salt);
-    let pool = all.filter((h) => h.kind !== "me" && h.realm !== S.realm && Math.abs(h.level - L) <= span);
+    const r = U.rng(S.npcSeed + S.arena.wins * 7 + S.arena.losses * 13 + L * 31 + (S.arena.roll || 0) * 101);
+    const est = (f, salt, n) => E.estimateWin(hero, [f], n || 80, "ar" + salt);
+    // nach dem Neuwuerfeln (E.arenaReroll) nicht dieselben Gegner noch einmal
+    const prev = S.arena.prev || [];
+    let pool = all.filter((h) => h.kind !== "me" && h.realm !== S.realm && Math.abs(h.level - L) <= span && prev.indexOf(h.id) < 0);
     pool.sort((a, b) => (a.kind === "real" ? -1 : 0) - (b.kind === "real" ? -1 : 0) || r() - 0.5);
     pool = pool.slice(0, 24).map((h) => Object.assign({}, h, { chance: est(E.rivalFighter(h), h.id) }));
     const out = [];
     E.ARENA_TARGETS.forEach((tg, ti) => {
+      // grob vorsortiert, dann die naechsten drei genau nachgerechnet
+      const near = pool
+        .filter((h) => !out.find((x) => x.id === h.id))
+        .map((h) => ({ h, d: Math.abs(h.chance - tg.c) - (h.kind === "real" ? 0.05 : 0) }))
+        .filter((x) => x.d <= 0.15)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 3);
       let best = null;
-      for (const h of pool) {
-        if (out.find((x) => x.id === h.id)) continue;
-        const d = Math.abs(h.chance - tg.c) - (h.kind === "real" ? 0.05 : 0);
-        if (d <= 0.13 && (!best || d < best.d)) best = { h, d };
+      for (const x of near) {
+        const c = E.arenaChance(hero, E.rivalFighter(x.h), x.h);
+        const d = Math.abs(c - tg.c) - (x.h.kind === "real" ? 0.05 : 0);
+        if (d <= 0.1 && (!best || d < best.d)) best = { h: x.h, d, c };
       }
       if (best) {
-        out.push(Object.assign(best.h, { tier: ti }));
+        out.push(Object.assign(best.h, { tier: ti, chance: best.c }));
         return;
       }
       // Wanderkaempfer: Staerke so lange anpassen, bis die Siegchance zum Ziel passt
@@ -1663,14 +1810,14 @@
       for (let tries = 0; tries < 5; tries++) {
         let lo = 0.15;
         let hi = 1.8;
-        for (let k = 0; k < 7; k++) {
+        for (let k = 0; k < 8; k++) {
           w.q = (lo + hi) / 2;
           const c = est(E.wanderFighter(w), w.id + k);
           if (c > tg.c) lo = w.q;
           else hi = w.q;
         }
         w.q = Math.round(((lo + hi) / 2) * 1000) / 1000;
-        w.chance = est(E.wanderFighter(w), w.id);
+        w.chance = E.arenaChance(hero, E.wanderFighter(w), w);
         // Selbst ganz schwach noch zu stark: eine Stufe tiefer suchen
         if (w.chance >= tg.c - 0.15 || w.level <= 1) break;
         w.level = Math.max(1, w.level - Math.max(1, Math.round(L * 0.15)));
@@ -1682,6 +1829,20 @@
     S.arena.rivals = { stamp, until: now + 30 * 60 * 1000, list: out.map((h) => (h.kind === "wander" ? h : { id: h.id, kind: h.kind, tier: h.tier, chance: h.chance })) };
     return out;
   };
+  // Neue Herausforderer: einmal je Auswahl kostenlos, danach fuer etwas Gold; nach jedem Kampf wieder frei
+  E.arenaRerollCost = (S) => (S.arena.freeRoll !== false ? 0 : Math.max(10, Math.round(E.goldBase(S.level) * 0.25)));
+  E.arenaReroll = function (S, now) {
+    now = now || E.now();
+    const cost = E.arenaRerollCost(S);
+    if (cost > S.gold) return { ok: false, msg: "Für neue Herausforderer fehlen dir " + U.fmt(cost - S.gold) + " Gold." };
+    S.gold -= cost;
+    const cur = S.arena.rivals ? S.arena.rivals.list.map((h) => h.id) : [];
+    S.arena.prev = cur;
+    S.arena.roll = (S.arena.roll || 0) + 1;
+    S.arena.freeRoll = false;
+    S.arena.rivals = null;
+    return { ok: true, cost };
+  };
   E.arenaFight = function (S, opp, now) {
     now = now || E.now();
     if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
@@ -1690,20 +1851,24 @@
     const hero = E.heroFighter(S, now);
     const foe = E.rivalFighter(opp);
     const chain = E.simulateChain(hero, [foe], U.hash(S.name + opp.id + now));
-    return { ok: true, fight: { hero, foes: [foe], chain, opp } };
+    return { ok: true, fight: { hero, foes: [foe], chain, opp, chance: E.arenaChance(hero, foe, opp) } };
   };
   E.resolveArena = function (S, fight, now) {
     now = now || E.now();
     const opp = fight.opp;
     const won = fight.chain.winner === 0;
-    const gain = U.clamp(Math.round(22 + (opp.honor - S.honor) / 15), 6, 60);
+    const c = fight.chance != null ? fight.chance : E.arenaChance(fight.hero, fight.foes[0], opp);
+    const hon = E.arenaHonor(c);
+    const gain = hon.win;
     const rew = { won, honor: 0, gold: 0, xp: 0 };
     S.arena.next = now + E.C.ARENA_CD;
     S.arena.rivals = null;
+    S.arena.freeRoll = true;
+    S.arena.prev = [];
     if (won) {
       S.honor += gain;
       rew.honor = gain;
-      rew.gold = Math.round(E.goldBase(S.level) * 0.5);
+      rew.gold = Math.round(E.goldBase(S.level) * 0.5 * (0.7 + 0.8 * (1 - c)));
       E.gainGold(S, rew.gold);
       if (S.daily.arenaXp < 10) {
         S.daily.arenaXp++;
@@ -1715,7 +1880,7 @@
       if (opp.kind === "npc") S.npcHonor[opp.id] = (S.npcHonor[opp.id] || 0) - Math.round(gain * 0.6);
       E.grantAch(S, "ersterSieg");
     } else {
-      const loss = Math.round(gain * 0.5);
+      const loss = hon.loss;
       S.honor = Math.max(0, S.honor - loss);
       rew.honor = -loss;
       S.arena.losses++;
@@ -1742,7 +1907,7 @@
   E.bossFor = function (d, floor) {
     const D0 = D.DUNGEONS[d];
     const b = D0.bosses[floor];
-    const mon = { id: D0.id + "-" + floor, name: b.name, arch: b.arch, color: b.color, accent: b.accent };
+    const mon = E.dungeonMon(D0.id + "-" + floor);
     return { mon, L: D0.base + floor, power: 0.95 + 0.02 * floor + (b.final ? 0.05 : 0), final: !!b.final };
   };
   E.dungeonFight = function (S, d, now) {
@@ -1770,7 +1935,7 @@
       rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * (b.final ? 8 : 3));
       const r = U.rng(U.hash(b.mon.id + now));
-      giveItem(S, E.makeItem(r, { level: b.L, cls: S.cls, minRarity: b.final ? "episch" : "selten", boost: (b.final ? 2 : 0.6) + E.lootBoost(S) }), rew);
+      giveItem(S, E.makeItem(r, Object.assign({ level: b.L, cls: S.cls }, E.bossLoot(b.L, b.final, b.final ? 2 : 0.6, E.lootBoost(S)))), rew);
       if (b.final) {
         rew.perlen = 3;
         S.perlen += 3;
@@ -1894,10 +2059,11 @@
   };
 
   /* ---------------- Wunschbrunnen ---------------- */
+  E.wellFree = (S, now) => (now || E.now()) >= (S.wellNext || 0);
   E.tossWell = function (S, now, usePerl) {
     now = now || E.now();
     let paid = false;
-    if (S.daily.wellFree > 0 && !usePerl) S.daily.wellFree--;
+    if (!usePerl && E.wellFree(S, now)) S.wellNext = now + E.C.WELL_FREE_MS;
     else {
       if (S.daily.wellPaid >= E.C.WELL_PAID_MAX) return { ok: false, msg: "Der Brunnen ist für heute erschöpft." };
       if (S.perlen < 1) return { ok: false, msg: "Ein weiterer Wurf kostet eine Wolkenperle." };
@@ -1960,6 +2126,38 @@
     SB.bus.emit("achievement", A);
     return true;
   };
+  // Fortschritt zaehlbarer Abzeichen: [erreicht, noetig] oder null
+  E.achProgress = function (S, id) {
+    const st = S.stats || {};
+    const done = (n, max) => [Math.min(n || 0, max), max];
+    switch (id) {
+      case "quest10": return done(st.quests, 10);
+      case "quest50": return done(st.quests, 50);
+      case "quest150": return done(st.quests, 150);
+      case "quest300": return done(st.quests, 300);
+      case "stufe10": return done(S.level, 10);
+      case "stufe25": return done(S.level, 25);
+      case "stufe40": return done(S.level, 40);
+      case "stufe50": return done(S.level, 50);
+      case "arena10": return done(st.arenaWins, 10);
+      case "arena100": return done(st.arenaWins, 100);
+      case "mondjaeger": return done(st.nightHunts, 5);
+      case "mondjaeger25": return done(st.nightHunts, 25);
+      case "bestiarium12": return done(Object.keys(S.bestiary || {}).length, 12);
+      case "bestiarium30": return done(Object.keys(S.bestiary || {}).length, 30);
+      case "halsbrecher25": return done(st.hardWins, 25);
+      case "horde10": return done(st.hordes, 10);
+      case "unbesiegt20": return done(st.streak, 20);
+      case "legendaer5": return done(st.legendaries, 5);
+      case "kapitel3": return done(Object.keys((S.story && S.story.done) || {}).length, 3);
+      case "chronik": {
+        const ch = E.storyChapters(S);
+        return done(ch.filter((c) => c.done).length, ch.length);
+      }
+      case "dungeonAll": return done(D.DUNGEONS.filter((d) => ((S.dungeons && S.dungeons.progress[d.id]) || 0) >= d.bosses.length).length, D.DUNGEONS.length);
+      default: return null;
+    }
+  };
   E.checkAch = function (S, now) {
     if (S.stats.quests >= 10) E.grantAch(S, "quest10");
     if (S.stats.quests >= 50) E.grantAch(S, "quest50");
@@ -1970,6 +2168,12 @@
     if (S.stats.arenaWins >= 10) E.grantAch(S, "arena10");
     if ((S.stats.nightHunts || 0) >= 5) E.grantAch(S, "mondjaeger");
     if (Object.keys(S.bestiary).length >= 12) E.grantAch(S, "bestiarium12");
+    // schwere Abzeichen; ihr Fortschritt steht in E.achProgress
+    for (const a of D.ACHIEVEMENTS) {
+      if (!a.hard || S.ach[a.id]) continue;
+      const pr = E.achProgress(S, a.id);
+      if (pr && pr[0] >= pr[1]) E.grantAch(S, a.id);
+    }
     if (now !== undefined) {
       const me = E.allHeroes(S, now, SB.remoteHeroes || null).find((h) => h.kind === "me");
       if (me && me.rank <= 10) E.grantAch(S, "arenaTop10");

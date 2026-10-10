@@ -458,7 +458,6 @@
      Eigener Koerper mit gemalter Textur und eigenen Gelenken, gleiches Skelett und gleiche Bewegungen wie
      alle Helden. Kleidungsteile sind auf genau diesen Koerper angepasst und blenden die Haut darunter aus. */
   const GEN = () => (SB.assets.data && SB.assets.data.gen) || {};
-  HU.hasGen = (key) => !!GEN()[key];
   // Texturen der erzeugten Koerper vorab dekodieren; erst danach gelten sie als bereit (sonst dunkle Portraets)
   const GREADY = {};
   HU.genReady = (key) => GREADY[key] === true;
@@ -468,8 +467,12 @@
       Object.keys(GEN()).map((k) => {
         if (GREADY[k]) return null;
         const G0 = GEN()[k];
-        const m = genMat(k, G0.tex, null, G0.nrm);
-        const waits = [m.map, m.normalMap].filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
+        // Figuren mit Meshy-Skelett und echten Bewegungen (src/r3d-rigged.js): dieselben Texturen wie dort vorladen
+        const texs =
+          G0.kind === "rig"
+            ? [SB.assets.texture("rig." + k, G0.tex, { srgb: true }), G0.ntex ? SB.assets.texture("rig." + k + ".n", G0.ntex, { srgb: false }) : null]
+            : ((m) => [m.map, m.normalMap])(genMat(k, G0.tex, null, G0.nrm));
+        const waits = texs.filter((t) => t && t.userData.ready).map((t) => t.userData.ready);
         return Promise.all(waits).then(() => (GREADY[k] = true));
       })
     );
@@ -503,6 +506,40 @@
     }
     return (GMAT[key] = m);
   }
+  // Guertel nur am Rumpf: in A-Haltung haengen die Haende auf Guertelhoehe und machten ihn bei aelteren Paketen viel
+  // zu breit (Wurfmesser schwebten neben der Huefte). Von der Mitte aus bis zur ersten Luecke im Querschnitt.
+  const GSOCK = {};
+  function genSockets(key, G0) {
+    if (GSOCK[key]) return GSOCK[key];
+    const S = Object.assign({}, G0.sockets);
+    const b = S.belt;
+    if (b && b.left && b.right && G0.pos) {
+      const P = G0.pos;
+      const yb = b.left[1];
+      const l = [];
+      const r = [];
+      for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i + 1] - yb) < 0.02) (P[i] >= 0 ? l : r).push(Math.abs(P[i]));
+      const edge = (xs, fb) => {
+        if (!xs.length) return fb;
+        xs.sort((a, c) => a - c);
+        let e = xs[0];
+        for (const x of xs) {
+          if (x - e > 0.03) break;
+          e = x;
+        }
+        return e;
+      };
+      // beruehrt eine Hand die Huefte, gibt es auf dieser Seite keine Luecke: hoechstens wenig breiter als die andere Seite
+      let el = edge(l, b.left[0]);
+      let er = edge(r, -b.right[0]);
+      const m = Math.min(el, er) * 1.15;
+      el = Math.min(el, m);
+      er = Math.min(er, m);
+      S.belt = Object.assign({}, b, { left: [el, yb, b.left[2]], right: [-er, yb, b.right[2]] });
+    }
+    return (GSOCK[key] = S);
+  }
+  HU.genSockets = (key) => (GEN()[key] ? genSockets(key, GEN()[key]) : null);
   function buildGen(desc) {
     const D = SB.data;
     const G0 = GEN()[desc.gen];
@@ -523,7 +560,7 @@
     mesh.frustumCulled = false;
     mesh.castShadow = true;
     body.add(mesh);
-    const prof = { j: G0.j, top: G0.top, sockets: G0.sockets };
+    const prof = { j: G0.j, top: G0.top, sockets: genSockets(desc.gen, G0) };
     // erzeugte Haende sind schon locker gebeugt: freie Hand nur wenig weiter schliessen, mit Waffe ganz (attachRigid)
     const parts = { root, body, mesh, rig, B: rig.by, prof, pk: "gen:" + desc.gen, gen: true, gripL: 0.12, gripR: 0.12 };
     for (const p of worn) {
@@ -554,9 +591,13 @@
   /* ---------- Held ---------- */
   HU.build = function (desc) {
     T = R.T();
-    if (desc.gen && GEN()[desc.gen]) return buildGen(desc);
+    const RG = R.rigged;
+    if (desc.gen && GEN()[desc.gen]) return RG && RG.is(desc.gen) ? RG.build(desc, desc.gen) : buildGen(desc);
     const D = SB.data;
     const raceId = D.RACES[desc.race] ? desc.race : OLD_RACE[desc.race] || "albier";
+    // Figur mit eigenem Skelett (Meshy-Strecke), die fuer dieses Volk und Geschlecht hinterlegt ist
+    const auto = RG && !desc.noGen ? RG.auto(raceId, desc.gender, desc.look && desc.look.hairStyle) : null;
+    if (auto) return RG.build(desc, auto);
     const race = D.RACES[raceId];
     const clsId = D.CLASSES[desc.cls] ? desc.cls : OLD_CLS[desc.cls] || "schildritter";
     const C = D.CLASSES[clsId];
@@ -649,8 +690,10 @@
     if (pre) QA.multiply(pre);
     bone.quaternion.copy(QA);
   }
-  HU.pose = function (m, name, u) {
+  HU.pose = function (m, name, u, dt) {
     const P = m.parts;
+    // Figuren mit eigenem Skelett spielen Clips ab (src/r3d-rigged.js)
+    if (P.clips) return P.clips.tick(dt || 0);
     const B = P.B;
     const t = m.t;
     const s = R.stance(m);

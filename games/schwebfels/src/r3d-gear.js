@@ -152,6 +152,8 @@
   /* ---------- Geometrie je Teil und Koerper ---------- */
   // Masse eines Profils fuer frei haengende Teile (Huefte, Brust, Kopf ...)
   const FIT = {};
+  // Figuren mit eigenem Netz (src/r3d-rigged.js) bringen ihre Masse selbst mit
+  G.setFit = (profKey, fit) => (FIT[profKey] = fit);
   function fitOf(profKey) {
     if (FIT[profKey]) return FIT[profKey];
     const HU = R.human;
@@ -529,8 +531,22 @@
   G.attachRigid = function (parts, gear, hc) {
     const IT = R.items;
     if (!IT) return;
+    T = R.T();
     const S = parts.prof.sockets;
+    // Haltepunkte in den Haenden fuer Dinge aus den Szenen (Krug, Laterne); die alten Figuren haben eigene. Rahmen wie
+    // bei Waffen: Y entlang der Griffachse, X in Fingerrichtung. userData.grip sagt den Szenen, dass hier gegriffen wird.
+    for (const [side, sock, mirror] of [["R", S.gripR, false], ["L", S.gripL, true]]) {
+      if (parts["hand" + side] || !sock || !parts.B["hand." + side]) continue;
+      const h = new T.Group();
+      h.quaternion.copy(gripFrame(sock, mirror));
+      placeOnBone(parts, h, "hand." + side, sock.p);
+      h.userData.grip = true;
+      parts["hand" + side] = h;
+    }
     const build = (it, base, variant) => {
+      // erzeugte Waffe oder erzeugter Schild aus dem Figurenpaket (src/r3d-rigged.js) vor der Bauregel
+      const gw = !base && variant == null && R.rigged && R.rigged.weaponFor ? R.rigged.weaponFor(it, hc) : null;
+      if (gw) return gw;
       const V = visOf(it, hc);
       const b = base || V.base;
       if (!IT.forms[b]) return null;
@@ -584,7 +600,8 @@
           // des Ellbogens also nach vorn links), die Laengsachse steht senkrecht auf Unterarm und Seite
           const a = S.armL;
           const fa = V3(a.along).normalize();
-          const lat = new T.Vector3(1, 0, 0.3).normalize();
+          // Handruecken: bei Figuren mit eigenem Skelett aus den Haltepunkten, sonst haengender Arm
+          const lat = (a.dorsal ? V3(a.dorsal) : new T.Vector3(1, 0, 0.3)).normalize();
           lat.addScaledVector(fa, -lat.dot(fa)).normalize();
           const out = fa.clone().multiplyScalar(0.62).addScaledVector(lat, 0.78).normalize();
           const up = new T.Vector3().crossVectors(fa, lat).normalize();

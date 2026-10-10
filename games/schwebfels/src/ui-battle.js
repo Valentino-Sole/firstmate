@@ -11,7 +11,26 @@
   const $ = UI.$;
 
   /* ================= Kampf ================= */
+  // Monsterfiguren der Gegner, Heldenkoerper und die gemalte Kulisse vorher nachladen (hoechstens 15 Sekunden, mit
+  // Hinweis, sonst stehen Platzhalter da); auf langsamen Handys dauert das beim ersten Kampf einen Moment
+  const BATTLE_WAIT = 15000;
   UI.runBattle = function (fight, opts) {
+    const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
+    const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, BATTLE_WAIT))]);
+    // Heldenkoerper aller beteiligten Reiche (Arena, Rangliste): deren Figurendatei ebenfalls vorher laden
+    const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
+    // Der Ausgang steht schon fest: ab jetzt gilt der Kampf als laufend (Stufenaufstieg, Abzeichen und Beute melden
+    // sich erst danach) und der Kampfbildschirm deckt die Insel samt Leiste mit Stufe und Gold zu
+    UI.inBattle = true;
+    UI.hideTip();
+    const root = $("#battle");
+    root.innerHTML = '<div class="bload"><b>' + esc(opts.title || "") + '</b><span class="muted">Figuren und Kulisse werden geladen …</span></div>';
+    root.hidden = false;
+    document.body.classList.add("in-battle");
+    $("#hint").hidden = true;
+    return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
+  };
+  function runBattle(fight, opts) {
     return new Promise((resolve) => {
       const S = UI.S;
       const root = $("#battle");
@@ -25,7 +44,7 @@
       const multi = foes.length > 1;
       const sub = (f) => "Stufe " + f.level + (f.kind === "monster" ? " · " + (D.ARCH_NAMES[f.arch] || D.MONSTER_TYPES[f.mainKey].profile) : " · " + D.CLASSES[f.cls].name);
       const plate = (f, side) =>
-        '<div class="plate ' + side + '"><span class="porthole">' + UI.portrait(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
+        '<div class="plate ' + side + '"><span class="porthole">' + UI.portraitNow(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
       root.innerHTML =
         '<div class="bstage"></div><div class="plates">' + plate(hero, "left") + '<div class="btitle">' + esc(opts.title || "") + (multi ? '<div class="wave">Gegner <b id="waveNo">1</b> von ' + foes.length + "</div>" : "") + "</div>" + plate(foes[0], "right") + "</div>" +
         '<div class="bcontrols"><button class="btn ghost small" data-speed="1">1×</button><button class="btn ghost small" data-speed="2">2×</button><button class="btn ghost small" data-speed="4">4×</button><button class="btn small" data-skip="1">Überspringen</button></div>';
@@ -55,6 +74,7 @@
           battle = SB.R3D.createBattle(stage, {
             setting: opts.setting,
             tint: opts.tint,
+            dungeon: opts.dungeon,
             dayTime: opts.dayTime != null ? opts.dayTime : SB.R3D.dayTime(S.settings.dayCycle || "zyklus"),
             realm: S.realm,
             left: UI.fighterDesc(hero),
@@ -72,7 +92,7 @@
       let curFoeDesc = UI.fighterDesc(foes[0]);
       function fallbackStage(foe) {
         curFoeDesc = UI.fighterDesc(foe);
-        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portrait(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portrait(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
+        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portraitNow(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portraitNow(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
       }
@@ -242,7 +262,7 @@
         };
       }
     });
-  };
+  }
 
   /* ================= Heldenerschaffung ================= */
   let view = null;
@@ -262,14 +282,20 @@
   function randomDraft(keepName, realm) {
     const r = Math.random;
     realm = realm || realmKeys()[Math.floor(r() * 3)];
-    const race = racesOf(realm)[Math.floor(r() * 2)];
+    const races = racesOf(realm);
+    const race = races[Math.floor(r() * races.length)];
     const cls = classesOf(realm)[Math.floor(r() * 4)];
     return { name: keepName || "", realm, race, gender: r() < 0.5 ? "m" : "w", cls, look: randomLook(race) };
   }
+  // Kameraeinstellung der Vorschau: "ganz" mit Waffe, "nah" und "kopf" ohne Waffe und Schild (sonst verdeckt etwa der
+  // Schild der Krieger das Gesicht)
+  let zoom = "ganz";
   function previewDesc() {
     const C = D.CLASSES[draft.cls];
     const tint = C.material === "platte" ? "#9aa4ad" : C.material === "leder" ? "#5a3d2a" : D.REALMS[draft.realm].color;
-    return {
+    const armed = zoom === "ganz";
+    // neue Figur (Bild zu 3D), sobald die Figurendatei des Reiches geladen ist
+    return UI.withGen({
       kind: "hero",
       race: draft.race,
       cls: draft.cls,
@@ -277,33 +303,57 @@
       gender: draft.gender,
       look: draft.look,
       gear: {
-        waffe: { base: C.weapons[0], tint: "#6b4a2f", rarity: "selten", style: 0 },
+        waffe: armed ? { base: C.weapons[0], tint: "#6b4a2f", rarity: "selten", style: 0 } : null,
         ruestung: { base: C.chest, tint, rarity: "gewoehnlich", style: 1 },
         stiefel: { base: "stiefel", tint: "#4a3a2a", rarity: "gewoehnlich", style: 0 },
-        nebenhand: { base: C.offhand, rarity: "gewoehnlich", style: 0 },
+        nebenhand: armed ? { base: C.offhand, rarity: "gewoehnlich", style: 0 } : null,
         umhang: { base: "umhang", tint: D.REALMS[draft.realm].color, style: 0 },
       },
-    };
+    });
+  }
+  // Hinweis, solange die Figur des gewaehlten Volkes noch laedt (bis dahin steht ein Platzhalter auf dem Sockel)
+  const genLoad = {};
+  function genHints() {
+    const note = $("#create .gen-note");
+    if (!note) return;
+    const waiting = !!(view && previewDesc().pending);
+    const st = genLoad[draft.realm];
+    note.hidden = !waiting;
+    note.textContent = st === "fehler" || st === "fehlt" ? "Die Figur konnte noch nicht geladen werden, gleich ein neuer Versuch …" : "Figur wird geladen …";
+  }
+  const genWait = {};
+  function loadGen() {
+    const realm = draft.realm;
+    if (!view || genWait[realm] || genLoad[realm] === "laedt" || genLoad[realm] === "bereit" || UI.GEN_REALMS.indexOf(realm) < 0) return;
+    genLoad[realm] = "laedt";
+    UI.loadGenFigures(realm).then((st) => {
+      genLoad[realm] = st;
+      // nach einem Fehlschlag erst spaeter neu versuchen: bis dahin liefert UI.loadGenFigures sofort dasselbe
+      // erfuellte Versprechen, ein direkter neuer Versuch liefe endlos weiter und hielte die Seite an
+      if (st !== "bereit") {
+        genWait[realm] = true;
+        setTimeout(() => {
+          genWait[realm] = false;
+          if (view && !$("#create").hidden) updateView();
+        }, 15000);
+      }
+      if (view && !$("#create").hidden) updateView();
+    });
   }
   function modsText(mods) {
     const parts = [];
     for (const a of D.ATTRS) if (mods[a]) parts.push((mods[a] > 0 ? "+" : "") + mods[a] + " " + D.ATTR_INFO[a].name);
     return parts.length ? "(" + parts.join(", ") + ")" : "";
   }
+  // Aussehen: Haut, Haare und Gesicht gehoeren zum Meshy-Koerper; zu waehlen gibt es nur eine Gestalt, falls es fuer
+  // Volk und Geschlecht mehrere Modelle gibt
   function renderForm() {
     const f = $("#create .cform");
     const R = D.RACES[draft.race];
     const C = D.CLASSES[draft.cls];
     const L = draft.look;
-    const sw = (arr, key) =>
-      '<div class="swatches">' + arr.map((c) => {
-        const col = typeof c === "string" ? c : c.c;
-        return '<button type="button" class="sw' + (L[key] === col ? " on" : "") + (typeof c === "object" && c.glow ? " glowsw" : "") + '" style="background:' + col + '" data-cact="look" data-k="' + key + '" data-v="' + col + '" title="' + esc(typeof c === "object" ? c.name : col) + '" aria-label="' + esc(typeof c === "object" ? c.name : "Farbe") + '"></button>';
-      }).join("") + "</div>";
-    const opt = (key, labels, ids) => '<div class="choices">' + labels.map((l, i) => {
-      const v = ids ? ids[i] : i;
-      return '<button type="button" class="choice' + (L[key] === v ? " on" : "") + '" data-cact="' + (ids ? "looks" : "lookn") + '" data-k="' + key + '" data-v="' + v + '">' + esc(l) + "</button>";
-    }).join("") + "</div>";
+    const gest = UI.gestalten(draft.race, draft.gender);
+    const nameNo = gest.length > 1 ? 5 : 4;
     f.innerHTML =
       '<div class="step"><span class="stepno">1</span><h3>Wähle dein Reich</h3></div><div class="realmcards small">' +
       realmKeys().map((r) => '<button type="button" class="realmcard r-' + r + (draft.realm === r ? " on" : "") + '" data-cact="realm" data-v="' + r + '">' + I.realm(r) + "<h3>" + esc(D.REALMS[r].name) + "</h3><i>„" + esc(D.REALMS[r].motto) + "“</i></button>").join("") + "</div>" +
@@ -315,14 +365,8 @@
       racesOf(draft.realm).map((id) => '<button type="button" class="choice' + (draft.race === id ? " on" : "") + '" data-cact="race" data-v="' + id + '">' + D.RACES[id].name + "</button>").join("") + "</div>" +
       '<p class="desc">' + esc(R.desc) + " " + modsText(R.mods) + "</p>" +
       '<div class="choices" style="grid-template-columns:repeat(2,1fr);margin-top:8px"><button type="button" class="choice' + (draft.gender === "m" ? " on" : "") + '" data-cact="gender" data-v="m">Männlich</button><button type="button" class="choice' + (draft.gender === "w" ? " on" : "") + '" data-cact="gender" data-v="w">Weiblich</button></div>' +
-      '<div class="step"><span class="stepno">4</span><h3>Aussehen</h3><span class="spacer"></span><button type="button" class="btn ghost small" data-cact="randomLook">Würfeln</button></div>' +
-      "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES) +
-      (draft.gender === "m" ? "<h4>Bart</h4>" + opt("beard", D.BEARDS) : "") +
-      "<h4>Augen</h4>" + sw(D.EYES, "eyes") +
-      "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor") +
-      "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id)) +
-      (R.horns ? "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]) : "") +
-      '<div class="step"><span class="stepno">5</span><h3>Name</h3></div><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
+      (gest.length > 1 ? '<div class="step"><span class="stepno">4</span><h3>Gestalt</h3></div>' + UI.gestaltHtml(L, gest.length, "data-cact", { race: draft.race, gender: draft.gender, cls: draft.cls, realm: draft.realm }) : "") +
+      '<div class="step"><span class="stepno">' + nameNo + '</span><h3>Name</h3></div><input id="heroName" maxlength="16" autocomplete="off" placeholder="z. B. Tilda Sturmfang" value="' + esc(draft.name) + '">' +
       '<p class="delta-down" id="nameErr" hidden></p>' +
       '<div class="row" style="margin-top:18px"><button type="button" class="btn ghost" data-cact="random">Alles zufällig</button><button type="button" class="btn ghost" data-cact="import">Spielstand laden</button><span class="spacer"></span><button type="button" class="btn big" data-cact="start">Für ' + esc(D.REALMS[draft.realm].name) + "!</button></div>";
     const inp = f.querySelector("#heroName");
@@ -330,17 +374,21 @@
     $("#create").dataset.realm = draft.realm;
   }
   function updateView() {
-    if (view) view.set(previewDesc());
-    else {
+    if (view) {
+      view.set(previewDesc());
+      loadGen();
+    } else {
       const fb = $("#create .cview .hv-fallback");
       if (fb) fb.innerHTML = I.silhouette(previewDesc().gear.ruestung.tint, "hero");
     }
+    genHints();
   }
   UI.showCreate = function (onDone) {
     const box = $("#create");
     draft = randomDraft("");
+    zoom = "ganz";
     box.innerHTML =
-      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div></div><div class="cform"></div>';
+      '<div class="cview"><div class="ctitle"><h1>Helden von<br>Schwebfels</h1><p>' + esc(D.LORE) + '</p></div><p class="gen-note" hidden></p></div><div class="cform"></div>';
     box.hidden = false;
     const cv = box.querySelector(".cview");
     if (UI.use3d) {
@@ -351,6 +399,11 @@
       }
     }
     if (!view) cv.insertAdjacentHTML("beforeend", '<div class="hv-fallback" style="position:absolute;inset:120px 20% 20px"></div>');
+    // Figuren zeigen, sobald sie bereit sind (die aus der Seite kommen vor der Zusatzdatei)
+    UI.onGen = () => {
+      if ($("#create").hidden) return;
+      if (view) updateView();
+    };
     renderForm();
     updateView();
     box.onclick = (ev) => {
@@ -379,9 +432,7 @@
         draft.look.hair = R.hairs[0];
       } else if (act === "cls") draft.cls = v;
       else if (act === "gender") draft.gender = v;
-      else if (act === "look" || act === "looks") draft.look[b.dataset.k] = v;
       else if (act === "lookn") draft.look[b.dataset.k] = +v;
-      else if (act === "randomLook") draft.look = randomLook(draft.race);
       else if (act === "random") draft = randomDraft(keep);
       else if (act === "import") {
         UI.ACTIONS.importSave();
@@ -405,12 +456,17 @@
       }
       if (act !== "random") draft.name = keep;
       SB.audio.play("click");
+      // Kamerafahrt: bei Volk und Geschlecht nah an Kopf und Oberkoerper, bei einer Gestalt an den Kopf, sonst die ganze
+      // Figur mit Waffe
+      zoom = act === "race" || act === "gender" ? "nah" : act === "lookn" ? "kopf" : "ganz";
       renderForm();
       updateView();
+      if (view && view.focus) view.focus(zoom);
     };
   };
   UI.closeCreate = function () {
     const box = $("#create");
+    UI.onGen = null;
     if (view) view.dispose();
     view = null;
     box.hidden = true;

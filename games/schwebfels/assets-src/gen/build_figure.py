@@ -562,6 +562,20 @@ def arrays(o, Wv):
     return P.astype(np.float32), np.array(UV, np.float32), np.array(I, np.int32), order.astype(np.uint8), np.round(w4 * 255).astype(np.uint8)
 
 
+def belt_edge(xs, gap=0.03):
+    """Abstand der Rumpfseite von der Mitte auf Guertelhoehe. In A-Haltung haengen die Haende auf derselben Hoehe;
+    sie zaehlen nicht mit: von der Mitte nach aussen bis zur ersten Luecke im Querschnitt."""
+    xs = np.sort(np.abs(np.asarray(xs, np.float64)))
+    if not len(xs):
+        return 0.0
+    e = xs[0]
+    for x in xs:
+        if x - e > gap:
+            break
+        e = x
+    return float(e)
+
+
 def sockets(P, Jg):
     jj = {n: Jg[i] for i, n in enumerate(NAMES)}
     out = {}
@@ -604,7 +618,11 @@ def sockets(P, Jg):
     out["back"] = dict(p=front(ch[1] + (nk[1] - ch[1]) * 0.3, -1))
     yb = hp[1] + 0.06 * (P[:, 1].max() / 2.0)
     q = P[np.abs(P[:, 1] - yb) < 0.02]
-    out["belt"] = dict(p=front(yb), left=[float(q[:, 0].max()), float(yb), 0.02], right=[float(q[:, 0].min()), float(yb), 0.02])
+    el, er = belt_edge(q[q[:, 0] >= 0, 0]), belt_edge(q[q[:, 0] < 0, 0])
+    # beruehrt eine Hand die Huefte, gibt es auf dieser Seite keine Luecke: hoechstens wenig breiter als die andere Seite
+    m = min(el, er) * 1.15
+    el, er = min(el, m), min(er, m)
+    out["belt"] = dict(p=front(yb), left=[el, float(yb), 0.02], right=[-er, float(yb), 0.02])
     return out
 
 

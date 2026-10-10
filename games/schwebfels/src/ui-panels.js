@@ -36,10 +36,10 @@
     return '<div class="say">' + (b.what === "quest" ? "Du bist gerade auf einem Auftrag unterwegs." : "Du hältst gerade Wache am Turm.") + "</div>";
   };
   const estCache = new Map();
-  function estimate(hero, foes, key) {
-    const k = key + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block + "|" + hero.maxHp + "|" + JSON.stringify(hero.tal || {});
+  function estimate(hero, foes, key, n) {
+    const k = key + "|" + (n || 30) + "|" + JSON.stringify(hero.attrs) + hero.wMin + "|" + hero.wMax + "|" + hero.armor + "|" + hero.prof.block + "|" + hero.maxHp + "|" + JSON.stringify(hero.tal || {});
     if (estCache.has(k)) return estCache.get(k);
-    const v = E.estimateWin(hero, foes, 30, key);
+    const v = E.estimateWin(hero, foes, n || 30, key);
     estCache.set(k, v);
     if (estCache.size > 200) estCache.delete(estCache.keys().next().value);
     return v;
@@ -58,6 +58,8 @@
   P.taverne = {
     render() {
       const s = S();
+      // Monsterfiguren der angebotenen Auftraege im Hintergrund laden (Portraits erneuern sich danach)
+      UI.loadMonsters(UI.offerArchs());
       const now = E.now();
       const en = E.energy(s, now);
       const max = E.energyMax(s);
@@ -66,7 +68,7 @@
         '<div class="row" style="margin-bottom:12px"><span class="gauge" style="padding-right:12px">' + UI.gauge(en, max) + "<span><small>Tatendrang</small>" + Math.floor(en) + " / " + max + "</span></span>" +
         (en < max ? '<span class="muted">+1 in <b class="num" data-until="' + (now + E.nextEnergyIn(s, now)) + '"></b></span>' : "") +
         '<span class="spacer"></span><button class="btn small" data-act="brew"' + (s.daily.brews >= E.C.BREW_MAX ? " disabled" : "") + ">Nebelmet +" + E.C.BREW_ENERGY + " · 1 " + I.ui("perle") + "</button></div>" +
-        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " Krüge Nebelmet erhältlich.</div>";
+        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " von " + E.C.BREW_MAX + " Krügen Nebelmet erhältlich." + (s.daily.brews >= E.C.BREW_MAX ? ' Neue Krüge um Mitternacht, in <b class="num" data-until="' + E.nextMidnight(now) + '"></b>.' : "") + "</div>";
       if (s.guard) return h + busyNote();
       const a = s.quest.active;
       if (a) {
@@ -74,8 +76,8 @@
         const mon = E.questMonster(o);
         const fin = a.end <= now;
         h +=
-          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
-          '<div class="progress"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
+          '<div class="quest' + (o.rare || o.boss ? " rare" : "") + '"><div class="mon">' + UI.portrait(UI.monDesc(mon, o.rare || !!o.boss), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" +
+          '<div class="progress" data-from="' + a.start + '" data-to="' + a.end + '"><i style="width:' + (fin ? 100 : (((now - a.start) / (a.end - a.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="foot">' +
           (fin
             ? '<button class="btn big done-pulse" data-act="questFight">' + (o.rare ? "Die Horde stellen" : "Kampf gegen " + esc(mon.name)) + "</button>"
@@ -89,16 +91,19 @@
         const mon = E.questMonster(o);
         const c = estimate(hero, E.questFoes(o, hero), o.id);
         const dur = E.questDuration(s, o);
+        const bossDef = o.boss && D.DUNGEONS.find((d) => d.id === o.boss);
         const waves = o.rare
           ? '<div class="waves"><span class="tag rare">Seltener Auftrag</span> ' + o.waves.length + " Gegner nacheinander, ohne Pause:" + '<div class="wavepics">' + o.waves.map((w, k) => '<span class="wp' + (w.boss ? " boss" : "") + '" title="' + esc(E.monById(w.monster).name) + '">' + UI.portrait(UI.monDesc(E.monById(w.monster), w.boss), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div></div>"
-          : "";
+          : bossDef
+            ? '<div class="waves"><span class="tag rare">Verliesboss</span> ' + esc(bossDef.name) + ": kämpft mit den Kräften eines Bosses</div>"
+            : "";
         h +=
-          '<div class="quest' + (o.rare ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
+          '<div class="quest' + (o.rare || o.boss ? " rare" : "") + '"><div class="mon" title="' + esc(mon.name) + '">' + UI.portrait(UI.monDesc(mon, o.rare || !!o.boss), 128) + "</div><div><h3>" + esc(o.title) + "</h3><p>" + esc(o.text) + "</p>" + waves +
           '<div class="meta">' + pips(o.diff) + "<span>" + E.DIFF[o.diff].name + "</span><span>" + I.ui("uhr") + " " + U.fmtTime(dur) + "</span><span>" + I.ui("tatendrang") + " " + o.energy + "</span>" + chanceTxt(c) + "</div>" +
           '<div class="rewards"><span>' + I.ui("xp") + ' <span class="num">' + U.fmt(o.xp) + " EP</span></span><span>" + UI.gold(o.gold) + "</span>" +
           (o.perle ? "<span>" + UI.perlen(o.perle) + "</span>" : "") +
           (o.item ? '<button type="button" class="mini-item r-' + o.item.rarity + '" data-item="offer:' + i + '" data-act="itemInfo" data-ref="offer:' + i + '" aria-label="' + esc(o.item.name) + '">' + I.item(o.item) + "</button>" : "") +
-          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
+          '</div><div class="foot"><span class="muted">Ziel: ' + esc(o.place) + " · " + (o.rare ? "Anführer" : o.boss ? "Verliesboss" : "Gegner") + ": " + esc(mon.name) + " (Stufe " + o.mlevel + ')</span><span class="spacer"></span><button class="btn" data-act="questStart" data-i="' + i + '"' + (en < o.energy ? " disabled" : "") + ">Aufbrechen</button></div></div></div>";
       });
       h += "</div>";
       if (en < 6) h += '<div class="say" style="margin-top:12px">Dein Tatendrang ist erschöpft. Ein Krug Nebelmet hilft, oder du hältst so lange Wache am Turm.</div>';
@@ -230,7 +235,9 @@
     },
     after(el) {
       const slot = el.querySelector("#heroViewSlot");
-      if (slot) UI.attachHeroView(slot, UI.heroDesc(S()), "<b>" + esc(S().name) + "</b>");
+      const v = slot && UI.attachHeroView(slot, UI.heroDesc(S()), "<b>" + esc(S().name) + "</b>");
+      // vor dem Spiegel nah an Kopf und Oberkoerper, im Charakterbogen die ganze Figur
+      if (v && v.focus) v.focus(UI.tabs.held === "aussehen" ? "nah" : "ganz");
     },
   };
   A.tab = (el) => {
@@ -249,6 +256,7 @@
     const col = (arr) => '<div class="col">' + arr.map((sl) => UI.slotHtml(s.equip[sl], "eq:" + sl, { emptyIcon: slotIcon[sl], label: D.SLOT_INFO[sl].name })).join("") + "</div>";
     let h = UI.xpBlock(s);
     h += '<div class="sheet">' + col(left) + '<div class="heroview" id="heroViewSlot"></div>' + col(right) + "</div>";
+    h += '<div class="row helm-toggle"><span class="spacer"></span><button class="btn small ghost" data-act="toggleHelm" aria-pressed="' + !!s.look.hideHelm + '">' + (s.look.hideHelm ? "Helm einblenden" : "Helm ausblenden") + '</button><span class="spacer"></span></div>';
     h += '<div class="section-title">Attribute <span class="muted small">Gold: ' + UI.gold(s.gold) + "</span></div>";
     h += '<div class="row" style="margin-bottom:8px"><span class="muted">Kaufmenge</span>' + [1, 5, 10].map((q) => '<button class="tab' + (UI.qty === q ? " on" : "") + '" data-act="qty" data-q="' + q + '">×' + q + "</button>").join("") + "</div>";
     h += '<div class="attrs">';
@@ -363,35 +371,25 @@
     SB.audio.play("coin");
     UI.refresh();
   };
-  // Spiegel: Aussehen jederzeit kostenlos aendern
+  // Spiegel: Haut, Haare und Gesicht gehoeren zum Meshy-Koerper; gibt es fuer Volk und Geschlecht mehrere Modelle, waehlt
+  // man hier jederzeit kostenlos die Gestalt
   function looks() {
     const s = S();
-    const R = D.RACES[s.race];
     const L = s.look;
-    const sw = (arr, key, glowList) =>
-      '<div class="swatches">' + arr.map((c) => {
-        const col = typeof c === "string" ? c : c.c;
-        const glow = typeof c === "object" && c.glow;
-        return '<button type="button" class="sw' + (L[key] === col ? " on" : "") + (glow ? " glowsw" : "") + '" style="background:' + col + '" data-act="look" data-k="' + key + '" data-v="' + col + '" title="' + esc(typeof c === "object" ? c.name : col) + '" aria-label="' + esc(typeof c === "object" ? c.name : "Farbe") + '"></button>';
-      }).join("") + "</div>";
-    const opt = (key, labels, ids) => '<div class="choices">' + labels.map((l, i) => {
-      const v = ids ? ids[i] : i;
-      return '<button type="button" class="choice' + (L[key] === v ? " on" : "") + '" data-act="lookn" data-k="' + key + '" data-v="' + v + '"' + (ids ? ' data-str="1"' : "") + ">" + esc(l) + "</button>";
-    }).join("") + "</div>";
     let h = '<div class="mirror"><div class="heroview small" id="heroViewSlot"></div><div class="mirror-form">';
-    h += '<p class="muted small">Vor dem Spiegel im Heim kannst du dein Aussehen jederzeit kostenlos ändern.</p>';
-    h += "<h4>Haut</h4>" + sw(R.skins, "skin") + "<h4>Haare</h4>" + sw(R.hairs, "hair") + opt("hairStyle", D.HAIR_STYLES);
-    if (s.gender !== "w") h += "<h4>Bart</h4>" + opt("beard", D.BEARDS);
-    h += "<h4>Augen</h4>" + sw(D.EYES, "eyes");
-    h += "<h4>Tätowierung</h4>" + opt("tattoo", D.TATTOOS.map((t) => t.name), D.TATTOOS.map((t) => t.id)) + sw(D.TATTOO_COLORS, "tattooColor");
-    h += "<h4>Narben</h4>" + opt("scar", D.SCARS.map((t) => t.name), D.SCARS.map((t) => t.id));
-    if (R.horns) h += "<h4>Hörner</h4>" + opt("horns", ["Widder", "Aufrecht", "Zurückgelegt"]);
+    const gest = UI.gestalten(s.race, s.gender);
+    if (gest.length > 1) {
+      h += '<p class="muted small">Vor dem Spiegel im Heim kannst du deine Gestalt jederzeit kostenlos wechseln.</p>';
+      h += UI.gestaltHtml(L, gest.length, "data-act", { race: s.race, gender: s.gender, cls: s.cls, realm: s.realm });
+    } else h += '<p class="desc">Dein Held ist eine fertig modellierte Figur aus deinen Konzeptbildern: Haut, Haare und Gesicht gehören zu ihr.</p>';
     h += "</div></div>";
     return h;
   }
-  A.look = (el) => {
-    E.setLook(S(), { [el.dataset.k]: el.dataset.v });
+  // Helm nur optisch aus- oder einblenden; Werte und Ausruestung bleiben
+  A.toggleHelm = () => {
+    E.setLook(S(), { hideHelm: !S().look.hideHelm });
     SB.audio.play("click");
+    UI.save();
     UI.refresh();
   };
   A.lookn = (el) => {
@@ -413,6 +411,8 @@
     const all = D.MONSTERS.map((m) => ({ id: m.id, name: m.name, desc: UI.monDesc(m) }));
     D.DUNGEONS.forEach((d) => d.bosses.forEach((b, i) => all.push({ id: d.id + "-" + i, name: b.name, desc: UI.monDesc(b, true, b.final) })));
     const found = all.filter((m) => s.bestiary[m.id]).length;
+    // Meshy-Figuren der entdeckten Wesen nachladen (die Portraits entstehen danach neu); unentdeckte bleiben Umrisse
+    UI.loadMonsters([...new Set(all.filter((m) => s.bestiary[m.id]).map((m) => m.desc.arch))]);
     let h = '<div class="muted" style="margin-bottom:10px">' + found + " von " + all.length + " Wesen entdeckt. Jedes entdeckte Wesen bringt dir dauerhaft +0,5 % Erfahrung und Gold aus Aufträgen (derzeit +" + (found * 0.5).toFixed(1).replace(".", ",") + " %).</div>";
     h += '<div class="bestiary">';
     for (const m of all) {
@@ -426,7 +426,9 @@
     let h = "";
     for (const a of D.ACHIEVEMENTS) {
       const got = s.ach[a.id];
-      h += '<div class="ach' + (got ? "" : " locked") + '">' + I.ui("abzeichen") + "<div><b>" + esc(a.name) + '</b><div class="muted" style="font-size:13px">' + esc(a.desc) + "</div></div><span>" + (got ? "✓ " : "") + "+" + a.perlen + " " + I.ui("perle") + "</span></div>";
+      const pr = got ? null : E.achProgress(s, a.id);
+      const bar = pr ? '<div class="ach-prog"><i style="width:' + Math.round((pr[0] / pr[1]) * 100) + '%"></i></div><div class="muted num" style="font-size:12px">' + U.fmt(pr[0]) + " von " + U.fmt(pr[1]) + "</div>" : "";
+      h += '<div class="ach' + (got ? "" : " locked") + (a.hard ? " hard" : "") + '">' + I.ui("abzeichen") + "<div><b>" + esc(a.name) + (a.hard ? ' <span class="tag">schwer</span>' : "") + '</b><div class="muted" style="font-size:13px">' + esc(a.desc) + "</div>" + bar + "</div><span>" + (got ? "✓ " : "") + "+" + a.perlen + " " + I.ui("perle") + "</span></div>";
     }
     return h;
   }
@@ -445,8 +447,10 @@
       else if (s.story.next > now) h += '<div class="say">Du musst dich nach deiner Niederlage erst sammeln: <b class="num" data-until="' + s.story.next + '"></b></div>';
       const hero = E.heroFighter(s, now);
       h += '<div class="chapters">';
+      const archs = [];
       for (const ch of E.storyChapters(s)) {
         const foes = ch.foes.map((f) => (f.mon ? Object.assign({}, E.monById(f.mon), { boss: f.boss, final: f.final }) : f));
+        if (ch.done || ch.available) for (const f of foes) archs.push(f.arch);
         let status = "";
         if (ch.done) status = '<span class="tag">Abgeschlossen</span>';
         else if (ch.available) {
@@ -460,6 +464,8 @@
           '<div class="foot">' + status + "</div></div>";
       }
       h += "</div>";
+      // Figuren der sichtbaren Gegner nachladen (die Bilder erneuern sich danach)
+      UI.loadMonsters(archs);
       return h;
     },
   };
@@ -492,21 +498,34 @@
       if (busy) h += busyNote();
       else if (s.arena.next > now) h += '<div class="say">Nächster Kampf in <b class="num" data-until="' + s.arena.next + '"></b>. <button class="btn small" data-act="arenaSkip">Sofort · 1 ' + I.ui("perle") + "</button></div>";
       const rivals = E.arenaRivals(s, now, remote);
+      // Heldenkoerper der fremden Reiche nachladen (die Bilder erneuern sich danach einmal)
+      for (const rl of new Set(rivals.map((r) => r.realm).filter(Boolean))) UI.loadGenFigures(rl);
       const hero = E.heroFighter(s, now);
-      h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div><div class="cards">';
+      const rc = E.arenaRerollCost(s);
+      h += '<div class="section-title">Herausforderer aus den anderen Reichen, passend zu deiner Stärke</div>';
+      h += '<div class="row" style="margin:-2px 0 10px"><span class="muted small">Siegchance aus 400 Probekämpfen. Schwere Gegner bringen mehr Ehre.</span><span class="spacer"></span><button class="btn ghost small" data-act="arenaReroll">Andere Gegner · ' + (rc ? U.fmt(rc) + " " + I.ui("gold") : "kostenlos") + "</button></div>";
+      h += '<div class="cards">';
       rivals.forEach((r) => {
         const f = E.rivalFighter(r);
-        const c = estimate(hero, [f], "arena" + r.id + r.level);
-        const tier = c >= 0.68 ? ["leicht", "Leicht"] : c >= 0.42 ? ["fair", "Ebenbürtig"] : ["schwer", "Schwer"];
+        // dieselbe Rechnung wie E.arenaChance (gleiche Probekaempfe), damit Anzeige, Einstufung und Ehre zusammenpassen
+        const c = estimate(hero, [f], "arena" + r.id + r.level, E.ARENA_N);
+        const t = E.arenaTier(c);
+        const tier = [t.key, t.label];
+        const hon = E.arenaHonor(c);
         const where = r.kind === "wander" ? "Wanderkämpfer" : "Platz " + r.rank;
         h +=
           '<div class="card"><div class="pic">' + UI.portrait(UI.fighterDesc(f), 128, true) + "</div><div><h4>" + esc(r.name) + guildTag(r.guild) + (r.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + ' <span class="tier t-' + tier[0] + '">' + tier[1] + "</span></h4>" +
-          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · " + where + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + "</div>" +
+          '<div class="muted small">' + realmChip(r.realm) + " " + I.classCrest(r.cls) + " " + D.CLASSES[r.cls].name + " · Stufe " + r.level + " · " + where + " · " + U.fmt(r.honor) + " Ehre</div>" + chanceTxt(c) + ' <span class="muted small">Sieg +' + hon.win + " Ehre, Niederlage kostet " + hon.loss + "</span></div>" +
           '<button class="btn" data-act="arenaFight" data-id="' + esc(r.id) + '"' + (busy || s.arena.next > now ? " disabled" : "") + ">Herausfordern</button></div>";
       });
       h += '</div><div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn ghost small" data-act="open" data-id="ruhmeshalle">Alle Ranglisten</button></div>';
       return h;
     },
+  };
+  A.arenaReroll = () => {
+    if (!done(E.arenaReroll(S()))) return;
+    UI.saveNow();
+    UI.refresh();
   };
   A.arenaSkip = () => {
     if (!done(E.skipArena(S()))) return;
@@ -564,6 +583,7 @@
       const busy = E.busy(s, now);
       const hero = E.heroFighter(s, now);
       const foes = E.nightHuntPreview(s, now);
+      UI.loadMonsters(foes.map((f) => f.arch));
       const c = estimate(hero, foes, "nacht" + s.daily.day + s.daily.nightHunts);
       h +=
         '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
@@ -598,7 +618,7 @@
         const fin = g.end <= now;
         h +=
           '<div class="card" style="grid-template-columns:72px 1fr"><div class="pic">' + I.ui("leuchtturm") + "</div><div><h4>" + g.shifts + " Schichten Wache</h4>" +
-          '<div class="progress"><i style="width:' + (fin ? 100 : (((now - g.start) / (g.end - g.start)) * 100).toFixed(1)) + '%"></i></div>' +
+          '<div class="progress" data-from="' + g.start + '" data-to="' + g.end + '"><i style="width:' + (fin ? 100 : (((now - g.start) / (g.end - g.start)) * 100).toFixed(1)) + '%"></i></div>' +
           '<div class="row" style="margin-top:8px">Lohn: ' + UI.gold(g.pay) + '<span class="spacer"></span>' +
           (fin ? '<button class="btn" data-act="guardCollect">Lohn abholen</button>' : '<span>noch <b class="num" data-until="' + g.end + '"></b></span><button class="btn small ghost" data-act="guardCancel">Abbrechen</button>') +
           "</div></div></div>";
@@ -669,12 +689,14 @@
           pic = I.ui("tiefen");
           info = '<div class="muted small">Öffnet sich ab Stufe ' + dg.unlock + (d > 0 ? " und nach dem ersten Boss des vorigen Dungeons" : "") + ".</div>";
         } else if (st.done) {
+          UI.loadMonsters([dg.bosses[7].arch]);
           pic = UI.portrait(UI.monDesc(dg.bosses[7], true, true), 128);
           info = '<div class="small delta-up">Gesäubert! Alle acht Bosse besiegt.</div>';
         } else {
           const b = E.bossFor(d, st.cleared);
           const foe = E.monsterFighter(b.mon, b.L, b.power, { boss: true, final: b.final });
           const c = estimate(hero, [foe], b.mon.id);
+          UI.loadMonsters([b.mon.arch]);
           pic = UI.portrait(UI.monDesc(b.mon, true, b.final), 128);
           info = '<div class="small">Boss ' + (st.cleared + 1) + "/8: <b>" + esc(b.mon.name) + "</b> · Stufe " + b.L + "</div>" + chanceTxt(c);
           btn = '<button class="btn" data-act="dungeonFight" data-d="' + d + '"' + (busy || s.dungeons.next > now ? " disabled" : "") + ">Angreifen</button>";
@@ -698,7 +720,7 @@
     const rew = E.resolveDungeon(s, res.fight);
     UI.saveNow();
     SB.audio.play("roar");
-    await UI.runBattle(res.fight, { setting: "dungeon", tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: D.DUNGEONS[d].id, tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
     UI.refresh();
   };
 
@@ -869,7 +891,12 @@
       const s = S();
       const T = D.HOUSE_TIERS[s.house.tier];
       const next = D.HOUSE_TIERS[s.house.tier + 1];
-      let h = '<div class="homeview" id="homeSlot"></div>';
+      const painted = UI.use3d && SB.R3D.homePainted && SB.R3D.homePainted(s.realm);
+      if (!painted && E.furn(s, "trophaeen")) UI.loadMonsters(["wolf", "drache", "troll"]);
+      // gemaltes Heim (Bild aus kulissen.js): laedt es noch, zeichnet sich das Fenster danach neu
+      if (UI.use3d && !painted) UI.loadKulissen().then((ok) => ok && UI.panelId === "heim" && SB.R3D.homePainted(S().realm) && UI.renderPanel());
+      let h = '<div class="homeview' + (painted ? " painted" : "") + '" id="homeSlot"></div>';
+      if (painted) h += '<p class="muted small hp-note">So sieht dein Heim voll ausgebaut aus. Was du noch nicht eingerichtet hast, liegt im Dunkeln; ein Klick auf eine Station zeigt sie in der Liste.</p>';
       h += '<div class="housecard"><div><h3>' + esc(T.name) + '</h3><div class="muted small">' + esc(T.desc) + "</div></div>";
       if (next)
         h += '<div class="next"><div class="small">Ausbau zur <b>' + esc(next.name) + "</b>" + (s.level < next.lv ? ' <span class="delta-down">(ab Stufe ' + next.lv + ")</span>" : "") + "</div>" + '<button class="btn small" data-act="houseUp"' + (s.level < next.lv || s.gold < next.cost || (next.perlen && s.perlen < next.perlen) ? " disabled" : "") + ">" + UI.gold(next.cost) + (next.perlen ? " + " + UI.perlen(next.perlen) : "") + "</button></div>";
@@ -900,13 +927,20 @@
         slot.innerHTML = '<div class="hv-fallback">' + I.ui("heim") + "</div>";
         return;
       }
+      const painted = SB.R3D.homePainted && SB.R3D.homePainted(s.realm);
+      // Wechsel zwischen gebautem und gemaltem Heim (Bild kam nach): Ansicht neu anlegen
+      if (homeView && !!homeView.painted !== !!painted) {
+        homeView.dispose();
+        homeView = null;
+        homeEl = null;
+      }
       if (!homeEl) {
         homeEl = document.createElement("div");
         homeEl.style.cssText = "position:absolute;inset:0";
       }
       slot.appendChild(homeEl);
       if (!homeView) {
-        homeView = SB.R3D.createHome(homeEl, {
+        homeView = (painted ? SB.R3D.createPaintedHome : SB.R3D.createHome)(homeEl, {
           quality: s.settings.quality,
           onPick: (id) => {
             UI.homeFocus = id;
@@ -958,18 +992,18 @@
     '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M32 10 L36 26 L52 26 L39 36 L44 52 L32 42 L20 52 L25 36 L12 26 L28 26 Z" fill="#fff3c4" stroke="#6a4d18" stroke-width="2.6" stroke-linejoin="round"/></svg>';
   UI.lastWell = null;
   P.brunnen = {
-    role: "Einmal am Tag wirft jeder umsonst",
+    role: "Alle 8 Stunden wirft jeder umsonst",
     portrait: () => '<span class="iconport">' + I.ui("brunnen") + "</span>",
     render() {
       const s = S();
       const now = E.now();
-      const free = s.daily.wellFree > 0;
+      const free = E.wellFree(s, now);
       const paidLeft = E.C.WELL_PAID_MAX - s.daily.wellPaid;
       let h = '<div class="say">Man sagt, der Brunnen erfüllt Wünsche. Meistens wünscht er sich allerdings Münzen.</div>';
       h += '<div class="well"><div class="coin" id="coin"><div class="face">' + COIN_FRONT + '</div><div class="face back">' + I.ui("perle") + "</div></div></div>";
       h += '<div class="wellbox' + (free ? " ready" : "") + '"><div class="wl-title">' + I.ui("sanduhr") + " Freier Wurf</div>";
       if (free) h += '<div class="wl-big">Bereit!</div><button class="btn big" data-act="well">Kostenlos werfen</button>';
-      else h += '<div class="muted">Heute schon geworfen. Der nächste freie Wurf kommt um Mitternacht:</div><div class="wl-big num" data-until="' + E.nextMidnight(now) + '"></div>';
+      else h += '<div class="muted">Der Brunnen sammelt neue Kraft. Der nächste freie Wurf kommt in:</div><div class="wl-big num" data-until="' + s.wellNext + '"></div>';
       h += "</div>";
       h +=
         '<div class="wellbox"><div class="wl-title">' + I.ui("perle") + " Zusätzlicher Wurf</div><div class=\"muted small\">Kostet eine Wolkenperle. Nur wenn du willst, deine Perlen bleiben sonst gespart. Heute noch " + paidLeft + " möglich, du hast " + s.perlen + ' Perlen.</div><button class="btn ghost" data-act="wellPerl"' + (paidLeft <= 0 || s.perlen < 1 ? " disabled" : "") + ">Mit 1 Wolkenperle werfen</button></div>";
@@ -1021,34 +1055,86 @@
       h += '<div class="row" style="margin-top:6px"><button class="btn ghost" data-act="open" data-id="klangprobe">Klangprobe öffnen</button><span class="muted small">Kampfgeräusche, Stimmen der Völker und Gegner, Magie zum Anhören</span></div>';
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
-      const gf = s.settings.genFigures !== false;
-      h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
-      h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
-      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Texte, Symbole, Musikstücke und die 3D-Welt sind eigens dafür entstanden. Die Kampfgeräusche und Stimmen stammen aus freien, gemeinfreien Sammlungen (CC0) von Kenney und von OpenGameArt (unter anderem rubberduck, artisticdude, StarNinjas, qubodup, cicifyre). Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
+      h += '<div class="section-title">Galerie</div><div class="row"><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button></div>';
+      if (UI.hub && UI.hub.visit && SB.hubPainted) {
+        const others = Object.keys(D.REALMS).filter((r) => r !== s.realm && SB.hubPainted.has(r));
+        if (others.length) h += '<div class="row">' + others.map((r) => '<button class="btn ghost" data-act="inselBesuch" data-v="' + r + '">' + esc(D.REALMS[r].isle) + " besuchen (" + esc(D.REALMS[r].name) + ")</button>").join("") + "</div>";
+      }
+      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die Kampfgeräusche und Stimmen stammen aus freien, gemeinfreien Sammlungen (CC0) von Kenney und von OpenGameArt (unter anderem rubberduck, artisticdude, StarNinjas, qubodup, cicifyre). Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
   };
-  /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
-  const FP = { fig: "nordmann-frau", pose: "", weapon: true, near: false, state: "", view: null, el: null, timer: 0 };
-  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg"];
-  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg" };
-  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["victory", "Jubel"]];
-  const FP_AXE = { base: "axt", variant: 0, rarity: "selten", vis: { f: "axt.0", c: "midgard", o: 0, v: 1 } };
-  const fpDesc = () => {
-    const [race, sex] = FP.fig.split("-");
-    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: "sturmhuene", realm: "midgard", gear: FP.weapon ? { waffe: FP_AXE } : {} };
+  /* Inseln der anderen Reiche besuchen (aus den Einstellungen) */
+  A.inselBesuch = (el) => {
+    if (UI.hub && UI.hub.visit) UI.hub.visit(el.dataset.v);
+    UI.closePanel();
   };
+
+  /* ================= Figurenprobe: erzeugte Figuren ansehen ================= */
+  const FP = { fig: "nordmann-frau", pose: "", weapon: "axt", near: false, state: "", view: null, el: null, timer: 0 };
+  const FP_ORDER = ["nordmann", "trollblut", "frostwicht", "glutzwerg", "albier", "kreidezwerg", "sidhe", "moorling"];
+  const FP_NAME = { nordmann: "Nordmann", trollblut: "Trollblut", frostwicht: "Frostwicht", glutzwerg: "Glutzwerg", albier: "Albier", kreidezwerg: "Kreidezwerg", sidhe: "Sidhe", moorling: "Moorling" };
+  const FP_POSES = [["", "Stand"], ["walk", "Laufen"], ["attack", "Angriff"], ["special", "Spezialangriff"], ["hit", "Treffer"], ["block", "Parade"], ["evade", "Ausweichen"], ["victory", "Jubel"], ["defeat", "Niederlage"]];
+  // Waffe und passende Klasse (die Klasse waehlt Angriff und Spezialangriff wie im Kampf)
+  const FP_WEAPONS = [["axt", "Axt", "sturmhuene"], ["schwert", "Schwert", "sturmhuene"], ["hammer", "Hammer", "sturmhuene"], ["dolch", "Dolche", "nebelschleicher"], ["speer", "Speer", "wolfsjaeger"], ["bogen", "Bogen", "wolfsjaeger"], ["stab", "Stab", "runenwirker"], ["", "ohne", "sturmhuene"]];
+  // Monster mit neuer Figur aus dem Monsterkonzept (Monster-ID); nur waehlbar, wenn die Figur im Paket steckt
+  // alle Monster; waehlbar, sobald ihre Familie geladen ist und es eine eigene Figur gibt
+  const FP_MON = () => {
+    const order = ["ghul", "goblin", "kultist", "golem", "troll", "todesritter", "baum", "pilz", "schemen", "schlund", "wolf", "spinne", "krebs", "fledermaus", "drache"];
+    return SB.data.MONSTERS.slice().sort((a, b) => order.indexOf(a.arch) - order.indexOf(b.arch)).map((m) => [m.id, m.name, m.arch]);
+  };
+  // Endbosse aus Chronik und Verliesen (eigene Figur unter dem Schluessel ihres Namens, UI.monKey)
+  let FP_BOSSES = null;
+  const FP_BOSS = () => {
+    if (FP_BOSSES) return FP_BOSSES;
+    const out = [];
+    const seen = {};
+    const walk = (o) => {
+      if (!o || typeof o !== "object") return;
+      if (Array.isArray(o.foes)) for (const f of o.foes) if (f && f.final && f.name && !seen[f.name]) out.push((seen[f.name] = f));
+      for (const k in o) if (k !== "foes" && o[k] && typeof o[k] === "object") walk(o[k]);
+    };
+    walk(D);
+    for (const d of D.DUNGEONS) for (const b of d.bosses) if (b.final && !seen[b.name]) out.push((seen[b.name] = b));
+    return (FP_BOSSES = out);
+  };
+  const fpMon = () => (FP.fig.indexOf("mon:") === 0 ? E.monById(FP.fig.slice(4)) : FP.fig.indexOf("boss:") === 0 ? FP_BOSS().find((b) => UI.monKey(b.name) === FP.fig.slice(5)) : null);
+  const fpMonReady = (id) => {
+    const m = E.monById(id);
+    const R = SB.R3D;
+    return !!(m && ((R.rigged && R.rigged.is(id)) || (R.beasts && R.beasts.isGen && R.beasts.isGen(m.arch, id))));
+  };
+  // waehlbar, sobald die eigene oder die geliehene Figur geladen ist
+  const fpBossReady = (b) => {
+    const R = SB.R3D;
+    const own = (k) => !!k && ((R.rigged && R.rigged.is(k)) || (R.beasts && R.beasts.hasOwn && R.beasts.hasOwn(k)));
+    return own(UI.monKey(b.name)) || own(UI.monLook(b));
+  };
+  const fpWeapon = () => FP_WEAPONS.find((w) => w[0] === FP.weapon) || FP_WEAPONS[0];
+  const fpDesc = () => {
+    const mon = fpMon();
+    if (mon) return UI.monDesc(mon, !!mon.final, !!mon.final);
+    const [race, sex] = FP.fig.split("-");
+    const w = fpWeapon();
+    const gear = w[0] ? { waffe: { base: w[0], variant: 0, rarity: "selten", vis: { f: w[0] + ".0", c: "midgard", o: 0, v: 1 } } } : {};
+    if (w[0] === "schwert") gear.nebenhand = { base: "schild", variant: 0, rarity: "selten", vis: { f: "schild.0", c: "midgard", o: 0, v: 1 } };
+    return { kind: "hero", gen: FP.fig, genGear: [], race, gender: sex === "frau" ? "w" : "m", cls: w[2], realm: "midgard", gear };
+  };
+  // Angriff mit Bogen ist ein Schuss, mit dem Stab ein Zauber (wie im Kampf)
+  const fpAction = (pose) => (fpMon() ? pose : pose === "attack" && FP.weapon === "bogen" ? "shoot" : pose === "attack" && FP.weapon === "stab" ? "cast" : pose);
   function fpCamera() {
     const v = FP.view;
     if (!v || !v.model) return;
     const box = new (SB.R3D.T().Box3)().setFromObject(v.model.obj);
     // Bildausschnitt nach Figurengroesse: ganz (etwa 85 % der Hoehe) oder nah (Kopf und Oberkoerper)
     const top = Math.max(1, box.max.y);
+    // lange Tiere (Wolf, Schlund) ganz ins Bild
+    const len = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
     if (FP.near) {
       v.camera.position.set(0, top * 0.86, top * 0.95 + 0.45);
       v.camera.lookAt(0, top * 0.8, 0);
     } else {
-      v.camera.position.set(0, top * 0.58, Math.max(3.4, top * 2.3));
+      v.camera.position.set(0, top * 0.58, Math.max(3.4, top * 2.3, len * 1.9));
       v.camera.lookAt(0, top * 0.5, 0);
     }
   }
@@ -1062,28 +1148,43 @@
     clearInterval(FP.timer);
     FP.timer = 0;
     if (!FP.view || !FP.pose) return;
-    const go = () => FP.view && FP.view.play(FP.pose, 2.4);
+    // Dauer wie im Kampf (etwas laenger zum Hinsehen): der Schlag faellt ans Ende, danach klingt die Bewegung aus
+    const DUR = { attack: 0.6, special: 0.7, shoot: 0.6, cast: 0.6, hit: 0.45, block: 0.45, evade: 0.45, victory: 1.2, defeat: 1.2 };
+    const go = () => FP.view && FP.view.play(fpAction(FP.pose), DUR[fpAction(FP.pose)] || 2.4);
     go();
     FP.timer = setInterval(go, 2600);
   }
   P.figurenprobe = {
-    title: "Figurenprobe Midgard",
-    role: "Qualitätstest der neuen Heldenfiguren",
+    title: "Figurenprobe",
+    role: "Alle Figuren, Waffen und Bewegungen",
     portrait: () => '<span class="iconport">' + I.ui("einstellungen") + "</span>",
     render() {
       const gen = (SB.assets.data && SB.assets.data.gen) || {};
-      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Skelett und Faustgriff. Ziehen dreht die Figur. Ausrüstung, Wolf und Kampfumgebung folgen im nächsten Schritt.</p>';
+      let h = '<p class="muted small">Erzeugt aus deinen Konzeptbildern, mit Meshy-Skelett und echten, aufgenommenen Bewegungen aus der Meshy-Bibliothek (dieselben für alle Figuren). Ziehen dreht die Figur.</p>';
       if (!UI.use3d) return h + '<div class="muted">Die Figurenprobe braucht die 3D-Darstellung. Schalte sie oben in den Einstellungen ein und lade die Seite neu.</div>';
       const stage = '<div class="heroview fp-stage" id="fpStage">' + (FP.state === "ok" ? "" : '<div class="hv-caption"><span class="muted">' + (FP.state === "fehler" ? "Die Figurendaten konnten nicht geladen werden. Bitte die Seite neu laden." : "Figuren werden geladen ...") + "</span></div>") + "</div>";
-      h += stage + '<div class="section-title">Volk</div><div class="row">';
+      h += stage + (FP.partial && FP.state === "ok" ? '<p class="muted small">Die Figurendateien der Reiche konnten nicht nachgeladen werden; Nordmann und Trollblut stecken direkt im Spiel.</p>' : "") + '<div class="section-title">Volk</div><div class="row">';
       for (const r of FP_ORDER) {
         for (const [sx, nm] of [["frau", "Frau"], ["mann", "Mann"]]) {
           const k = r + "-" + sx;
           h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !gen[k] ? " disabled" : "") + ">" + FP_NAME[r] + " " + nm + "</button>";
         }
       }
+      h += '</div><div class="section-title">Monster aus deinem Monsterkonzept</div><div class="row">';
+      UI.loadMonsters(FP_MON().map((x) => x[2]));
+      for (const [id, nm] of FP_MON()) {
+        const k = "mon:" + id;
+        h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !fpMonReady(id) ? " disabled" : "") + ">" + nm + "</button>";
+      }
+      // Endbosse wie im Kampf: eigene Figur, sonst die geliehene eines Monsters ihrer Familie
+      h += '</div><div class="section-title">Endbosse aus Chronik und Verliesen</div><div class="row">';
+      for (const b of FP_BOSS()) {
+        const k = "boss:" + UI.monKey(b.name);
+        h += '<button class="tab' + (FP.fig === k ? " on" : "") + '" data-act="fpFig" data-k="' + k + '"' + (FP.state === "ok" && !fpBossReady(b) ? " disabled" : "") + ">" + esc(b.name) + "</button>";
+      }
       h += '</div><div class="section-title">Bewegung</div><div class="row">' + FP_POSES.map(([id, n]) => '<button class="tab' + (FP.pose === id ? " on" : "") + '" data-act="fpPose" data-p="' + id + '">' + n + "</button>").join("");
-      h += '<span class="spacer"></span><button class="tab' + (FP.weapon ? " on" : "") + '" data-act="fpWeapon">Axt ' + (FP.weapon ? "an" : "aus") + '</button><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
+      h += '</div><div class="section-title">Waffe</div><div class="row">' + FP_WEAPONS.map(([id, n]) => '<button class="tab' + (FP.weapon === id ? " on" : "") + '" data-act="fpWeapon" data-w="' + id + '"' + (fpMon() ? " disabled" : "") + ">" + n + "</button>").join("");
+      h += '<span class="spacer"></span><button class="tab' + (FP.near ? " on" : "") + '" data-act="fpNear">' + (FP.near ? "Nah" : "Ganz") + "</button></div>";
       return h;
     },
     after(root) {
@@ -1103,16 +1204,26 @@
       }
       if (FP.state === "laden") return;
       FP.state = "laden";
-      SB.assets.loadGen("midgard").then(
-        () => {
-          FP.state = "ok";
-          if (UI.panelId === "figurenprobe") UI.renderPanel();
-        },
-        () => {
-          FP.state = "fehler";
-          if (UI.panelId === "figurenprobe") UI.renderPanel();
-        }
-      );
+      const mon = UI.loadMonsters(FP_MON().map((x) => x[2]).concat(FP_BOSS().map((b) => b.arch)));
+      // Heldenkoerper aller drei Reiche; fehlt eine Datei, bleiben die uebrigen waehlbar
+      const realms = ["midgard", "albion", "hibernia"].map((r) => SB.assets.loadGen(r).then(() => true, () => false));
+      Promise.all(realms)
+        .then((ok) => {
+          if (!ok.some(Boolean)) throw new Error("keine Figurendatei");
+          return mon.then(() => SB.R3D.human.preloadGen());
+        })
+        .then(
+          () => {
+            FP.state = "ok";
+            if (UI.panelId === "figurenprobe") UI.renderPanel();
+          },
+          () => {
+            // ohne Zusatzdatei bleiben die Figuren, die in der Seite stecken (Nordmann und Trollblut)
+            FP.state = Object.keys((SB.assets.data && SB.assets.data.gen) || {}).length ? "ok" : "fehler";
+            FP.partial = true;
+            if (UI.panelId === "figurenprobe") UI.renderPanel();
+          }
+        );
     },
     close() {
       clearInterval(FP.timer);
@@ -1132,8 +1243,8 @@
     UI.renderPanel();
     fpPlay();
   };
-  A.fpWeapon = () => {
-    FP.weapon = !FP.weapon;
+  A.fpWeapon = (el) => {
+    FP.weapon = el.dataset.w || "";
     UI.renderPanel();
     fpShow();
   };
@@ -1260,13 +1371,6 @@
     UI.renderPanel();
     UI.renderTop();
     UI.updateMusic();
-  };
-  A.genFigures = () => {
-    const S_ = S();
-    S_.settings.genFigures = S_.settings.genFigures === false;
-    UI.save();
-    if (S_.settings.genFigures) UI.loadGenFigures("midgard");
-    UI.refresh();
   };
   A.fastFights = () => {
     S().settings.fastFights = !S().settings.fastFights;
