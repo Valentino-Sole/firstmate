@@ -157,7 +157,7 @@ test("Seltene Hordenauftraege: mehrere Gegner nacheinander, Lebenspunkte werden 
 test("Chronik: Kapitel von Reich und Klasse, freigeschaltet nach Stufe und Reihenfolge", () => {
   const { E, S, now } = fresh("runenwirker");
   let ch = E.storyChapters(S);
-  assert.equal(ch.length, 8);
+  assert.equal(ch.length, 15); // 10 Reichs- und 5 Klassenkapitel (zweiter Akt seit 0.74)
   assert.equal(ch.filter((c) => c.available).length, 1);
   S.bought.verstand = 800;
   S.bought.konstitution = 800;
@@ -672,4 +672,18 @@ test("Verliesbosse tauchen selten in der Taverne auf, ab Stufe 10 und ohne Endbo
   assert.equal(zaehle(8), 0);
   const q = zaehle(24);
   assert.ok(q > 0.02 && q < 0.08, "Anteil " + q);
+});
+
+test("Chronik geht nach Stufe 30 weiter: zweiter Akt bis Stufe 50, Kapitel der Reihe nach", () => {
+  const { E, S } = fresh("runenwirker");
+  S.level = 50;
+  const ch = E.storyChapters(S);
+  assert.equal(Math.max(...ch.map((c) => c.lv)), 50);
+  assert.equal(ch.filter((c) => c.kind === "realm").length, 10);
+  assert.equal(ch.filter((c) => c.kind === "class").length, 5);
+  // ohne die Kapitel davor ist der zweite Akt verschlossen
+  assert.ok(!ch.find((c) => c.lv === 32).available);
+  for (const c of ch) S.story.done[c.key] = 1;
+  const hero = E.heroFighter(S);
+  for (const c of E.storyChapters(S)) for (const f of E.storyFoes(S, c, hero)) assert.ok(f.maxHp > 0 && f.name, c.t);
 });

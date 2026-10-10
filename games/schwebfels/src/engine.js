@@ -1406,7 +1406,9 @@
       const L = ch.lv + (f.boss ? 1 : 0);
       // Mehrere Gegner nacheinander: jeder einzelne ist schwaecher, die Kette bleibt eine Herausforderung
       const n = ch.foes.length;
-      const p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
+      let p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
+      // zweiter Akt (ab Stufe 40): Endkaempfe mit Gewicht, der Held soll merken, dass es um alles geht
+      if (ch.lv >= 40) p *= f.final ? (n >= 2 ? 1.12 : 1.05) : 1.05;
       return E.monsterFighter(mon, L, E.adaptPower(hero, L, p), { boss: !!f.boss, final: !!f.final });
     });
   };
