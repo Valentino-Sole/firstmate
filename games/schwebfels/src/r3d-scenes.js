@@ -2982,8 +2982,9 @@
         m.headY *= s;
         box3 = new T.Box3().setFromObject(m.obj);
       }
-      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte)
-      const front = side < 0 ? box3.max.x - home.x : home.x - box3.min.x;
+      // vordere Ausdehnung zum Gegner hin: Nahkaempfer halten davor (ein Drache reicht weit in die Mitte). Nur fuer
+      // Bestien; bei Menschenartigen zaehlte sonst die vorgestreckte Waffe mit (Held blieb vor dem Troll 3 m weg stehen)
+      const front = m.parts && m.parts.beast ? (side < 0 ? box3.max.x - home.x : home.x - box3.min.x) : 0;
       const sh = KUL ? new T.Mesh(new T.CircleGeometry(1, 24), softShadowMat()) : new T.Mesh(new T.CircleGeometry(1, 24), basic("#000000", 0.3));
       sh.rotation.x = -PI / 2;
       sh.position.set(home.x, 0.03, home.z);
@@ -3052,6 +3053,10 @@
         f.m.speed = speed;
         f.m.update(dt * speed);
         f.shadow.position.x = f.m.obj.position.x;
+        if (f.runes) {
+          f.runes.userData.spin.rotation.y += dt * speed * 0.8;
+          f.runes.position.x = f.m.obj.position.x;
+        }
         if (f.aura) f.aura.position.copy(f.m.obj.position);
         if (f.bubble) {
           f.bubble.position.x = f.m.obj.position.x;
@@ -3335,6 +3340,7 @@
       const m = f.bubble.userData.mat;
       tween(0.3, (u) => (m.opacity = 0.18 + 0.4 * Math.sin(u * PI)));
       if (left <= 0) {
+        dropRunes(f);
         const b = f.bubble;
         f.bubble = null;
         burst(b.position.clone(), "#cfeaff", 18, 2.2);
@@ -3355,6 +3361,113 @@
         if (u >= 1) scene.remove(c);
       });
     }
+    /* Abschluss-Talente (Wunsch des Kapitaens: eigene sichtbare Spezialattacken): Bewegungen aus den gekauften
+       Meshy-Clips (charge, stab, power in src/r3d-rigged.js), Figuren ohne Clips nehmen die naechste gebaute Bewegung */
+    const clipAct = (f, name, fb) => (f.m.parts && f.m.parts.clips ? name : fb);
+    // Staubwolke am Boden (Sturmangriff)
+    function dust(x, z, color) {
+      burst(new T.Vector3(x, 0.15, z), color || "#cbb89a", 6, 1.2, 0.6);
+    }
+    // Druckwelle: flacher Ring am Boden, der schnell auseinanderlaeuft, dazu ein Lichtblitz
+    function shockwave(f, color) {
+      const r = new T.Mesh(G.torus(0.5, 0.12, PI * 2, 6, 48), glow(color, 0.9).clone());
+      r.rotation.x = PI / 2;
+      r.position.set(f.m.obj.position.x, 0.1, f.m.obj.position.z);
+      scene.add(r);
+      burst(new T.Vector3(f.m.obj.position.x, 0.4, f.m.obj.position.z), color, 22, 3, 0.8);
+      return tween(0.55, (u) => {
+        r.scale.setScalar(1 + u * 7);
+        r.material.opacity = 0.9 * (1 - u) * (1 - u);
+        if (u >= 1) scene.remove(r);
+      });
+    }
+    // Explosion (Wilde Macht): wachsende leuchtende Kugel, Lichtsaeule, Funkenregen
+    function explosion(f, color) {
+      const c = new T.Vector3(f.m.obj.position.x, (f.m.headY || 1.8) * 0.55, f.m.obj.position.z);
+      const sm = new T.MeshBasicMaterial({ color: col(color), transparent: true, opacity: 0.8, blending: T.AdditiveBlending, depthWrite: false });
+      const b = new T.Mesh(G.sph(0.5, 20, 14), sm);
+      b.position.copy(c);
+      scene.add(b);
+      burst(c, color, 30, 4.5, 0.5);
+      burst(c, "#ffffff", 12, 2.5, 0.5);
+      lightColumn(f, color);
+      shake = Math.max(shake, 0.5);
+      zoom = Math.max(zoom, 0.7);
+      return tween(0.6, (u) => {
+        b.scale.setScalar(1 + u * 4);
+        sm.opacity = 0.8 * (1 - u);
+        if (u >= 1) scene.remove(b);
+      });
+    }
+    // Pfeilregen (Pfeilsalve): Pfeile fallen von oben auf den Gegner
+    function arrowRain(f, n, color) {
+      const wm = pm("wood", "#c9b89a");
+      const tm = pm("metal", "#c8ced6");
+      const arrows = [];
+      for (let i = 0; i < n; i++) {
+        const a = grp();
+        a.add(mesh(G.cyl(0.028, 0.028, 1.0, 4), wm));
+        a.add(mesh(G.cone(0.06, 0.18, 4), tm, { p: [0, -0.58, 0], r: [PI, 0, 0] }));
+        const tr = spark(color, 0.45);
+        tr.position.y = 0.3;
+        a.add(tr);
+        const x = f.m.obj.position.x + (Math.random() - 0.5) * 1.8;
+        const z = f.m.obj.position.z + (Math.random() - 0.5) * 1.2;
+        a.position.set(x - 0.8 * f.side, 7 + Math.random() * 2, z);
+        a.rotation.z = -0.12 * f.side;
+        a.userData = { x, z, d: Math.random() * 0.35 };
+        scene.add(a);
+        arrows.push(a);
+      }
+      return tween(0.85, (u) => {
+        for (const a of arrows) {
+          const k = Math.max(0, Math.min(1, (u - a.userData.d) / 0.5));
+          a.position.y = 8 - 7.6 * k * k;
+          a.position.x = a.userData.x - 0.8 * f.side * (1 - k);
+          if (k >= 1 && !a.userData.hit) {
+            a.userData.hit = true;
+            burst(new T.Vector3(a.userData.x, 0.3, a.userData.z), color, 3, 0.8, 0.3);
+          }
+        }
+        if (u >= 1) arrows.forEach((a) => scene.remove(a));
+      });
+    }
+    // Runenkreis (Bannkreis): leuchtender Kreis mit kreisenden Runen am Boden, bis die Barriere bricht
+    function runeCircle(f, color) {
+      const g = grp([f.m.obj.position.x, 0.06, f.m.obj.position.z]);
+      const gm = glow(color, 0.8).clone();
+      const ringM = new T.Mesh(G.torus(1.25, 0.035, PI * 2, 4, 64), gm);
+      ringM.rotation.x = PI / 2;
+      g.add(ringM);
+      const inner = new T.Mesh(G.torus(0.95, 0.02, PI * 2, 4, 64), gm);
+      inner.rotation.x = PI / 2;
+      g.add(inner);
+      const runes = grp();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * PI * 2;
+        const r = mesh(G.box(0.16, 0.02, 0.06), gm, { p: [Math.cos(a) * 1.1, 0.02, Math.sin(a) * 1.1], r: [0, -a, 0] });
+        runes.add(r);
+        runes.add(mesh(G.box(0.03, 0.02, 0.16), gm, { p: [Math.cos(a) * 1.1, 0.02, Math.sin(a) * 1.1], r: [0, -a + 0.6, 0] }));
+      }
+      g.add(runes);
+      g.add(R.haloSprite(color, 3, 0.35, [0, 0.2, 0]));
+      g.scale.setScalar(0.01);
+      scene.add(g);
+      g.userData.spin = runes;
+      g.userData.mat = gm;
+      tween(0.5, (u) => g.scale.setScalar(0.01 + u));
+      return g;
+    }
+    function dropRunes(f) {
+      const g = f.runes;
+      if (!g) return;
+      f.runes = null;
+      tween(0.4, (u) => {
+        g.scale.setScalar(1 + u * 0.6);
+        g.userData.mat.opacity = 0.8 * (1 - u);
+        if (u >= 1) scene.remove(g);
+      });
+    }
     async function playTalent(ev) {
       const A = F[ev.a];
       const color = TAL_COLOR[ev.id] || "#ffd27a";
@@ -3364,20 +3477,39 @@
       if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
       if (ev.id === "ward") {
         A.wardLeft = ev.ward;
+        // Bannkreis (Abschluss-Talent): Runenkreis unter dem Zaubernden, der bis zum Bruch der Barriere leuchtet
+        if (ev.name === "Bannkreis") {
+          A.m.play(clipAct(A, "cast", "cast"), 0.7);
+          if (A.runes) scene.remove(A.runes);
+          A.runes = runeCircle(A, color);
+          await wait(0.45);
+        }
         setBubble(A, true);
         floatText(A, "Barriere " + SB.util.fmt(ev.ward), "talent");
       } else if (ev.id === "secondWind") {
+        // Schmerz ignorieren und Zweiter Atem: Kraftschrei mit erhobenen Armen, gruene Lichtsaeule, Funken steigen auf
+        A.m.play(clipAct(A, "power", "victory"), 1.1);
         lightColumn(A, color);
+        shockwave(A, color);
+        rising(A, color, 22);
         hp[ev.a] = ev.hp[ev.a];
         floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
         report(ev.a, ev, -1);
+        await wait(0.45);
       } else if (ev.id === "vanish") {
-        burst(A.m.obj.position.clone().setY(1), color, 22, 1.8, 0.4);
+        // Verschwinden: Rauchwolke und Schattenring, die Figur taucht etwas weiter hinten wieder auf
+        const p0 = A.m.obj.position.clone();
+        burst(p0.clone().setY(1), color, 26, 1.8, 0.4);
+        burst(p0.clone().setY(0.4), "#2a2236", 18, 1.4, 0.2);
+        ring(A, color, false);
         A.m.obj.visible = false;
-        await wait(0.35);
+        await wait(0.4);
+        A.m.obj.position.x = A.home.x + A.side * 0.5;
         A.m.obj.visible = true;
+        burst(A.m.obj.position.clone().setY(1), color, 12, 1.2, 0.3);
         A.m.play("evade", 0.4);
         floatText(A, "Verschwunden!", "evade");
+        tween(0.4, (u) => (A.m.obj.position.x = A.home.x + A.side * 0.5 * (1 - u)));
       } else if (ev.id === "purge") {
         lightColumn(A, color);
         clearStars(A);
@@ -3415,6 +3547,10 @@
           shake = 0.25;
           zoom = Math.max(zoom, 0.6);
           floatText(Bf, "Kritisch!", "critlabel");
+        }
+        if (hit.tags && hit.tags.indexOf("wild") >= 0) {
+          explosion(Bf, A.m.projColor || "#c47bff");
+          floatText(A, "Wilde Macht!", "talent");
         }
         burst(new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z), hit.res === "crit" ? "#ffb13b" : "#ffe8d0", hit.res === "crit" ? 16 : 8, 1.8);
         if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit");
@@ -3464,6 +3600,12 @@
         zoom = 0.5;
         if (opts.sfx) opts.sfx("special");
         if (SFX.kind === "aura") setAura(A, SFX.color);
+        if (ev.master) {
+          // Grossmeister (Abschluss-Talent des Klassenpfads): goldener Kreis und Funken, der Spezialangriff kommt oefter
+          ring(A, "#ffd27a", true);
+          rising(A, "#ffe9a8", 18);
+          floatText(A, "Großmeister!", "talent");
+        }
         await wait(0.4);
       }
       const isHero = A.desc.kind !== "monster";
@@ -3480,7 +3622,21 @@
           const aim = (A.side < 0 ? PI / 2 : -PI / 2) - turn;
           tween(0.3, (u) => (A.m.obj.rotation.y = yaw0 + (aim - yaw0) * (1 - (1 - u) * (1 - u))));
         }
+        // Pfeilsalve (Abschluss-Talent der Jaeger): die zusaetzlichen Treffer fallen als Pfeilregen vom Himmel
+        const rainFrom = ev.volley && bowLike ? ev.hits.length - ev.volley : ev.hits.length;
         for (let i = 0; i < ev.hits.length; i++) {
+          if (i >= rainFrom) {
+            if (i === rainFrom) {
+              banner("Pfeilsalve", A.side);
+              A.m.play("shoot", 0.6);
+              await wait(0.6);
+              if (opts.sfx) opts.sfx("bow");
+              await arrowRain(Bf, 8 + 4 * ev.volley, special ? SFX.color : "#ffe9b0");
+            }
+            await impact(ev, A, Bf, ev.hits[i], i);
+            await wait(0.12);
+            continue;
+          }
           const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
           A.m.play(bowLike ? "shoot" : "cast", D);
           await wait(archer ? D : 0.3);
@@ -3507,22 +3663,57 @@
         const target = Bf.home.x - Bf.side * gap;
         const ST = A.m.strike;
         const from = A.home.x;
-        if (special && SFX.kind === "smoke") {
+        const tags0 = (ev.hits[0] && ev.hits[0].tags) || [];
+        const opener = tags0.indexOf("opener") >= 0;
+        const assassin = tags0.indexOf("assassinate") >= 0;
+        let behind = false;
+        if (assassin) {
+          // Meucheln (Abschluss-Talent der Schurken): in einer Rauchwolke verschwinden, hinter dem Gegner auftauchen
+          banner("Meucheln", A.side);
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 20, 1.6, 0.5);
+          burst(A.m.obj.position.clone().setY(0.4), "#2a2236", 14, 1.2, 0.2);
+          A.m.obj.visible = false;
+          await wait(0.3);
+          behind = true;
+          A.m.obj.position.x = Bf.home.x + Bf.side * 1.3;
+          A.m.obj.rotation.y += PI;
+          A.m.obj.visible = true;
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 14, 1.2, 0.4);
+        } else if (special && SFX.kind === "smoke") {
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
           A.m.obj.visible = false;
           await wait(0.15);
           A.m.obj.position.x = target;
           A.m.obj.visible = true;
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
+        } else if (opener) {
+          // Sturmangriff (Abschluss-Talent der Krieger): im vollen Lauf auf den Gegner, Staub hinter jedem Schritt
+          banner("Sturmangriff", A.side);
+          A.m.play(clipAct(A, "charge", "walk"), 0.5);
+          let last = 0;
+          await tween(0.42, (u) => {
+            A.m.obj.position.x = from + (target - from) * u * u;
+            if (u - last > 0.12) {
+              last = u;
+              dust(A.m.obj.position.x, A.m.obj.position.z);
+            }
+          });
         } else {
           A.m.play(special && ev.sp === "zermalmen" ? "special" : "walk", 0.3);
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         for (let i = 0; i < ev.hits.length; i++) {
           const big = special && i === 0;
-          A.m.play(big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
+          const stab = assassin && i === 0;
+          A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42);
           if (opts.sfx) opts.sfx("swing");
           await wait(ST ? (big ? ST.shit : ST.hit) : 0.22);
+          if (opener && i === 0) {
+            shockwave(Bf, "#ffd27a");
+            shake = Math.max(shake, 0.45);
+            zoom = Math.max(zoom, 0.6);
+          }
+          if (stab) slash(Bf, "#b48cff", 1);
           if (special && (SFX.kind === "slash" || SFX.kind === "aura")) slash(Bf, SFX.color, i % 2);
           else if (special && SFX.kind === "shock") {
             ring(Bf, SFX.color, true);
@@ -3533,7 +3724,16 @@
           // Bestien: Biss und Satz zurueck ausspielen lassen
           await wait(ST ? 0.3 : 0.16);
         }
-        await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
+        if (behind) {
+          // nach dem Meucheln in den Schatten zurueck auf den eigenen Platz
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 12, 1.2, 0.4);
+          A.m.obj.visible = false;
+          await wait(0.2);
+          A.m.obj.position.x = from;
+          A.m.obj.rotation.y -= PI;
+          A.m.obj.visible = true;
+          burst(A.m.obj.position.clone().setY(1), "#b48cff", 10, 1.0, 0.4);
+        } else await tween(0.26, (u) => (A.m.obj.position.x = target + (from - target) * u));
       }
       if (ev.heal) {
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.heal;
@@ -3577,6 +3777,8 @@
         clearStars(old);
         setBubble(old, false);
         setBubble(F[0], false);
+        dropRunes(old);
+        dropRunes(F[0]);
         F[0].wardLeft = 0;
         setAura(old, null);
         setPoison(old, false);

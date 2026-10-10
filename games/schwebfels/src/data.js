@@ -417,7 +417,7 @@
       d: [["hp", "Zähigkeit", 1, 3, { hp: 0.04 }], ["eva", "Ausweichen", 2, 3, { evade: 0.02 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["ls", "Jagdinstinkt", 3, 2, { lifesteal: 0.04 }], ["cap", "Zweiter Atem", 4, 1, { secondWind: 0.2 }, "Aktive Fähigkeit: Wenn es eng wird, findest du neue Kraft."]],
     },
     magier: {
-      o: [["dmg", "Zerstörung", 1, 3, { dmg: 0.04 }], ["crit", "Fokussierte Macht", 2, 3, { crit: 0.02 }], ["cm", "Entfesselung", 2, 2, { critMult: 0.2 }], ["exe", "Vernichtung", 3, 2, { execute: 0.1 }], ["cap", "Wilde Macht", 4, 1, { critMult: 0.5, crit: 0.04 }, "Aktive Fähigkeit: Rohe Magie macht kritische Zauber verheerend."]],
+      o: [["dmg", "Zerstörung", 1, 3, { dmg: 0.04 }], ["crit", "Fokussierte Macht", 2, 3, { crit: 0.02 }], ["cm", "Entfesselung", 2, 2, { critMult: 0.2 }], ["exe", "Vernichtung", 3, 2, { execute: 0.1 }], ["cap", "Wilde Macht", 4, 1, { critMult: 0.5, crit: 0.04, wild: 1 }, "Aktive Fähigkeit: Rohe Magie macht kritische Zauber verheerend."]],
       d: [["hp", "Lebenskraft", 1, 3, { hp: 0.05 }], ["ward", "Barriere", 2, 3, { ward: 0.03 }], ["mag", "Magie meiden", 2, 2, { magicRes: 0.08 }], ["tgh", "Standhaftigkeit", 3, 2, { toughness: 0.04 }], ["cap", "Bannkreis", 4, 1, { ward: 0.08, purge: 1 }, "Aktive Fähigkeit: Ein Kreis aus Runen schützt dich zu Kampfbeginn."]],
     },
   };

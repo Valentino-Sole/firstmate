@@ -75,10 +75,18 @@
         return ["Sit_and_Drink"].concat(RG.candidates(m, "sit", gender));
       case "hammer":
         return ["Heavy_Hammer_Swing", "Charged_Axe_Chop"].concat(MELEE);
+      // Abschluss-Talente im Kampf (src/r3d-scenes.js): Sturmangriff im Lauf, Meucheln als Stich, Kraftschrei bei
+      // Zweitem Atem und Schmerz ignorieren
+      case "charge":
+        return ["running", "Walk_Fight_Forward"].concat(RG.candidates(m, "walk", gender));
+      case "stab":
+        return ["Thrust_Slash"].concat(RG.candidates(m, "attack", gender));
+      case "power":
+        return ["Cheer_with_Both_Hands_Up", "Victory_Cheer"].concat(RG.candidates(m, "victory", gender));
     }
     return RG.candidates(m, "idle", gender);
   };
-  const KIND = { idle: "loop", walk: "loop", sit: "loop", drink: "loop", hammer: "loop", victory: "free", defeat: "hold" };
+  const KIND = { idle: "loop", walk: "loop", sit: "loop", drink: "loop", hammer: "loop", charge: "loop", victory: "free", power: "free", defeat: "hold" };
   const BODY_HIT = { hit: 1, evade: 1 };
   // Feinabstimmung einzelner Clips, falls die automatische Schlagmarke nicht passt: { Name: { hit: Sekunden, from:
   // Sekunden } }. Bei den Schuessen ist die automatische Marke die schnellste Handbewegung (der Griff zum Koecher); das

@@ -602,7 +602,7 @@
         if (n <= 0) continue;
         budget -= n;
         for (const k in t.eff) {
-          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" ? 1 : n);
+          eff[k] = (eff[k] || 0) + t.eff[k] * (k === "spEvery" || k === "firstStrike" || k === "assassinate" || k === "vanish" || k === "wild" ? 1 : n);
           eff._names[k] = t.name;
         }
       }
@@ -825,6 +825,8 @@
       const crit = (!att.opened && AT.assassinate) || r() < E.critChance(att.attrs.glueck, def.level, cBonus);
       if (crit) dmg *= (att.prof.critMult || 2) + (special ? AT.spCritMult || 0 : 0);
       if (!att.opened && AT.assassinate) tags.push("assassinate");
+      // Wilde Macht (Abschluss-Talent der Magier): kritische Zauber zeigt der Kampf als Explosion
+      if (crit && AT.wild) tags.push("wild");
       dmg *= 1 - (DT.toughness || 0);
       if (att.mainKey === "verstand") dmg *= 1 - (DT.magicRes || 0);
       dmg = Math.max(1, Math.round(dmg));
@@ -930,6 +932,9 @@
       }
       def.dazed = false;
       const ev = { a: turn, kind: special ? "special" : "attack", sp: special ? special.id : null, spName: special ? special.name : null, hits: out };
+      // fuer die Darstellung der Abschluss-Talente: Grossmeister (Spezialangriff oefter), Pfeilsalve (zusaetzliche Treffer)
+      if (special && att.T.spEvery) ev.master = true;
+      if (special && att.T.spHits) ev.volley = att.T.spHits;
       if (healed > 0 && att.hp > 0) {
         att.hp = Math.min(att.maxHp, att.hp + healed);
         ev.lifesteal = healed;
