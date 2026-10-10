@@ -262,12 +262,56 @@
     return withGen({ kind: "hero", race: f.race, cls: f.cls, realm: f.realm, gender: f.gender, look: f.look, gear: f.gear });
   };
   UI.monDesc = (m, boss, final) => ({ kind: "monster", arch: m.arch, visual: monVisual(m), look: UI.monLook(m), mv: UI.monReady[m.arch] ? 1 : 0, color: m.color, accent: m.accent, boss: !!boss, final: !!final, realm: UI.foeRealm(m) });
+  /* Portraits ohne Wartezeit: schon gezeichnete kommen sofort, neue zeichnet das Spiel nacheinander im Hintergrund
+     (eines je Takt, nicht waehrend eines Kampfes) und setzt sie dann an ihre Stelle. Vorher entstanden alle Portraits
+     eines Fensters, bevor es aufging; die Arena mit vier Gegnern stand so spuerbar still (im Testbrowser 13 Sekunden). */
+  const SNAPQ = new Map();
+  let SNAPN = 0;
+  let snapTimer = 0;
+  const silhouetteOf = (desc) => I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
+  function snapNext() {
+    snapTimer = 0;
+    if (!SNAPQ.size) return;
+    if (UI.inBattle) {
+      snapTimer = setTimeout(snapNext, 400);
+      return;
+    }
+    const [key, job] = SNAPQ.entries().next().value;
+    SNAPQ.delete(key);
+    const url = SB.R3D.snapshot(job.desc, job.size, job.bust);
+    if (url) for (const el of document.querySelectorAll('[data-snap="' + job.id + '"]')) el.outerHTML = '<img alt="" src="' + url + '">';
+    if (SNAPQ.size) snapTimer = setTimeout(snapNext, 16);
+  }
   UI.portrait = function (desc, size, bust) {
     // noch ladende Meshy-Figur (Held oder Monster): Umriss statt Bild, das Portrait entsteht nach dem Laden neu
     const waiting = desc.pending || (desc.kind === "monster" && (desc.visual || desc.look) && !desc.mv && !(SB.R3D.beasts && SB.R3D.beasts.hasOwn && SB.R3D.beasts.hasOwn(desc.look)));
-    const url = UI.use3d && !waiting ? SB.R3D.snapshot(desc, size || 128, bust) : null;
-    if (url) return '<img alt="" src="' + url + '">';
-    return I.silhouette(desc.kind === "monster" ? desc.color : desc.gear && desc.gear.ruestung ? desc.gear.ruestung.tint : "#7f8a96", desc.kind);
+    if (!UI.use3d || waiting) return silhouetteOf(desc);
+    const R = SB.R3D;
+    size = size || 128;
+    if (!R.snapshotCached || UI.syncPortraits) {
+      const url = R.snapshot(desc, size, bust);
+      return url ? '<img alt="" src="' + url + '">' : silhouetteOf(desc);
+    }
+    const hit = R.snapshotCached(desc, size, bust);
+    if (hit) return '<img alt="" src="' + hit + '">';
+    const key = R.snapshotKey(desc, size, bust);
+    let job = SNAPQ.get(key);
+    if (!job) {
+      job = { id: "sn" + ++SNAPN, desc, size, bust };
+      SNAPQ.set(key, job);
+    }
+    if (!snapTimer) snapTimer = setTimeout(snapNext, 16);
+    return '<span class="snap-wait" data-snap="' + job.id + '">' + silhouetteOf(desc) + "</span>";
+  };
+  // sofort gezeichnet (Kampfanzeige, Auswahl der Gestalt): dort muss das Bild gleich da sein
+  UI.portraitNow = function (desc, size, bust) {
+    const o = UI.syncPortraits;
+    UI.syncPortraits = true;
+    try {
+      return UI.portrait(desc, size, bust);
+    } finally {
+      UI.syncPortraits = o;
+    }
   };
   UI.npcPortrait = (id) => (UI.NPC_LOOK[id] ? UI.portrait(withGen(Object.assign({ kind: "hero" }, UI.NPC_LOOK[id])), 128, true) : "");
   UI.heroPortrait = (S) => UI.portrait(UI.heroDesc(S), 128, true);
@@ -284,7 +328,7 @@
     if (n > 1) {
       h += '<div class="choices">';
       for (let i = 0; i < n; i++) {
-        const pic = desc && UI.use3d ? UI.portrait(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
+        const pic = desc && UI.use3d ? UI.portraitNow(Object.assign({ kind: "hero" }, desc, { look: { hairStyle: i } }), 96, true).replace("<img ", '<img style="display:block;width:64px;height:64px;margin:0 auto 4px" ') : "";
         h += '<button type="button" class="choice' + (cur === i ? " on" : "") + '" ' + act + '="lookn" data-k="hairStyle" data-v="' + i + '">' + (pic.indexOf("<img") === 0 ? pic : "") + "Gestalt " + (i + 1) + "</button>";
       }
       h += "</div>";

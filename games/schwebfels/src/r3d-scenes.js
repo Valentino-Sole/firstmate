@@ -2608,11 +2608,14 @@
   let snapScene = null;
   let snapCam = null;
   const snapCache = new Map();
+  R.snapshotKey = (desc, size, bust) => JSON.stringify(desc) + "|" + (size || 160) + "|" + (bust ? 1 : 0);
+  // schon gezeichnetes Portrait (ohne zu zeichnen), sonst null
+  R.snapshotCached = (desc, size, bust) => snapCache.get(R.snapshotKey(desc, size, bust)) || null;
   R.snapshot = function (desc, size, bust) {
     if (!R.ready()) return null;
     init();
     size = size || 160;
-    const key = JSON.stringify(desc) + "|" + size + "|" + (bust ? 1 : 0);
+    const key = R.snapshotKey(desc, size, bust);
     if (snapCache.has(key)) return snapCache.get(key);
     try {
       if (!snapR) {

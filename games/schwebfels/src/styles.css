@@ -684,3 +684,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Portrait wird im Hintergrund gezeichnet: Umriss steht wie das spaetere Bild */
+.snap-wait { display: contents; }

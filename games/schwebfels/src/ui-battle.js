@@ -44,7 +44,7 @@
       const multi = foes.length > 1;
       const sub = (f) => "Stufe " + f.level + (f.kind === "monster" ? " · " + (D.ARCH_NAMES[f.arch] || D.MONSTER_TYPES[f.mainKey].profile) : " · " + D.CLASSES[f.cls].name);
       const plate = (f, side) =>
-        '<div class="plate ' + side + '"><span class="porthole">' + UI.portrait(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
+        '<div class="plate ' + side + '"><span class="porthole">' + UI.portraitNow(UI.fighterDesc(f), 128, f.kind !== "monster") + '</span><div class="pmeta"><div class="pname">' + (f.realm && f.kind !== "monster" ? I.realm(f.realm) + " " : "") + esc(f.name) + '</div><div class="plv">' + sub(f) + '</div><div class="hp"><i style="width:100%"></i><span class="num">' + U.fmt(f.maxHp) + "</span></div></div></div>";
       root.innerHTML =
         '<div class="bstage"></div><div class="plates">' + plate(hero, "left") + '<div class="btitle">' + esc(opts.title || "") + (multi ? '<div class="wave">Gegner <b id="waveNo">1</b> von ' + foes.length + "</div>" : "") + "</div>" + plate(foes[0], "right") + "</div>" +
         '<div class="bcontrols"><button class="btn ghost small" data-speed="1">1×</button><button class="btn ghost small" data-speed="2">2×</button><button class="btn ghost small" data-speed="4">4×</button><button class="btn small" data-skip="1">Überspringen</button></div>';
@@ -90,7 +90,7 @@
         }
       }
       function fallbackStage(foe) {
-        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portrait(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portrait(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
+        stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portraitNow(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portraitNow(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
       }
