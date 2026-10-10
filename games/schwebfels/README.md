@@ -45,7 +45,8 @@ Bekommt der Testbrowser keine direkte Verbindung zu den CDNs, kann `CDN_CACHE` a
 | `src/r3d-realms.js` | Die drei Heimatinseln: Landschaft, Gebäude, Wetter und Wahrzeichen je Reich |
 | `src/ui-*.js` | Oberfläche: Menüleiste, Orte, Kampfablauf, Heldenerschaffung |
 | `src/store.js` | Speichern im Browser, Spielstand-Code, optional claude.ai-Konto, Helden- und Gildenprofile |
-| `src/audio.js` | Musik je Ort und Reich sowie Klangeffekte per WebAudio |
+| `src/audio.js` | Musik je Ort und Reich per WebAudio; Klangbank aus freien Aufnahmen (`assets/klang.pack`, eingebettet als `SB_KLANG`) mit Varianten, Streuung und Stereo; Kampfereignisse mit Zusammenhang (`SB.audio.play(name, { a, d, side, how })`) wählen Schwung nach Waffe, Treffer nach Waffe und Material, Magie nach Schule, Stimmen nach Gegnertyp oder Volk; ohne Bank die erzeugten Effekte |
+| `assets-src/klang/` | `build_klang.py` baut die Klangbank aus den CC0-Sammlungen in `QUELLEN.md` (Schneiden, Tonhöhe, Schichten, Angleichen, MP3) |
 | `src/main.js` | Start, Reichswahl für alte Spielstände, Spielstand-Wechsel |
 
 Alle Figuren, Texte, Symbole, Musikstücke, Klänge und 3D-Modelle sind eigens für dieses Spiel entstanden. Die 3D-Darstellung nutzt [three.js](https://threejs.org) (MIT-Lizenz).

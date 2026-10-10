@@ -1018,12 +1018,13 @@
       h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
+      h += '<div class="row" style="margin-top:6px"><button class="btn ghost" data-act="open" data-id="klangprobe">Klangprobe öffnen</button><span class="muted small">Kampfgeräusche, Stimmen der Völker und Gegner, Magie zum Anhören</span></div>';
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
       const gf = s.settings.genFigures !== false;
       h += '<div class="section-title">Neue Figuren (Probe)</div><p class="muted small">Qualitätstest der neuen Heldenfiguren aus deinen Konzeptbildern, bisher für Midgard (Nordmann und Trollblut). Ist die Probe an, zeigen Charakter, Insel und Kämpfe diese Helden mit den neuen Körpern (Daten etwa 14 MB, einmal geladen). Rüstung, Helm und Umhang erscheinen darauf erst mit der Wechselausrüstung im nächsten Schritt, Waffe und Schild schon jetzt.</p>';
       h += '<div class="row"><button class="tab' + (gf ? " on" : "") + '" data-act="genFigures">Neue Figuren im Spiel ' + (gf ? "an" : "aus") + '</button><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe Midgard öffnen</button></div>';
-      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
+      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Texte, Symbole, Musikstücke und die 3D-Welt sind eigens dafür entstanden. Die Kampfgeräusche und Stimmen stammen aus freien, gemeinfreien Sammlungen (CC0) von Kenney und von OpenGameArt (unter anderem rubberduck, artisticdude, StarNinjas, qubodup, cicifyre). Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
   };
@@ -1141,6 +1142,110 @@
     UI.renderPanel();
     fpCamera();
   };
+
+  /* ================= Klangprobe: Geraeusche einzeln und als kleine Kampfszenen anhoeren ================= */
+  const KP_W = (base) => ({ base, rarity: "selten" });
+  const KP_HERO = {
+    nordfrau: { kind: "hero", race: "nordmann", gender: "w", cls: "sturmhuene", realm: "midgard", gear: { waffe: KP_W("axt"), ruestung: KP_W("harnisch") } },
+    lichtweber: { kind: "hero", race: "albier", gender: "m", cls: "lichtweber", realm: "albion", gear: { waffe: KP_W("zepter"), ruestung: KP_W("robe") } },
+    langbogner: { kind: "hero", race: "kreidezwerg", gender: "w", cls: "langbogner", realm: "albion", gear: { waffe: KP_W("bogen"), ruestung: KP_W("wams") } },
+    runenwirker: { kind: "hero", race: "trollblut", gender: "m", cls: "runenwirker", realm: "midgard", gear: { waffe: KP_W("runenstab"), ruestung: KP_W("robe") } },
+    schattentaenzer: { kind: "hero", race: "sidhe", gender: "w", cls: "schattentaenzer", realm: "hibernia", gear: { waffe: KP_W("dolch"), ruestung: KP_W("schattenwams") } },
+    hainwaechter: { kind: "hero", race: "moorling", gender: "m", cls: "hainwaechter", realm: "hibernia", gear: { waffe: KP_W("hammer"), ruestung: KP_W("harnisch"), nebenhand: KP_W("schild") } },
+  };
+  const KP_MON = (arch, extra) => Object.assign({ kind: "monster", arch }, extra || {});
+  const KP_SZENEN = [
+    ["Nordmann-Kriegerin mit Axt gegen Grauwolf", "nordfrau", KP_MON("wolf"), "nah", "nah"],
+    ["Runenwirker (Trollblut) gegen Eiswyrm", "runenwirker", KP_MON("drache", { accent: "#9fd8ff", boss: true }), "magie", "magie"],
+    ["Lichtweber gegen Blutkultist", "lichtweber", KP_MON("kultist"), "magie", "magie"],
+    ["Langbognerin (Kreidezwerg) gegen Netzlauerer", "langbogner", KP_MON("spinne"), "pfeil", "nah"],
+    ["Hainwächter mit Schild gegen Felsgolem", "hainwaechter", KP_MON("golem", { boss: true }), "nah", "nah"],
+    ["Schattentänzerin (Sidhe) gegen Fahlen Schemen", "schattentaenzer", KP_MON("schemen"), "nah", "magie"],
+    ["Nordmann-Kriegerin gegen Schwelwurm (Drache)", "nordfrau", KP_MON("drache", { accent: "#ff7a2a", boss: true }), "nah", "magie"],
+    ["Nordmann-Kriegerin gegen Todesritter", "nordfrau", KP_MON("todesritter"), "nah", "nah"],
+  ];
+  const KP_ARCHS = [["wolf", "Wolf"], ["drache", "Drache"], ["troll", "Troll"], ["golem", "Golem"], ["schemen", "Schemen"], ["ghul", "Ghul"], ["spinne", "Spinne"], ["pilz", "Pilz"], ["baum", "Baumhirte"], ["krebs", "Krebs"], ["fledermaus", "Flatterer"], ["goblin", "Kobold"], ["kultist", "Kultist"], ["todesritter", "Todesritter"], ["schlund", "Schlund"]];
+  const KP_RACES = [["albier", "Albier"], ["kreidezwerg", "Kreidezwerg"], ["nordmann", "Nordmann"], ["trollblut", "Trollblut"], ["sidhe", "Sidhe"], ["moorling", "Moorling"]];
+  const KP_WAFFEN = [["dolch", "Dolch"], ["schwert", "Schwert"], ["axt", "Axt"], ["hammer", "Hammer"], ["speer", "Speer"], ["bogen", "Bogen"], ["armbrust", "Armbrust"]];
+  const KP_ZIELE = [["krieger", "Plattenrüstung"], ["schurke", "Leder"], ["wolf", "Fell"], ["golem", "Stein"], ["baum", "Holz"], ["ghul", "Knochen"], ["spinne", "Panzer"], ["schlund", "Schleim"], ["schemen", "Geist"], ["drache", "Schuppen"], ["kultist", "Stoff"]];
+  const KP_MAGIE = [["licht", "Licht (Albion)"], ["frost", "Frost und Runen (Midgard)"], ["dorn", "Dornen (Hibernia)"], ["dunkel", "Dunkel"], ["feuer", "Feuer"], ["blitz", "Blitz"], ["gift", "Gift"]];
+  const KP = { waffe: "schwert" };
+  P.klangprobe = {
+    title: "Klangprobe",
+    role: "Kampfgeräusche, Stimmen und Magie zum Anhören",
+    portrait: () => '<span class="iconport">' + I.ui("ton") + "</span>",
+    render() {
+      const row = (items, act, extra) => '<div class="row" style="gap:6px">' + items.map(([v, n]) => '<button class="tab" data-act="' + act + '" data-v="' + v + '"' + (extra || "") + ">" + esc(n) + "</button>").join("") + "</div>";
+      let h = '<p class="muted small">Freie Aufnahmen (gemeinfrei) statt der bisherigen erzeugten Töne. Jeder Klang hat mehrere Varianten und klingt bei jedem Antippen etwas anders. Sag mir, was dir gefällt und was nicht.</p>';
+      if (!SB.audio.enabled) h += '<p class="muted small">Die Klangeffekte sind ausgeschaltet. Schalte sie oben rechts ein, um etwas zu hören.</p>';
+      h += '<div class="section-title">Kleine Kampfszenen</div><div style="display:grid;gap:6px">' + KP_SZENEN.map((sz, i) => '<button class="btn ghost small" style="justify-content:flex-start" data-act="kpSzene" data-i="' + i + '">' + esc(sz[0]) + "</button>").join("") + "</div>";
+      h += '<div class="section-title">Gegner</div><div class="muted small">Tippe auf einen Gegner: Auftritt, Angriff, Schmerz und Niederlage nacheinander.</div>' + row(KP_ARCHS, "kpGegner");
+      h += '<div class="section-title">Völker</div><div class="muted small">Kampfruf und Schmerzlaut, jeweils Frau und Mann.</div>' + row(KP_RACES, "kpVolk");
+      h += '<div class="section-title">Waffe trifft Material</div>' + row(KP_WAFFEN.map(([v, n]) => [v, (KP.waffe === v ? "● " : "") + n]), "kpWaffe") + '<div style="height:6px"></div>' + row(KP_ZIELE, "kpZiel");
+      h += '<div class="section-title">Magie</div>' + row(KP_MAGIE, "kpMagie") + '<div style="height:6px"></div>' + row([["magie.heilung", "Heilung"], ["magie.barriere", "Barriere"], ["magie.teleport", "Verschwinden"], ["magie.reinigung", "Reinigung"]], "kpBank");
+      h += '<div class="section-title">Vorher und nachher</div><div class="muted small">Links der bisherige erzeugte Ton, rechts die neue Aufnahme.</div>';
+      h += [["hit", "Treffer", "mat.fleisch"], ["crit", "Kritisch", "krit"], ["swing", "Schwung", "schwung.klinge"], ["bow", "Bogen", "bogen.schuss"], ["spell", "Zauber", "magie.licht.wirken"], ["block", "Block", "block.schild"]]
+        .map(([o, n, k]) => '<div class="row" style="gap:6px"><span style="min-width:90px">' + n + '</span><button class="tab" data-act="kpAlt" data-v="' + o + '">vorher</button><button class="tab" data-act="kpBank" data-v="' + k + '">nachher</button></div>')
+        .join("");
+      return h;
+    },
+  };
+  const kpSay = (d, kind, ms) => setTimeout(() => SB.audio.voiceProbe(d, kind), ms || 0);
+  const kpEv = (name, c, ms) => setTimeout(() => SB.audio.event(name, c), ms || 0);
+  A.kpSzene = (el) => {
+    const [, hk, foe, howH, howF] = KP_SZENEN[+el.dataset.i];
+    const hero = KP_HERO[hk];
+    const att = (a, d, how, side, t, crit) => {
+      if (how === "nah") kpEv("swing", { a, side: -side }, t);
+      else if (how === "pfeil") kpEv("bow", { a, side: -side }, t);
+      else kpEv("spell", { a, side: -side }, t);
+      kpEv(crit ? "crit" : "hit", { a, d, side, how }, t + (how === "nah" ? 220 : 520));
+    };
+    kpEv("auftritt", { a: foe, side: 1 }, 0);
+    att(hero, foe, howH, 1, 1500, false);
+    att(foe, hero, howF, -1, 2700, false);
+    att(hero, foe, howH, 1, 3900, true);
+    att(foe, hero, howF, -1, 5100, true);
+    att(hero, foe, howH, 1, 6300, false);
+    kpEv("ko", { d: foe, side: 1 }, 7100);
+  };
+  A.kpGegner = (el) => {
+    const d = { kind: "monster", arch: el.dataset.v, accent: el.dataset.v === "drache" ? "#ff7a2a" : null };
+    kpSay(d, "auftritt", 0);
+    kpSay(d, "angriff", 1700);
+    kpSay(d, "schmerz", 2700);
+    kpSay(d, "tod", 3600);
+  };
+  A.kpVolk = (el) => {
+    const r = el.dataset.v;
+    const w = { kind: "hero", race: r, gender: "w" };
+    const m = { kind: "hero", race: r, gender: "m" };
+    kpSay(w, "angriff", 0);
+    kpSay(w, "schmerz", 700);
+    kpSay(m, "angriff", 1500);
+    kpSay(m, "schmerz", 2200);
+  };
+  A.kpWaffe = (el) => {
+    KP.waffe = el.dataset.v;
+    UI.renderPanel();
+  };
+  A.kpZiel = (el) => {
+    const a = { kind: "hero", race: "nordmann", gender: "w", gear: { waffe: KP_W(KP.waffe) } };
+    const d = { kind: "monster", arch: el.dataset.v };
+    const ranged = KP.waffe === "bogen" || KP.waffe === "armbrust";
+    if (ranged) kpEv("bow", { a, side: -1, quiet: true }, 0);
+    else kpEv("swing", { a, side: -1, quiet: true }, 0);
+    kpEv("hit", { a, d, side: 1, how: ranged ? "pfeil" : "nah", quiet: true }, ranged ? 450 : 220);
+  };
+  A.kpMagie = (el) => {
+    const sc = el.dataset.v;
+    const cls = { licht: "lichtweber", frost: "runenwirker", dorn: "dornenrufer" }[sc];
+    const a = cls ? { kind: "hero", cls, race: "albier", gender: "w" } : { kind: "monster", arch: sc === "gift" ? "pilz" : sc === "dunkel" ? "kultist" : "drache", accent: sc === "feuer" ? "#ff7a2a" : sc === "blitz" ? "#ffe45a" : null };
+    kpEv("spell", { a, side: -1, quiet: true }, 0);
+    kpEv("hit", { a, d: { kind: "monster", arch: "krieger" }, side: 1, how: "magie", quiet: true }, 600);
+  };
+  A.kpBank = (el) => SB.audio.probe(el.dataset.v);
+  A.kpAlt = (el) => SB.audio.probeOld(el.dataset.v);
 
   A.quality = (el) => {
     S().settings.quality = el.dataset.q;

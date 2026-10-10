@@ -61,7 +61,7 @@
             right: UI.fighterDesc(foes[0]),
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
-            sfx: (n) => SB.audio.play(n),
+            sfx: (n, c) => SB.audio.play(n, c),
           });
           battle.setSpeed(speed);
         } catch (e) {
@@ -69,7 +69,9 @@
           battle = null;
         }
       }
+      let curFoeDesc = UI.fighterDesc(foes[0]);
       function fallbackStage(foe) {
+        curFoeDesc = UI.fighterDesc(foe);
         stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portrait(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portrait(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
@@ -128,7 +130,7 @@
             setHp(d, hpNow[d]);
             figs[d].classList.add("hit");
             setTimeout(() => figs[d].classList.remove("hit"), 150);
-            SB.audio.play(h.res === "crit" ? "crit" : "hit");
+            SB.audio.play(h.res === "crit" ? "crit" : "hit", { a: a === 0 ? UI.fighterDesc(hero) : curFoeDesc, d: a === 0 ? curFoeDesc : UI.fighterDesc(hero), side: a === 0 ? 1 : -1 });
             const TAGS = { double: "Doppelschlag", opener: "Sturmangriff", assassinate: "Meucheln", execute: "Gnadenstoß", afterStun: "Nachsetzen" };
             const tags = (h.tags || []).filter((t) => TAGS[t]).map((t) => TAGS[t]);
             txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + (tags.length ? " [" + tags.join(", ") + "]" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "") + (h.absorbed ? " (" + U.fmt(h.absorbed) + " von der Barriere abgefangen)" : "");

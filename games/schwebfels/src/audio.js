@@ -54,6 +54,7 @@
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       startScheduler();
       if (A.context) A.music(A.context, true);
+      setTimeout(loadBank, 50);
     } catch (e) {
       A.ctx = null;
     }
@@ -188,13 +189,307 @@
     },
   };
 
-  A.play = function (name) {
-    if (!A.enabled || !A.ctx || !FX[name]) return;
+  /* ---------- Klangbank: freie Aufnahmen (CC0, assets-src/klang/QUELLEN.md) ---------- */
+  // Das Paket (globalThis.SB_KLANG, Base64) wird nach dem ersten Antippen im Hintergrund dekodiert. Bis dahin und
+  // ohne Paket klingen die erzeugten Effekte oben.
+  const BANK = {};
+  let bankState = "aus";
+  function unpack(s) {
+    const bin = atob(s);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const dv = new DataView(u8.buffer);
+    const hl = dv.getUint32(4, true);
+    const head = JSON.parse(new TextDecoder().decode(u8.subarray(8, 8 + hl)));
+    let base = 8 + hl;
+    base += (4 - (base % 4)) % 4;
+    const out = {};
+    for (const k in head.klang) out[k] = head.klang[k].map((r) => u8.slice(base + r.$[1], base + r.$[1] + r.$[2]).buffer);
+    return out;
+  }
+  function loadBank() {
+    if (bankState !== "aus" || !A.ctx || !globalThis.SB_KLANG) return;
+    bankState = "laden";
+    let raw;
     try {
-      FX[name]();
+      raw = unpack(globalThis.SB_KLANG);
+    } catch (e) {
+      bankState = "fehler";
+      return;
+    }
+    globalThis.SB_KLANG = null;
+    const jobs = [];
+    for (const k in raw) {
+      BANK[k] = [];
+      raw[k].forEach((buf, i) =>
+        jobs.push(
+          new Promise((ok) => A.ctx.decodeAudioData(buf, (b) => ok((BANK[k][i] = b)), () => ok(null)))
+        )
+      );
+    }
+    Promise.all(jobs).then(() => (bankState = "bereit"));
+  }
+  A.bankReady = () => bankState === "bereit";
+  A.bankStats = () => Object.fromEntries(Object.entries(BANK).map(([k, v]) => [k, v.filter(Boolean).length + "/" + v.length]));
+  A.bankNames = () => Object.keys(BANK);
+
+  // Eine Variante abspielen: nie zweimal hintereinander dieselbe, Tonhoehe und Lautstaerke leicht gestreut,
+  // links oder rechts je nach Seite im Kampf
+  const LAST = {};
+  let voices = 0;
+  function sample(name, o) {
+    const arr = BANK[name];
+    if (!arr || !A.ctx) return false;
+    const ok = arr.map((b, i) => (b ? i : -1)).filter((i) => i >= 0);
+    if (!ok.length) return false;
+    o = o || {};
+    let i = ok[Math.floor(Math.random() * ok.length)];
+    if (ok.length > 1 && i === LAST[name]) i = ok[(ok.indexOf(i) + 1) % ok.length];
+    LAST[name] = i;
+    if (A.onSample) A.onSample(name, i);
+    const c = A.ctx;
+    const t = c.currentTime + (o.delay || 0);
+    const s = c.createBufferSource();
+    s.buffer = arr[i];
+    const vary = o.vary != null ? o.vary : 0.05;
+    s.playbackRate.value = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * vary);
+    const g = c.createGain();
+    g.gain.value = (o.gain != null ? o.gain : 0.7) * (1 + (Math.random() * 2 - 1) * 0.12);
+    s.connect(g);
+    let end = g;
+    if (o.pan && c.createStereoPanner) {
+      const p = c.createStereoPanner();
+      p.pan.value = o.pan;
+      g.connect(p);
+      end = p;
+    }
+    end.connect(sfxBus);
+    s.start(t);
+    if (o.voice) {
+      voices++;
+      s.onended = () => voices--;
+    }
+    return true;
+  }
+
+  /* ---------- Was im Kampf wie klingt ---------- */
+  // Waffe des Helden: Schwungart und Trefferart
+  const WAFFE = { dolch: "leicht", kurzschwert: "leicht", sichel: "leicht", wurfmesser: "leicht", schwert: "klinge", axt: "axt", hammer: "wucht", speer: "stoss", stab: "wucht", zepter: "wucht", runenstab: "wucht" };
+  const SCHWUNG = { leicht: "leicht", klinge: "klinge", axt: "schwer", wucht: "schwer", stoss: "stoss", faust: "leicht", biss: "klaue", klaue: "klaue", zange: "klaue", geist: "schwer" };
+  const SCHLAG = { leicht: "klinge", klinge: "klinge", axt: "axt", wucht: "wucht", stoss: "spitze", faust: "faust", biss: "biss", klaue: "klinge", zange: "zange", geist: "geist" };
+  // Gegnertypen: Angriffsart und Material, aus dem sie sind
+  const GEGNER = {
+    wolf: ["biss", "fell"], drache: ["klaue", "schuppen"], troll: ["wucht", "fleisch"], golem: ["wucht", "stein"], schemen: ["geist", "geist"],
+    ghul: ["klaue", "knochen"], spinne: ["biss", "panzer"], pilz: ["wucht", "schleim"], baum: ["wucht", "holz"], krebs: ["zange", "panzer"],
+    fledermaus: ["biss", "fell"], goblin: ["klinge", "leder"], kultist: ["klinge", "stoff"], todesritter: ["klinge", "metall"], schlund: ["biss", "schleim"],
+    krieger: ["klinge", "metall"], schurke: ["leicht", "leder"], magier: ["wucht", "stoff"], jaeger: ["klinge", "leder"],
+  };
+  const RUESTUNG = { harnisch: "metall", schattenwams: "leder", wams: "leder", robe: "stoff" };
+  const SCHULE = { lichtweber: "licht", runenwirker: "frost", dornenrufer: "dorn" };
+  // Stimmlage je Volk: Satz der Frauenstimme und Tonhoehe (Trollblut tiefer, Sidhe und Moorling heller)
+  const VOLK = {
+    albier: ["w2", 1.0], kreidezwerg: ["w3", 0.9], nordmann: ["w2", 0.96], trollblut: ["w3", 0.88],
+    sidhe: ["w1", 1.07], moorling: ["w1", 1.15], frostwicht: ["w1", 1.1], glutzwerg: ["w3", 0.88],
+  };
+  const isMon = (d) => d && d.kind === "monster";
+  function attackOf(d) {
+    if (!d) return "faust";
+    if (isMon(d)) return (GEGNER[d.arch] || GEGNER.ghul)[0];
+    const w = d.gear && d.gear.waffe;
+    return (w && WAFFE[w.base]) || "faust";
+  }
+  function materialOf(d) {
+    if (!d) return "fleisch";
+    if (isMon(d)) return (GEGNER[d.arch] || GEGNER.ghul)[1];
+    const r = d.gear && d.gear.ruestung;
+    return (r && RUESTUNG[r.base]) || "fleisch";
+  }
+  function hueOf(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    if (!m) return -1;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) / 255;
+    const g = ((n >> 8) & 255) / 255;
+    const b = (n & 255) / 255;
+    const mx = Math.max(r, g, b);
+    const d = mx - Math.min(r, g, b);
+    if (d < 0.08) return -1;
+    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  }
+  function schoolOf(d) {
+    if (!d) return "licht";
+    if (!isMon(d)) return SCHULE[d.cls] || "licht";
+    if (d.arch === "pilz") return "gift";
+    if (d.arch === "drache") {
+      const h = hueOf(d.accent || d.color);
+      return h < 0 ? "feuer" : h < 45 || h >= 330 ? "feuer" : h < 75 ? "blitz" : h < 165 ? "gift" : h < 265 ? "frost" : "dunkel";
+    }
+    return "dunkel";
+  }
+  function voiceOf(d) {
+    // [Klangsatz, Tonhoehe, Lautstaerke]
+    if (!d) return null;
+    const boss = d.final ? 0.8 : d.boss ? 0.88 : 1;
+    if (isMon(d)) {
+      if (BANK["stimme." + d.arch + ".angriff"]) return ["stimme." + d.arch, boss, d.boss ? 0.95 : 0.8];
+      return ["held.m", boss, 0.7];
+    }
+    const v = VOLK[d.race] || VOLK.albier;
+    if (d.gender === "w") return ["held." + v[0], v[1], 0.6];
+    return [d.race === "trollblut" ? "held.gross" : "held.m", d.race === "trollblut" ? 1.0 : v[1], 0.6];
+  }
+  const pan = (side) => (side ? Math.max(-0.5, Math.min(0.5, side * 0.35)) : 0);
+  const lastVoice = {};
+  let quiet = false;
+  function sayVoice(d, kind, side, chance, force) {
+    if (quiet) return false;
+    const v = voiceOf(d);
+    if (!v || (!force && chance != null && Math.random() > chance)) return false;
+    const key = String(side || 0);
+    const now = A.ctx.currentTime;
+    if (!force && kind !== "tod" && kind !== "auftritt" && (lastVoice[key] > now - 0.7 || voices > 2)) return false;
+    let name = v[0] + "." + kind;
+    if (!BANK[name]) name = kind === "tod" || kind === "auftritt" ? v[0] + (kind === "tod" ? ".schmerz" : ".angriff") : null;
+    if (!name || !BANK[name]) return false;
+    lastVoice[key] = now;
+    const slow = kind === "tod" && !isMon(d) ? 0.9 : 1;
+    return sample(name, { rate: v[1] * slow, gain: v[2] * (kind === "auftritt" ? 1.15 : 1), pan: pan(side), voice: true, vary: 0.04 });
+  }
+
+  // Kampfereignis mit Zusammenhang: a = Angreifer, d = Getroffener (Beschreibungen wie in R.buildFighter), side -1/1
+  const KAMPF = {
+    swing(c) {
+      const at = attackOf(c.a);
+      sample("schwung." + (SCHWUNG[at] || "klinge"), { gain: 0.5, pan: pan(c.side) });
+      sayVoice(c.a, "angriff", c.side, isMon(c.a) ? (c.a.arch === "drache" ? 0.85 : 0.55) : 0.35);
+    },
+    hit(c, crit) {
+      const how = c.how || "nah";
+      const mat = materialOf(c.d);
+      const p = pan(c.side);
+      if (how === "magie") sample("magie." + schoolOf(c.a) + ".treffer", { gain: 0.65, pan: p }) || sample("magie.licht.treffer", { gain: 0.6, pan: p });
+      else sample("schlag." + (how === "pfeil" || how === "speer" ? "spitze" : SCHLAG[attackOf(c.a)] || "faust"), { gain: 0.7, pan: p });
+      sample("mat." + mat, { gain: how === "magie" ? 0.35 : 0.6, pan: p });
+      if (crit) sample("krit", { gain: 0.75, pan: p });
+      sayVoice(c.d, "schmerz", c.side, crit ? 1 : 0.3);
+    },
+    block(c) {
+      const sh = c.d && !isMon(c.d) && c.d.gear && c.d.gear.nebenhand && c.d.gear.nebenhand.base === "schild";
+      const m = materialOf(c.d);
+      sample(sh ? "block.schild" : m === "metall" || m === "stein" ? "block.metall" : attackOf(c.d) === "klinge" || attackOf(c.d) === "leicht" ? "block.waffe" : "block.schild", { gain: 0.75, pan: pan(c.side) });
+    },
+    evade(c) {
+      sample("ausweichen", { gain: 0.5, pan: pan(c.side) });
+    },
+    shoot(c) {
+      const wb = c.a && c.a.gear && c.a.gear.waffe && c.a.gear.waffe.base;
+      if (wb === "armbrust") sample("armbrust.schuss", { gain: 0.7, pan: pan(c.side) });
+      else if (wb === "speer") sample("schwung.stoss", { gain: 0.6, pan: pan(c.side), rate: 0.85 });
+      else sample("bogen.schuss", { gain: 0.7, pan: pan(c.side) });
+      sample("pfeil.flug", { gain: 0.35, pan: 0, delay: 0.08 });
+    },
+    cast(c) {
+      const sc = schoolOf(c.a);
+      if (!isMon(c.a) && c.a && c.a.cls === "runenwirker") sample("magie.runen.wirken", { gain: 0.4, pan: pan(c.side) });
+      sample("magie." + sc + ".wirken", { gain: 0.6, pan: pan(c.side) }) || sample("magie.licht.wirken", { gain: 0.55, pan: pan(c.side) });
+      sayVoice(c.a, "angriff", c.side, isMon(c.a) ? (c.a.arch === "drache" ? 0.9 : 0.6) : 0.25);
+    },
+    special(c) {
+      const p = pan(c.side);
+      const k = c.kind;
+      if (k === "shock") {
+        sample("mat.stein", { gain: 0.8, pan: p, rate: 0.8 });
+        sample("krit", { gain: 0.7, pan: p, delay: 0.05 });
+      } else if (k === "slash") {
+        sample("schwung.leicht", { gain: 0.55, pan: p });
+        sample("schwung.klinge", { gain: 0.5, pan: p, delay: 0.12 });
+      } else if (k === "arrows") {
+        for (let i = 0; i < 4; i++) sample("bogen.schuss", { gain: 0.45, pan: p, delay: i * 0.11 });
+      } else if (k === "beam") sample("magie.licht.wirken", { gain: 0.7, pan: p, rate: 0.8 });
+      else if (k === "roots") sample("magie.dorn.wirken", { gain: 0.7, pan: p, rate: 0.85 });
+      else if (k === "smoke") sample("magie.teleport", { gain: 0.6, pan: p });
+      else if (k === "orbs") sample("magie." + (c.sp === "fluch" ? "dunkel" : "frost") + ".wirken", { gain: 0.65, pan: p });
+      else if (k === "arrow") sample(c.sp === "frostpfeil" ? "magie.frost.wirken" : "magie.licht.wirken", { gain: 0.5, pan: p });
+      else if (k === "aura") sample("magie.dunkel.wirken", { gain: 0.55, pan: p, rate: 0.9 });
+      sayVoice(c.a, "angriff", c.side, 1);
+    },
+    talent(c) {
+      const id = c.id;
+      const p = pan(c.side);
+      if (id === "secondWind") sample("magie.heilung", { gain: 0.6, pan: p });
+      else if (id === "ward") sample("magie.barriere", { gain: 0.6, pan: p });
+      else if (id === "vanish") sample("magie.teleport", { gain: 0.6, pan: p });
+      else if (id === "purge") sample("magie.reinigung", { gain: 0.6, pan: p });
+      else return false;
+      return true;
+    },
+    heal(c) {
+      sample("magie.heilung", { gain: 0.55, pan: pan(c.side) });
+      if (c.a && !isMon(c.a) && c.a.gender === "w") sayVoice(c.a, "heilung", c.side, 0.5);
+    },
+    poison(c) {
+      sample("magie.gift.treffer", { gain: 0.45, pan: pan(c.side) });
+    },
+    ko(c) {
+      sayVoice(c.d, "tod", c.side);
+    },
+    auftritt(c) {
+      sayVoice(c.a, "auftritt", c.side);
+    },
+    schritt(c) {
+      sample("schritt." + (c.surface || "gras"), { gain: 0.35, pan: pan(c.side), vary: 0.08 });
+    },
+  };
+  // alte Effektnamen ohne Zusammenhang (Bedienung, Insel) auf passende Aufnahmen legen
+  const PLAIN = { click: "ui.klick", page: "ui.seite", coin: "ui.muenzen", buy: "ui.kaufen", door: "ui.tuer", anvil: "ui.amboss", well: "ui.brunnen", heal: "magie.heilung", poison: "magie.gift.treffer", evade: "ausweichen", block: "block.schild", swing: "schwung.klinge", bow: "bogen.schuss", spell: "magie.licht.wirken", crit: "krit", hit: "mat.fleisch" };
+  const PLAIN_GAIN = { click: 0.45, page: 0.5, coin: 0.55, buy: 0.6, door: 0.55, anvil: 0.6, well: 0.6 };
+
+  A.play = function (name, c) {
+    if (!A.enabled || !A.ctx) return;
+    try {
+      if (bankState === "bereit") {
+        if (c) {
+          const k = { hit: "hit", crit: "hit", block: "block", evade: "evade", swing: "swing", bow: "shoot", spell: "cast", special: "special", talent: "talent", chime: "talent", heal: "heal", poison: "poison", ko: "ko", auftritt: "auftritt", schritt: "schritt" }[name];
+          if (k && KAMPF[k]) {
+            quiet = !!c.quiet;
+            const r = KAMPF[k](c, name === "crit");
+            quiet = false;
+            if (r !== false) return;
+          }
+        }
+        if (PLAIN[name] && sample(PLAIN[name], { gain: PLAIN_GAIN[name] || 0.6 })) {
+          if (name === "anvil" || name === "well") FX[name]();
+          return;
+        }
+      }
+      if (FX[name]) FX[name]();
     } catch (e) {
       /* Ton ist optional */
+      if (A.debug) console.warn("Klang", name, e);
     }
+  };
+  // Klangprobe: einen Eintrag der Bank direkt oder ein Kampfereignis mit Beispielbeschreibung abspielen
+  A.probe = function (name, opts) {
+    if (!A.ctx) A.unlock();
+    if (!A.ctx) return false;
+    if (bankState === "aus") loadBank();
+    return sample(name, Object.assign({ gain: 0.7 }, opts || {}));
+  };
+  // Stimme eines Volkes oder Gegners ohne Zufall und Pause (fuer die Klangprobe)
+  A.voiceProbe = function (d, kind) {
+    if (!A.ctx) A.unlock();
+    if (bankState === "aus") loadBank();
+    return bankState === "bereit" && sayVoice(d, kind, 0, 1, true);
+  };
+  A.probeOld = function (name) {
+    if (!A.ctx) A.unlock();
+    if (A.ctx && FX[name]) FX[name]();
+  };
+  A.event = function (name, c) {
+    if (!A.ctx) A.unlock();
+    if (bankState === "aus") loadBank();
+    A.play(name, c);
   };
 
   /* ---------- Musik ---------- */

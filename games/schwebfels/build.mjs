@@ -26,6 +26,12 @@ try {
 } catch (e) {
   console.warn("Hinweis: assets/schwebfels.pack fehlt, das Spiel nutzt die alten Figuren.");
 }
+// Klangbank aus freien Aufnahmen (assets/klang.pack, aus assets-src/klang/ gebaut), etwa 1,6 MB
+try {
+  packJs += "<script>globalThis.SB_KLANG=\"" + readFileSync(path.join(dir, "assets/klang.pack")).toString("base64") + "\";</script>";
+} catch (e) {
+  console.warn("Hinweis: assets/klang.pack fehlt, das Spiel nutzt die erzeugten Klaenge.");
+}
 // Erzeugte Figuren aus der Bild-zu-3D-Strecke (assets/gen-<reich>.pack, aus assets-src/gen/ gebaut): je Reich eine
 // eigene Datei dist/gen-<reich>.js, die das Spiel erst bei Bedarf nachlaedt (die Seite bleibt unter 16 MB)
 mkdirSync(path.join(dir, "dist"), { recursive: true });

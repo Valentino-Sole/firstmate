@@ -2659,6 +2659,9 @@
       return { m, home, side, shadow: sh, desc };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
+    // Schritte auf dem Boden des Schauplatzes; der Gegner meldet sich beim Erscheinen (der Drache bruellt)
+    const SURFACE = setting === "arena" || setting === "dungeon" ? "stein" : opts.realm === "midgard" ? "schnee" : "gras";
+    if (opts.sfx) setTimeout(() => opts.sfx("auftritt", { a: F[1].desc, side: F[1].side }), 450);
 
     let speed = 1;
     let w = 1;
@@ -2987,7 +2990,7 @@
       banner(ev.name, A.side);
       ring(A, color, true);
       rising(A, color, 14);
-      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
+      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime", { id: ev.id, a: A.desc, side: A.side });
       if (ev.id === "ward") {
         A.wardLeft = ev.ward;
         setBubble(A, true);
@@ -3012,7 +3015,8 @@
       await wait(0.75);
     }
 
-    async function impact(ev, A, Bf, hit, idx) {
+    async function impact(ev, A, Bf, hit, idx, how) {
+      const ctx = { a: A.desc, d: Bf.desc, side: Bf.side, how: how || "nah" };
       const def = 1 - ev.a;
       if (hit.tags) for (const t of hit.tags) if (TAG_TEXT[t]) floatText(t === "double" || t === "opener" || t === "assassinate" ? A : Bf, t === "execute" && A.m.arch === "magier" ? "Vernichtung!" : TAG_TEXT[t], "talent");
       if (hit.absorbed) {
@@ -3025,12 +3029,12 @@
         Bf.m.play("evade", 0.4);
         tween(0.4, (u) => (Bf.m.obj.position.x = Bf.home.x + Math.sin(u * PI) * dx));
         floatText(Bf, "Ausgewichen!", "evade");
-        if (opts.sfx) opts.sfx("evade");
+        if (opts.sfx) opts.sfx("evade", ctx);
       } else if (hit.res === "block") {
         Bf.m.play("block", 0.4);
         burst(new T.Vector3(Bf.m.obj.position.x - Bf.side * 0.6, 1.4, Bf.m.obj.position.z), "#ffe27a", 12, 2);
         floatText(Bf, "Geblockt!", "block");
-        if (opts.sfx) opts.sfx("block");
+        if (opts.sfx) opts.sfx("block", ctx);
       } else {
         hp[def] = Math.max(0, hp[def] - hit.dmg);
         Bf.m.play("hit", 0.35);
@@ -3043,7 +3047,7 @@
           floatText(Bf, "Kritisch!", "critlabel");
         }
         burst(new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z), hit.res === "crit" ? "#ffb13b" : "#ffe8d0", hit.res === "crit" ? 16 : 8, 1.8);
-        if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit");
+        if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit", ctx);
       }
       report(def, ev, idx);
     }
@@ -3068,7 +3072,7 @@
         A.m.play("hit", 0.35);
         rising(A, "#7fff5a", 8);
         floatText(A, "-" + SB.util.fmt(ev.dmg), "poison");
-        if (opts.sfx) opts.sfx("poison");
+        if (opts.sfx) opts.sfx("poison", { d: A.desc, side: A.side });
         report(ev.a, ev, 0);
         if (ev.hp && ev.hp[ev.a] <= 0) setPoison(A, false);
         await wait(0.55);
@@ -3088,7 +3092,7 @@
         ring(A, SFX.color, true);
         rising(A, SFX.color, 14);
         zoom = 0.5;
-        if (opts.sfx) opts.sfx("special");
+        if (opts.sfx) opts.sfx("special", { sp: ev.sp, kind: SFX.kind, a: A.desc, side: A.side });
         if (SFX.kind === "aura") setAura(A, SFX.color);
         await wait(0.4);
       }
@@ -3100,7 +3104,7 @@
         for (let i = 0; i < ev.hits.length; i++) {
           A.m.play(bowLike ? "shoot" : "cast", 0.5);
           await wait(bowLike ? 0.3 : 0.3);
-          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell");
+          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell", { a: A.desc, side: A.side });
           if (special && SFX.kind === "beam") {
             await beam(A, Bf, SFX.color);
           } else if (special && SFX.kind === "roots") {
@@ -3110,7 +3114,7 @@
             const kind = bowLike ? (wb === "speer" ? "spear" : "arrow") : special && SFX.kind === "orbs" ? "star" : "orb";
             await projectile(A, Bf, kind, special ? SFX.color : A.m.projColor || "#c47bff");
           }
-          await impact(ev, A, Bf, ev.hits[i], i);
+          await impact(ev, A, Bf, ev.hits[i], i, bowLike ? (wb === "speer" ? "speer" : "pfeil") : "magie");
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
       } else {
@@ -3125,11 +3129,15 @@
           burst(A.m.obj.position.clone().setY(1), SFX.color, 16, 1.5, 0.5);
         } else {
           A.m.play(special && ev.sp === "zermalmen" ? "special" : "walk", 0.3);
+          if (opts.sfx && A.desc.kind !== "monster") {
+            opts.sfx("schritt", { surface: SURFACE, side: A.side });
+            setTimeout(() => opts.sfx("schritt", { surface: SURFACE, side: A.side }), 120 / speed);
+          }
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         for (let i = 0; i < ev.hits.length; i++) {
           A.m.play(special && i === 0 ? "special" : "attack", special ? 0.5 : 0.42);
-          if (opts.sfx) opts.sfx("swing");
+          if (opts.sfx) opts.sfx("swing", { a: A.desc, side: A.side });
           await wait(0.22);
           if (special && (SFX.kind === "slash" || SFX.kind === "aura")) slash(Bf, SFX.color, i % 2);
           else if (special && SFX.kind === "shock") {
@@ -3146,7 +3154,7 @@
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.heal;
         rising(A, "#7fffb0", 16);
         floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
-        if (opts.sfx) opts.sfx("heal");
+        if (opts.sfx) opts.sfx("heal", { a: A.desc, side: A.side });
         report(ev.a, ev, -1);
       }
       if (ev.lifesteal) {
@@ -3196,6 +3204,7 @@
         scene.remove(old.shadow);
         const nf = makeFighter(desc, 1);
         F[1] = nf;
+        if (opts.sfx) opts.sfx("auftritt", { a: nf.desc, side: nf.side });
         hp[1] = foeHp || 1;
         const tx = nf.home.x;
         nf.m.obj.position.x = tx + 6;
@@ -3217,7 +3226,7 @@
         setPoison(L, false);
         setAura(L, null);
         L.m.play("defeat", 0.9);
-        if (opts.sfx) opts.sfx("ko");
+        if (opts.sfx) opts.sfx("ko", { d: L.desc, side: L.side });
         await wait(0.6);
         W.m.play("victory", 1.4);
         burst(new T.Vector3(W.m.obj.position.x, 2.2, W.m.obj.position.z), "#ffd25a", 24, 3);
