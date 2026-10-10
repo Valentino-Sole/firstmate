@@ -9277,7 +9277,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
      liegt knapp hinter der rechten Hand. Die Bogenclips halten den Bogen links; ohne Ausrichtung schwang die Armbrust in
      der Zughand ueber die Schulter. Gebaute und erzeugte Armbrueste liegen gleich: Schaft entlang +x, Bogen (Prod) vorn
      bei +x, Griff im Ursprung (assets-src/gen/weapon.py, F.armbrust in src/r3d-items-weapons.js). */
-  let VL = null, VR = null, MB = null, VS = null;
   // Ausdehnung einer Waffe entlang ihres Schafts (einmal je Waffe): tip vorn (Bolzenspitze), back hinten (Kolben)
   RG.weaponExtent = function (W) {
     if (W.userData.ext) return W.userData.ext;
@@ -9294,45 +9293,125 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     });
     return (W.userData.ext = box.isEmpty() ? { tip: 0.4, back: -0.4 } : { tip: box.max.x, back: box.min.x });
   };
-  Player.prototype.aimCrossbow = function () {
+  // Armbrust im Anschlag. Die Bogenbewegung zieht die rechte Hand an die Wange; zwischen die Haende gelegt lag die
+  // Armbrust quer vor dem Gesicht und ihr Kolben steckte neben dem Ohr im Kopf (Kapitaen: "zur Haelfte im Koerper").
+  // Jetzt liegt sie waagerecht in Schussrichtung knapp unter der rechten Wange, der Kolben endet an der Schulter, und die
+  // Arme greifen sie ueber eine Zwei-Knochen-Rechnung je Arm: rechte Hand am Griff, linke vorn unter dem Bogen, Ellbogen
+  // nach unten. Anteile der Armbrustlaenge vom Kolben aus; Masse in Metern fuer eine Figur von 1,8 m.
+  RG.CROSSBOW = { grip: 0.3, fore: 0.64, cheek: 0.11, drop: 0, butt: 0.16, blend: 0.25 };
+  let CB = null;
+  function turnBone(bone, child, want, w) {
+    const { p, u, v, qa, qb } = CB;
+    bone.getWorldPosition(p);
+    u.subVectors(child, p).normalize();
+    v.subVectors(want, p).normalize();
+    qa.setFromUnitVectors(u, v);
+    bone.getWorldQuaternion(qb).premultiply(qa);
+    bone.parent.getWorldQuaternion(qa).invert().multiply(qb);
+    bone.quaternion.slerp(qa, w);
+    bone.updateMatrixWorld(true);
+  }
+  // um die Senkrechte drehen (Hals und Kopf zum Ziel)
+  function yawBone(bone, ang) {
+    if (!bone || !bone.parent) return;
+    const { qa, qb } = CB;
+    qa.setFromAxisAngle(CB.Y, ang);
+    bone.getWorldQuaternion(qb).premultiply(qa);
+    bone.parent.getWorldQuaternion(qa).invert().multiply(qb);
+    bone.quaternion.copy(qa);
+    bone.updateMatrixWorld(true);
+  }
+  // Oberarm und Unterarm so drehen, dass das Handgelenk das Ziel erreicht (oder so nah wie die Armlaenge erlaubt)
+  function reachArm(B, side, target, pole, w) {
+    const U = B["upperarm." + side];
+    const F = B["forearm." + side];
+    const H = B["hand." + side];
+    if (!U || !F || !H || !U.parent || !F.parent) return;
+    const { s, e, h, d, n, t } = CB;
+    U.getWorldPosition(s);
+    F.getWorldPosition(e);
+    H.getWorldPosition(h);
+    const a = s.distanceTo(e);
+    const b = e.distanceTo(h);
+    d.subVectors(target, s);
+    const dist = Math.min(a + b - 1e-4, Math.max(Math.abs(a - b) + 1e-4, d.length()));
+    d.normalize();
+    n.copy(pole).addScaledVector(d, -pole.dot(d));
+    if (n.lengthSq() < 1e-8) return;
+    n.normalize();
+    const ca = Math.max(-1, Math.min(1, (a * a + dist * dist - b * b) / (2 * a * dist)));
+    t.copy(s).addScaledVector(d, a * ca).addScaledVector(n, a * Math.sqrt(1 - ca * ca));
+    turnBone(U, e, t, w);
+    F.getWorldPosition(e);
+    H.getWorldPosition(h);
+    t.copy(s).addScaledVector(d, dist);
+    turnBone(F, h, t, w);
+  }
+  Player.prototype.aimCrossbow = function (dt) {
     const W = this.m.parts.weapon;
     if (!W || this.m.weaponBase !== "armbrust") return;
     if (!W.userData.q0) {
       W.userData.q0 = W.quaternion.clone();
       W.userData.p0 = W.position.clone();
     }
+    W.quaternion.copy(W.userData.q0);
+    W.position.copy(W.userData.p0);
     const B = this.m.parts.B || {};
-    const aiming = this.cur && this.cur.action === "shoot" && B["hand.L"] && B["hand.R"] && W.parent;
-    if (!aiming) {
-      W.quaternion.copy(W.userData.q0);
-      W.position.copy(W.userData.p0);
-      return;
+    if (!B["hand.L"] || !B["hand.R"] || !B.head || !W.parent) return;
+    const k = RG.CROSSBOW;
+    const aiming = this.cur && this.cur.action === "shoot";
+    if (aiming) this.aimTurn = RG.SHOT_TURN[this.cur.c.name] || 0;
+    this.aimW = Math.max(0, Math.min(1, (this.aimW || 0) + ((aiming ? 1 : -1) * (dt || 0)) / k.blend));
+    const w = this.aimW * this.aimW * (3 - 2 * this.aimW);
+    if (w <= 0) return;
+    if (!CB) {
+      CB = {};
+      for (const nm of ["p", "u", "v", "s", "e", "h", "d", "n", "t", "A", "Y", "R", "c", "o", "g", "f", "pl", "pr", "hp", "sc"]) CB[nm] = new T.Vector3();
+      for (const nm of ["qa", "qb", "qo", "qh", "qt"]) CB[nm] = new T.Quaternion();
+      CB.M = new T.Matrix4();
     }
-    if (!VL) {
-      VL = new T.Vector3();
-      VR = new T.Vector3();
-      VS = new T.Vector3();
-      MB = new T.Matrix4();
+    const { A, Y, R, c, o, g, f, pl, pr, hp, qo, qh, qt, M } = CB;
+    const obj = this.m.obj;
+    obj.updateMatrixWorld(true);
+    // Schussrichtung: die Kampfbuehne dreht die Figur um aimTurn, damit der Bogenarm zum Ziel zeigt
+    obj.getWorldQuaternion(qo);
+    A.set(Math.sin(this.aimTurn), 0, Math.cos(this.aimTurn)).applyQuaternion(qo).setY(0).normalize();
+    Y.set(0, 1, 0);
+    R.crossVectors(A, Y);
+    // Kopf in Schussrichtung (die Skelette haben keine Ruhedrehungen, das Gesicht zeigt also entlang +z des Kopfknochens);
+    // die rechte Wange liegt dann an der Armbrust. Hals ein Drittel, Kopf den Rest, hoechstens 80 Grad.
+    const face = CB.u.set(0, 0, 1).applyQuaternion(B.head.getWorldQuaternion(CB.qa)).setY(0);
+    if (face.lengthSq() > 1e-6) {
+      face.normalize();
+      const ang = w * Math.max(-1.4, Math.min(1.4, Math.atan2(face.z * A.x - face.x * A.z, face.dot(A))));
+      yawBone(B.neck, ang * 0.35);
+      yawBone(B.head, ang * 0.65);
     }
-    B["hand.L"].getWorldPosition(VL);
-    B["hand.R"].getWorldPosition(VR);
-    const x = VL.sub(VR);
-    if (x.lengthSq() < 1e-6) return;
-    x.normalize();
+    const hs = Math.max(0.75, Math.min(1.2, (this.E.top || 1.8) / 1.8));
     const ext = RG.weaponExtent(W);
-    const up = new T.Vector3(0, 1, 0).addScaledVector(x, -x.y).normalize();
-    const z = new T.Vector3().crossVectors(x, up);
-    MB.makeBasis(x, up, z);
-    const qT = QW.setFromRotationMatrix(MB);
+    const sw = W.getWorldScale(CB.sc).x;
+    const L = (ext.tip - ext.back) * sw;
+    // Kolben: hinter der rechten Wange, knapp unter Kopfmitte; Ursprung der Waffe (ihr Griff) liegt -ext.back davor
+    B.head.getWorldPosition(c).addScaledVector(R, k.cheek * hs).addScaledVector(Y, -k.drop * hs).addScaledVector(A, -k.butt * hs);
+    o.copy(c).addScaledVector(A, -ext.back * sw);
+    // Haende an die Armbrust: rechts am Griff, links vorn unter dem Bogen, Handgelenke etwas tiefer
+    g.copy(c).addScaledVector(A, L * k.grip - 0.03 * hs).addScaledVector(Y, -0.07 * hs);
+    f.copy(c).addScaledVector(A, L * k.fore).addScaledVector(Y, -0.07 * hs);
+    pr.copy(Y).multiplyScalar(-1).addScaledVector(A, -0.4).addScaledVector(R, 0.5);
+    pl.copy(Y).multiplyScalar(-1).addScaledVector(R, -0.3);
+    reachArm(B, "R", g, pr, w);
+    reachArm(B, "L", f, pl, w);
+    // gehaltene Lage (an der Hand) und Anschlag mischen
     const P = W.parent;
     P.updateWorldMatrix(true, false);
-    W.quaternion.copy(P.getWorldQuaternion(QU).invert().multiply(qT));
-    // Faust der rechten Hand (Lage des Griffs ohne Ausrichtung)
-    P.localToWorld(VR.copy(W.userData.p0));
-    // Griff so weit vor die rechte Hand, dass der Kolben 8 cm hinter ihr endet (Wange), hoechstens 35 cm
-    const sc = W.getWorldScale(VS).x;
-    const d = Math.max(0, Math.min(0.35, -ext.back * sc - 0.08));
-    W.position.copy(P.worldToLocal(VR.addScaledVector(x, d)));
+    P.localToWorld(hp.copy(W.userData.p0));
+    P.getWorldQuaternion(qh).multiply(W.userData.q0);
+    M.makeBasis(A, Y, R);
+    qt.setFromRotationMatrix(M);
+    qh.slerp(qt, w);
+    hp.lerp(o, w);
+    W.quaternion.copy(P.getWorldQuaternion(qo).invert().multiply(qh));
+    W.position.copy(P.worldToLocal(hp));
   };
   Player.prototype.tick = function (dt) {
     const m = this.m;
@@ -9353,7 +9432,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     // steife Knochen (Kopf und Hals grosser Monster): Bewegung der Heldenbewegungen nur zum kleinen Teil uebernehmen
     if (this.stiff) for (const b of this.stiff) b.quaternion.slerp(QI, 0.85);
     this.fixStaff();
-    this.aimCrossbow();
+    this.aimCrossbow(dt);
     // Sitzen: Huefte auf Bankhoehe wie bei den alten Figuren (Huefte 0,5 ueber dem Boden)
     const P = m.parts;
     const sit = this.cur && (this.cur.action === "sit" || this.cur.action === "drink");

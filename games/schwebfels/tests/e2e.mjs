@@ -22,7 +22,8 @@ const url = "file://" + path.join(dir, "..", "dist", "schwebfels.html");
 
 const errors = [];
 const cdnMap = process.env.CDN_CACHE ? JSON.parse(readFileSync(process.env.CDN_CACHE, "utf8")) : null;
-const browser = await pw.chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"] });
+const launch = () => pw.chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"] });
+let browser = await launch();
 
 async function newPage(vp, dpr = 1) {
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: dpr });
@@ -378,6 +379,10 @@ await page.context().close();
 
 /* ---- Mobil ---- */
 step("Mobil");
+// frischer Testbrowser: nach dem langen Durchlauf brauchte Software-WebGL fuer den Handystart mal ueber zwei Minuten,
+// allein 9 bis 20 Sekunden
+await browser.close();
+browser = await launch();
 // doppelte Pixeldichte wie bei ueblichen Handys: dort hielt die 3D-Ansicht das Formular frueher breiter als den Bildschirm
 const mob = await newPage({ width: 390, height: 844 }, 2);
 await mob.goto(url);
