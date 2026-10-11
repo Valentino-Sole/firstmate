@@ -86,7 +86,7 @@
             pet: opts.petDesc || null,
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
-            sfx: (n) => SB.audio.play(n),
+            sfx: (n, c) => SB.audio.play(n, c),
           });
           battle.setSpeed(speed);
         } catch (e) {
@@ -94,7 +94,9 @@
           battle = null;
         }
       }
+      let curFoeDesc = UI.fighterDesc(foes[0]);
       function fallbackStage(foe) {
+        curFoeDesc = UI.fighterDesc(foe);
         stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portraitNow(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portraitNow(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
@@ -153,7 +155,7 @@
             setHp(d, hpNow[d]);
             figs[d].classList.add("hit");
             setTimeout(() => figs[d].classList.remove("hit"), 150);
-            SB.audio.play(h.res === "crit" ? "crit" : "hit");
+            SB.audio.play(h.res === "crit" ? "crit" : "hit", { a: a === 0 ? UI.fighterDesc(hero) : curFoeDesc, d: a === 0 ? curFoeDesc : UI.fighterDesc(hero), side: a === 0 ? 1 : -1 });
             const TAGS = { double: "Doppelschlag", opener: "Sturmangriff", assassinate: "Meucheln", execute: "Gnadenstoß", afterStun: "Nachsetzen" };
             const tags = (h.tags || []).filter((t) => TAGS[t]).map((t) => TAGS[t]);
             txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + (tags.length ? " [" + tags.join(", ") + "]" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "") + (h.absorbed ? " (" + U.fmt(h.absorbed) + " von der Barriere abgefangen)" : "");
@@ -225,7 +227,10 @@
         const won = chain.winner === 0;
         if (battle) await battle.finish(won ? 0 : 1);
         else await wait(400);
-        SB.audio.play(won ? "victory" : "defeat");
+        // kurzes Lied: bei grossen Siegen (Chronik, Verlies, Arena, seltene Auftraege, Bosse) die Fanfare
+        const big = opts.setting !== "quest" || !!opts.rare || foes.some((f) => f.boss || f.final);
+        const st = (UI.S && UI.S.settings) || {};
+        SB.audio.play(won ? "victory" : "defeat", { big, wahl: won ? st.liedSieg : st.liedNiederlage });
         showResult(won);
       })();
       function showResult(win) {
@@ -324,12 +329,22 @@
     note.hidden = !waiting;
     note.textContent = st === "fehler" || st === "fehlt" ? "Die Figur konnte noch nicht geladen werden, gleich ein neuer Versuch …" : "Figur wird geladen …";
   }
+  const genWait = {};
   function loadGen() {
     const realm = draft.realm;
-    if (!view || genLoad[realm] === "laedt" || genLoad[realm] === "bereit" || UI.GEN_REALMS.indexOf(realm) < 0) return;
+    if (!view || genWait[realm] || genLoad[realm] === "laedt" || genLoad[realm] === "bereit" || UI.GEN_REALMS.indexOf(realm) < 0) return;
     genLoad[realm] = "laedt";
     UI.loadGenFigures(realm).then((st) => {
       genLoad[realm] = st;
+      // nach einem Fehlschlag erst spaeter neu versuchen: bis dahin liefert UI.loadGenFigures sofort dasselbe
+      // erfuellte Versprechen, ein direkter neuer Versuch liefe endlos weiter und hielte die Seite an
+      if (st !== "bereit") {
+        genWait[realm] = true;
+        setTimeout(() => {
+          genWait[realm] = false;
+          if (view && !$("#create").hidden) updateView();
+        }, 15000);
+      }
       if (view && !$("#create").hidden) updateView();
     });
   }

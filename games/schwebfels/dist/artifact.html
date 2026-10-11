@@ -4604,7 +4604,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
 
 </script>
 <script>/* src/audio.js */
-/* Helden von Schwebfels - Klangeffekte und Musik, live mit WebAudio erzeugt (keine fremden Aufnahmen).
+/* Helden von Schwebfels - Klangeffekte und Musik per WebAudio: Musik live erzeugt, Kampfklaenge, Stimmen und die Lieder
+   nach dem Kampf aus freien Aufnahmen (CC0, Klangbank unten), ohne Klangbank erzeugte Ersatzklaenge.
    Musik je Ort: Insel bei Tag und bei Nacht, Taverne, Kampf, Tiefe (Dungeon), Heim, Chronik.
    Jedes Reich klingt anders: Albion hoefisch (Laute, Schalmei, Trommel im Dreiertakt),
    Midgard duester nordisch (Bordun, Fidel, Kriegstrommeln, Horn, tiefer Chor),
@@ -4660,6 +4661,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       startScheduler();
       if (A.context) A.music(A.context, true);
+      setTimeout(loadBank, 50);
     } catch (e) {
       A.ctx = null;
     }
@@ -4794,13 +4796,398 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     },
   };
 
-  A.play = function (name) {
-    if (!A.enabled || !A.ctx || !FX[name]) return;
+  /* ---------- Klangbank: freie Aufnahmen (CC0, assets-src/klang/QUELLEN.md) ---------- */
+  // Das Paket (globalThis.SB_KLANG, Base64, aus klang.js) wird nach dem ersten Antippen im Hintergrund geladen und dekodiert. Bis dahin und
+  // ohne Paket klingen die erzeugten Effekte oben.
+  const BANK = {};
+  let bankState = "aus";
+  function unpack(s) {
+    const bin = atob(s);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const dv = new DataView(u8.buffer);
+    const hl = dv.getUint32(4, true);
+    const head = JSON.parse(new TextDecoder().decode(u8.subarray(8, 8 + hl)));
+    let base = 8 + hl;
+    base += (4 - (base % 4)) % 4;
+    const out = {};
+    for (const k in head.klang) out[k] = head.klang[k].map((r) => u8.slice(base + r.$[1], base + r.$[1] + r.$[2]).buffer);
+    return out;
+  }
+  // Die Klangbank liegt als klang.js neben der Seite (build.mjs); fehlt sie, bleibt es bei den erzeugten Effekten
+  // und nach einer Minute wird es erneut versucht
+  function fetchBank() {
+    bankState = "laden";
+    const el = document.createElement("script");
+    el.src = "klang.js";
+    el.onload = () => {
+      bankState = "aus";
+      if (globalThis.SB_KLANG) loadBank();
+      else bankState = "fehler";
+    };
+    el.onerror = () => {
+      el.remove();
+      bankState = "fehler";
+      setTimeout(() => bankState === "fehler" && (bankState = "aus"), 60000);
+    };
+    document.head.appendChild(el);
+  }
+  function loadBank() {
+    if (bankState !== "aus" || !A.ctx) return;
+    if (!globalThis.SB_KLANG) return fetchBank();
+    bankState = "laden";
+    let raw;
     try {
-      FX[name]();
+      raw = unpack(globalThis.SB_KLANG);
+    } catch (e) {
+      bankState = "fehler";
+      return;
+    }
+    globalThis.SB_KLANG = null;
+    const jobs = [];
+    for (const k in raw) {
+      BANK[k] = [];
+      raw[k].forEach((buf, i) =>
+        jobs.push(
+          new Promise((ok) => A.ctx.decodeAudioData(buf, (b) => ok((BANK[k][i] = b)), () => ok(null)))
+        )
+      );
+    }
+    Promise.all(jobs).then(() => (bankState = "bereit"));
+  }
+  A.bankReady = () => bankState === "bereit";
+  A.bankStats = () => Object.fromEntries(Object.entries(BANK).map(([k, v]) => [k, v.filter(Boolean).length + "/" + v.length]));
+  A.bankNames = () => Object.keys(BANK);
+
+  // Eine Variante abspielen: nie zweimal hintereinander dieselbe, Tonhoehe und Lautstaerke leicht gestreut,
+  // links oder rechts je nach Seite im Kampf
+  const LAST = {};
+  let voices = 0;
+  function sample(name, o) {
+    const arr = BANK[name];
+    if (!arr || !A.ctx) return false;
+    const ok = arr.map((b, i) => (b ? i : -1)).filter((i) => i >= 0);
+    if (!ok.length) return false;
+    o = o || {};
+    let i = ok[Math.floor(Math.random() * ok.length)];
+    if (ok.length > 1 && i === LAST[name]) i = ok[(ok.indexOf(i) + 1) % ok.length];
+    LAST[name] = i;
+    if (A.onSample) A.onSample(name, i);
+    const c = A.ctx;
+    const t = c.currentTime + (o.delay || 0);
+    const s = c.createBufferSource();
+    s.buffer = arr[i];
+    const vary = o.vary != null ? o.vary : 0.05;
+    s.playbackRate.value = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * vary);
+    const g = c.createGain();
+    g.gain.value = (o.gain != null ? o.gain : 0.7) * (1 + (Math.random() * 2 - 1) * 0.12);
+    s.connect(g);
+    let end = g;
+    if (o.pan && c.createStereoPanner) {
+      const p = c.createStereoPanner();
+      p.pan.value = o.pan;
+      g.connect(p);
+      end = p;
+    }
+    end.connect(sfxBus);
+    s.start(t);
+    if (o.voice) {
+      voices++;
+      s.onended = () => voices--;
+    }
+    return true;
+  }
+
+  /* ---------- Lieder nach dem Kampf ---------- */
+  // Sieg und Niederlage: kurzes Lied aus der Klangbank (lied.sieg.*, lied.niederlage.*), die Musik tritt so lange
+  // zurueck. Wahl (Klangprobe, S.settings.liedSieg/liedNiederlage): "auto" spielt bei grossen Siegen (Chronik,
+  // Verlies, Arena, seltene Auftraege, Bosse) die Fanfare, sonst das mittelalterliche Lied; sonst fest "fest",
+  // "fanfare" oder "tragisch"
+  let liedSrc = null;
+  let duckUntil = 0;
+  const musicLevel = () => (cur ? (cur.indexOf("kampf") === 0 ? 0.75 : 0.85) : 0.0001);
+  A.liedName = function (kind, o) {
+    o = o || {};
+    let w = o.wahl || (kind === "sieg" ? "auto" : "fest");
+    if (w === "auto") w = kind === "sieg" && o.big ? "fanfare" : "fest";
+    return BANK["lied." + kind + "." + w] ? "lied." + kind + "." + w : "lied." + kind + ".fest";
+  };
+  function lied(kind, o) {
+    o = o || {};
+    const name = A.liedName(kind, o);
+    const buf = BANK[name] && BANK[name][0];
+    if (!buf) return false;
+    const c = A.ctx;
+    if (liedSrc) {
+      try {
+        liedSrc.stop();
+      } catch (e) {
+        /* schon zu Ende */
+      }
+    }
+    if (A.onSample) A.onSample(name, 0);
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    const g = c.createGain();
+    g.gain.value = o.gain != null ? o.gain : 0.8;
+    s.connect(g);
+    g.connect(sfxBus);
+    const t = c.currentTime + 0.05;
+    s.start(t);
+    liedSrc = s;
+    s.onended = () => {
+      if (liedSrc === s) liedSrc = null;
+    };
+    // Musik ausblenden und nach dem Lied wieder einblenden (A.music wartet beim Ortswechsel ebenfalls bis dahin)
+    duckUntil = t + buf.duration;
+    const mg = musicBus.gain;
+    mg.cancelScheduledValues(c.currentTime);
+    mg.setValueAtTime(mg.value, c.currentTime);
+    mg.linearRampToValueAtTime(0.0001, c.currentTime + 0.25);
+    mg.setValueAtTime(0.0001, duckUntil);
+    mg.linearRampToValueAtTime(musicLevel(), duckUntil + 1.5);
+    return true;
+  }
+  A.lied = function (kind, o) {
+    if (!A.ctx) A.unlock();
+    if (!A.ctx) return false;
+    if (bankState === "aus") loadBank();
+    return bankState === "bereit" && lied(kind, o);
+  };
+
+  /* ---------- Was im Kampf wie klingt ---------- */
+  // Waffe des Helden: Schwungart und Trefferart
+  const WAFFE = { dolch: "leicht", kurzschwert: "leicht", sichel: "leicht", wurfmesser: "leicht", schwert: "klinge", axt: "axt", hammer: "wucht", speer: "stoss", stab: "wucht", zepter: "wucht", runenstab: "wucht" };
+  const SCHWUNG = { leicht: "leicht", klinge: "klinge", axt: "schwer", wucht: "schwer", stoss: "stoss", faust: "leicht", biss: "klaue", klaue: "klaue", zange: "klaue", geist: "schwer" };
+  const SCHLAG = { leicht: "klinge", klinge: "klinge", axt: "axt", wucht: "wucht", stoss: "spitze", faust: "faust", biss: "biss", klaue: "klinge", zange: "zange", geist: "geist" };
+  // Gegnertypen: Angriffsart und Material, aus dem sie sind
+  const GEGNER = {
+    wolf: ["biss", "fell"], drache: ["klaue", "schuppen"], troll: ["wucht", "fleisch"], golem: ["wucht", "stein"], schemen: ["geist", "geist"],
+    ghul: ["klaue", "knochen"], spinne: ["biss", "panzer"], pilz: ["wucht", "schleim"], baum: ["wucht", "holz"], krebs: ["zange", "panzer"],
+    fledermaus: ["biss", "fell"], goblin: ["klinge", "leder"], kultist: ["klinge", "stoff"], todesritter: ["klinge", "metall"], schlund: ["biss", "schleim"],
+    krieger: ["klinge", "metall"], schurke: ["leicht", "leder"], magier: ["wucht", "stoff"], jaeger: ["klinge", "leder"],
+  };
+  const RUESTUNG = { harnisch: "metall", schattenwams: "leder", wams: "leder", robe: "stoff" };
+  const SCHULE = { lichtweber: "licht", runenwirker: "frost", dornenrufer: "dorn" };
+  // Stimmlage je Volk: Satz der Frauenstimme und Tonhoehe (Trollblut tiefer, Sidhe und Moorling heller)
+  const VOLK = {
+    albier: ["w2", 1.0], kreidezwerg: ["w3", 0.9], nordmann: ["w2", 0.96], trollblut: ["w3", 0.88],
+    sidhe: ["w1", 1.07], moorling: ["w1", 1.15], frostwicht: ["w1", 1.1], glutzwerg: ["w3", 0.88],
+  };
+  const isMon = (d) => d && d.kind === "monster";
+  function attackOf(d) {
+    if (!d) return "faust";
+    if (isMon(d)) return (GEGNER[d.arch] || GEGNER.ghul)[0];
+    const w = d.gear && d.gear.waffe;
+    return (w && WAFFE[w.base]) || "faust";
+  }
+  function materialOf(d) {
+    if (!d) return "fleisch";
+    if (isMon(d)) return (GEGNER[d.arch] || GEGNER.ghul)[1];
+    const r = d.gear && d.gear.ruestung;
+    return (r && RUESTUNG[r.base]) || "fleisch";
+  }
+  function hueOf(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    if (!m) return -1;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) / 255;
+    const g = ((n >> 8) & 255) / 255;
+    const b = (n & 255) / 255;
+    const mx = Math.max(r, g, b);
+    const d = mx - Math.min(r, g, b);
+    if (d < 0.08) return -1;
+    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  }
+  // Zauberarten der Kampfbuehne (SPELL_FX in r3d-scenes.js) und Drachenatem je Element
+  const ZAUBER = {
+    arcane: "licht", lights: "licht", rune: "frost", thorns: "dorn", mist: "dorn",
+    spores: "gift", sporerain: "gift", glob: "gift",
+    void: "dunkel", blood: "dunkel", hex: "dunkel", wisp: "dunkel", tendril: "dunkel",
+  };
+  const ATEM = { fire: "feuer", storm: "blitz", ice: "frost", acid: "gift", shadow: "dunkel" };
+  function schoolOf(d, sp) {
+    if (sp && sp.kind === "breath" && ATEM[sp.el]) return ATEM[sp.el];
+    if (sp && ZAUBER[sp.kind]) return ZAUBER[sp.kind];
+    if (!d) return "licht";
+    if (!isMon(d)) return SCHULE[d.cls] || "licht";
+    if (d.arch === "pilz") return "gift";
+    if (d.arch === "drache") {
+      const h = hueOf(d.accent || d.color);
+      return h < 0 ? "feuer" : h < 45 || h >= 330 ? "feuer" : h < 75 ? "blitz" : h < 165 ? "gift" : h < 265 ? "frost" : "dunkel";
+    }
+    return "dunkel";
+  }
+  function voiceOf(d) {
+    // [Klangsatz, Tonhoehe, Lautstaerke]
+    if (!d) return null;
+    const boss = d.final ? 0.8 : d.boss ? 0.88 : 1;
+    if (isMon(d)) {
+      if (BANK["stimme." + d.arch + ".angriff"]) return ["stimme." + d.arch, boss, d.boss ? 0.95 : 0.8];
+      return ["held.m", boss, 0.7];
+    }
+    const v = VOLK[d.race] || VOLK.albier;
+    if (d.gender === "w") return ["held." + v[0], v[1], 0.6];
+    return [d.race === "trollblut" ? "held.gross" : "held.m", d.race === "trollblut" ? 1.0 : v[1], 0.6];
+  }
+  const pan = (side) => (side ? Math.max(-0.5, Math.min(0.5, side * 0.35)) : 0);
+  const lastVoice = {};
+  let quiet = false;
+  function sayVoice(d, kind, side, chance, force) {
+    if (quiet) return false;
+    const v = voiceOf(d);
+    if (!v || (!force && chance != null && Math.random() > chance)) return false;
+    const key = String(side || 0);
+    const now = A.ctx.currentTime;
+    if (!force && kind !== "tod" && kind !== "auftritt" && (lastVoice[key] > now - 0.7 || voices > 2)) return false;
+    let name = v[0] + "." + kind;
+    if (!BANK[name]) name = kind === "tod" || kind === "auftritt" ? v[0] + (kind === "tod" ? ".schmerz" : ".angriff") : null;
+    if (!name || !BANK[name]) return false;
+    lastVoice[key] = now;
+    const slow = kind === "tod" && !isMon(d) ? 0.9 : 1;
+    return sample(name, { rate: v[1] * slow, gain: v[2] * (kind === "auftritt" ? 1.15 : 1), pan: pan(side), voice: true, vary: 0.04 });
+  }
+
+  // Kampfereignis mit Zusammenhang: a = Angreifer, d = Getroffener (Beschreibungen wie in R.buildFighter), side -1/1
+  const KAMPF = {
+    swing(c) {
+      const at = attackOf(c.a);
+      sample("schwung." + (SCHWUNG[at] || "klinge"), { gain: 0.5, pan: pan(c.side) });
+      sayVoice(c.a, "angriff", c.side, isMon(c.a) ? (c.a.arch === "drache" ? 0.85 : 0.55) : 0.35);
+    },
+    hit(c, crit) {
+      const how = c.how || "nah";
+      const mat = materialOf(c.d);
+      const p = pan(c.side);
+      if (how === "magie") sample("magie." + schoolOf(c.a, c.spell) + ".treffer", { gain: 0.65, pan: p }) || sample("magie.licht.treffer", { gain: 0.6, pan: p });
+      else sample("schlag." + (how === "pfeil" || how === "speer" ? "spitze" : SCHLAG[attackOf(c.a)] || "faust"), { gain: 0.7, pan: p });
+      sample("mat." + mat, { gain: how === "magie" ? 0.35 : 0.6, pan: p });
+      if (crit) sample("krit", { gain: 0.75, pan: p });
+      sayVoice(c.d, "schmerz", c.side, crit ? 1 : 0.3);
+    },
+    block(c) {
+      const sh = c.d && !isMon(c.d) && c.d.gear && c.d.gear.nebenhand && c.d.gear.nebenhand.base === "schild";
+      const m = materialOf(c.d);
+      sample(sh ? "block.schild" : m === "metall" || m === "stein" ? "block.metall" : attackOf(c.d) === "klinge" || attackOf(c.d) === "leicht" ? "block.waffe" : "block.schild", { gain: 0.75, pan: pan(c.side) });
+    },
+    evade(c) {
+      sample("ausweichen", { gain: 0.5, pan: pan(c.side) });
+    },
+    shoot(c) {
+      const wb = c.a && c.a.gear && c.a.gear.waffe && c.a.gear.waffe.base;
+      if (wb === "armbrust") sample("armbrust.schuss", { gain: 0.7, pan: pan(c.side) });
+      else if (wb === "speer") sample("schwung.stoss", { gain: 0.6, pan: pan(c.side), rate: 0.85 });
+      else sample("bogen.schuss", { gain: 0.7, pan: pan(c.side) });
+      sample("pfeil.flug", { gain: 0.35, pan: 0, delay: 0.08 });
+    },
+    cast(c) {
+      const sc = schoolOf(c.a, c.spell);
+      if ((c.spell && c.spell.kind === "rune") || (!isMon(c.a) && c.a && c.a.cls === "runenwirker")) sample("magie.runen.wirken", { gain: 0.4, pan: pan(c.side) });
+      sample("magie." + sc + ".wirken", { gain: 0.6, pan: pan(c.side) }) || sample("magie.licht.wirken", { gain: 0.55, pan: pan(c.side) });
+      sayVoice(c.a, "angriff", c.side, isMon(c.a) ? (c.a.arch === "drache" ? 0.9 : 0.6) : 0.25);
+    },
+    special(c) {
+      const p = pan(c.side);
+      const k = c.kind;
+      if (k === "shock") {
+        sample("mat.stein", { gain: 0.8, pan: p, rate: 0.8 });
+        sample("krit", { gain: 0.7, pan: p, delay: 0.05 });
+      } else if (k === "slash") {
+        sample("schwung.leicht", { gain: 0.55, pan: p });
+        sample("schwung.klinge", { gain: 0.5, pan: p, delay: 0.12 });
+      } else if (k === "arrows") {
+        for (let i = 0; i < 4; i++) sample("bogen.schuss", { gain: 0.45, pan: p, delay: i * 0.11 });
+      } else if (k === "stoss") {
+        // Jaeger mit Speer (Frostspeer, Speerhagel): Anlauf mit zwei schnellen Stoessen statt Bogensehne
+        sample("schwung.stoss", { gain: 0.6, pan: p });
+        sample("schwung.stoss", { gain: 0.5, pan: p, delay: 0.14, rate: 1.1 });
+        if (c.sp === "frostpfeil") sample("magie.frost.wirken", { gain: 0.45, pan: p, delay: 0.05 });
+      } else if (k === "beam") sample("magie.licht.wirken", { gain: 0.7, pan: p, rate: 0.8 });
+      else if (k === "roots") sample("magie.dorn.wirken", { gain: 0.7, pan: p, rate: 0.85 });
+      else if (k === "smoke") sample("magie.teleport", { gain: 0.6, pan: p });
+      else if (k === "orbs") sample("magie." + (c.sp === "fluch" ? "dunkel" : "frost") + ".wirken", { gain: 0.65, pan: p });
+      else if (k === "arrow") sample(c.sp === "frostpfeil" ? "magie.frost.wirken" : "magie.licht.wirken", { gain: 0.5, pan: p });
+      else if (k === "aura") sample("magie.dunkel.wirken", { gain: 0.55, pan: p, rate: 0.9 });
+      sayVoice(c.a, "angriff", c.side, 1);
+    },
+    talent(c) {
+      const id = c.id;
+      const p = pan(c.side);
+      if (id === "secondWind") sample("magie.heilung", { gain: 0.6, pan: p });
+      else if (id === "ward") sample("magie.barriere", { gain: 0.6, pan: p });
+      else if (id === "vanish") sample("magie.teleport", { gain: 0.6, pan: p });
+      else if (id === "purge") sample("magie.reinigung", { gain: 0.6, pan: p });
+      else return false;
+      return true;
+    },
+    heal(c) {
+      sample("magie.heilung", { gain: 0.55, pan: pan(c.side) });
+      if (c.a && !isMon(c.a) && c.a.gender === "w") sayVoice(c.a, "heilung", c.side, 0.5);
+    },
+    poison(c) {
+      sample("magie.gift.treffer", { gain: 0.45, pan: pan(c.side) });
+    },
+    ko(c) {
+      sayVoice(c.d, "tod", c.side);
+    },
+    auftritt(c) {
+      sayVoice(c.a, "auftritt", c.side);
+    },
+    schritt(c) {
+      sample("schritt." + (c.surface || "gras"), { gain: 0.35, pan: pan(c.side), vary: 0.08 });
+    },
+  };
+  // alte Effektnamen ohne Zusammenhang (Bedienung, Insel) auf passende Aufnahmen legen
+  const PLAIN = { click: "ui.klick", page: "ui.seite", coin: "ui.muenzen", buy: "ui.kaufen", door: "ui.tuer", anvil: "ui.amboss", well: "ui.brunnen", heal: "magie.heilung", poison: "magie.gift.treffer", evade: "ausweichen", block: "block.schild", swing: "schwung.klinge", bow: "bogen.schuss", spell: "magie.licht.wirken", crit: "krit", hit: "mat.fleisch" };
+  const PLAIN_GAIN = { click: 0.45, page: 0.5, coin: 0.55, buy: 0.6, door: 0.55, anvil: 0.6, well: 0.6 };
+
+  A.play = function (name, c) {
+    if (!A.enabled || !A.ctx) return;
+    try {
+      if (bankState === "bereit") {
+        if ((name === "victory" || name === "defeat") && lied(name === "victory" ? "sieg" : "niederlage", c)) return;
+        if (c) {
+          const k = { hit: "hit", crit: "hit", block: "block", evade: "evade", swing: "swing", bow: "shoot", spell: "cast", special: "special", talent: "talent", chime: "talent", heal: "heal", poison: "poison", ko: "ko", auftritt: "auftritt", schritt: "schritt" }[name];
+          if (k && KAMPF[k]) {
+            quiet = !!c.quiet;
+            const r = KAMPF[k](c, name === "crit");
+            quiet = false;
+            if (r !== false) return;
+          }
+        }
+        if (PLAIN[name] && sample(PLAIN[name], { gain: PLAIN_GAIN[name] || 0.6 })) {
+          if (name === "anvil" || name === "well") FX[name]();
+          return;
+        }
+      }
+      if (FX[name]) FX[name]();
     } catch (e) {
       /* Ton ist optional */
+      if (A.debug) console.warn("Klang", name, e);
     }
+  };
+  // Klangprobe: einen Eintrag der Bank direkt oder ein Kampfereignis mit Beispielbeschreibung abspielen
+  A.probe = function (name, opts) {
+    if (!A.ctx) A.unlock();
+    if (!A.ctx) return false;
+    if (bankState === "aus") loadBank();
+    return sample(name, Object.assign({ gain: 0.7 }, opts || {}));
+  };
+  // Stimme eines Volkes oder Gegners ohne Zufall und Pause (fuer die Klangprobe)
+  A.voiceProbe = function (d, kind) {
+    if (!A.ctx) A.unlock();
+    if (bankState === "aus") loadBank();
+    return bankState === "bereit" && sayVoice(d, kind, 0, 1, true);
+  };
+  A.probeOld = function (name) {
+    if (!A.ctx) A.unlock();
+    if (A.ctx && FX[name]) FX[name]();
+  };
+  A.event = function (name, c) {
+    if (!A.ctx) A.unlock();
+    if (bankState === "aus") loadBank();
+    A.play(name, c);
   };
 
   /* ---------- Musik ---------- */
@@ -5322,9 +5709,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       barNo = 0;
       nextBar = c.currentTime + 0.1;
       if (cur) {
+        // laeuft noch ein Lied nach dem Kampf, kommt die Musik erst danach
+        const t0 = Math.max(c.currentTime, duckUntil);
         g.cancelScheduledValues(c.currentTime);
         g.setValueAtTime(0.0001, c.currentTime);
-        g.linearRampToValueAtTime(cur.indexOf("kampf") === 0 ? 0.75 : 0.85, c.currentTime + 1.5);
+        g.setValueAtTime(0.0001, t0);
+        g.linearRampToValueAtTime(musicLevel(), t0 + 1.5);
       }
     }, 650);
   };
@@ -17995,6 +18385,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       PET.m.play(name, 0.6);
       if (lunge) tween(0.5, (u) => (PET.m.obj.position.x = PET.home.x + Math.sin(u * PI) * 0.8));
     }
+    // Schritte auf dem Boden des Schauplatzes; der Gegner meldet sich beim Erscheinen (der Drache bruellt)
+    const SURFACE = setting === "arena" || setting === "dungeon" ? "stein" : opts.realm === "midgard" ? "schnee" : "gras";
+    if (opts.sfx) setTimeout(() => opts.sfx("auftritt", { a: F[1].desc, side: F[1].side }), 450);
 
     let speed = 1;
     let w = 1;
@@ -19251,7 +19644,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       banner(ev.name, A.side);
       ring(A, color, true);
       rising(A, color, 14);
-      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
+      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime", { id: ev.id, a: A.desc, side: A.side });
       if (ev.id === "ward") {
         A.wardLeft = ev.ward;
         // Bannkreis (Abschluss-Talent): Runenkreis unter dem Zaubernden, der bis zum Bruch der Barriere leuchtet
@@ -19295,7 +19688,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       await wait(0.75);
     }
 
-    async function impact(ev, A, Bf, hit, idx) {
+    async function impact(ev, A, Bf, hit, idx, how) {
+      const ctx = { a: A.desc, d: Bf.desc, side: Bf.side, how: how || "nah", spell: how === "magie" ? spellOf(A) : null };
       const def = 1 - ev.a;
       if (hit.tags) for (const t of hit.tags) if (TAG_TEXT[t]) floatText(t === "double" || t === "opener" || t === "assassinate" ? A : Bf, t === "execute" && A.m.arch === "magier" ? "Vernichtung!" : TAG_TEXT[t], "talent");
       if (hit.absorbed) {
@@ -19308,12 +19702,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         Bf.m.play("evade", 0.4);
         tween(0.4, (u) => (Bf.m.obj.position.x = Bf.home.x + Math.sin(u * PI) * dx));
         floatText(Bf, "Ausgewichen!", "evade");
-        if (opts.sfx) opts.sfx("evade");
+        if (opts.sfx) opts.sfx("evade", ctx);
       } else if (hit.res === "block") {
         Bf.m.play("block", 0.4);
         burst(new T.Vector3(Bf.m.obj.position.x - Bf.side * 0.6, 1.4, Bf.m.obj.position.z), "#ffe27a", 12, 2);
         floatText(Bf, "Geblockt!", "block");
-        if (opts.sfx) opts.sfx("block");
+        if (opts.sfx) opts.sfx("block", ctx);
       } else {
         hp[def] = Math.max(0, hp[def] - hit.dmg);
         Bf.m.play("hit", 0.35);
@@ -19330,7 +19724,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           floatText(A, "Wilde Macht!", "talent");
         }
         burst(new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z), hit.res === "crit" ? "#ffb13b" : "#ffe8d0", hit.res === "crit" ? 16 : 8, 1.8);
-        if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit");
+        if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit", ctx);
       }
       report(def, ev, idx);
     }
@@ -19355,7 +19749,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         A.m.play("hit", 0.35);
         rising(A, "#7fff5a", 8);
         floatText(A, "-" + SB.util.fmt(ev.dmg), "poison");
-        if (opts.sfx) opts.sfx("poison");
+        if (opts.sfx) opts.sfx("poison", { d: A.desc, side: A.side });
         report(ev.a, ev, 0);
         if (ev.hp && ev.hp[ev.a] <= 0) setPoison(A, false);
         await wait(0.55);
@@ -19382,7 +19776,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         ring(A, SFX.color, true);
         rising(A, SFX.color, 14);
         zoom = 0.5;
-        if (opts.sfx) opts.sfx("special");
+        if (opts.sfx) opts.sfx("special", { sp: ev.sp, kind: spear && /^arrows?$/.test(SFX.kind) ? "stoss" : SFX.kind, a: A.desc, side: A.side });
         if (SFX.kind === "aura") setAura(A, SFX.color);
         if (ev.master) {
           // Grossmeister (Abschluss-Talent des Klassenpfads): goldener Kreis und Funken, der Spezialangriff kommt oefter
@@ -19412,17 +19806,17 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
               banner("Pfeilsalve", A.side);
               A.m.play("shoot", 0.6);
               await wait(0.6);
-              if (opts.sfx) opts.sfx("bow");
+              if (opts.sfx) opts.sfx("special", { sp: "pfeilhagel", kind: "arrows", a: A.desc, side: A.side });
               await arrowRain(Bf, 8 + 4 * ev.volley, special ? SFX.color : "#ffe9b0");
             }
-            await impact(ev, A, Bf, ev.hits[i], i);
+            await impact(ev, A, Bf, ev.hits[i], i, "pfeil");
             await wait(0.12);
             continue;
           }
           const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
           A.m.play(bowLike ? "shoot" : "cast", D);
           await wait(archer ? D : 0.3);
-          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell");
+          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell", { a: A.desc, side: A.side, spell: bowLike ? null : spellOf(A) });
           if (special && SFX.kind === "beam") {
             await beam(A, Bf, SFX.color);
           } else if (special && SFX.kind === "roots") {
@@ -19432,7 +19826,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             const kind = bowLike ? (wb === "armbrust" ? "bolt" : "arrow") : "star";
             await projectile(A, Bf, kind, special ? SFX.color : HERO_TINT[A.desc.cls] || A.m.projColor || "#c47bff");
           } else await castFx(A, Bf, spellOf(A));
-          await impact(ev, A, Bf, ev.hits[i], i);
+          await impact(ev, A, Bf, ev.hits[i], i, bowLike ? (wb === "speer" ? "speer" : "pfeil") : "magie");
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
         if (archer) {
@@ -19482,6 +19876,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           });
         } else {
           A.m.play(special && ev.sp === "zermalmen" ? "special" : "walk", 0.3);
+          if (opts.sfx && A.desc.kind !== "monster") {
+            opts.sfx("schritt", { surface: SURFACE, side: A.side });
+            setTimeout(() => opts.sfx("schritt", { surface: SURFACE, side: A.side }), 120 / speed);
+          }
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         // Pfeilsalve (Abschluss-Talent der Jaeger) mit dem Speer: die zusaetzlichen Treffer als schnelle Stossfolge
@@ -19492,7 +19890,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           const quick = i >= flurry ? 0.7 : 1;
           if (spear && i === flurry) banner(spName("Pfeilsalve"), A.side);
           A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", (ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42) * quick);
-          if (opts.sfx) opts.sfx("swing");
+          if (opts.sfx) opts.sfx("swing", { a: A.desc, side: A.side });
           await wait((ST ? (big ? ST.shit : ST.hit) : 0.22) * quick);
           if (opener && i === 0) {
             shockwave(Bf, "#ffd27a");
@@ -19528,7 +19926,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.heal;
         rising(A, "#7fffb0", 16);
         floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
-        if (opts.sfx) opts.sfx("heal");
+        if (opts.sfx) opts.sfx("heal", { a: A.desc, side: A.side });
         report(ev.a, ev, -1);
       }
       if (ev.lifesteal) {
@@ -19581,6 +19979,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         scene.remove(old.shadow);
         const nf = makeFighter(desc, 1);
         F[1] = nf;
+        if (opts.sfx) opts.sfx("auftritt", { a: nf.desc, side: nf.side });
         hp[1] = foeHp || 1;
         const tx = nf.home.x;
         nf.m.obj.position.x = tx + 6;
@@ -19603,7 +20002,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         setPoison(L, false);
         setAura(L, null);
         L.m.play("defeat", 0.9);
-        if (opts.sfx) opts.sfx("ko");
+        if (opts.sfx) opts.sfx("ko", { d: L.desc, side: L.side });
         await wait(0.6);
         W.m.play("victory", 1.4);
         burst(new T.Vector3(W.m.obj.position.x, 2.2, W.m.obj.position.z), "#ffd25a", 24, 3);
@@ -23594,6 +23993,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       h += '<div class="muted small" style="margin-top:6px">Das Mondtor öffnet sich nur bei Nacht. Die Nachtjagden sind auf ' + E.C.NIGHT_HUNTS + " pro Tag begrenzt, ganz gleich, welche Einstellung du wählst.</div>";
       h += '<div class="section-title">Kämpfe</div><div class="row"><button class="tab' + (s.settings.fastFights ? " on" : "") + '" data-act="fastFights">Kämpfe standardmäßig doppelt so schnell</button></div>';
       h += '<div class="section-title">Klang</div><div class="row"><button class="tab' + (s.settings.sound ? " on" : "") + '" data-act="toggleSound">Klangeffekte ' + (s.settings.sound ? "an" : "aus") + '</button><button class="tab' + (s.settings.music !== false ? " on" : "") + '" data-act="toggleMusic">Musik ' + (s.settings.music !== false ? "an" : "aus") + "</button></div>";
+      h += '<div class="row" style="margin-top:6px"><button class="btn ghost" data-act="open" data-id="klangprobe">Klangprobe öffnen</button><span class="muted small">Kampfgeräusche, Stimmen der Völker und Gegner, Magie und Siegeslieder zum Anhören</span></div>';
       h += '<div class="section-title">Spielstand</div><p class="muted small">' + (SB.store.cloud ? "Dein Spielstand wird in diesem Browser und privat in deinem claude.ai-Konto gespeichert." : "Dein Spielstand wird in diesem Browser gespeichert. Sichere ihn als Code, wenn du das Gerät wechseln willst.") + "</p>";
       h += '<div class="row"><button class="btn ghost" data-act="exportSave">Spielstand als Code</button><button class="btn ghost" data-act="importSave">Code laden</button><span class="spacer"></span><button class="btn danger small" data-act="resetHero">Neuen Helden beginnen</button></div>';
       h += '<div class="section-title">Galerie</div><div class="row"><button class="btn ghost" data-act="open" data-id="figurenprobe">Figurenprobe: alle Figuren, Waffen und Bewegungen</button></div>';
@@ -23601,7 +24001,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const others = Object.keys(D.REALMS).filter((r) => r !== s.realm && SB.hubPainted.has(r));
         if (others.length) h += '<div class="row">' + others.map((r) => '<button class="btn ghost" data-act="inselBesuch" data-v="' + r + '">' + esc(D.REALMS[r].isle) + " besuchen (" + esc(D.REALMS[r].name) + ")</button>").join("") + "</div>";
       }
-      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Klänge, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
+      h += '<div class="section-title">Über das Spiel</div><p class="muted small">Helden von Schwebfels ist ein eigenständiges Browser-Rollenspiel. Alle Figuren, Texte, Symbole, Musikstücke und 3D-Modelle sind eigens dafür entstanden. Die Kampfgeräusche und Stimmen stammen aus freien, gemeinfreien Sammlungen (CC0) von Kenney und von OpenGameArt (unter anderem rubberduck, artisticdude, StarNinjas, qubodup, cicifyre). Die 3D-Darstellung nutzt die Bibliothek three.js.</p>';
       return h;
     },
   };
@@ -23795,6 +24195,124 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     fpCamera();
   };
 
+  /* ================= Klangprobe: Geraeusche einzeln und als kleine Kampfszenen anhoeren ================= */
+  const KP_W = (base) => ({ base, rarity: "selten" });
+  const KP_HERO = {
+    nordfrau: { kind: "hero", race: "nordmann", gender: "w", cls: "sturmhuene", realm: "midgard", gear: { waffe: KP_W("axt"), ruestung: KP_W("harnisch") } },
+    lichtweber: { kind: "hero", race: "albier", gender: "m", cls: "lichtweber", realm: "albion", gear: { waffe: KP_W("zepter"), ruestung: KP_W("robe") } },
+    langbogner: { kind: "hero", race: "kreidezwerg", gender: "w", cls: "langbogner", realm: "albion", gear: { waffe: KP_W("bogen"), ruestung: KP_W("wams") } },
+    runenwirker: { kind: "hero", race: "trollblut", gender: "m", cls: "runenwirker", realm: "midgard", gear: { waffe: KP_W("runenstab"), ruestung: KP_W("robe") } },
+    schattentaenzer: { kind: "hero", race: "sidhe", gender: "w", cls: "schattentaenzer", realm: "hibernia", gear: { waffe: KP_W("dolch"), ruestung: KP_W("schattenwams") } },
+    hainwaechter: { kind: "hero", race: "moorling", gender: "m", cls: "hainwaechter", realm: "hibernia", gear: { waffe: KP_W("hammer"), ruestung: KP_W("harnisch"), nebenhand: KP_W("schild") } },
+  };
+  const KP_MON = (arch, extra) => Object.assign({ kind: "monster", arch }, extra || {});
+  const KP_SZENEN = [
+    ["Nordmann-Kriegerin mit Axt gegen Grauwolf", "nordfrau", KP_MON("wolf"), "nah", "nah"],
+    ["Runenwirker (Trollblut) gegen Eiswyrm", "runenwirker", KP_MON("drache", { accent: "#9fd8ff", boss: true }), "magie", "magie"],
+    ["Lichtweber gegen Blutkultist", "lichtweber", KP_MON("kultist"), "magie", "magie"],
+    ["Langbognerin (Kreidezwerg) gegen Netzlauerer", "langbogner", KP_MON("spinne"), "pfeil", "nah"],
+    ["Hainwächter mit Schild gegen Felsgolem", "hainwaechter", KP_MON("golem", { boss: true }), "nah", "nah"],
+    ["Schattentänzerin (Sidhe) gegen Fahlen Schemen", "schattentaenzer", KP_MON("schemen"), "nah", "magie"],
+    ["Nordmann-Kriegerin gegen Schwelwurm (Drache)", "nordfrau", KP_MON("drache", { accent: "#ff7a2a", boss: true }), "nah", "magie"],
+    ["Nordmann-Kriegerin gegen Todesritter", "nordfrau", KP_MON("todesritter"), "nah", "nah"],
+  ];
+  const KP_ARCHS = [["wolf", "Wolf"], ["drache", "Drache"], ["troll", "Troll"], ["golem", "Golem"], ["schemen", "Schemen"], ["ghul", "Ghul"], ["spinne", "Spinne"], ["pilz", "Pilz"], ["baum", "Baumhirte"], ["krebs", "Krebs"], ["fledermaus", "Flatterer"], ["goblin", "Kobold"], ["kultist", "Kultist"], ["todesritter", "Todesritter"], ["schlund", "Schlund"]];
+  const KP_RACES = [["albier", "Albier"], ["kreidezwerg", "Kreidezwerg"], ["nordmann", "Nordmann"], ["trollblut", "Trollblut"], ["sidhe", "Sidhe"], ["moorling", "Moorling"]];
+  const KP_WAFFEN = [["dolch", "Dolch"], ["schwert", "Schwert"], ["axt", "Axt"], ["hammer", "Hammer"], ["speer", "Speer"], ["bogen", "Bogen"], ["armbrust", "Armbrust"]];
+  const KP_ZIELE = [["krieger", "Plattenrüstung"], ["schurke", "Leder"], ["wolf", "Fell"], ["golem", "Stein"], ["baum", "Holz"], ["ghul", "Knochen"], ["spinne", "Panzer"], ["schlund", "Schleim"], ["schemen", "Geist"], ["drache", "Schuppen"], ["kultist", "Stoff"]];
+  const KP_MAGIE = [["licht", "Licht (Albion)"], ["frost", "Frost und Runen (Midgard)"], ["dorn", "Dornen (Hibernia)"], ["dunkel", "Dunkel"], ["feuer", "Feuer"], ["blitz", "Blitz"], ["gift", "Gift"]];
+  const KP = { waffe: "schwert" };
+  P.klangprobe = {
+    title: "Klangprobe",
+    role: "Kampfgeräusche, Stimmen, Magie und Siegeslieder zum Anhören",
+    portrait: () => '<span class="iconport">' + I.ui("ton") + "</span>",
+    render() {
+      const row = (items, act, extra) => '<div class="row" style="gap:6px">' + items.map(([v, n]) => '<button class="tab" data-act="' + act + '" data-v="' + v + '"' + (extra || "") + ">" + esc(n) + "</button>").join("") + "</div>";
+      let h = '<p class="muted small">Freie Aufnahmen (gemeinfrei) statt der bisherigen erzeugten Töne. Jeder Klang hat mehrere Varianten und klingt bei jedem Antippen etwas anders. Sag mir, was dir gefällt und was nicht.</p>';
+      if (!SB.audio.enabled) h += '<p class="muted small">Die Klangeffekte sind ausgeschaltet. Schalte sie oben rechts ein, um etwas zu hören.</p>';
+      h += '<div class="section-title">Kleine Kampfszenen</div><div style="display:grid;gap:6px">' + KP_SZENEN.map((sz, i) => '<button class="btn ghost small" style="justify-content:flex-start" data-act="kpSzene" data-i="' + i + '">' + esc(sz[0]) + "</button>").join("") + "</div>";
+      // Lieder nach dem Kampf: anhoeren und waehlen, welches das Spiel spielt (S.settings.liedSieg, liedNiederlage)
+      const st = S().settings;
+      const wahl = (kind, items, cur) => '<div class="row" style="gap:6px">' + items.map(([v, n]) => '<button class="tab' + (cur === v ? " on" : "") + '" data-act="kpLiedWahl" data-k="' + kind + '" data-v="' + v + '">' + esc(n) + "</button>").join("") + "</div>";
+      h += '<div class="section-title">Sieg und Niederlage</div><div class="muted small">Kurze Lieder am Ende des Kampfes, die Musik tritt so lange zurück.</div>';
+      h += '<div class="row" style="gap:6px">' + [["sieg", "fest", "Sieg: mittelalterlich"], ["sieg", "fanfare", "Sieg: Fanfare"], ["niederlage", "fest", "Niederlage: mittelalterlich"], ["niederlage", "tragisch", "Niederlage: tragisch"]].map(([k, v, n]) => '<button class="tab" data-act="kpLied" data-k="' + k + '" data-v="' + v + '">▶ ' + esc(n) + "</button>").join("") + "</div>";
+      h += '<div class="muted small" style="margin-top:8px">Im Spiel nach einem Sieg:</div>' + wahl("sieg", [["auto", "Abwechselnd (Fanfare bei Bossen, Chronik, Verlies, Arena)"], ["fest", "Immer mittelalterlich"], ["fanfare", "Immer Fanfare"]], st.liedSieg || "auto");
+      h += '<div class="muted small" style="margin-top:8px">Im Spiel nach einer Niederlage:</div>' + wahl("niederlage", [["fest", "Mittelalterlich"], ["tragisch", "Tragisch"]], st.liedNiederlage || "fest");
+      h += '<div class="section-title">Gegner</div><div class="muted small">Tippe auf einen Gegner: Auftritt, Angriff, Schmerz und Niederlage nacheinander.</div>' + row(KP_ARCHS, "kpGegner");
+      h += '<div class="section-title">Völker</div><div class="muted small">Kampfruf und Schmerzlaut, jeweils Frau und Mann.</div>' + row(KP_RACES, "kpVolk");
+      h += '<div class="section-title">Waffe trifft Material</div>' + row(KP_WAFFEN.map(([v, n]) => [v, (KP.waffe === v ? "● " : "") + n]), "kpWaffe") + '<div style="height:6px"></div>' + row(KP_ZIELE, "kpZiel");
+      h += '<div class="section-title">Magie</div>' + row(KP_MAGIE, "kpMagie") + '<div style="height:6px"></div>' + row([["magie.heilung", "Heilung"], ["magie.barriere", "Barriere"], ["magie.teleport", "Verschwinden"], ["magie.reinigung", "Reinigung"]], "kpBank");
+      h += '<div class="section-title">Vorher und nachher</div><div class="muted small">Links der bisherige erzeugte Ton, rechts die neue Aufnahme.</div>';
+      h += [["hit", "Treffer", "mat.fleisch"], ["crit", "Kritisch", "krit"], ["swing", "Schwung", "schwung.klinge"], ["bow", "Bogen", "bogen.schuss"], ["spell", "Zauber", "magie.licht.wirken"], ["block", "Block", "block.schild"], ["victory", "Sieg", "lied.sieg.fest"], ["defeat", "Niederlage", "lied.niederlage.fest"]]
+        .map(([o, n, k]) => '<div class="row" style="gap:6px"><span style="min-width:90px">' + n + '</span><button class="tab" data-act="kpAlt" data-v="' + o + '">vorher</button><button class="tab" data-act="kpBank" data-v="' + k + '">nachher</button></div>')
+        .join("");
+      return h;
+    },
+  };
+  const kpSay = (d, kind, ms) => setTimeout(() => SB.audio.voiceProbe(d, kind), ms || 0);
+  const kpEv = (name, c, ms) => setTimeout(() => SB.audio.event(name, c), ms || 0);
+  A.kpSzene = (el) => {
+    const [, hk, foe, howH, howF] = KP_SZENEN[+el.dataset.i];
+    const hero = KP_HERO[hk];
+    const att = (a, d, how, side, t, crit) => {
+      if (how === "nah") kpEv("swing", { a, side: -side }, t);
+      else if (how === "pfeil") kpEv("bow", { a, side: -side }, t);
+      else kpEv("spell", { a, side: -side }, t);
+      kpEv(crit ? "crit" : "hit", { a, d, side, how }, t + (how === "nah" ? 220 : 520));
+    };
+    kpEv("auftritt", { a: foe, side: 1 }, 0);
+    att(hero, foe, howH, 1, 1500, false);
+    att(foe, hero, howF, -1, 2700, false);
+    att(hero, foe, howH, 1, 3900, true);
+    att(foe, hero, howF, -1, 5100, true);
+    att(hero, foe, howH, 1, 6300, false);
+    kpEv("ko", { d: foe, side: 1 }, 7100);
+  };
+  A.kpGegner = (el) => {
+    const d = { kind: "monster", arch: el.dataset.v, accent: el.dataset.v === "drache" ? "#ff7a2a" : null };
+    kpSay(d, "auftritt", 0);
+    kpSay(d, "angriff", 1700);
+    kpSay(d, "schmerz", 2700);
+    kpSay(d, "tod", 3600);
+  };
+  A.kpVolk = (el) => {
+    const r = el.dataset.v;
+    const w = { kind: "hero", race: r, gender: "w" };
+    const m = { kind: "hero", race: r, gender: "m" };
+    kpSay(w, "angriff", 0);
+    kpSay(w, "schmerz", 700);
+    kpSay(m, "angriff", 1500);
+    kpSay(m, "schmerz", 2200);
+  };
+  A.kpWaffe = (el) => {
+    KP.waffe = el.dataset.v;
+    UI.renderPanel();
+  };
+  A.kpZiel = (el) => {
+    const a = { kind: "hero", race: "nordmann", gender: "w", gear: { waffe: KP_W(KP.waffe) } };
+    const d = { kind: "monster", arch: el.dataset.v };
+    const ranged = KP.waffe === "bogen" || KP.waffe === "armbrust";
+    if (ranged) kpEv("bow", { a, side: -1, quiet: true }, 0);
+    else kpEv("swing", { a, side: -1, quiet: true }, 0);
+    kpEv("hit", { a, d, side: 1, how: ranged ? "pfeil" : "nah", quiet: true }, ranged ? 450 : 220);
+  };
+  A.kpMagie = (el) => {
+    const sc = el.dataset.v;
+    const cls = { licht: "lichtweber", frost: "runenwirker", dorn: "dornenrufer" }[sc];
+    const a = cls ? { kind: "hero", cls, race: "albier", gender: "w" } : { kind: "monster", arch: sc === "gift" ? "pilz" : sc === "dunkel" ? "kultist" : "drache", accent: sc === "feuer" ? "#ff7a2a" : sc === "blitz" ? "#ffe45a" : null };
+    kpEv("spell", { a, side: -1, quiet: true }, 0);
+    kpEv("hit", { a, d: { kind: "monster", arch: "krieger" }, side: 1, how: "magie", quiet: true }, 600);
+  };
+  A.kpBank = (el) => SB.audio.probe(el.dataset.v);
+  A.kpLied = (el) => SB.audio.lied(el.dataset.k, { wahl: el.dataset.v });
+  A.kpLiedWahl = (el) => {
+    S().settings[el.dataset.k === "sieg" ? "liedSieg" : "liedNiederlage"] = el.dataset.v;
+    UI.save();
+    UI.renderPanel();
+    SB.audio.lied(el.dataset.k, { wahl: el.dataset.v === "auto" ? "fest" : el.dataset.v });
+  };
+  A.kpAlt = (el) => SB.audio.probeOld(el.dataset.v);
+
   A.quality = (el) => {
     S().settings.quality = el.dataset.q;
     UI.saveNow();
@@ -23972,7 +24490,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             pet: opts.petDesc || null,
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
-            sfx: (n) => SB.audio.play(n),
+            sfx: (n, c) => SB.audio.play(n, c),
           });
           battle.setSpeed(speed);
         } catch (e) {
@@ -23980,7 +24498,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           battle = null;
         }
       }
+      let curFoeDesc = UI.fighterDesc(foes[0]);
       function fallbackStage(foe) {
+        curFoeDesc = UI.fighterDesc(foe);
         stage.innerHTML = '<div class="fb2d"><div class="fig">' + UI.portraitNow(UI.fighterDesc(hero), 200) + '</div><div class="fig">' + UI.portraitNow(UI.fighterDesc(foe), 200) + '</div></div><div class="blog"></div>';
         log = stage.querySelector(".blog");
         figs = stage.querySelectorAll(".fig");
@@ -24039,7 +24559,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             setHp(d, hpNow[d]);
             figs[d].classList.add("hit");
             setTimeout(() => figs[d].classList.remove("hit"), 150);
-            SB.audio.play(h.res === "crit" ? "crit" : "hit");
+            SB.audio.play(h.res === "crit" ? "crit" : "hit", { a: a === 0 ? UI.fighterDesc(hero) : curFoeDesc, d: a === 0 ? curFoeDesc : UI.fighterDesc(hero), side: a === 0 ? 1 : -1 });
             const TAGS = { double: "Doppelschlag", opener: "Sturmangriff", assassinate: "Meucheln", execute: "Gnadenstoß", afterStun: "Nachsetzen" };
             const tags = (h.tags || []).filter((t) => TAGS[t]).map((t) => TAGS[t]);
             txt = esc(names[a]) + (ev.spName ? " (" + esc(ev.spName) + ")" : "") + (tags.length ? " [" + tags.join(", ") + "]" : "") + " trifft für <b>" + U.fmt(h.dmg) + "</b>" + (h.res === "crit" ? ", kritisch!" : "") + (h.absorbed ? " (" + U.fmt(h.absorbed) + " von der Barriere abgefangen)" : "");
@@ -24111,7 +24631,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         const won = chain.winner === 0;
         if (battle) await battle.finish(won ? 0 : 1);
         else await wait(400);
-        SB.audio.play(won ? "victory" : "defeat");
+        // kurzes Lied: bei grossen Siegen (Chronik, Verlies, Arena, seltene Auftraege, Bosse) die Fanfare
+        const big = opts.setting !== "quest" || !!opts.rare || foes.some((f) => f.boss || f.final);
+        const st = (UI.S && UI.S.settings) || {};
+        SB.audio.play(won ? "victory" : "defeat", { big, wahl: won ? st.liedSieg : st.liedNiederlage });
         showResult(won);
       })();
       function showResult(win) {
@@ -24210,12 +24733,22 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     note.hidden = !waiting;
     note.textContent = st === "fehler" || st === "fehlt" ? "Die Figur konnte noch nicht geladen werden, gleich ein neuer Versuch …" : "Figur wird geladen …";
   }
+  const genWait = {};
   function loadGen() {
     const realm = draft.realm;
-    if (!view || genLoad[realm] === "laedt" || genLoad[realm] === "bereit" || UI.GEN_REALMS.indexOf(realm) < 0) return;
+    if (!view || genWait[realm] || genLoad[realm] === "laedt" || genLoad[realm] === "bereit" || UI.GEN_REALMS.indexOf(realm) < 0) return;
     genLoad[realm] = "laedt";
     UI.loadGenFigures(realm).then((st) => {
       genLoad[realm] = st;
+      // nach einem Fehlschlag erst spaeter neu versuchen: bis dahin liefert UI.loadGenFigures sofort dasselbe
+      // erfuellte Versprechen, ein direkter neuer Versuch liefe endlos weiter und hielte die Seite an
+      if (st !== "bereit") {
+        genWait[realm] = true;
+        setTimeout(() => {
+          genWait[realm] = false;
+          if (view && !$("#create").hidden) updateView();
+        }, 15000);
+      }
       if (view && !$("#create").hidden) updateView();
     });
   }

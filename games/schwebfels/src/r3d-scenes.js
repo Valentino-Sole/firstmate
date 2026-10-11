@@ -3091,6 +3091,9 @@
       PET.m.play(name, 0.6);
       if (lunge) tween(0.5, (u) => (PET.m.obj.position.x = PET.home.x + Math.sin(u * PI) * 0.8));
     }
+    // Schritte auf dem Boden des Schauplatzes; der Gegner meldet sich beim Erscheinen (der Drache bruellt)
+    const SURFACE = setting === "arena" || setting === "dungeon" ? "stein" : opts.realm === "midgard" ? "schnee" : "gras";
+    if (opts.sfx) setTimeout(() => opts.sfx("auftritt", { a: F[1].desc, side: F[1].side }), 450);
 
     let speed = 1;
     let w = 1;
@@ -4347,7 +4350,7 @@
       banner(ev.name, A.side);
       ring(A, color, true);
       rising(A, color, 14);
-      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime");
+      if (opts.sfx) opts.sfx(ev.id === "secondWind" ? "heal" : "chime", { id: ev.id, a: A.desc, side: A.side });
       if (ev.id === "ward") {
         A.wardLeft = ev.ward;
         // Bannkreis (Abschluss-Talent): Runenkreis unter dem Zaubernden, der bis zum Bruch der Barriere leuchtet
@@ -4391,7 +4394,8 @@
       await wait(0.75);
     }
 
-    async function impact(ev, A, Bf, hit, idx) {
+    async function impact(ev, A, Bf, hit, idx, how) {
+      const ctx = { a: A.desc, d: Bf.desc, side: Bf.side, how: how || "nah", spell: how === "magie" ? spellOf(A) : null };
       const def = 1 - ev.a;
       if (hit.tags) for (const t of hit.tags) if (TAG_TEXT[t]) floatText(t === "double" || t === "opener" || t === "assassinate" ? A : Bf, t === "execute" && A.m.arch === "magier" ? "Vernichtung!" : TAG_TEXT[t], "talent");
       if (hit.absorbed) {
@@ -4404,12 +4408,12 @@
         Bf.m.play("evade", 0.4);
         tween(0.4, (u) => (Bf.m.obj.position.x = Bf.home.x + Math.sin(u * PI) * dx));
         floatText(Bf, "Ausgewichen!", "evade");
-        if (opts.sfx) opts.sfx("evade");
+        if (opts.sfx) opts.sfx("evade", ctx);
       } else if (hit.res === "block") {
         Bf.m.play("block", 0.4);
         burst(new T.Vector3(Bf.m.obj.position.x - Bf.side * 0.6, 1.4, Bf.m.obj.position.z), "#ffe27a", 12, 2);
         floatText(Bf, "Geblockt!", "block");
-        if (opts.sfx) opts.sfx("block");
+        if (opts.sfx) opts.sfx("block", ctx);
       } else {
         hp[def] = Math.max(0, hp[def] - hit.dmg);
         Bf.m.play("hit", 0.35);
@@ -4426,7 +4430,7 @@
           floatText(A, "Wilde Macht!", "talent");
         }
         burst(new T.Vector3(Bf.m.obj.position.x, (Bf.m.headY || 1.8) * 0.6, Bf.m.obj.position.z), hit.res === "crit" ? "#ffb13b" : "#ffe8d0", hit.res === "crit" ? 16 : 8, 1.8);
-        if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit");
+        if (opts.sfx) opts.sfx(hit.res === "crit" ? "crit" : "hit", ctx);
       }
       report(def, ev, idx);
     }
@@ -4451,7 +4455,7 @@
         A.m.play("hit", 0.35);
         rising(A, "#7fff5a", 8);
         floatText(A, "-" + SB.util.fmt(ev.dmg), "poison");
-        if (opts.sfx) opts.sfx("poison");
+        if (opts.sfx) opts.sfx("poison", { d: A.desc, side: A.side });
         report(ev.a, ev, 0);
         if (ev.hp && ev.hp[ev.a] <= 0) setPoison(A, false);
         await wait(0.55);
@@ -4478,7 +4482,7 @@
         ring(A, SFX.color, true);
         rising(A, SFX.color, 14);
         zoom = 0.5;
-        if (opts.sfx) opts.sfx("special");
+        if (opts.sfx) opts.sfx("special", { sp: ev.sp, kind: spear && /^arrows?$/.test(SFX.kind) ? "stoss" : SFX.kind, a: A.desc, side: A.side });
         if (SFX.kind === "aura") setAura(A, SFX.color);
         if (ev.master) {
           // Grossmeister (Abschluss-Talent des Klassenpfads): goldener Kreis und Funken, der Spezialangriff kommt oefter
@@ -4508,17 +4512,17 @@
               banner("Pfeilsalve", A.side);
               A.m.play("shoot", 0.6);
               await wait(0.6);
-              if (opts.sfx) opts.sfx("bow");
+              if (opts.sfx) opts.sfx("special", { sp: "pfeilhagel", kind: "arrows", a: A.desc, side: A.side });
               await arrowRain(Bf, 8 + 4 * ev.volley, special ? SFX.color : "#ffe9b0");
             }
-            await impact(ev, A, Bf, ev.hits[i], i);
+            await impact(ev, A, Bf, ev.hits[i], i, "pfeil");
             await wait(0.12);
             continue;
           }
           const D = archer ? (i === 0 ? 0.9 : 0.6) : 0.5;
           A.m.play(bowLike ? "shoot" : "cast", D);
           await wait(archer ? D : 0.3);
-          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell");
+          if (opts.sfx) opts.sfx(bowLike ? "bow" : "spell", { a: A.desc, side: A.side, spell: bowLike ? null : spellOf(A) });
           if (special && SFX.kind === "beam") {
             await beam(A, Bf, SFX.color);
           } else if (special && SFX.kind === "roots") {
@@ -4528,7 +4532,7 @@
             const kind = bowLike ? (wb === "armbrust" ? "bolt" : "arrow") : "star";
             await projectile(A, Bf, kind, special ? SFX.color : HERO_TINT[A.desc.cls] || A.m.projColor || "#c47bff");
           } else await castFx(A, Bf, spellOf(A));
-          await impact(ev, A, Bf, ev.hits[i], i);
+          await impact(ev, A, Bf, ev.hits[i], i, bowLike ? (wb === "speer" ? "speer" : "pfeil") : "magie");
           await wait(ev.hits.length > 1 ? 0.1 : 0.28);
         }
         if (archer) {
@@ -4578,6 +4582,10 @@
           });
         } else {
           A.m.play(special && ev.sp === "zermalmen" ? "special" : "walk", 0.3);
+          if (opts.sfx && A.desc.kind !== "monster") {
+            opts.sfx("schritt", { surface: SURFACE, side: A.side });
+            setTimeout(() => opts.sfx("schritt", { surface: SURFACE, side: A.side }), 120 / speed);
+          }
           await tween(0.26, (u) => (A.m.obj.position.x = from + (target - from) * u));
         }
         // Pfeilsalve (Abschluss-Talent der Jaeger) mit dem Speer: die zusaetzlichen Treffer als schnelle Stossfolge
@@ -4588,7 +4596,7 @@
           const quick = i >= flurry ? 0.7 : 1;
           if (spear && i === flurry) banner(spName("Pfeilsalve"), A.side);
           A.m.play(stab ? clipAct(A, "stab", "attack") : big ? "special" : "attack", (ST ? (big ? ST.sdur : ST.dur) : special ? 0.5 : 0.42) * quick);
-          if (opts.sfx) opts.sfx("swing");
+          if (opts.sfx) opts.sfx("swing", { a: A.desc, side: A.side });
           await wait((ST ? (big ? ST.shit : ST.hit) : 0.22) * quick);
           if (opener && i === 0) {
             shockwave(Bf, "#ffd27a");
@@ -4624,7 +4632,7 @@
         hp[ev.a] = ev.hp ? ev.hp[ev.a] : hp[ev.a] + ev.heal;
         rising(A, "#7fffb0", 16);
         floatText(A, "+" + SB.util.fmt(ev.heal), "heal");
-        if (opts.sfx) opts.sfx("heal");
+        if (opts.sfx) opts.sfx("heal", { a: A.desc, side: A.side });
         report(ev.a, ev, -1);
       }
       if (ev.lifesteal) {
@@ -4677,6 +4685,7 @@
         scene.remove(old.shadow);
         const nf = makeFighter(desc, 1);
         F[1] = nf;
+        if (opts.sfx) opts.sfx("auftritt", { a: nf.desc, side: nf.side });
         hp[1] = foeHp || 1;
         const tx = nf.home.x;
         nf.m.obj.position.x = tx + 6;
@@ -4699,7 +4708,7 @@
         setPoison(L, false);
         setAura(L, null);
         L.m.play("defeat", 0.9);
-        if (opts.sfx) opts.sfx("ko");
+        if (opts.sfx) opts.sfx("ko", { d: L.desc, side: L.side });
         await wait(0.6);
         W.m.play("victory", 1.4);
         burst(new T.Vector3(W.m.obj.position.x, 2.2, W.m.obj.position.z), "#ffd25a", 24, 3);

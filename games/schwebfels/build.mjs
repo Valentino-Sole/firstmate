@@ -1,6 +1,7 @@
 // Baut aus index.html und src/ zwei Einzeldateien:
 //   dist/schwebfels.html  vollstaendige Seite zum Oeffnen im Browser
 //   dist/artifact.html    Seiteninhalt ohne html/head/body-Huelle (fuer claude.ai Artifacts)
+//   dist/klang.js         Klangbank zum Nachladen (beim Veroeffentlichen als Zusatzdatei klang.js mitgeben)
 //   dist/gen-<reich>.js   erzeugte Figuren je Reich zum Nachladen (nur wenn assets/gen-<reich>.pack vorliegt;
 //                         beim Veroeffentlichen als Zusatzdatei mit gleichem Namen neben die Seite legen)
 // Aufruf: node build.mjs
@@ -117,6 +118,15 @@ for (const f of readdirSync(path.join(dir, "assets"))) {
     writeFileSync(path.join(out, "kulissen.js"), js);
     genFiles.push(path.relative(dir, path.join(out, "kulissen.js")) + " " + (js.length / 1024).toFixed(0) + " KB (Kampfkulissen und Heime " + Object.keys(kul).join(", ") + ", beim Veroeffentlichen als kulissen.js unter files angeben)");
   }
+}
+// Klangbank aus freien Aufnahmen (assets/klang.pack, aus assets-src/klang/ gebaut, etwa 1,6 MB) als eigene Datei klang.js
+// neben der Seite; src/audio.js laedt sie beim ersten Ton nach, ohne sie bleiben die erzeugten Klaenge
+try {
+  const js = 'globalThis.SB_KLANG="' + readFileSync(path.join(dir, "assets/klang.pack")).toString("base64") + '";';
+  writeFileSync(path.join(out, "klang.js"), js);
+  genFiles.push(path.relative(dir, path.join(out, "klang.js")) + " " + (js.length / 1024).toFixed(0) + " KB (Klangbank, beim Veroeffentlichen als klang.js unter files angeben)");
+} catch (e) {
+  console.warn("Hinweis: assets/klang.pack fehlt, das Spiel nutzt die erzeugten Klaenge.");
 }
 const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");
 const cdnTags = cdn.map((u) => '<script src="' + u + '"></script>').join("\n");

@@ -2,10 +2,10 @@
 
 Aufruf (Blender als Python-Modul, siehe CLAUDE.md "Werkzeuge in einer neuen Sitzung"):
   python handy.py <dist-ordner> <ausgabe.html> [--held 6000] [--monster 2600] [--tex 512] [--tex-monster 256]
-                  [--tex-ausr 144] [--kulisse 800] [--ganz]
+                  [--tex-ausr 144] [--kulisse 800] [--klang-kbps 24] [--klang-varianten 2] [--ohne-klang] [--ganz]
 
 <dist-ordner> ist ein Bau wie zum Veroeffentlichen: schwebfels.html mit Inselbildern, daneben die Figurendateien
-gen-*.js und kulissen.js. Die Seite laedt diese Dateien sonst einzeln nach; auf dem Handy liegt aber nur die eine
+gen-*.js, kulissen.js und klang.js. Die Seite laedt diese Dateien sonst einzeln nach; auf dem Handy liegt aber nur die eine
 HTML-Datei, deshalb kommt hier alles hinein, als Skripte vor dem Spielcode (der Lader in src/r3d-assets.js findet die
 Daten dort und laedt nichts mehr nach).
 
@@ -25,7 +25,9 @@ Damit die Datei klein genug bleibt:
    src/r3d-assets.js). Ohne das kaeme die Datei mit 0.75 auf 71 MB.
  - Das Grundpaket der Seite verliert die Kleidung der gebauten Figuren (Haare, Baerte, Hemden, Roben; strip_legacy),
    die hier nie zu sehen ist: rund 4 MB.
-Mit 0.75 ergeben die Standardwerte 28,9 MB (vorher 40 MB). Die Ausruestung ist der groesste Block (gut 11 MB, davon
+ - Klangbank (klang.js): Kampfklaenge einkanalig mit 24 kbit/s und zwei Varianten je Klang, die Lieder nach dem Kampf
+   stereo mit 48 kbit/s, zusammen knapp 0,9 MB statt 2,6 MB (--klang-kbps, --klang-varianten, --ohne-klang).
+Mit 0.75 ergeben die Standardwerte 28,9 MB (vorher 40 MB), mit der Klangbank (0.77) geschaetzt 29,8 MB. Die Ausruestung ist der groesste Block (gut 11 MB, davon
 knapp 9 MB Formen); bessere Kompression der Formen (Ebenen trennen, Differenzen) brachte mit gzip nichts.
 --ganz bettet alles unveraendert ein (etwa 120 MB, fuer Rechner mit viel Speicher).
 """
@@ -39,6 +41,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 
 import numpy as np
@@ -512,6 +515,33 @@ def shrink_kulissen(js, opt):
     return "globalThis.SB_KULISSEN=" + json.dumps(out, separators=(",", ":")) + ";"
 
 
+def shrink_klang(js, opt):
+    """Klangbank fuers Handy: Klaenge einkanalig mit --klang-kbps bei 22,05 kHz und hoechstens --klang-varianten je
+    Klang, die Lieder nach dem Kampf stereo mit 48 kbit/s; gleiches Paketformat wie assets/klang.pack (SBP1)."""
+    m = re.match(r'globalThis\.SB_KLANG="([A-Za-z0-9+/=]+)";', js)
+    b = base64.b64decode(m.group(1))
+    hl = struct.unpack("<I", b[4:8])[0]
+    head = json.loads(b[8:8 + hl])
+    base = 8 + hl + (4 - (8 + hl) % 4) % 4
+    blobs, out, off = [], {}, 0
+    for k, recs in head["klang"].items():
+        lied = k.startswith("lied.")
+        out[k] = []
+        for r in recs if lied else recs[:opt.klang_varianten]:
+            src = b[base + r["$"][1]:base + r["$"][1] + r["$"][2]]
+            fmt = ["-ac", "2", "-ar", "44100", "-b:a", "48k"] if lied else ["-ac", "1", "-ar", "22050", "-b:a", "%dk" % opt.klang_kbps]
+            z = subprocess.run(["ffmpeg", "-v", "error", "-i", "-"] + fmt + ["-c:a", "libmp3lame", "-f", "mp3", "-"], input=src, capture_output=True)
+            if z.returncode or not z.stdout:
+                raise SystemExit("ffmpeg (mit libmp3lame) fehlt oder scheitert an " + k + "; ohne Klangbank bauen: --ohne-klang")
+            out[k].append({"$": ["img", off, len(z.stdout), "audio/mpeg"]})
+            pad = (4 - len(z.stdout) % 4) % 4
+            blobs.append(z.stdout + b"\0" * pad)
+            off += len(z.stdout) + pad
+    hj = json.dumps({"klang": out}, separators=(",", ":")).encode()
+    pk = struct.pack("<II", 0x31504253, len(hj)) + hj + b"\0" * ((4 - (8 + len(hj)) % 4) % 4) + b"".join(blobs)
+    return 'globalThis.SB_KLANG="' + base64.b64encode(pk).decode() + '";'
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dist")
@@ -524,6 +554,9 @@ def main():
     ap.add_argument("--qualitaet", type=int, default=72)
     ap.add_argument("--kulisse", type=int, default=800)
     ap.add_argument("--qualitaet-kulisse", type=int, default=62)
+    ap.add_argument("--klang-kbps", type=int, default=24, help="Bitrate der Kampfklaenge (einkanalig, 22,05 kHz)")
+    ap.add_argument("--klang-varianten", type=int, default=2, help="Varianten je Kampfklang")
+    ap.add_argument("--ohne-klang", action="store_true", help="Klangbank weglassen (dann die erzeugten Klaenge)")
     ap.add_argument("--ganz", action="store_true")
     opt = ap.parse_args()
 
@@ -572,6 +605,13 @@ def main():
         js = shrink_kulissen(open(kf, encoding="utf-8").read(), opt)
         print("kulissen.js            %6.2f MB -> %5.2f MB" % (os.path.getsize(kf) / 1e6, len(js) / 1e6))
         scripts.append("<script>/* kulissen.js */\n" + js + "\n</script>")
+    # Klangbank: verkleinert hinein (mit --ganz unveraendert), src/audio.js findet SB_KLANG dann ohne Nachladen
+    kl = os.path.join(opt.dist, "klang.js")
+    if os.path.exists(kl) and not opt.ohne_klang:
+        js0 = open(kl, encoding="utf-8").read()
+        js = js0 if opt.ganz else shrink_klang(js0, opt)
+        print("klang.js               %6.2f MB -> %5.2f MB" % (len(js0) / 1e6, len(js) / 1e6))
+        scripts.append("<script>/* klang.js */\n" + js + "\n</script>")
     for s in scripts:
         assert "</script" not in s[8:-9]
     laden = ('<div id="sbx-laden" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;'
@@ -585,6 +625,9 @@ def main():
     with open(opt.out, "w", encoding="utf-8") as f:
         f.write(page)
     print("Handy-Fassung %s: %.1f MB" % (opt.out, os.path.getsize(opt.out) / 1e6))
+    if not opt.ganz and os.path.getsize(opt.out) > 30e6:
+        print("WARNUNG: ueber 30 MB, der Chat uebertraegt die Datei nicht. Kleiner bauen, etwa mit --klang-kbps 16, "
+              "--klang-varianten 1 oder --ohne-klang")
 
 
 if __name__ == "__main__":
