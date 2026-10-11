@@ -6,103 +6,236 @@
 </head>
 <body>
 <title>Tiefsee Konzern</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@500;600;700&display=swap">
 <style>
-/* Layout: links Zähler und Abbau, rechts die Anlagenliste; Hintergrund dunkelt mit der Tiefe ab. */
+/* Tauchfahrt-Interface: lebendes Wasser als Buehne, Glaspaneele als HUD,
+   eine Tiefenleiste als Navigationsinstrument. Alles dunkelt mit der Zone ab. */
 :root{
-  --bg:#114a63;
-  --panel:#0b1c30cc;
-  --panel-solid:#0b1c30;
-  --border:#1e3a5f;
-  --text:#dbeafe;
-  --text-dim:#7a9cc0;
-  --text-off:#4a6584;
-  --gold:#fbbf24;
-  --gold-dark:#b45309;
-  --gold-text:#211203;
-  --green:#4ade80;
-  --cyan:#7dd3fc;
+  --bg:#0b4a66;
+  --panel:rgba(5,22,35,.60);
+  --panel-strong:rgba(5,22,35,.82);
+  --stroke:rgba(135,210,235,.16);
+  --stroke-strong:rgba(135,210,235,.30);
+  --text:#eaf6fb;
+  --dim:#8fb7c9;
+  --off:#51788c;
+  --gold:#ffc53d;
+  --gold-deep:#c97f10;
+  --gold-text:#2a1a02;
+  --green:#5fe3a1;
+  --cyan:#6fd6f7;
+  --danger:#ff7a6b;
   color-scheme:dark;
 }
+*{box-sizing:border-box}
+html,body{height:100%}
 body{
+  margin:0;
   background:var(--bg);
   color:var(--text);
   font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-  padding-inline:16px;
-  padding-block:16px 32px;
-  transition:background-color 2.5s ease;
-  min-height:100%;
+  overflow-x:hidden;
 }
-@media (prefers-reduced-motion: reduce){ body{transition:none} }
 .num{font-family:"Chakra Petch",ui-monospace,monospace;font-variant-numeric:tabular-nums}
-header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;max-width:1100px;margin:0 auto 18px}
-header h1{font-family:"Chakra Petch",sans-serif;font-size:22px;letter-spacing:3px;margin:0;color:var(--cyan)}
-.badge{font-size:11px;letter-spacing:1px;color:var(--text-dim);border:1px solid var(--border);border-radius:999px;padding:3px 10px}
-main{display:flex;gap:40px;flex-wrap:wrap;max-width:1100px;margin:0 auto}
-.col-left{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:12px}
-.col-right{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:8px}
-#pearls{font-size:52px;font-weight:700;line-height:1.05;color:#fff}
-#rate{font-size:18px;color:var(--green);font-weight:600}
-.depthbox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-#depth{font-size:15px;color:var(--cyan);font-weight:600}
-#depthnext{font-size:12px;color:var(--text-dim)}
-.bar{height:8px;background:#0516257f;border:1px solid var(--border);border-radius:5px;overflow:hidden}
-.bar>div{height:100%;width:0%;background:linear-gradient(90deg,var(--gold-dark),var(--gold))}
-button{font-family:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--border);background:var(--panel-solid);color:var(--text);padding:10px 14px;font-size:14px;text-align:left}
-button:hover:not(:disabled){background:#11253e}
+.display{font-family:"Russo One","Chakra Petch",sans-serif}
+
+#sea{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+
+#stage{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:18px 16px 40px;display:flex;flex-direction:column;gap:16px;min-height:100%}
+
+/* Kopfzeile */
+.topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{display:flex;align-items:baseline;gap:10px}
+.logo h1{margin:0;font-size:clamp(19px,3.4vw,26px);letter-spacing:4px;color:var(--cyan);text-shadow:0 0 18px rgba(111,214,247,.45)}
+.logo .sub{font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.badge{font-size:11px;letter-spacing:1px;color:var(--dim);border:1px solid var(--stroke);border-radius:999px;padding:4px 11px;background:var(--panel)}
+#sndbtn{margin-left:auto;font-size:12px;padding:7px 14px;border-radius:999px;border:1px solid var(--stroke);background:var(--panel);color:var(--dim);cursor:pointer}
+#sndbtn:hover{color:var(--text);border-color:var(--stroke-strong)}
+
+/* Zonenbanner */
+#zonebanner{
+  position:fixed;left:50%;top:60px;transform:translateX(-50%) translateY(-24px);
+  z-index:5;pointer-events:none;opacity:0;transition:opacity .5s ease,transform .5s ease;
+  background:linear-gradient(180deg,rgba(10,32,48,.92),rgba(6,20,32,.92));
+  border:1px solid var(--stroke-strong);border-radius:14px;padding:14px 26px;text-align:center;
+  box-shadow:0 18px 50px rgba(0,0,0,.5),0 0 40px rgba(111,214,247,.12);
+  max-width:min(520px,calc(100vw - 32px));
+}
+#zonebanner.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#zonebanner .zb-eyebrow{font-size:10px;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
+#zonebanner .zb-name{font-size:22px;letter-spacing:2px;color:var(--text);margin:3px 0}
+#zonebanner .zb-rule{font-size:13px;color:var(--cyan)}
+
+/* Hauptraster */
+.grid{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.hud{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.fleet{flex:1 1 400px;min-width:0;display:flex;flex-direction:column;gap:10px}
+
+.card{
+  background:var(--panel);border:1px solid var(--stroke);border-radius:18px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:0 10px 36px rgba(0,8,16,.35);
+}
+
+/* Perlen-Zaehler */
+.counter{padding:20px 22px 16px;position:relative;overflow:hidden}
+.counter .label{font-size:11px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;display:flex;align-items:center;gap:7px}
+.counter .label svg{flex:none}
+#pearls{font-size:clamp(34px,6vw,48px);line-height:1.1;color:#fff;text-shadow:0 0 26px rgba(255,197,61,.35);margin-top:4px;overflow-wrap:anywhere}
+#rate{font-size:15px;color:var(--green);margin-top:4px;font-weight:600}
+#abysschip{display:none;margin-top:10px;font-size:12px;color:var(--gold);border:1px solid rgba(255,197,61,.35);border-radius:999px;padding:3px 11px;width:fit-content;background:rgba(255,197,61,.08)}
+
+/* Zonenkarte */
+.zone{padding:14px 18px;display:flex;flex-direction:column;gap:9px}
+.zone .zrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+#zonename{font-size:16px;color:var(--cyan);letter-spacing:1px}
+#zonelevel{font-size:11px;letter-spacing:2px;color:var(--dim)}
+#zonerule{font-size:13px;color:var(--text);opacity:.85}
+.zbar{height:9px;border-radius:6px;background:rgba(3,12,20,.7);border:1px solid var(--stroke);overflow:hidden}
+.zbar>div{height:100%;width:0%;border-radius:6px;background:linear-gradient(90deg,var(--gold-deep),var(--gold));box-shadow:0 0 12px rgba(255,197,61,.5);transition:width .3s ease}
+#zonenext{font-size:12px;color:var(--dim)}
+
+/* Abbau-Knopf */
+#minewrap{position:relative}
+#mine{
+  width:100%;border:none;cursor:pointer;border-radius:18px;padding:20px 18px 18px;
+  font-family:"Russo One",sans-serif;font-size:clamp(19px,3vw,23px);letter-spacing:2px;color:var(--gold-text);
+  background:radial-gradient(120% 160% at 50% 0%,#ffe08a 0%,var(--gold) 45%,#e89c1a 100%);
+  box-shadow:0 8px 0 #8a5a08,0 16px 42px rgba(255,180,40,.35),inset 0 1px 0 rgba(255,255,255,.65);
+  transition:transform .06s ease,box-shadow .06s ease;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+}
+#mine:hover{filter:brightness(1.05)}
+#mine:active{transform:translateY(5px);box-shadow:0 3px 0 #8a5a08,0 8px 22px rgba(255,180,40,.3),inset 0 1px 0 rgba(255,255,255,.65)}
+#mine:focus-visible{outline:3px solid #fff;outline-offset:3px}
+#mine .mv{font-size:14px;letter-spacing:1px;background:rgba(42,26,2,.16);border-radius:999px;padding:4px 12px}
+.floatwrap{position:relative;height:0;z-index:4}
+.pluspop{position:absolute;top:-16px;color:var(--gold);font-weight:700;font-size:19px;pointer-events:none;text-shadow:0 2px 10px rgba(0,0,0,.6);animation:rise .8s ease-out forwards}
+@keyframes rise{to{transform:translateY(-58px);opacity:0}}
+
+#offline{display:none;padding:12px 16px;font-size:13px;color:var(--cyan);border-color:rgba(111,214,247,.35)}
+
+/* Neustart */
+#prestige{
+  border-radius:18px;padding:14px 16px;cursor:pointer;text-align:center;font-weight:700;font-size:14px;
+  background:var(--panel);border:1px solid var(--stroke);color:var(--off);width:100%;
+}
+#prestige.ready{
+  color:var(--gold);border-color:rgba(255,197,61,.55);
+  background:linear-gradient(180deg,rgba(255,197,61,.14),rgba(255,197,61,.05));
+  box-shadow:0 0 26px rgba(255,197,61,.18);cursor:pointer;
+  animation:breath 2.6s ease-in-out infinite;
+}
+@keyframes breath{50%{box-shadow:0 0 40px rgba(255,197,61,.32)}}
+
+/* Flottenliste */
+.fleet h2{margin:2px 4px;font-size:11px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;font-weight:600}
+.genrow{display:flex;gap:10px;padding:12px 14px;align-items:center;transition:border-color .25s ease,box-shadow .25s ease}
+.genrow.locked{opacity:.55}
+.genrow.can{border-color:rgba(255,197,61,.4);box-shadow:0 0 22px rgba(255,197,61,.10),0 10px 36px rgba(0,8,16,.35)}
+.gicon{flex:none;width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:rgba(10,36,54,.8);border:1px solid var(--stroke)}
+.ginfo{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+.gname{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gown{font-size:10px;letter-spacing:1px;color:var(--cyan);border:1px solid rgba(111,214,247,.3);border-radius:999px;padding:1px 8px;background:rgba(111,214,247,.08)}
+.gprod{font-size:11.5px;color:var(--green)}
+.gbtns{flex:none;display:flex;gap:7px}
+.gbuy,.gup{
+  cursor:pointer;border-radius:11px;font-size:12px;font-weight:700;padding:9px 11px;text-align:center;
+  background:rgba(10,36,54,.85);border:1px solid var(--stroke);color:var(--text);min-width:86px;
+}
+.gbuy .s,.gup .s{display:block;font-size:9.5px;font-weight:600;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-bottom:2px}
+.gbuy:not(:disabled){border-color:rgba(255,197,61,.5);color:var(--gold)}
+.gbuy:not(:disabled):hover{background:rgba(255,197,61,.12)}
+.gup:not(:disabled){color:var(--cyan);border-color:rgba(111,214,247,.45)}
+.gup:not(:disabled):hover{background:rgba(111,214,247,.1)}
+.gbuy:disabled,.gup:disabled{color:var(--off);cursor:default}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-button:disabled{background:#091626;color:var(--text-off);cursor:default}
-#mine{background:linear-gradient(180deg,var(--gold),#d97706);color:var(--gold-text);border:1px solid var(--gold-dark);font-family:"Chakra Petch",sans-serif;font-size:21px;font-weight:700;text-align:center;padding:16px;box-shadow:0 4px 0 #92400e}
-#mine:hover{background:linear-gradient(180deg,#fcd34d,#d97706)}
-#mine:active{transform:translateY(2px);box-shadow:0 2px 0 #92400e}
-#prestige{text-align:center;font-weight:600}
-#prestige:not(:disabled){color:var(--gold);border-color:var(--gold-dark)}
-.toast{font-size:14px;color:var(--gold);font-weight:600;min-height:20px}
-#offline{font-size:13px;color:var(--cyan)}
-.genrow{display:flex;gap:8px}
-.genrow .buy{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:10px 14px}
-.genrow .buy .l1{font-weight:700;font-size:14px}
-.genrow .buy .l2{font-size:12px;color:var(--text-dim)}
-.genrow .buy:disabled .l2{color:var(--text-off)}
-.genrow .up{flex:0 0 108px;text-align:center;font-size:13px;font-weight:700;color:var(--gold)}
-.genrow .up:disabled{color:var(--text-off)}
-footer{max-width:1100px;margin:26px auto 0;font-size:11px;color:var(--text-off)}
-.snd{margin-left:auto;font-size:12px;padding:5px 12px;text-align:center}
-.floatwrap{position:relative;height:0}
-.pluspop{position:absolute;top:-12px;color:var(--gold);font-weight:700;font-size:18px;pointer-events:none;animation:rise .7s ease-out forwards}
-@keyframes rise{to{transform:translateY(-44px);opacity:0}}
-@media (prefers-reduced-motion: reduce){.pluspop{animation:none;opacity:0}}
+
+/* Tiefenleiste */
+#gauge{position:relative;width:34px;height:min(62vh,460px);display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 10px 30px rgba(0,8,16,.4)}
+#gauge .seg{flex:1;position:relative;background:var(--segc)}
+#gauge .seg+.seg{border-top:1px solid rgba(255,255,255,.08)}
+#gauge .seg.active::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 2px var(--gold);}
+#gmarker{position:absolute;left:-7px;width:0;height:0;border:8px solid transparent;border-left:12px solid var(--gold);filter:drop-shadow(0 0 6px rgba(255,197,61,.8));transition:top .4s ease;z-index:3}
+#gaugewrap{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:2}
+footer{position:relative;z-index:1;text-align:center;font-size:11px;color:var(--off);padding:4px 16px 18px}
+
+@media (max-width:860px){ #gaugewrap{display:none} }
+@media (prefers-reduced-motion: reduce){
+  .pluspop{animation:none;opacity:0}
+  #prestige.ready{animation:none}
+  #zonebanner{transition:none}
+}
 </style>
 
-<header>
-  <h1>TIEFSEE KONZERN</h1>
-  <span class="badge">v0.4 · Browser-Testversion</span>
-  <button id="sndbtn" type="button" class="snd">Ton: an</button>
-</header>
+<canvas id="sea" aria-hidden="true"></canvas>
 
-<main>
-  <section class="col-left">
-    <div id="pearls" class="num">0 Perlen</div>
-    <div id="rate" class="num">+0 pro Sekunde</div>
-    <div class="depthbox">
-      <div id="depth">Tiefe 1: Schelfmeer · Der Tauchgang beginnt</div>
-      <div class="bar" aria-hidden="true"><div id="depthbar"></div></div>
-      <div id="depthnext">Nächste Tiefe bei 50,00 Tsd</div>
+<div id="zonebanner" role="status">
+  <div class="zb-eyebrow">Neue Tiefe erreicht</div>
+  <div class="zb-name display" id="zbname">Dämmerzone</div>
+  <div class="zb-rule" id="zbrule">Klicks zählen dreifach</div>
+</div>
+
+<div id="gaugewrap" aria-hidden="true"><div id="gauge"></div><div id="gmarker"></div></div>
+
+<div id="stage">
+  <div class="topbar">
+    <div class="logo">
+      <h1 class="display">TIEFSEE KONZERN</h1>
+      <span class="sub">Perlen aus der Finsternis</span>
     </div>
-    <button id="mine" type="button">ABBAUEN&nbsp; +1</button>
-    <div class="floatwrap" id="floats" aria-hidden="true"></div>
-    <div class="toast" id="toast" role="status"></div>
-    <div id="offline" hidden></div>
-    <button id="prestige" type="button" disabled>Neustart ab 1 Mrd Perlen dieser Runde</button>
-  </section>
-  <section class="col-right" id="gens"></section>
-</main>
+    <span class="badge num">v0.5 · Testversion</span>
+    <button id="sndbtn" type="button">Ton: an</button>
+  </div>
 
-<footer>Testversion der Godot-Fassung mit identischen Spielregeln. Der Spielstand wird nur in diesem Browser gespeichert.</footer>
+  <div class="grid">
+    <section class="hud">
+      <div class="card counter">
+        <div class="label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="#fff" fill-opacity=".9"/><circle cx="9.5" cy="9.5" r="2.6" fill="#fff"/><circle cx="12" cy="12" r="8" stroke="#ffc53d" stroke-width="1.6"/></svg>
+          Perlen
+        </div>
+        <div id="pearls" class="display num">0</div>
+        <div id="rate" class="num">+0 pro Sekunde</div>
+        <div id="abysschip" class="num"></div>
+      </div>
+
+      <div class="card zone">
+        <div class="zrow">
+          <span id="zonename" class="display">Schelfmeer</span>
+          <span id="zonelevel" class="num">TIEFE 1 / 6</span>
+        </div>
+        <div id="zonerule">Der Tauchgang beginnt</div>
+        <div class="zbar"><div id="zonebar"></div></div>
+        <div id="zonenext" class="num">Nächste Tiefe bei 50,00 Tsd</div>
+      </div>
+
+      <div id="minewrap">
+        <button id="mine" type="button">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2a1a02" stroke-width="2" aria-hidden="true"><path d="M3 21l6.5-6.5M14 4l6 6M12 6l6 6M10.5 7.5 16.5 13.5" stroke-linecap="round"/><path d="M14 4c2-2 5-1.5 6 0s2 4 0 6" stroke-linecap="round"/></svg>
+          <span>ABBAUEN</span>
+          <span class="mv num" id="minevalue">+1</span>
+        </button>
+        <div class="floatwrap" id="floats" aria-hidden="true"></div>
+      </div>
+
+      <div class="card" id="offline"></div>
+
+      <button id="prestige" type="button" disabled>Neustart ab 1 Mrd Perlen dieser Runde</button>
+    </section>
+
+    <section class="fleet">
+      <h2>Bergbau-Flotte</h2>
+      <div id="gens"></div>
+    </section>
+  </div>
+</div>
+
+<footer>Browser-Testversion · identische Spielregeln wie die Godot-Fassung · Spielstand liegt nur in diesem Browser</footer>
 
 <script>
 'use strict';
-// Spielregeln und Zahlen: 1:1 aus src/economy.gd (v0.3)
+/* ================= Spielregeln: 1:1 aus src/economy.gd (v0.4) ================= */
 const GENS=[
   {id:'handtaucher', name:'Handtaucher',  base:15,      growth:1.15, prod:0.5},
   {id:'bohrdrohne',  name:'Bohrdrohne',   base:220,     growth:1.15, prod:4},
@@ -112,12 +245,12 @@ const GENS=[
   {id:'portal',      name:'Abyss-Portal', base:6000000, growth:1.12, prod:24000},
 ];
 const DEPTHS=[
-  {th:0,     name:'Schelfmeer',       rule:'Der Tauchgang beginnt',                 bg:'#114a63'},
-  {th:5e4,   name:'Dämmerzone',       rule:'Klicks zählen dreifach',                bg:'#0d3a52'},
-  {th:5e6,   name:'Mitternachtszone', rule:'Taucher und Drohnen produzieren x5',    bg:'#092a41'},
-  {th:5e8,   name:'Abgrund',          rule:'Alle Käufe 10 % günstiger',             bg:'#061b2e'},
-  {th:5e10,  name:'Hadalzone',        rule:'Offline volle Rate',                    bg:'#040f1d'},
-  {th:5e12,  name:'Abyss-Tor',        rule:'Abyss-Punkte +50 %',                    bg:'#05060f'},
+  {th:0,    name:'Schelfmeer',       rule:'Der Tauchgang beginnt',              water:['#1878a3','#0b4a66'], seg:'#1878a3'},
+  {th:5e4,  name:'Dämmerzone',       rule:'Klicks zählen dreifach',             water:['#0f5f86','#083850'], seg:'#0f5f86'},
+  {th:5e6,  name:'Mitternachtszone', rule:'Taucher und Drohnen produzieren x5', water:['#0a425f','#052538'], seg:'#0a425f'},
+  {th:5e8,  name:'Abgrund',          rule:'Alle Käufe 10 % günstiger',          water:['#062c42','#031726'], seg:'#062c42'},
+  {th:5e10, name:'Hadalzone',        rule:'Offline volle Rate',                 water:['#031b2b','#010c15'], seg:'#031b2b'},
+  {th:5e12, name:'Abyss-Tor',        rule:'Abyss-Punkte +50 %',                 water:['#02101d','#01040a'], seg:'#02101d'},
 ];
 const OFFLINE_CAP=8*3600, PRESTIGE_UNLOCK=1e9, UPG_STEP=10, UPG_MAX=4, UPG_FACTOR=80, UPG_GROWTH=10;
 
@@ -151,7 +284,7 @@ function fmt(v){
   return v.toFixed(2).replace('.',',')+' '+UNITS[idx];
 }
 
-// --- Klang (per WebAudio erzeugt, keine Dateien noetig) ---
+/* ================= Klang (WebAudio, ohne Dateien) ================= */
 let audioCtx=null,soundOn=true;
 try{soundOn=localStorage.getItem('tk_sound')!=='off'}catch(e){}
 function beep(f1,f2,dur,type,gain){
@@ -168,24 +301,13 @@ function beep(f1,f2,dur,type,gain){
     o.start(t);o.stop(t+dur);
   }catch(e){}
 }
-const sndClick=()=>beep(880,520,0.07,'square',0.035);
+const sndClick=()=>beep(880,520,0.07,'square',0.03);
 const sndBuy=()=>beep(300,180,0.09,'triangle',0.05);
 const sndUpgrade=()=>beep(520,820,0.12,'triangle',0.05);
 const sndDepth=()=>beep(160,42,0.7,'sine',0.06);
 const sndPrestige=()=>beep(90,900,0.5,'sawtooth',0.035);
 
-function spawnFloat(text){
-  const host=document.getElementById('floats');
-  if(!host)return;
-  const s=document.createElement('span');
-  s.className='pluspop num';
-  s.style.left=(10+Math.random()*60)+'%';
-  s.textContent=text;
-  host.appendChild(s);
-  setTimeout(()=>s.remove(),700);
-}
-
-// --- Spielstand ---
+/* ================= Spielstand ================= */
 const SAVE_KEY='tiefsee_konzern_v2';
 function saveGame(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({saved_at:Date.now()/1000,eco}))}catch(e){}}
 function loadGame(){
@@ -196,77 +318,312 @@ function loadGame(){
     for(let i=0;i<6;i++){eco.owned[i]=(d.eco.owned&&d.eco.owned[i])|0;eco.upg[i]=(d.eco.upg&&d.eco.upg[i])|0}
     const away=Math.max(0,Date.now()/1000-(d.saved_at||0));
     const gain=pps()*Math.min(away,OFFLINE_CAP)*offlineRate();
-    if(gain>0.5){earn(gain);const o=document.getElementById('offline');o.textContent='Willkommen zurück! Offline verdient: '+fmt(gain)+' Perlen';o.hidden=false}
+    if(gain>0.5){
+      earn(gain);
+      const o=document.getElementById('offline');
+      o.textContent='Willkommen zurück, Kapitän der Tiefe! Offline verdient: '+fmt(gain)+' Perlen';
+      o.style.display='block';
+    }
   }catch(e){}
 }
 
-// --- Oberfläche ---
+/* ================= Unterwasser-Buehne (Canvas) ================= */
+const sea=document.getElementById('sea');
+const sctx=sea.getContext('2d');
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth;H=window.innerHeight;
+  sea.width=W*DPR;sea.height=H*DPR;
+  sctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',()=>{resize();if(reduced)drawSea(1)});
+resize();
+
+const bubbles=[],snow=[],fish=[],pearlsFx=[];
+let jelly=null;
+for(let i=0;i<26;i++)bubbles.push(newBubble(true));
+for(let i=0;i<46;i++)snow.push({x:Math.random()*W,y:Math.random()*H,r:.6+Math.random()*1.6,v:4+Math.random()*9,drift:(Math.random()-.5)*6});
+function newBubble(any){return{x:Math.random()*W,y:any?Math.random()*H:H+12,r:1.5+Math.random()*4.5,v:16+Math.random()*34,w:Math.random()*6.28,ws:.6+Math.random()*1.6}}
+function spawnFish(){
+  const dir=Math.random()<.5?1:-1;
+  fish.push({x:dir>0?-80:W+80,y:H*.18+Math.random()*H*.6,v:(14+Math.random()*26)*dir,s:.6+Math.random()*1.5,wob:Math.random()*6.28});
+}
+let fishTimer=4+Math.random()*6, jellyTimer=14+Math.random()*10;
+
+/* Wasserfarbe folgt der Zone, weich ueberblendet */
+function hex2rgb(h){const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255]}
+const lerp=(a,b,t)=>a+(b-a)*t;
+let waterTop=hex2rgb(DEPTHS[0].water[0]),waterBot=hex2rgb(DEPTHS[0].water[1]);
+let targetTop=waterTop.slice(),targetBot=waterBot.slice();
+
+function drawSea(dt){
+  for(let c=0;c<3;c++){
+    waterTop[c]=lerp(waterTop[c],targetTop[c],Math.min(dt*1.2,1));
+    waterBot[c]=lerp(waterBot[c],targetBot[c],Math.min(dt*1.2,1));
+  }
+  const grad=sctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,`rgb(${waterTop.map(Math.round)})`);
+  grad.addColorStop(1,`rgb(${waterBot.map(Math.round)})`);
+  sctx.fillStyle=grad;sctx.fillRect(0,0,W,H);
+
+  const d=depthLevel();
+  /* Lichtstrahlen, nur in hellen Zonen */
+  const rayAlpha=Math.max(0,.16-(d-1)*.05);
+  if(rayAlpha>0){
+    sctx.save();
+    for(let i=0;i<4;i++){
+      const bx=W*(.12+i*.24)+Math.sin(perf*.0002+i*2.1)*30;
+      const g2=sctx.createLinearGradient(bx,0,bx+W*.08,H*.9);
+      g2.addColorStop(0,`rgba(205,240,255,${rayAlpha})`);
+      g2.addColorStop(1,'rgba(205,240,255,0)');
+      sctx.fillStyle=g2;
+      sctx.beginPath();
+      sctx.moveTo(bx-30,0);sctx.lineTo(bx+70,0);
+      sctx.lineTo(bx+W*.16,H*.95);sctx.lineTo(bx+W*.16-140,H*.95);
+      sctx.closePath();sctx.fill();
+    }
+    sctx.restore();
+  }
+
+  /* Meeresschnee */
+  sctx.fillStyle='rgba(220,240,250,.35)';
+  for(const p of snow){
+    p.y+=p.v*dt;p.x+=Math.sin(perf*.0004+p.y*.01)*p.drift*dt;
+    if(p.y>H+4){p.y=-4;p.x=Math.random()*W}
+    sctx.beginPath();sctx.arc(p.x,p.y,p.r,0,6.29);sctx.fill();
+  }
+
+  /* Fische als Silhouetten */
+  sctx.fillStyle='rgba(2,14,24,.55)';
+  for(let i=fish.length-1;i>=0;i--){
+    const f=fish[i];
+    f.x+=f.v*dt;f.wob+=dt*4;
+    const fy=f.y+Math.sin(f.wob)*4,dir=Math.sign(f.v),s=f.s;
+    sctx.save();sctx.translate(f.x,fy);sctx.scale(dir*s,s);
+    sctx.beginPath();
+    sctx.ellipse(0,0,16,6,0,0,6.29);
+    sctx.moveTo(-14,0);sctx.lineTo(-24,-7);sctx.lineTo(-24,7);sctx.closePath();
+    sctx.fill();sctx.restore();
+    if(f.x<-120||f.x>W+120)fish.splice(i,1);
+  }
+
+  /* Qualle ab Mitternachtszone */
+  if(jelly){
+    jelly.t+=dt;jelly.y-=dt*7;jelly.x+=Math.sin(jelly.t*.8)*dt*9;
+    const pul=1+Math.sin(jelly.t*2.2)*.12;
+    sctx.save();sctx.translate(jelly.x,jelly.y);sctx.globalAlpha=.5;
+    sctx.fillStyle='rgba(150,190,255,.35)';
+    sctx.beginPath();sctx.arc(0,0,16*pul,Math.PI,0);sctx.closePath();sctx.fill();
+    sctx.strokeStyle='rgba(150,190,255,.3)';sctx.lineWidth=1.4;
+    for(let i=-2;i<=2;i++){
+      sctx.beginPath();sctx.moveTo(i*5,2);
+      sctx.quadraticCurveTo(i*5+Math.sin(jelly.t*3+i)*5,16,i*4+Math.sin(jelly.t*2+i)*7,30);
+      sctx.stroke();
+    }
+    sctx.restore();
+    if(jelly.y<-50)jelly=null;
+  }
+
+  /* Blasen */
+  sctx.strokeStyle='rgba(215,240,250,.5)';
+  for(const b of bubbles){
+    b.y-=b.v*dt;b.w+=b.ws*dt;b.x+=Math.sin(b.w)*12*dt;
+    if(b.y<-8)Object.assign(b,newBubble(false));
+    sctx.beginPath();sctx.arc(b.x,b.y,b.r,0,6.29);sctx.stroke();
+  }
+
+  /* Perlen-Funken vom Klick */
+  for(let i=pearlsFx.length-1;i>=0;i--){
+    const p=pearlsFx[i];
+    p.vy+=260*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;
+    if(p.life<=0){pearlsFx.splice(i,1);continue}
+    sctx.globalAlpha=Math.min(1,p.life*2.5);
+    const g3=sctx.createRadialGradient(p.x-p.r*.4,p.y-p.r*.4,0,p.x,p.y,p.r);
+    g3.addColorStop(0,'#ffffff');g3.addColorStop(.6,'#ffe9b0');g3.addColorStop(1,'#d9a441');
+    sctx.fillStyle=g3;
+    sctx.beginPath();sctx.arc(p.x,p.y,p.r,0,6.29);sctx.fill();
+    sctx.globalAlpha=1;
+  }
+}
+function pearlBurst(x,y){
+  if(reduced)return;
+  for(let i=0;i<10;i++){
+    const a=-Math.PI/2+(Math.random()-.5)*1.8;
+    const sp=120+Math.random()*160;
+    pearlsFx.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:2.2+Math.random()*2.8,life:.55+Math.random()*.3});
+  }
+}
+
+let perf=performance.now(),lastFrame=perf;
+function frame(now){
+  perf=now;
+  const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;
+  fishTimer-=dt;if(fishTimer<=0){spawnFish();fishTimer=5+Math.random()*9}
+  jellyTimer-=dt;
+  if(jellyTimer<=0){if(depthLevel()>=3&&!jelly)jelly={x:W*.15+Math.random()*W*.7,y:H+40,t:0};jellyTimer=16+Math.random()*14}
+  drawSea(dt);
+  requestAnimationFrame(frame);
+}
+
+/* ================= Flotten-Symbole ================= */
+const ICONS={
+  handtaucher:'<circle cx="12" cy="9" r="4.2"/><path d="M8.6 7.6h6.8M12 13.4V20M9 17h6M12 4.8V3.4"/>',
+  bohrdrohne:'<rect x="7" y="9" width="10" height="7" rx="2"/><path d="M12 9V6M8 6h8M12 16v3.4l-2 1.2M12 19.4l2 1.2M4.6 12.5H7M17 12.5h2.4"/>',
+  tiefseekran:'<path d="M4 20h16M6.5 20V9.5L15 5.5M15 5.5V20M15 9.5l4.5 2V20M9.8 12.2v3"/><circle cx="9.8" cy="16.6" r="1.2"/>',
+  uboot:'<ellipse cx="11" cy="13.5" rx="7.5" ry="4.2"/><path d="M18.5 13.5l3-2.6v5.2l-3-2.6M9.5 9.3V6.8h4"/><circle cx="8.6" cy="13.5" r="1.1"/><circle cx="12.4" cy="13.5" r="1.1"/>',
+  magma:'<path d="M12 3.5v8M8.2 8.5q3.8 5.4 7.6 0M9.4 17.6q2.6-3.4 5.2 0M12 11.5l-1.8 3.2h3.6L12 18"/>',
+  portal:'<circle cx="12" cy="12" r="7.6"/><circle cx="12" cy="12" r="4"/><path d="M12 1.8v2.8M12 19.4v2.8M1.8 12h2.8M19.4 12h2.8"/>',
+};
+
+/* ================= Oberflaeche ================= */
 const $=id=>document.getElementById(id);
-const buyBtns=[],upBtns=[];
+const rowEls=[];
+let shownPearls=0,lastDepth=1,bannerTimer=null;
+
 function buildRows(){
   const host=$('gens');
   GENS.forEach((g,i)=>{
-    const row=document.createElement('div');row.className='genrow';
-    const b=document.createElement('button');b.type='button';b.className='buy';b.id='buy_'+g.id;
-    b.innerHTML='<span class="l1"></span><span class="l2 num"></span>';
-    b.addEventListener('click',()=>{if(buy(i)){sndBuy();render()}});
-    const u=document.createElement('button');u.type='button';u.className='up num';u.id='up_'+g.id;
-    u.addEventListener('click',()=>{if(buyUpg(i)){sndUpgrade();render()}});
-    row.append(b,u);host.append(row);buyBtns.push(b);upBtns.push(u);
+    const row=document.createElement('div');
+    row.className='card genrow locked';
+    row.innerHTML=
+      '<div class="gicon"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#6fd6f7" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICONS[g.id]+'</svg></div>'+
+      '<div class="ginfo"><div class="gname">'+g.name+' <span class="gown num">0</span></div><div class="gprod num">&nbsp;</div></div>'+
+      '<div class="gbtns">'+
+      '<button type="button" class="gbuy num"><span class="s">Kaufen</span><span class="c"></span></button>'+
+      '<button type="button" class="gup num"><span class="s">x2</span><span class="c"></span></button>'+
+      '</div>';
+    host.appendChild(row);
+    const buyBtn=row.querySelector('.gbuy'),upBtn=row.querySelector('.gup');
+    buyBtn.addEventListener('click',()=>{if(buy(i)){sndBuy();render()}});
+    upBtn.addEventListener('click',()=>{if(buyUpg(i)){sndUpgrade();render()}});
+    rowEls.push({row,own:row.querySelector('.gown'),prod:row.querySelector('.gprod'),buy:buyBtn,buyc:buyBtn.querySelector('.c'),up:upBtn,upc:upBtn.querySelector('.c')});
   });
 }
-let lastDepth=1,toastTimer=null;
+
+function buildGauge(){
+  const gg=$('gauge');
+  DEPTHS.forEach((d,i)=>{
+    const s=document.createElement('div');
+    s.className='seg';s.style.setProperty('--segc',d.seg);s.dataset.i=i;
+    gg.appendChild(s);
+  });
+}
+
+function setWaterTargets(d){
+  targetTop=hex2rgb(DEPTHS[d-1].water[0]);
+  targetBot=hex2rgb(DEPTHS[d-1].water[1]);
+  document.documentElement.style.setProperty('--bg',DEPTHS[d-1].water[1]);
+}
+
+function showBanner(dep){
+  $('zbname').textContent=dep.name;
+  $('zbrule').textContent=dep.rule;
+  const b=$('zonebanner');
+  b.classList.add('show');
+  clearTimeout(bannerTimer);
+  bannerTimer=setTimeout(()=>b.classList.remove('show'),4200);
+}
+
 function render(){
   const d=depthLevel(),dep=DEPTHS[d-1];
   if(d!==lastDepth){
-    lastDepth=d;
-    document.documentElement.style.setProperty('--bg',dep.bg);
-    const t=$('toast');t.textContent='Neue Tiefe erreicht! '+dep.name+' · '+dep.rule;
-    clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.textContent=''},6000);
-    sndDepth();
+    lastDepth=d;setWaterTargets(d);showBanner(dep);sndDepth();
   }
-  $('pearls').textContent=fmt(eco.pearls)+' Perlen';
   $('rate').textContent='+'+fmt(pps())+' pro Sekunde';
-  $('mine').innerHTML='ABBAUEN&nbsp; +'+fmt(clickValue());
-  $('depth').textContent='Tiefe '+d+': '+dep.name+' · '+dep.rule;
+  $('minevalue').textContent='+'+fmt(clickValue());
+  $('zonename').textContent=dep.name;
+  $('zonelevel').textContent='TIEFE '+d+' / '+DEPTHS.length;
+  $('zonerule').textContent=dep.rule;
   const next=d<DEPTHS.length?DEPTHS[d].th:-1;
   if(next>0){
-    $('depthnext').textContent='Nächste Tiefe bei '+fmt(next);
-    const lo=dep.th;$('depthbar').style.width=(Math.min(1,(eco.run-lo)/(next-lo))*100).toFixed(1)+'%';
-  }else{$('depthnext').textContent='Tiefste Zone erreicht';$('depthbar').style.width='100%'}
+    $('zonenext').textContent='Nächste Tiefe bei '+fmt(next);
+    const lo=dep.th;
+    $('zonebar').style.width=(Math.min(1,(eco.run-lo)/(next-lo))*100).toFixed(1)+'%';
+  }else{$('zonenext').textContent='Tiefste Zone erreicht';$('zonebar').style.width='100%'}
+
+  const chip=$('abysschip');
+  if(eco.abyss>0){chip.style.display='inline-block';chip.textContent=eco.abyss+' Abyss-Punkte · +'+(eco.abyss*2)+' % Produktion'}
+  else chip.style.display='none';
+
+  document.querySelectorAll('#gauge .seg').forEach((s,i)=>s.classList.toggle('active',i===d-1));
+  const gg=$('gauge');
+  if(gg.clientHeight>0){
+    const segH=gg.clientHeight/DEPTHS.length;
+    let frac=0;
+    if(next>0)frac=Math.min(1,(eco.run-dep.th)/(next-dep.th));
+    $('gmarker').style.top=((d-1)*segH+frac*segH-8+(gg.offsetTop||0))+'px';
+  }
+
   GENS.forEach((g,i)=>{
-    const b=buyBtns[i];
-    b.querySelector('.l1').textContent=g.name;
-    let l2='Besitz: '+eco.owned[i]+'   ·   Kosten: '+fmt(genCost(i));
-    if(eco.owned[i]>0)l2+='   ·   +'+fmt(genProd(i)*globalMult())+'/s';
-    b.querySelector('.l2').textContent=l2;
-    b.disabled=eco.pearls<genCost(i);
-    const u=upBtns[i];
-    if(eco.upg[i]>=UPG_MAX){u.textContent='MAX';u.disabled=true}
-    else if(upgAvailable(i)){u.textContent='x2 · '+fmt(upgCost(i));u.disabled=eco.pearls<upgCost(i)}
-    else{u.textContent='x2 ab '+upgRequired(i);u.disabled=true}
+    const r=rowEls[i],cost=genCost(i),afford=eco.pearls>=cost;
+    r.own.textContent=eco.owned[i];
+    r.prod.innerHTML=eco.owned[i]>0?('+'+fmt(genProd(i)*globalMult())+'/s'):'<span style="color:var(--off)">noch stillgelegt</span>';
+    r.buyc.textContent=fmt(cost);
+    r.buy.disabled=!afford;
+    r.row.classList.toggle('can',afford);
+    r.row.classList.toggle('locked',eco.owned[i]===0&&!afford);
+    if(eco.upg[i]>=UPG_MAX){r.upc.textContent='MAX';r.up.disabled=true}
+    else if(upgAvailable(i)){r.upc.textContent=fmt(upgCost(i));r.up.disabled=eco.pearls<upgCost(i)}
+    else{r.upc.textContent='ab '+upgRequired(i);r.up.disabled=true}
   });
+
   const p=prestigePoints(),pb=$('prestige');
-  if(p>0){pb.textContent='Neustart: +'+p+' Abyss-Punkte (je +2 % Produktion)';pb.disabled=false}
-  else{pb.textContent=eco.abyss>0?('Abyss-Punkte: '+eco.abyss+' · Neustart ab 1 Mrd dieser Runde'):'Neustart ab 1 Mrd Perlen dieser Runde';pb.disabled=true}
+  if(p>0){pb.textContent='⟲ Neustart: +'+p+' Abyss-Punkte (je +2 % für immer)';pb.disabled=false;pb.classList.add('ready')}
+  else{
+    pb.classList.remove('ready');pb.disabled=true;
+    pb.textContent=eco.abyss>0?'Neustart ab 1 Mrd dieser Runde':'Neustart ab 1 Mrd Perlen dieser Runde';
+  }
 }
 
+/* weicher Perlenzaehler */
+function tickCounter(dt){
+  const target=eco.pearls;
+  shownPearls=Math.abs(target-shownPearls)<1?target:shownPearls+(target-shownPearls)*Math.min(1,dt*8);
+  $('pearls').textContent=fmt(shownPearls);
+}
+
+function spawnFloatText(text){
+  const host=$('floats');
+  const s=document.createElement('span');
+  s.className='pluspop num';
+  s.style.left=(12+Math.random()*58)+'%';
+  s.textContent=text;
+  host.appendChild(s);
+  setTimeout(()=>s.remove(),800);
+}
+
+/* ================= Start ================= */
 function start(hot){
   if(hot&&hot.eco){eco=hot.eco}
-  buildRows();
+  buildRows();buildGauge();
   if(!(hot&&hot.eco))loadGame();
+  shownPearls=eco.pearls;
   lastDepth=depthLevel();
-  document.documentElement.style.setProperty('--bg',DEPTHS[lastDepth-1].bg);
+  setWaterTargets(lastDepth);
+  waterTop=targetTop.slice();waterBot=targetBot.slice();
   render();
-  let last=performance.now(),acc=0;
+  drawSea(1);
+  if(!reduced)requestAnimationFrame(frame);
+
+  let acc=0,uiAcc=0,last=performance.now();
   setInterval(()=>{
     const now=performance.now(),dt=Math.min(1,(now-last)/1000);last=now;
     earn(pps()*dt);
-    render();
+    tickCounter(dt);
+    uiAcc+=dt;if(uiAcc>=0.15){uiAcc=0;render()}
     acc+=dt;if(acc>=10){acc=0;saveGame()}
-  },100);
-  $('mine').addEventListener('click',()=>{const v=clickValue();earn(v);sndClick();spawnFloat('+'+fmt(v));render()});
-  $('prestige').addEventListener('click',()=>{if(doPrestige()){sndPrestige();saveGame();render()}});
+  },80);
+
+  $('mine').addEventListener('click',e=>{
+    const v=clickValue();earn(v);sndClick();
+    spawnFloatText('+'+fmt(v));
+    const rect=e.currentTarget.getBoundingClientRect();
+    pearlBurst(rect.left+rect.width*(0.3+Math.random()*0.4),rect.top+8);
+    render();
+  });
+  $('prestige').addEventListener('click',()=>{if(doPrestige()){sndPrestige();saveGame();shownPearls=0;render()}});
   const sndbtn=$('sndbtn');
   sndbtn.textContent=soundOn?'Ton: an':'Ton: aus';
   sndbtn.addEventListener('click',()=>{
