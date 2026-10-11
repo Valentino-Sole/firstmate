@@ -284,8 +284,33 @@ func _refresh() -> void:
 
 
 func _on_click() -> void:
-	eco.click()
+	var value: float = eco.click()
+	_spawn_click_float(value)
+	_pop_click_button()
 	_refresh()
+
+
+## Aufsteigendes "+X" beim Abbau-Klick.
+func _spawn_click_float(value: float) -> void:
+	var float_label := Label.new()
+	float_label.text = "+" + I18nScript.fmt(locale, value)
+	float_label.add_theme_font_size_override("font_size", 22)
+	float_label.add_theme_color_override("font_color", COL_GOLD)
+	add_child(float_label)
+	var base: Vector2 = click_button.global_position + Vector2(click_button.size.x * randf_range(0.15, 0.7), -10.0)
+	float_label.global_position = base
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(float_label, "global_position:y", base.y - 46.0, 0.7)
+	tween.tween_property(float_label, "modulate:a", 0.0, 0.7)
+	tween.chain().tween_callback(float_label.queue_free)
+
+
+func _pop_click_button() -> void:
+	click_button.pivot_offset = click_button.size / 2.0
+	var tween := create_tween()
+	tween.tween_property(click_button, "scale", Vector2(0.96, 0.96), 0.04)
+	tween.tween_property(click_button, "scale", Vector2.ONE, 0.08)
 
 
 func _on_buy(index: int) -> void:

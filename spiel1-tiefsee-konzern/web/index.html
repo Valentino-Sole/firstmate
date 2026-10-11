@@ -67,11 +67,17 @@ button:disabled{background:#091626;color:var(--text-off);cursor:default}
 .genrow .up{flex:0 0 108px;text-align:center;font-size:13px;font-weight:700;color:var(--gold)}
 .genrow .up:disabled{color:var(--text-off)}
 footer{max-width:1100px;margin:26px auto 0;font-size:11px;color:var(--text-off)}
+.snd{margin-left:auto;font-size:12px;padding:5px 12px;text-align:center}
+.floatwrap{position:relative;height:0}
+.pluspop{position:absolute;top:-12px;color:var(--gold);font-weight:700;font-size:18px;pointer-events:none;animation:rise .7s ease-out forwards}
+@keyframes rise{to{transform:translateY(-44px);opacity:0}}
+@media (prefers-reduced-motion: reduce){.pluspop{animation:none;opacity:0}}
 </style>
 
 <header>
   <h1>TIEFSEE KONZERN</h1>
-  <span class="badge">v0.3 · Browser-Testversion</span>
+  <span class="badge">v0.4 · Browser-Testversion</span>
+  <button id="sndbtn" type="button" class="snd">Ton: an</button>
 </header>
 
 <main>
@@ -84,6 +90,7 @@ footer{max-width:1100px;margin:26px auto 0;font-size:11px;color:var(--text-off)}
       <div id="depthnext">Nächste Tiefe bei 50,00 Tsd</div>
     </div>
     <button id="mine" type="button">ABBAUEN&nbsp; +1</button>
+    <div class="floatwrap" id="floats" aria-hidden="true"></div>
     <div class="toast" id="toast" role="status"></div>
     <div id="offline" hidden></div>
     <button id="prestige" type="button" disabled>Neustart ab 1 Mrd Perlen dieser Runde</button>
@@ -144,6 +151,40 @@ function fmt(v){
   return v.toFixed(2).replace('.',',')+' '+UNITS[idx];
 }
 
+// --- Klang (per WebAudio erzeugt, keine Dateien noetig) ---
+let audioCtx=null,soundOn=true;
+try{soundOn=localStorage.getItem('tk_sound')!=='off'}catch(e){}
+function beep(f1,f2,dur,type,gain){
+  if(!soundOn)return;
+  try{
+    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;
+    o.type=type||'square';
+    o.frequency.setValueAtTime(f1,t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f2,1),t+dur);
+    g.gain.setValueAtTime(gain||0.04,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t);o.stop(t+dur);
+  }catch(e){}
+}
+const sndClick=()=>beep(880,520,0.07,'square',0.035);
+const sndBuy=()=>beep(300,180,0.09,'triangle',0.05);
+const sndUpgrade=()=>beep(520,820,0.12,'triangle',0.05);
+const sndDepth=()=>beep(160,42,0.7,'sine',0.06);
+const sndPrestige=()=>beep(90,900,0.5,'sawtooth',0.035);
+
+function spawnFloat(text){
+  const host=document.getElementById('floats');
+  if(!host)return;
+  const s=document.createElement('span');
+  s.className='pluspop num';
+  s.style.left=(10+Math.random()*60)+'%';
+  s.textContent=text;
+  host.appendChild(s);
+  setTimeout(()=>s.remove(),700);
+}
+
 // --- Spielstand ---
 const SAVE_KEY='tiefsee_konzern_v2';
 function saveGame(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({saved_at:Date.now()/1000,eco}))}catch(e){}}
@@ -168,9 +209,9 @@ function buildRows(){
     const row=document.createElement('div');row.className='genrow';
     const b=document.createElement('button');b.type='button';b.className='buy';b.id='buy_'+g.id;
     b.innerHTML='<span class="l1"></span><span class="l2 num"></span>';
-    b.addEventListener('click',()=>{if(buy(i))render()});
+    b.addEventListener('click',()=>{if(buy(i)){sndBuy();render()}});
     const u=document.createElement('button');u.type='button';u.className='up num';u.id='up_'+g.id;
-    u.addEventListener('click',()=>{if(buyUpg(i))render()});
+    u.addEventListener('click',()=>{if(buyUpg(i)){sndUpgrade();render()}});
     row.append(b,u);host.append(row);buyBtns.push(b);upBtns.push(u);
   });
 }
@@ -182,6 +223,7 @@ function render(){
     document.documentElement.style.setProperty('--bg',dep.bg);
     const t=$('toast');t.textContent='Neue Tiefe erreicht! '+dep.name+' · '+dep.rule;
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.textContent=''},6000);
+    sndDepth();
   }
   $('pearls').textContent=fmt(eco.pearls)+' Perlen';
   $('rate').textContent='+'+fmt(pps())+' pro Sekunde';
@@ -223,8 +265,16 @@ function start(hot){
     render();
     acc+=dt;if(acc>=10){acc=0;saveGame()}
   },100);
-  $('mine').addEventListener('click',()=>{earn(clickValue());render()});
-  $('prestige').addEventListener('click',()=>{if(doPrestige()){saveGame();render()}});
+  $('mine').addEventListener('click',()=>{const v=clickValue();earn(v);sndClick();spawnFloat('+'+fmt(v));render()});
+  $('prestige').addEventListener('click',()=>{if(doPrestige()){sndPrestige();saveGame();render()}});
+  const sndbtn=$('sndbtn');
+  sndbtn.textContent=soundOn?'Ton: an':'Ton: aus';
+  sndbtn.addEventListener('click',()=>{
+    soundOn=!soundOn;
+    sndbtn.textContent=soundOn?'Ton: an':'Ton: aus';
+    try{localStorage.setItem('tk_sound',soundOn?'on':'off')}catch(e){}
+    if(soundOn)sndClick();
+  });
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveGame()});
 }
 
