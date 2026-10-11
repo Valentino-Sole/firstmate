@@ -102,7 +102,7 @@ await page.waitForTimeout(800);
 step("Taverne");
 await shot(page, "04-taverne");
 await page.click('#hint [data-act="hintNext"]').catch(() => {});
-await page.click('[data-act="questStart"][data-i="0"]');
+await page.evaluate(() => document.querySelector('[data-act="questStart"][data-i="0"]').click());
 await page.waitForTimeout(500);
 // Der Reisebalken im Auftrag laeuft mit der Uhr weiter, ohne dass das Fenster neu aufgebaut wird
 {
@@ -116,9 +116,9 @@ await page.waitForTimeout(500);
   await page.evaluate(() => window.__uhrZurueck());
   if (!(w1 > w0 + 30)) throw new Error("Reisebalken steht still: " + w0 + " -> " + w1);
 }
-await page.click('[data-act="questSkip"]');
+await page.evaluate(() => document.querySelector('[data-act="questSkip"]').click());
 await page.waitForSelector('[data-act="questFight"]');
-await page.click('[data-act="questFight"]');
+await page.evaluate(() => document.querySelector('[data-act="questFight"]').click());
 await playBattle(page, "05-auftrag");
 
 step("Charakterbogen");
@@ -160,9 +160,11 @@ await shot(page, "08-taverne-horde");
 const rareIdx = await page.evaluate(() => SB.ui.S.quest.offers.findIndex((o) => o.rare));
 if (rareIdx < 0) errors.push("Kein seltener Auftrag erzeugt");
 else {
-  await page.click('[data-act="questStart"][data-i="' + rareIdx + '"]');
-  await page.click('[data-act="questSkip"]');
-  await page.click('[data-act="questFight"]');
+  await page.evaluate((i) => document.querySelector('[data-act="questStart"][data-i="' + i + '"]').click(), rareIdx);
+  await page.waitForSelector('[data-act="questSkip"]');
+  await page.evaluate(() => document.querySelector('[data-act="questSkip"]').click());
+  await page.waitForSelector('[data-act="questFight"]');
+  await page.evaluate(() => document.querySelector('[data-act="questFight"]').click());
   await playBattle(page, "09-horde", 3500);
 }
 
@@ -176,7 +178,9 @@ await shot(page, "10-chronik");
 const sf = page.locator('[data-act="storyFight"]:not([disabled])').first();
 if (!(await sf.count())) errors.push("Kein Chronik-Kapitel verfügbar");
 else {
-  await sf.click();
+  // Direkt ausloesen: unter Last zeichnet jedes fertig geladene Monsterpaket das Fenster neu,
+  // ein gewoehnlicher Klick verliert den Knopf dann immer wieder
+  await page.evaluate(() => document.querySelector('[data-act="storyFight"]:not([disabled])').click());
   await playBattle(page, "11-chronik");
 }
 
@@ -274,6 +278,21 @@ await open(page, "tiefen");
 await shot(page, "23-dungeon-offen");
 await page.click('[data-act="dungeonFight"]:not([disabled])');
 await playBattle(page, "23b-dungeon");
+
+step("Wolkenturm");
+await page.evaluate(() => {
+  SB.engine.setEnergy(SB.ui.S, 100);
+  SB.ui.refresh();
+});
+await open(page, "wolkenturm");
+await shot(page, "23c-wolkenturm");
+await page.evaluate(() => document.querySelector('[data-act="turmFight"]:not([disabled])').click());
+await playBattle(page, "23d-wolkenturm-etage");
+const turm = await page.evaluate(() => SB.ui.S.turm);
+if (!turm) errors.push("Wolkenturm: kein Aufstieg begonnen");
+else if (turm.wbest < 1) errors.push("Wolkenturm: Etage 1 nicht geschafft (Siegchance dort liegt bei fast 100 %)");
+await page.evaluate(() => { SB.ui.tabs.wolkenturm = "tag"; SB.ui.renderPanel(); });
+await shot(page, "23e-tagespruefungen");
 
 step("Talente und Attribute");
 await page.evaluate(() => {

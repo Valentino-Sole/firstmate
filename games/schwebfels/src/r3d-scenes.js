@@ -3064,6 +3064,33 @@
       return { m, home, side, shadow: sh, desc, front };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
+    // Gefaehrte (0.77): eine junge Bestie steht halb so gross hinter dem Helden und kaempft nur zur Schau
+    let PET = null;
+    if (opts.pet) {
+      try {
+        const pm = R.buildFighter(opts.pet);
+        pm.obj.scale.multiplyScalar(0.5);
+        if (pm.headY) pm.headY *= 0.5;
+        const phome = new T.Vector3(-sep - 1.5, 0, -1.2);
+        pm.obj.position.copy(phome);
+        pm.obj.rotation.y = PI / 2 - 0.4;
+        const psh = new T.Mesh(new T.CircleGeometry(1, 20), KUL ? softShadowMat() : basic("#000000", 0.3));
+        psh.rotation.x = -PI / 2;
+        psh.position.set(phome.x, 0.03, phome.z);
+        psh.scale.setScalar(0.55);
+        scene.add(psh);
+        scene.add(pm.obj);
+        PET = { m: pm, home: phome, shadow: psh };
+      } catch (e) {
+        console.warn("Gefaehrte nicht aufgebaut", e);
+        PET = null;
+      }
+    }
+    function petPlay(name, lunge) {
+      if (!PET) return;
+      PET.m.play(name, 0.6);
+      if (lunge) tween(0.5, (u) => (PET.m.obj.position.x = PET.home.x + Math.sin(u * PI) * 0.8));
+    }
 
     let speed = 1;
     let w = 1;
@@ -3135,6 +3162,11 @@
           f.poisonFx.position.set(f.m.obj.position.x, (f.m.headY || 1.8) + 0.2, f.m.obj.position.z);
           f.poisonFx.rotation.y += dt * 2;
         }
+      }
+      if (PET) {
+        PET.m.speed = speed;
+        PET.m.update(dt * speed);
+        PET.shadow.position.x = PET.m.obj.position.x;
       }
       for (const c of flickers) c.intensity = 12 + Math.sin(t * 13 + c.position.x) * 2 + Math.random() * 2;
       for (const e of extras) e.rotation.y = Math.sin(t * 2 + e.position.x) * 0.2;
@@ -4433,6 +4465,7 @@
         return;
       }
       const special = ev.kind === "special";
+      if (ev.a === 0) petPlay("attack", true);
       const SFX = special ? SPECIAL_FX[ev.sp] || { color: A.m.projColor || "#ffd25a", kind: "shock" } : null;
       const isHero = A.desc.kind !== "monster";
       const wb = A.m.weaponBase;
@@ -4659,6 +4692,7 @@
         if (heroHp != null) hp[0] = heroHp;
       },
       async finish(winner) {
+        petPlay(winner === 0 ? "victory" : "defeat");
         const W = F[winner];
         const L = F[1 - winner];
         clearStars(L);

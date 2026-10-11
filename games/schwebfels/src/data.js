@@ -482,8 +482,9 @@
     selten: { name: "Selten", color: "#4fa9ff", mult: 1.35, price: 2.4, lines: 2, weight: 13.5 },
     episch: { name: "Episch", color: "#c47bff", mult: 1.6, price: 4.0, lines: 3, weight: 4 },
     legendaer: { name: "Legendär", color: "#ffb13b", mult: 1.9, price: 7.0, lines: 4, weight: 0.5 },
+    mythisch: { name: "Mythisch", color: "#ff5a4a", mult: 2.2, price: 12.0, lines: 4, weight: 0 },
   };
-  const RARITY_ORDER = ["gewoehnlich", "ungewoehnlich", "selten", "episch", "legendaer"];
+  const RARITY_ORDER = ["gewoehnlich", "ungewoehnlich", "selten", "episch", "legendaer", "mythisch"];
 
   const ADJ = {
     gewoehnlich: ["rostig", "verbeult", "schlicht", "solide", "geflickt", "abgewetzt", "schartig"],
@@ -491,6 +492,7 @@
     selten: ["meisterlich", "runenverziert", "sturmgeschmiedet", "nebelgehärtet", "verzaubert", "silberbeschlagen"],
     episch: ["sternengeschmiedet", "uralt", "donnernd", "mondbeschienen", "flammend", "seelengebunden", "frostgeboren"],
     legendaer: ["himmelsbrechend", "sagenumwoben", "unvergänglich", "sternenfressend", "weltenweit"],
+    mythisch: ["weltenschmiedend", "sternengeboren", "urgewaltig", "göttergeschmiedet", "allbezwingend"],
   };
   const SUFFIX = {
     kraft: ["des Bären", "des Ambosses", "der Brandung", "des Riesen"],
@@ -845,6 +847,14 @@
     { id: "mondtor", name: "Das Mondtor", short: "Mondtor", npc: "mondhaendler", night: true },
   ];
 
+  /* Jagdziele im Bestiarium (0.77): je Monsterfamilie bei 25 Siegen Wolkenperlen, bei 100 dazu ein tragbarer Titel */
+  const JAGD = { steps: [25, 100], perlen: [2, 5] };
+  const JAGD_TITEL = {
+    ghul: "Grabwächter", schlund: "Schlundbezwinger", goblin: "Koboldschreck", wolf: "Rudelschreck", golem: "Steinbrecher",
+    fledermaus: "Himmelsjäger", pilz: "Sporenbann", spinne: "Netzbrenner", drache: "Drachentöter", schemen: "Lichtbringer",
+    krebs: "Panzerknacker", todesritter: "Klingenbrecher", troll: "Trollschlächter", baum: "Hainhüter", kultist: "Kultjäger",
+  };
+
   /* Ruhm: dauerhafte kleine Boni fuer Stufen ueber 50, je Stufe ein Punkt (engine.js, Abschnitt Ruhm) */
   const RUHM = [
     { id: "macht", name: "Macht", desc: "Jeder Punkt gibt 1 % mehr Schaden." },
@@ -857,6 +867,6 @@
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
     MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
-    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS, RUHM,
+    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS, RUHM, JAGD, JAGD_TITEL,
   };
 })();

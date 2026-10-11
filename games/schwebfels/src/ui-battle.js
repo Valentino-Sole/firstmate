@@ -16,6 +16,9 @@
   const BATTLE_WAIT = 15000;
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
+    // Gefaehrte des Helden (0.77): seine Figur mitladen und der Buehne geben
+    const pet = fight.hero && fight.hero.kind !== "monster" && E.activePet(UI.S) ? E.activePet(UI.S) : null;
+    if (pet) archs.push(pet.arch);
     const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, BATTLE_WAIT))]);
     // Heldenkoerper aller beteiligten Reiche (Arena, Rangliste): deren Figurendatei ebenfalls vorher laden
     const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
@@ -28,6 +31,7 @@
     root.hidden = false;
     document.body.classList.add("in-battle");
     $("#hint").hidden = true;
+    if (pet) opts = Object.assign({}, opts, { petDesc: UI.monDesc(E.petMon(pet)) });
     return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
@@ -79,6 +83,7 @@
             realm: S.realm,
             left: UI.fighterDesc(hero),
             right: UI.fighterDesc(foes[0]),
+            pet: opts.petDesc || null,
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
             sfx: (n) => SB.audio.play(n),

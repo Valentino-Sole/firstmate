@@ -31,6 +31,7 @@
   --r-selten: #4fa9ff;
   --r-episch: #c47bff;
   --r-legendaer: #ffb13b;
+  --r-mythisch: #ff5a4a;
   --font-display: "Pirata One", "Luminari", "Georgia", serif;
   --font-body: "Alegreya Sans", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
   --side-w: 188px;
@@ -292,11 +293,13 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .r-selten { border-color: var(--r-selten); box-shadow: 0 0 10px rgba(79, 169, 255, 0.4), inset 0 0 0 1px #000; }
 .r-episch { border-color: var(--r-episch); box-shadow: 0 0 12px rgba(196, 123, 255, 0.5), inset 0 0 0 1px #000; }
 .r-legendaer { border-color: var(--r-legendaer); box-shadow: 0 0 16px rgba(255, 177, 59, 0.6), inset 0 0 0 1px #000; }
+.r-mythisch { border-color: var(--r-mythisch); box-shadow: 0 0 20px rgba(255, 90, 74, 0.7), inset 0 0 0 1px #000; }
 .t-gewoehnlich { color: var(--r-gewoehnlich); }
 .t-ungewoehnlich { color: var(--r-ungewoehnlich); }
 .t-selten { color: var(--r-selten); }
 .t-episch { color: var(--r-episch); }
 .t-legendaer { color: var(--r-legendaer); }
+.t-mythisch { color: var(--r-mythisch); }
 .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .grid6.shop { row-gap: 18px; }
 
@@ -1192,8 +1195,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     selten: { name: "Selten", color: "#4fa9ff", mult: 1.35, price: 2.4, lines: 2, weight: 13.5 },
     episch: { name: "Episch", color: "#c47bff", mult: 1.6, price: 4.0, lines: 3, weight: 4 },
     legendaer: { name: "Legendär", color: "#ffb13b", mult: 1.9, price: 7.0, lines: 4, weight: 0.5 },
+    mythisch: { name: "Mythisch", color: "#ff5a4a", mult: 2.2, price: 12.0, lines: 4, weight: 0 },
   };
-  const RARITY_ORDER = ["gewoehnlich", "ungewoehnlich", "selten", "episch", "legendaer"];
+  const RARITY_ORDER = ["gewoehnlich", "ungewoehnlich", "selten", "episch", "legendaer", "mythisch"];
 
   const ADJ = {
     gewoehnlich: ["rostig", "verbeult", "schlicht", "solide", "geflickt", "abgewetzt", "schartig"],
@@ -1201,6 +1205,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     selten: ["meisterlich", "runenverziert", "sturmgeschmiedet", "nebelgehärtet", "verzaubert", "silberbeschlagen"],
     episch: ["sternengeschmiedet", "uralt", "donnernd", "mondbeschienen", "flammend", "seelengebunden", "frostgeboren"],
     legendaer: ["himmelsbrechend", "sagenumwoben", "unvergänglich", "sternenfressend", "weltenweit"],
+    mythisch: ["weltenschmiedend", "sternengeboren", "urgewaltig", "göttergeschmiedet", "allbezwingend"],
   };
   const SUFFIX = {
     kraft: ["des Bären", "des Ambosses", "der Brandung", "des Riesen"],
@@ -1555,6 +1560,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     { id: "mondtor", name: "Das Mondtor", short: "Mondtor", npc: "mondhaendler", night: true },
   ];
 
+  /* Jagdziele im Bestiarium (0.77): je Monsterfamilie bei 25 Siegen Wolkenperlen, bei 100 dazu ein tragbarer Titel */
+  const JAGD = { steps: [25, 100], perlen: [2, 5] };
+  const JAGD_TITEL = {
+    ghul: "Grabwächter", schlund: "Schlundbezwinger", goblin: "Koboldschreck", wolf: "Rudelschreck", golem: "Steinbrecher",
+    fledermaus: "Himmelsjäger", pilz: "Sporenbann", spinne: "Netzbrenner", drache: "Drachentöter", schemen: "Lichtbringer",
+    krebs: "Panzerknacker", todesritter: "Klingenbrecher", troll: "Trollschlächter", baum: "Hainhüter", kultist: "Kultjäger",
+  };
+
   /* Ruhm: dauerhafte kleine Boni fuer Stufen ueber 50, je Stufe ein Punkt (engine.js, Abschnitt Ruhm) */
   const RUHM = [
     { id: "macht", name: "Macht", desc: "Jeder Punkt gibt 1 % mehr Schaden." },
@@ -1567,7 +1580,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
     MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
-    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS, RUHM,
+    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS, RUHM, JAGD, JAGD_TITEL,
   };
 })();
 
@@ -1903,6 +1916,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       guild: null,
       talents: {},
       ruhm: {},
+      pets: [],
+      petActive: null,
+      staub: 0,
       shops: {},
       buffs: [],
       mounts: { owned: [] },
@@ -1978,6 +1994,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
     S.ruhm = S.ruhm && typeof S.ruhm === "object" ? S.ruhm : {};
     S.taskRun = S.taskRun && typeof S.taskRun === "object" ? S.taskRun : { day: "", n: 0 };
+    S.staub = typeof S.staub === "number" ? S.staub : 0;
+    S.pets = Array.isArray(S.pets) ? S.pets : [];
+    if (typeof S.petActive !== "string") S.petActive = null;
+    S.jagd = S.jagd && typeof S.jagd === "object" ? S.jagd : {};
+    if (typeof S.title !== "string") S.title = null;
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
@@ -2309,6 +2330,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const rr = E.ruhmRanks(S);
     if (rr.zaehigkeit) f.maxHp = Math.round(f.maxHp * (1 + rr.zaehigkeit * 0.01));
     if (rr.macht) f.prof.dmgMult *= 1 + rr.macht * 0.01;
+    const pe = E.petEffects(S);
+    if (pe) {
+      if (pe.dmg) f.prof.dmgMult *= 1 + pe.dmg;
+      if (pe.hp) f.maxHp = Math.round(f.maxHp * (1 + pe.hp));
+      if (pe.armor) f.armor = Math.round(f.armor * (1 + pe.armor));
+      if (pe.crit) f.prof.critBonus = (f.prof.critBonus || 0) + pe.crit;
+      if (pe.evade) f.prof.evade = (f.prof.evade || 0) + pe.evade;
+    }
     return f;
   };
   E.summaryOf = function (f) {
@@ -3093,7 +3122,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   /* ---------------- Mondtor: nur bei Nacht ---------------- */
   E.C.NIGHT_HUNTS = 3;
   E.NIGHT_POWER = { minion: 0.69, boss: 0.9 };
-  E.nightHuntsLeft = (S) => Math.max(0, E.C.NIGHT_HUNTS - ((S.daily && S.daily.nightHunts) || 0));
+  E.nightHuntsLeft = (S, now) => Math.max(0, E.nightHuntsMax(S, now) - ((S.daily && S.daily.nightHunts) || 0));
   // Die Nachtjagd: zwei Nachtwesen der eigenen Heimatinsel nacheinander
   E.nightHuntFoes = function (S, hero, n) {
     const list = D.NIGHT_FOES[S.realm] || D.NIGHT_FOES.albion;
@@ -3102,9 +3131,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     let b = U.pick(r, list);
     for (let k = 0; k < 6 && b.id === a.id; k++) b = U.pick(r, list);
     const L = S.level;
+    const ev = E.moonEvent();
+    const w = ev && ev.id === "blutmond" ? 1.15 : 1;
     return [
-      E.monsterFighter(a, L, E.adaptPower(hero, L, E.NIGHT_POWER.minion), {}),
-      E.monsterFighter(b, L + 1, E.adaptPower(hero, L + 1, E.NIGHT_POWER.boss), { boss: true }),
+      E.monsterFighter(a, L, E.adaptPower(hero, L, E.NIGHT_POWER.minion * w), {}),
+      E.monsterFighter(b, L + 1, E.adaptPower(hero, L + 1, E.NIGHT_POWER.boss * w), { boss: true }),
     ];
   };
   E.nightHuntPreview = function (S, now) {
@@ -3128,12 +3159,14 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const rew = { won, xp: 0, gold: 0, item: null, itemSold: 0, perle: 0 };
     const L = S.level;
     if (won) {
-      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (1 + E.xpBonus(S)));
-      rew.gold = Math.round(E.goldBase(L) * 1.8 * (1 + E.goldBonus(S)));
+      const ev = E.moonEvent();
+      const blut = ev && ev.id === "blutmond";
+      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (blut ? 1.5 : 1) * (1 + E.xpBonus(S)));
+      rew.gold = Math.round(E.goldBase(L) * 1.8 * (blut ? 2 : 1) * (1 + E.goldBonus(S)));
       E.gainGold(S, rew.gold);
       const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
-      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 + E.lootBoost(S) }), rew);
-      if (r() < 0.35) {
+      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: blut ? "episch" : "selten", boost: (blut ? 1.4 : 0.8) + E.lootBoost(S) }), rew);
+      if ((ev && ev.id === "sternennacht") || r() < 0.35) {
         S.perlen += 1;
         rew.perle = 1;
       }
@@ -3141,6 +3174,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       S.stats.wins++;
       S.stats.nightHunts = (S.stats.nightHunts || 0) + 1;
       E.dailyProgress(S, "nacht");
+      E.tryCapture(S, fight.foes, "nacht", S.daily.day + ":" + fight.n);
     } else {
       rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 0.3);
       S.stats.losses++;
@@ -3584,6 +3618,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       S.bestiary[b.mon.id] = (S.bestiary[b.mon.id] || 0) + 1;
       E.grantAch(S, "boss1");
       E.dailyProgress(S, "verlies", now);
+      E.tryCapture(S, fight.foes, "verlies", now);
     } else S.stats.losses++;
     E.checkAch(S, now);
     return rew;
@@ -3642,6 +3677,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   E.taskRun = (S) => S.taskRun || { day: "", n: 0 };
   E.dailyProgress = function (S, ev, now) {
     now = now || E.now();
+    if (FIGHT_EVS.indexOf(ev) >= 0) E.petFought(S);
     E.dailyTasks(S);
     for (const x of S.daily.tasks) {
       const t = TASKS.find((d) => d.id === x.id);
@@ -3795,9 +3831,199 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       S.stats.wins++;
       for (const f of fight.foes) if (f.id) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
       E.dailyProgress(S, "turm", now);
+      if (floor % 5 === 0) E.tryCapture(S, fight.foes, "turmboss", now);
     } else S.stats.losses++;
     E.checkAch(S, now);
     return rew;
+  };
+
+  /* ---------------- Brumms Amboss: Zerlegen, Veredeln, Umschmieden, Mythisch (0.77) ----------------
+     Sternenstaub (S.staub) entsteht beim Zerlegen von Gegenstaenden und bezahlt das Veredeln (+1 Stufe bis
+     zur Heldenstufe), das Umschmieden (Werte neu wuerfeln) und das Mythisch-Schmieden (nur legendaere
+     Stuecke; Mythisch faellt nie als Beute, weight 0). Erscheinung und Name bleiben dabei erhalten. */
+  E.C.STAUB_VALUE = { gewoehnlich: 1, ungewoehnlich: 2, selten: 5, episch: 12, legendaer: 30, mythisch: 60 };
+  E.C.REFINE_COST = { gewoehnlich: 2, ungewoehnlich: 3, selten: 6, episch: 14, legendaer: 35, mythisch: 70 };
+  E.C.REFORGE_COST = { gewoehnlich: 1, ungewoehnlich: 2, selten: 4, episch: 10, legendaer: 25, mythisch: 50 };
+  E.C.MYTH_STAUB = 150;
+  E.mythGold = (L) => Math.round(E.goldBase(L) * 20);
+  // Gegenstand hinter einer Rucksack- oder Ausruestungs-Referenz ("inv:3", "eq:waffe")
+  E.itemAt = function (S, ref) {
+    const p = String(ref || "").split(":");
+    if (p[0] === "inv") {
+      const i = +p[1];
+      return S.inv[i] ? { it: S.inv[i], put: (x) => (S.inv[i] = x), take: () => S.inv.splice(i, 1) } : null;
+    }
+    if (p[0] === "eq") return S.equip[p[1]] ? { it: S.equip[p[1]], put: (x) => (S.equip[p[1]] = x) } : null;
+    return null;
+  };
+  // Werte neu bauen; Kennung, Name und Erscheinung bleiben, die Werte wiegen zur Klasse des Helden
+  function reshape(S, it, level, rarity, seed) {
+    const r = U.rng(U.hash(it.id + ":" + seed));
+    const fresh = E.makeItem(r, { level, slot: it.slot, base: it.base, rarity, cls: S.cls });
+    fresh.id = it.id;
+    fresh.name = rarity === it.rarity ? it.name : fresh.name;
+    fresh.vis = it.vis;
+    fresh.tint = it.tint;
+    fresh.variant = it.variant;
+    fresh.style = it.style;
+    return fresh;
+  }
+  E.dismantle = function (S, ref) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    if (!loc.take) return { ok: false, msg: "Lege den Gegenstand erst ab, dann kann Brumm ihn zerlegen." };
+    const staub = E.C.STAUB_VALUE[loc.it.rarity] || 1;
+    const name = loc.it.name;
+    loc.take();
+    S.staub = (S.staub || 0) + staub;
+    return { ok: true, staub, name };
+  };
+  E.refine = function (S, ref, now) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    const it = loc.it;
+    if (it.level >= S.level) return { ok: false, msg: "Brumm veredelt höchstens bis zu deiner Stufe." };
+    const cost = E.C.REFINE_COST[it.rarity] || 10;
+    if ((S.staub || 0) < cost) return { ok: false, msg: "Dafür brauchst du " + cost + " Sternenstaub. Zerlege alte Gegenstände." };
+    S.staub -= cost;
+    const out = reshape(S, it, it.level + 1, it.rarity, "veredeln" + (now || E.now()));
+    loc.put(out);
+    return { ok: true, item: out, cost };
+  };
+  E.reforge = function (S, ref, now) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    const it = loc.it;
+    const cost = E.C.REFORGE_COST[it.rarity] || 10;
+    if ((S.staub || 0) < cost) return { ok: false, msg: "Dafür brauchst du " + cost + " Sternenstaub. Zerlege alte Gegenstände." };
+    S.staub -= cost;
+    const out = reshape(S, it, it.level, it.rarity, "umschmieden" + (now || E.now()));
+    loc.put(out);
+    return { ok: true, item: out, cost };
+  };
+  E.mythify = function (S, ref, now) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    const it = loc.it;
+    if (it.rarity !== "legendaer") return { ok: false, msg: "Nur legendäre Gegenstände lassen sich mythisch schmieden." };
+    const gold = E.mythGold(it.level);
+    if ((S.staub || 0) < E.C.MYTH_STAUB) return { ok: false, msg: "Dafür brauchst du " + E.C.MYTH_STAUB + " Sternenstaub." };
+    if (S.gold < gold) return { ok: false, msg: "Dafür brauchst du " + U.fmt(gold) + " Gold." };
+    S.staub -= E.C.MYTH_STAUB;
+    S.gold -= gold;
+    const out = reshape(S, it, it.level, "mythisch", "mythisch" + (now || E.now()));
+    loc.put(out);
+    return { ok: true, item: out };
+  };
+
+  /* ---------------- Jagdziele im Bestiarium (0.77) ----------------
+     Siege je Monsterfamilie (Bestiarium nach arch gefaltet): bei 25 Wolkenperlen, bei 100 dazu ein Titel,
+     den der Held tragen kann (S.title). Ausgezahlt wird einmalig ueber S.jagd in checkAch. */
+  E.familyKills = function (S) {
+    const out = {};
+    for (const id in S.bestiary) {
+      const m = E.monById(id);
+      if (m && m.arch) out[m.arch] = (out[m.arch] || 0) + S.bestiary[id];
+    }
+    return out;
+  };
+  E.jagdTitle = (arch) => D.JAGD_TITEL[arch] || "Schrecken der " + (D.ARCH_NAMES[arch] || arch);
+  E.earnedTitles = function (S) {
+    const kills = E.familyKills(S);
+    const out = [];
+    for (const arch in kills) if (kills[arch] >= D.JAGD.steps[1]) out.push(E.jagdTitle(arch));
+    return out;
+  };
+  E.setTitle = function (S, title) {
+    if (title && E.earnedTitles(S).indexOf(title) < 0) return { ok: false, msg: "Diesen Titel hast du noch nicht errungen." };
+    S.title = title || null;
+    return { ok: true };
+  };
+  E.checkJagd = function (S) {
+    const kills = E.familyKills(S);
+    S.jagd = S.jagd || {};
+    for (const arch in kills)
+      D.JAGD.steps.forEach((need, i) => {
+        const key = arch + ":" + need;
+        if (kills[arch] < need || S.jagd[key]) return;
+        S.jagd[key] = 1;
+        S.perlen += D.JAGD.perlen[i];
+        toast(
+          i === 0
+            ? "Jagdziel erreicht: " + need + " Siege gegen die Familie " + (D.ARCH_NAMES[arch] || arch) + ". +" + D.JAGD.perlen[i] + " Wolkenperlen"
+            : "Großes Jagdziel erreicht! Du darfst jetzt den Titel „" + E.jagdTitle(arch) + "“ tragen. +" + D.JAGD.perlen[i] + " Wolkenperlen",
+          "good"
+        );
+      });
+  };
+
+  /* ---------------- Mondereignisse (0.77) ----------------
+     Manche Naechte sind besonders, fest aus dem Tagesschluessel gewuerfelt: Im Blutmond sind die
+     Nachtjagd-Gegner staerker, dafuer ist die Beute deutlich besser; in der Sternennacht gibt es eine
+     vierte Jagd und sicher eine Wolkenperle je Sieg. */
+  E.moonEvent = function (now) {
+    const h = Math.abs(U.hash("mond" + U.dayKey(now || E.now())));
+    if (h % 7 === 0) return { id: "blutmond", name: "Blutmond", desc: "Die Nachtwesen sind wilder als sonst, ihre Beute dafür umso reicher: doppeltes Gold, Gegenstände mindestens episch." };
+    if (h % 7 === 3) return { id: "sternennacht", name: "Sternennacht", desc: "Der Himmel steht günstig: eine vierte Jagd heute Nacht, und jeder Sieg bringt sicher eine Wolkenperle." };
+    return null;
+  };
+  E.nightHuntsMax = function (S, now) {
+    const ev = E.moonEvent(now);
+    return E.C.NIGHT_HUNTS + (ev && ev.id === "sternennacht" ? 1 : 0);
+  };
+
+  /* ---------------- Gefaehrten (0.77 Teil 3) ----------------
+     Junge Bestien lassen sich nach gewonnenen Kaempfen einfangen (Nachtjagd am ehesten, Boss-Etagen des
+     Wolkenturms, Dungeons) und leben im Stall. Eine begleitet den Helden: sie steht im Kampf an seiner
+     Seite (nur zur Schau, src/r3d-scenes.js) und gibt einen kleinen Bonus je Familie, der mit ihrer Stufe
+     waechst. Die Stufe steigt durchs Mitkaempfen (alle 5 Siege eine, nie ueber die Heldenstufe). */
+  E.C.PET_MAX = 12;
+  E.C.PET_FIGHTS_PER_LV = 5;
+  E.C.PET_CHANCE = { nacht: 0.2, turmboss: 0.15, verlies: 0.1 };
+  E.PET_FAMS = ["wolf", "spinne", "drache", "krebs", "schlund", "fledermaus"];
+  E.PET_EFF = { wolf: { dmg: 0.05 }, drache: { dmg: 0.06 }, spinne: { crit: 0.03 }, krebs: { armor: 0.1 }, schlund: { hp: 0.06 }, fledermaus: { evade: 0.02 } };
+  E.activePet = (S) => ((S.pets || []).find((p) => p.id === S.petActive) || null);
+  E.petLevel = (S, pet) => Math.max(1, Math.min(S.level, pet.lv + Math.floor((pet.fights || 0) / E.C.PET_FIGHTS_PER_LV)));
+  E.petMon = (pet) => E.monById(pet.mon) || { id: pet.mon, name: pet.name, arch: pet.arch, color: pet.color, accent: pet.accent };
+  // Bonus des Begleiters, voll bei Gefaehrtenstufe = Heldenstufe
+  E.petEffects = function (S) {
+    const pet = E.activePet(S);
+    if (!pet) return null;
+    const base = E.PET_EFF[pet.arch];
+    if (!base) return null;
+    const k = E.petLevel(S, pet) / Math.max(1, S.level);
+    const out = {};
+    for (const key in base) out[key] = base[key] * k;
+    return out;
+  };
+  E.petFought = function (S) {
+    const pet = E.activePet(S);
+    if (pet) pet.fights = (pet.fights || 0) + 1;
+  };
+  E.tryCapture = function (S, foes, source, seed) {
+    const chance = E.C.PET_CHANCE[source] || 0;
+    if (!chance || (S.pets || []).length >= E.C.PET_MAX) return null;
+    const r = U.rng(U.hash(S.name + "fang" + source + (seed != null ? seed : E.now())));
+    if (r() >= chance) return null;
+    const beasts = (foes || []).filter((f) => f && f.id && E.PET_FAMS.indexOf(f.arch) >= 0);
+    if (!beasts.length) return null;
+    const f = U.pick(r, beasts);
+    const pet = { id: U.uid(), mon: f.id, name: f.name, arch: f.arch, color: f.color, accent: f.accent, lv: Math.max(1, Math.round(S.level * 0.6)), fights: 0, caught: E.now() };
+    S.pets.push(pet);
+    toast("Du hast ein Jungtier eingefangen: " + f.name + "! Es wartet im Stall auf dich.", "good");
+    return pet;
+  };
+  E.setActivePet = function (S, id) {
+    if (id && !(S.pets || []).some((p) => p.id === id)) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    S.petActive = id || null;
+    return { ok: true };
+  };
+  E.releasePet = function (S, id) {
+    const i = (S.pets || []).findIndex((p) => p.id === id);
+    if (i < 0) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    const pet = S.pets.splice(i, 1)[0];
+    if (S.petActive === id) S.petActive = null;
+    return { ok: true, pet };
   };
 
   /* ---------------- Laeden ---------------- */
@@ -4000,6 +4226,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     }
   };
   E.checkAch = function (S, now) {
+    E.checkJagd(S);
     if (S.stats.quests >= 10) E.grantAch(S, "quest10");
     if (S.stats.quests >= 50) E.grantAch(S, "quest50");
     if (S.stats.quests >= 150) E.grantAch(S, "quest150");
@@ -4316,6 +4543,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     arkanum: `<path d="M9 3 L15 3 L15 8 C19 10 20 13 20 15 C20 19 16 21.5 12 21.5 C8 21.5 4 19 4 15 C4 13 5 10 9 8 Z" fill="#9a6ae0" ${s2}/><circle cx="10" cy="15" r="1.6" fill="#fff" opacity="0.8"/><circle cx="14" cy="17" r="1" fill="#fff" opacity="0.8"/>`,
     arena: `<path d="M4 4 L6.5 4 L17 14.5 L14.5 17 L4 6.5 Z M20 4 L17.5 4 L7 14.5 L9.5 17 L20 6.5 Z" fill="#d9a441" ${s2}/><path d="M13 18 L18 13 M11 18 L6 13" stroke="${O}" stroke-width="2.6"/>`,
     leuchtturm: `<path d="M8 21 L9.5 8 L14.5 8 L16 21 Z" fill="#8a8680" ${s2}/><path d="M6 8 L18 8 L18 6 L6 6 Z" fill="#6a4628" ${s2}/><path d="M9 6 C9 3 11 2 12 0.5 C13 2 15 3 15 6 Z" fill="#ff9a3d" ${s2}/>`,
+    staub: `<path d="M12 4 L13.6 9.4 L19 11 L13.6 12.6 L12 18 L10.4 12.6 L5 11 L10.4 9.4 Z" fill="#9fe3ff" ${s2}/><path d="M18.5 15.5 L19.3 17.7 L21.5 18.5 L19.3 19.3 L18.5 21.5 L17.7 19.3 L15.5 18.5 L17.7 17.7 Z" fill="#dfe8ff" stroke="${O}" stroke-width="1"/><path d="M5.5 16.5 L6.1 18.1 L7.7 18.7 L6.1 19.3 L5.5 20.9 L4.9 19.3 L3.3 18.7 L4.9 18.1 Z" fill="#dfe8ff" stroke="${O}" stroke-width="1"/>`,
     wolkenturm: `<path d="M9 21 L9.7 8.5 L14.3 8.5 L15 21 Z" fill="#8a86a0" ${s2}/><path d="M8.4 8.5 L15.6 8.5 L15.6 6.2 L8.4 6.2 Z" fill="#6a628a" ${s2}/><path d="M9 6.2 L9 3.6 L10.6 4.8 L12 3 L13.4 4.8 L15 3.6 L15 6.2 Z" fill="#c9a441" ${s2}/><ellipse cx="6.4" cy="14.5" rx="3.4" ry="1.7" fill="#dfe8ff" stroke="${O}" stroke-width="1"/><ellipse cx="17.6" cy="11.5" rx="3" ry="1.5" fill="#dfe8ff" stroke="${O}" stroke-width="1" opacity=".85"/>`,
     tiefen: `<path d="M4 21 L4 10 C4 4 20 4 20 10 L20 21 Z" fill="#4a4558" ${s2}/><ellipse cx="12" cy="14" rx="5" ry="6" fill="#9a6ae0" ${s2}/><path d="M12 10 C14.5 11 14.5 14 12 15 C10 15.5 10 13 12 13" fill="none" stroke="#fff" stroke-width="1.2"/>`,
     stall: `<path d="M4 14 C4 9 8 6 12 6 L16 3 L17 7 C19 8 20 10 20 13 L18 14 L17 21 L14 21 L14 16 L9 16 L9 21 L6 21 L6 15 Z" fill="#c9a86a" ${s2}/><path d="M10 9 C6 6 3 7 2 10 C5 9 8 10 10 12" fill="#f4ecd8" ${s2}/>`,
@@ -17747,6 +17975,33 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       return { m, home, side, shadow: sh, desc, front };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
+    // Gefaehrte (0.77): eine junge Bestie steht halb so gross hinter dem Helden und kaempft nur zur Schau
+    let PET = null;
+    if (opts.pet) {
+      try {
+        const pm = R.buildFighter(opts.pet);
+        pm.obj.scale.multiplyScalar(0.5);
+        if (pm.headY) pm.headY *= 0.5;
+        const phome = new T.Vector3(-sep - 1.5, 0, -1.2);
+        pm.obj.position.copy(phome);
+        pm.obj.rotation.y = PI / 2 - 0.4;
+        const psh = new T.Mesh(new T.CircleGeometry(1, 20), KUL ? softShadowMat() : basic("#000000", 0.3));
+        psh.rotation.x = -PI / 2;
+        psh.position.set(phome.x, 0.03, phome.z);
+        psh.scale.setScalar(0.55);
+        scene.add(psh);
+        scene.add(pm.obj);
+        PET = { m: pm, home: phome, shadow: psh };
+      } catch (e) {
+        console.warn("Gefaehrte nicht aufgebaut", e);
+        PET = null;
+      }
+    }
+    function petPlay(name, lunge) {
+      if (!PET) return;
+      PET.m.play(name, 0.6);
+      if (lunge) tween(0.5, (u) => (PET.m.obj.position.x = PET.home.x + Math.sin(u * PI) * 0.8));
+    }
 
     let speed = 1;
     let w = 1;
@@ -17818,6 +18073,11 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           f.poisonFx.position.set(f.m.obj.position.x, (f.m.headY || 1.8) + 0.2, f.m.obj.position.z);
           f.poisonFx.rotation.y += dt * 2;
         }
+      }
+      if (PET) {
+        PET.m.speed = speed;
+        PET.m.update(dt * speed);
+        PET.shadow.position.x = PET.m.obj.position.x;
       }
       for (const c of flickers) c.intensity = 12 + Math.sin(t * 13 + c.position.x) * 2 + Math.random() * 2;
       for (const e of extras) e.rotation.y = Math.sin(t * 2 + e.position.x) * 0.2;
@@ -19116,6 +19376,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         return;
       }
       const special = ev.kind === "special";
+      if (ev.a === 0) petPlay("attack", true);
       const SFX = special ? SPECIAL_FX[ev.sp] || { color: A.m.projColor || "#ffd25a", kind: "shock" } : null;
       const isHero = A.desc.kind !== "monster";
       const wb = A.m.weaponBase;
@@ -19342,6 +19603,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         if (heroHp != null) hp[0] = heroHp;
       },
       async finish(winner) {
+        petPlay(winner === 0 ? "victory" : "defeat");
         const W = F[winner];
         const L = F[1 - winner];
         clearStars(L);
@@ -21019,6 +21281,16 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     // offenes Fenster neu zeichnen: Portraits und Figuren, die bis eben Platzhalter waren
     if (UI.panelId) UI.renderPanel();
   };
+  // Neuzeichnung des offenen Fensters buendeln: Laden mehrere Monsterdateien kurz nacheinander fertig
+  // (Chronik, Taverne), zeichnete frueher jede einzeln das Fenster neu und riss Knoepfe unter dem Zeiger weg
+  let panelSoon = 0;
+  UI.renderPanelSoon = function () {
+    if (panelSoon) return;
+    panelSoon = setTimeout(() => {
+      panelSoon = 0;
+      if (UI.panelId) UI.renderPanel();
+    }, 200);
+  };
   // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
   // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); bis dahin steht ein Platzhalter da.
   // Ein gescheitertes Laden wird nach einer Pause erneut versucht (schwaches Netz am Handy).
@@ -21049,7 +21321,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       .then(
         () => {
           UI.monReady[arch] = true;
-          if (MON_PANELS[UI.panelId]) UI.renderPanel();
+          if (MON_PANELS[UI.panelId]) UI.renderPanelSoon();
           return true;
         },
         (e) => {
@@ -21553,7 +21825,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       price = "Preis: " + UI.gold(it.value);
       actions += '<button class="btn" data-act="buy" data-shop="' + a + '" data-i="' + b + '"' + (S.gold < it.value ? " disabled" : "") + ">Kaufen</button>";
     }
-    UI.dialog(UI.itemCard(it, { price, compare: false }) + UI.compareTable(it) + (E.canEquip(S, it) ? "" : '<p class="delta-down">Nur für ' + esc(archName(it.arch)) + "-Klassen.</p>") + '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + actions + "</div>", { cls: "wide" });
+    // Brumms Amboss (0.77): in der Schmiede traegt der Dialog die Schmiedearbeiten
+    let amboss = "";
+    if (UI.panelId === "schmiede" && (kind === "inv" || kind === "eq")) {
+      const st = S.staub || 0;
+      const dust = (n) => '<span class="num">' + n + "</span> " + I.ui("staub");
+      if (kind === "inv") amboss += '<button class="btn ghost" data-act="dismantle" data-ref="' + ref + '">Zerlegen · +' + dust(E.C.STAUB_VALUE[it.rarity] || 1) + "</button>";
+      if (it.level < S.level) amboss += '<button class="btn" data-act="refineItem" data-ref="' + ref + '"' + (st < E.C.REFINE_COST[it.rarity] ? " disabled" : "") + ">Veredeln auf Stufe " + (it.level + 1) + " · " + dust(E.C.REFINE_COST[it.rarity]) + "</button>";
+      amboss += '<button class="btn ghost" data-act="reforgeItem" data-ref="' + ref + '"' + (st < E.C.REFORGE_COST[it.rarity] ? " disabled" : "") + ">Werte neu würfeln · " + dust(E.C.REFORGE_COST[it.rarity]) + "</button>";
+      if (it.rarity === "legendaer") amboss += '<button class="btn" data-act="mythifyItem" data-ref="' + ref + '"' + (st < E.C.MYTH_STAUB || S.gold < E.mythGold(it.level) ? " disabled" : "") + '>Mythisch schmieden · ' + dust(E.C.MYTH_STAUB) + " + " + UI.gold(E.mythGold(it.level)) + "</button>";
+      amboss = '<div class="section-title">' + I.ui("schmiede") + ' Brumms Amboss <span class="muted small">Du hast ' + dust(st) + ' Sternenstaub</span></div><div class="actions" style="justify-content:flex-start">' + amboss + "</div>";
+    }
+    UI.dialog(UI.itemCard(it, { price, compare: false }) + UI.compareTable(it) + (E.canEquip(S, it) ? "" : '<p class="delta-down">Nur für ' + esc(archName(it.arch)) + "-Klassen.</p>") + amboss + '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + actions + "</div>", { cls: "wide" });
   };
 
   /* ---------- Menueleiste (links am Desktop, unten am Handy) ---------- */
@@ -21598,7 +21881,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (UI.hub) UI.hub.setHero(UI.heroDesc(S));
     }
     top.querySelector(".me-name").innerHTML = I.realm(S.realm) + " " + esc(S.name) + (S.guild ? ' <span class="gtag">[' + esc(S.guild.tag) + "]</span>" : "");
-    top.querySelector(".me-sub").textContent = "Stufe " + S.level + " · " + D.CLASSES[S.cls].name;
+    top.querySelector(".me-sub").textContent = "Stufe " + S.level + " · " + (S.title ? S.title : D.CLASSES[S.cls].name);
     top.querySelector(".xpbar i").style.width = x.pct.toFixed(1) + "%";
     top.querySelector(".xptext").textContent = innerWidth <= 520 ? U.fmtShort(x.rest) + " EP bis " + (S.level + 1) : "Stufe " + S.level + " · " + U.fmt(x.have) + " / " + U.fmt(x.need) + " EP · noch " + U.fmt(x.rest) + " bis Stufe " + (S.level + 1);
     $("#resGold").innerHTML = I.ui("gold") + '<span class="num">' + U.fmtShort(S.gold) + "</span>";
@@ -21941,7 +22224,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         }
         if (gDone && prev[1] === "false") UI.toast("Deine Wache ist vorbei. Funzel hat deinen Lohn bereit.", "good", "leuchtturm");
         if (String(night) !== prev[7]) {
-          if (night) UI.toast("Die Nacht bricht herein. Das Mondtor hat sich geöffnet.", "good", "mond");
+          if (night) {
+            const ev = E.moonEvent(now);
+            UI.toast(ev ? "Die Nacht bricht herein, und heute steht der Himmel besonders: " + ev.name + "! " + ev.desc : "Die Nacht bricht herein. Das Mondtor hat sich geöffnet.", "good", "mond");
+          }
           else UI.toast("Der Morgen graut. Das Mondtor schließt sich bis zur nächsten Nacht.", "", "sonne");
           UI.updateMusic();
           UI.checkHint();
@@ -22170,11 +22456,47 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           }
           h += "</div>";
         }
-        h += invSection("Rucksack: zum Verkaufen anklicken");
+        if (shop === "schmiede") {
+          h += '<div class="section-title">' + I.ui("schmiede") + ' Brumms Amboss <span class="muted small">' + I.ui("staub") + ' <b class="num">' + (s.staub || 0) + "</b> Sternenstaub</span></div>";
+          h += '<div class="muted" style="font-size:13px;margin-bottom:8px">Klicke einen Gegenstand an: Brumm zerlegt Altes zu Sternenstaub und veredelt damit deine Ausrüstung auf deine Stufe, würfelt Werte neu oder schmiedet Legendäres zu <span class="t-mythisch">Mythischem</span>.</div>';
+          h += '<div class="grid6">' + D.SLOTS.map((sl) => (s.equip[sl] ? UI.slotHtml(s.equip[sl], "eq:" + sl, {}) : '<div class="slot empty"></div>')).join("") + "</div>";
+        }
+        h += invSection(shop === "schmiede" ? "Rucksack: anklicken zum Verkaufen oder Schmieden" : "Rucksack: zum Verkaufen anklicken");
         return h;
       },
     };
   }
+  A.wearTitle = (el) => {
+    const t = el.dataset.t || null;
+    if (!done(E.setTitle(S(), t))) return;
+    SB.audio.play("chime");
+    if (t) UI.toast("Du trägst jetzt den Titel „" + t + "“. Er steht oben neben deinem Namen.", "good", "abzeichen");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.dismantle = (el) => {
+    const res = E.dismantle(S(), el.dataset.ref);
+    if (!done(res)) return;
+    UI.closeDialog();
+    SB.audio.play("coin");
+    UI.toast("Brumm zerlegt „" + res.name + "“: +" + res.staub + " Sternenstaub.", "good", "schmiede");
+    UI.saveNow();
+    UI.refresh();
+  };
+  const smithAct = (fn, sound, text) => (el) => {
+    const ref = el.dataset.ref;
+    const res = fn(S(), ref);
+    if (!done(res)) return;
+    UI.closeDialog();
+    SB.audio.play(sound);
+    UI.toast(text(res), "good", "schmiede");
+    UI.saveNow();
+    UI.refresh();
+    UI.ACTIONS.itemInfo({ dataset: { ref } });
+  };
+  A.refineItem = smithAct(E.refine, "levelup", (r) => "Veredelt: „" + r.item.name + "“ ist jetzt Stufe " + r.item.level + ".");
+  A.reforgeItem = smithAct(E.reforge, "chime", (r) => "Neu geschmiedet: die Werte von „" + r.item.name + "“ sind neu gewürfelt.");
+  A.mythifyItem = smithAct(E.mythify, "levelup", (r) => "Brumms Meisterstück: „" + r.item.name + "“ ist jetzt mythisch!");
   function invSection(title) {
     const s = S();
     const size = E.invSize(s);
@@ -22472,7 +22794,26 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     // Meshy-Figuren der entdeckten Wesen nachladen (die Portraits entstehen danach neu); unentdeckte bleiben Umrisse
     UI.loadMonsters([...new Set(all.filter((m) => s.bestiary[m.id]).map((m) => m.desc.arch))]);
     let h = '<div class="muted" style="margin-bottom:10px">' + found + " von " + all.length + " Wesen entdeckt. Jedes entdeckte Wesen bringt dir dauerhaft +0,5 % Erfahrung und Gold aus Aufträgen (derzeit +" + (found * 0.5).toFixed(1).replace(".", ",") + " %).</div>";
-    h += '<div class="bestiary">';
+    // Jagdziele (0.77): Siege je Familie, bei 25 Wolkenperlen, bei 100 ein tragbarer Titel
+    const kills = E.familyKills(s);
+    const fams = Object.keys(D.ARCH_NAMES).filter((a) => kills[a]).sort((a, b) => (kills[b] || 0) - (kills[a] || 0));
+    if (fams.length) {
+      h += '<div class="section-title">' + I.ui("abzeichen") + ' Jagdziele <span class="muted small">' + D.JAGD.steps[0] + " Siege gegen eine Familie: +" + D.JAGD.perlen[0] + " " + I.ui("perle") + " · " + D.JAGD.steps[1] + ": +" + D.JAGD.perlen[1] + " " + I.ui("perle") + " und ein Titel</span></div>";
+      if (s.title) h += '<div class="row" style="margin-bottom:8px"><span class="chip">Dein Titel: <b>' + esc(s.title) + '</b></span><button class="btn small ghost" data-act="wearTitle" data-t="">Ablegen</button></div>';
+      h += '<div class="bestiary">';
+      for (const a of fams) {
+        const n = kills[a] || 0;
+        const next = D.JAGD.steps.find((x) => n < x);
+        const title = E.jagdTitle(a);
+        const earned = n >= D.JAGD.steps[1];
+        h +=
+          '<div class="beast"><b>' + esc(D.ARCH_NAMES[a] || a) + '</b><div class="muted num">' + n + "× besiegt" + (next ? " · nächstes Ziel: " + next : "") + "</div>" +
+          (earned ? (s.title === title ? '<span class="tag">' + esc(title) + "</span>" : '<button class="btn small" data-act="wearTitle" data-t="' + esc(title) + '">Titel „' + esc(title) + "“ tragen</button>") : '<div class="muted small">Titel bei ' + D.JAGD.steps[1] + ": „" + esc(title) + "“</div>") +
+          "</div>";
+      }
+      h += "</div>";
+    }
+    h += '<div class="section-title">Alle Wesen</div><div class="bestiary">';
     for (const m of all) {
       const n = s.bestiary[m.id] || 0;
       h += '<div class="beast' + (n ? "" : " unknown") + '"><div class="pic">' + UI.portrait(m.desc, 112) + "</div>" + (n ? esc(m.name) + '<div class="muted">' + n + "× besiegt</div>" : "???") + "</div>";
@@ -22624,6 +22965,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         h += '<div class="section-title">Was dich nachts erwartet</div><ul class="muted" style="margin:0;padding-left:20px"><li>Nachtjagd: zwei Nachtwesen deiner Heimatinsel nacheinander, ' + E.C.NIGHT_HUNTS + " Jagden pro Tag, kostet keinen Tatendrang.</li><li>Sichere Beute: immer mindestens ein seltener Gegenstand.</li><li>Selene Silberblick verkauft drei besondere Stücke, eines davon episch.</li></ul>";
         return h;
       }
+      const ev = E.moonEvent(now);
+      if (ev) h += '<div class="lore" style="border-color:' + (ev.id === "blutmond" ? "#b33" : "#7af") + '"><h3>' + I.ui("mond") + " " + esc(ev.name) + '</h3><p class="muted">' + esc(ev.desc) + "</p></div>";
       const tab = UI.tabs.mondtor || "jagd";
       h += '<div class="tabs">' + [["jagd", "Nachtjagd"], ["laden", "Mondhändlerin"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="mondtor" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
       const wait = E.nightChangeIn(mode, now);
@@ -22646,7 +22989,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       h +=
         '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
         '<div class="wavepics">' + foes.map((f, k) => '<span class="wp' + (k ? " boss" : "") + '" title="' + esc(f.name) + '">' + UI.portrait(UI.monDesc(f, !!k), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div>" +
-        '<div class="foot">' + chanceTxt(c) + '<span class="muted small">Noch ' + left + " von " + E.C.NIGHT_HUNTS + ' Jagden heute</span><span class="spacer"></span>' +
+        '<div class="foot">' + chanceTxt(c) + '<span class="muted small">Noch ' + left + " von " + E.nightHuntsMax(s, now) + ' Jagden heute</span><span class="spacer"></span>' +
         (busy ? '<span class="muted">Du bist gerade beschäftigt.</span>' : '<button class="btn" data-act="nightHunt"' + (left <= 0 ? " disabled" : "") + ">Zur Jagd</button>") +
         "</div></div></div>";
       h += '<div class="muted small">Belohnung bei Sieg: viel Erfahrung und Gold, ein Gegenstand mindestens „selten“, manchmal eine Wolkenperle.</div>';
@@ -22876,10 +23219,42 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
 
   /* ================= Stall ================= */
+  // Wirkung eines Gefaehrten in Worten, bei voller Staerke (Gefaehrtenstufe = Heldenstufe)
+  function petEffText(arch) {
+    const e = E.PET_EFF[arch] || {};
+    if (e.dmg) return "bis zu +" + Math.round(e.dmg * 100) + " % Schaden";
+    if (e.crit) return "bis zu +" + Math.round(e.crit * 100) + " Punkte kritische Trefferchance";
+    if (e.armor) return "bis zu +" + Math.round(e.armor * 100) + " % Rüstung";
+    if (e.hp) return "bis zu +" + Math.round(e.hp * 100) + " % Lebenspunkte";
+    if (e.evade) return "bis zu +" + Math.round(e.evade * 100) + " Punkte Ausweichen";
+    return "";
+  }
+  function petsTab(s) {
+    let h = '<div class="muted" style="margin-bottom:10px">Junge Bestien fängst du nach gewonnenen Kämpfen: am ehesten bei der <b>Nachtjagd</b>, auf den <b>Boss-Etagen des Wolkenturms</b> und in den <b>Dungeons</b>. Eine davon begleitet dich: sie steht im Kampf an deiner Seite und stärkt dich je nach Familie. Mitkämpfen macht sie stärker, alle ' + E.C.PET_FIGHTS_PER_LV + " Siege eine Stufe (nie über deine).</div>";
+    if (!(s.pets || []).length) return h + '<div class="say">Dein Stall hat noch keine Gefährten. Zieh zur Nachtjagd, wenn das Mondtor offen ist, dort streifen die meisten Jungtiere umher.</div>';
+    h += '<div class="cards">';
+    for (const pet of s.pets) {
+      const lv = E.petLevel(s, pet);
+      const next = lv >= s.level ? null : E.C.PET_FIGHTS_PER_LV - ((pet.fights || 0) % E.C.PET_FIGHTS_PER_LV);
+      const active = s.petActive === pet.id;
+      h +=
+        '<div class="card"><div class="pic">' + UI.portrait(UI.monDesc(E.petMon(pet)), 96) + "</div>" +
+        "<div><h4>" + esc(pet.name) + (active ? ' <span class="tag">begleitet dich</span>' : "") + "</h4>" +
+        '<div class="muted small">Stufe ' + lv + " · " + esc(D.ARCH_NAMES[pet.arch] || pet.arch) + " · " + petEffText(pet.arch) + (next ? " · nächste Stufe in " + next + " Siegen" : " · auf deiner Stufe") + "</div></div>" +
+        '<div class="row" style="gap:6px">' +
+        (active ? '<button class="btn small ghost" data-act="petActive" data-id="">Zurücklassen</button>' : '<button class="btn small" data-act="petActive" data-id="' + pet.id + '">Begleiten lassen</button>') +
+        '<button class="btn small ghost" data-act="petRelease" data-id="' + pet.id + '">Freilassen</button></div></div>';
+    }
+    UI.loadMonsters([...new Set(s.pets.map((p0) => p0.arch))]);
+    return h + "</div>";
+  }
   P.stall = {
     render() {
       const s = S();
       let h = say("hufnagel");
+      const tab = UI.tabs.stall || "tiere";
+      h += '<div class="tabs">' + [["tiere", "Reittiere"], ["gefaehrten", "Gefährten" + ((s.pets || []).length ? ' <span class="badge">' + s.pets.length + "</span>" : "")]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="stall" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      if (tab === "gefaehrten") return h + petsTab(s);
       h += '<div class="muted" style="margin-bottom:10px">Reittiere verkürzen die Reisezeit zu jedem Auftrag dauerhaft. Es zählt immer dein schnellstes Tier.</div><div class="cards">';
       for (const m of D.MOUNTS) {
         const owned = s.mounts.owned.indexOf(m.id) >= 0;
@@ -22891,6 +23266,29 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
       return h + "</div>";
     },
+  };
+  A.petActive = (el) => {
+    if (!done(E.setActivePet(S(), el.dataset.id || null))) return;
+    SB.audio.play("chime");
+    if (el.dataset.id) UI.toast("Dein Gefährte trottet dir hinterher. Er kämpft ab jetzt an deiner Seite.", "good", "stall");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.petRelease = (el) => {
+    const pet = (S().pets || []).find((p0) => p0.id === el.dataset.id);
+    if (!pet) return;
+    UI.dialog(
+      "<h3>" + esc(pet.name) + " freilassen?</h3><p>Das Tier kehrt in die Wildnis zurück. Das lässt sich nicht rückgängig machen.</p>" +
+        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Behalten</button><button class="btn" data-act="petReleaseYes" data-id="' + esc(pet.id) + '">Freilassen</button></div>'
+    );
+  };
+  A.petReleaseYes = (el) => {
+    const res = E.releasePet(S(), el.dataset.id);
+    if (!done(res)) return;
+    UI.closeDialog();
+    UI.toast(res.pet.name + " verschwindet zwischen den Wolkeninseln. Leb wohl!", "", "stall");
+    UI.saveNow();
+    UI.refresh();
   };
   A.mount = (el) => {
     if (!done(E.buyMount(S(), el.dataset.id))) return;
@@ -23511,6 +23909,9 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   const BATTLE_WAIT = 15000;
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
+    // Gefaehrte des Helden (0.77): seine Figur mitladen und der Buehne geben
+    const pet = fight.hero && fight.hero.kind !== "monster" && E.activePet(UI.S) ? E.activePet(UI.S) : null;
+    if (pet) archs.push(pet.arch);
     const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, BATTLE_WAIT))]);
     // Heldenkoerper aller beteiligten Reiche (Arena, Rangliste): deren Figurendatei ebenfalls vorher laden
     const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
@@ -23523,6 +23924,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     root.hidden = false;
     document.body.classList.add("in-battle");
     $("#hint").hidden = true;
+    if (pet) opts = Object.assign({}, opts, { petDesc: UI.monDesc(E.petMon(pet)) });
     return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
@@ -23574,6 +23976,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
             realm: S.realm,
             left: UI.fighterDesc(hero),
             right: UI.fighterDesc(foes[0]),
+            pet: opts.petDesc || null,
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
             sfx: (n) => SB.audio.play(n),

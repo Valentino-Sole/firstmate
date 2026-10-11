@@ -60,6 +60,16 @@
     // offenes Fenster neu zeichnen: Portraits und Figuren, die bis eben Platzhalter waren
     if (UI.panelId) UI.renderPanel();
   };
+  // Neuzeichnung des offenen Fensters buendeln: Laden mehrere Monsterdateien kurz nacheinander fertig
+  // (Chronik, Taverne), zeichnete frueher jede einzeln das Fenster neu und riss Knoepfe unter dem Zeiger weg
+  let panelSoon = 0;
+  UI.renderPanelSoon = function () {
+    if (panelSoon) return;
+    panelSoon = setTimeout(() => {
+      panelSoon = 0;
+      if (UI.panelId) UI.renderPanel();
+    }, 200);
+  };
   // Monster mit eigener Figur aus dem Monsterkonzept: je Familie eine Zusatzdatei gen-mon<familie>.js neben der Seite,
   // erst bei Bedarf geladen (Auftragsbrett, vor dem Kampf, Figurenprobe); bis dahin steht ein Platzhalter da.
   // Ein gescheitertes Laden wird nach einer Pause erneut versucht (schwaches Netz am Handy).
@@ -90,7 +100,7 @@
       .then(
         () => {
           UI.monReady[arch] = true;
-          if (MON_PANELS[UI.panelId]) UI.renderPanel();
+          if (MON_PANELS[UI.panelId]) UI.renderPanelSoon();
           return true;
         },
         (e) => {
@@ -594,7 +604,18 @@
       price = "Preis: " + UI.gold(it.value);
       actions += '<button class="btn" data-act="buy" data-shop="' + a + '" data-i="' + b + '"' + (S.gold < it.value ? " disabled" : "") + ">Kaufen</button>";
     }
-    UI.dialog(UI.itemCard(it, { price, compare: false }) + UI.compareTable(it) + (E.canEquip(S, it) ? "" : '<p class="delta-down">Nur für ' + esc(archName(it.arch)) + "-Klassen.</p>") + '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + actions + "</div>", { cls: "wide" });
+    // Brumms Amboss (0.77): in der Schmiede traegt der Dialog die Schmiedearbeiten
+    let amboss = "";
+    if (UI.panelId === "schmiede" && (kind === "inv" || kind === "eq")) {
+      const st = S.staub || 0;
+      const dust = (n) => '<span class="num">' + n + "</span> " + I.ui("staub");
+      if (kind === "inv") amboss += '<button class="btn ghost" data-act="dismantle" data-ref="' + ref + '">Zerlegen · +' + dust(E.C.STAUB_VALUE[it.rarity] || 1) + "</button>";
+      if (it.level < S.level) amboss += '<button class="btn" data-act="refineItem" data-ref="' + ref + '"' + (st < E.C.REFINE_COST[it.rarity] ? " disabled" : "") + ">Veredeln auf Stufe " + (it.level + 1) + " · " + dust(E.C.REFINE_COST[it.rarity]) + "</button>";
+      amboss += '<button class="btn ghost" data-act="reforgeItem" data-ref="' + ref + '"' + (st < E.C.REFORGE_COST[it.rarity] ? " disabled" : "") + ">Werte neu würfeln · " + dust(E.C.REFORGE_COST[it.rarity]) + "</button>";
+      if (it.rarity === "legendaer") amboss += '<button class="btn" data-act="mythifyItem" data-ref="' + ref + '"' + (st < E.C.MYTH_STAUB || S.gold < E.mythGold(it.level) ? " disabled" : "") + '>Mythisch schmieden · ' + dust(E.C.MYTH_STAUB) + " + " + UI.gold(E.mythGold(it.level)) + "</button>";
+      amboss = '<div class="section-title">' + I.ui("schmiede") + ' Brumms Amboss <span class="muted small">Du hast ' + dust(st) + ' Sternenstaub</span></div><div class="actions" style="justify-content:flex-start">' + amboss + "</div>";
+    }
+    UI.dialog(UI.itemCard(it, { price, compare: false }) + UI.compareTable(it) + (E.canEquip(S, it) ? "" : '<p class="delta-down">Nur für ' + esc(archName(it.arch)) + "-Klassen.</p>") + amboss + '<div class="actions"><button class="btn ghost" data-act="closeDialog">Schließen</button>' + actions + "</div>", { cls: "wide" });
   };
 
   /* ---------- Menueleiste (links am Desktop, unten am Handy) ---------- */
@@ -639,7 +660,7 @@
       if (UI.hub) UI.hub.setHero(UI.heroDesc(S));
     }
     top.querySelector(".me-name").innerHTML = I.realm(S.realm) + " " + esc(S.name) + (S.guild ? ' <span class="gtag">[' + esc(S.guild.tag) + "]</span>" : "");
-    top.querySelector(".me-sub").textContent = "Stufe " + S.level + " · " + D.CLASSES[S.cls].name;
+    top.querySelector(".me-sub").textContent = "Stufe " + S.level + " · " + (S.title ? S.title : D.CLASSES[S.cls].name);
     top.querySelector(".xpbar i").style.width = x.pct.toFixed(1) + "%";
     top.querySelector(".xptext").textContent = innerWidth <= 520 ? U.fmtShort(x.rest) + " EP bis " + (S.level + 1) : "Stufe " + S.level + " · " + U.fmt(x.have) + " / " + U.fmt(x.need) + " EP · noch " + U.fmt(x.rest) + " bis Stufe " + (S.level + 1);
     $("#resGold").innerHTML = I.ui("gold") + '<span class="num">' + U.fmtShort(S.gold) + "</span>";
@@ -982,7 +1003,10 @@
         }
         if (gDone && prev[1] === "false") UI.toast("Deine Wache ist vorbei. Funzel hat deinen Lohn bereit.", "good", "leuchtturm");
         if (String(night) !== prev[7]) {
-          if (night) UI.toast("Die Nacht bricht herein. Das Mondtor hat sich geöffnet.", "good", "mond");
+          if (night) {
+            const ev = E.moonEvent(now);
+            UI.toast(ev ? "Die Nacht bricht herein, und heute steht der Himmel besonders: " + ev.name + "! " + ev.desc : "Die Nacht bricht herein. Das Mondtor hat sich geöffnet.", "good", "mond");
+          }
           else UI.toast("Der Morgen graut. Das Mondtor schließt sich bis zur nächsten Nacht.", "", "sonne");
           UI.updateMusic();
           UI.checkHint();

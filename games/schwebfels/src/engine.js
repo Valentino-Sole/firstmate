@@ -328,6 +328,9 @@
       guild: null,
       talents: {},
       ruhm: {},
+      pets: [],
+      petActive: null,
+      staub: 0,
       shops: {},
       buffs: [],
       mounts: { owned: [] },
@@ -403,6 +406,11 @@
     S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
     S.ruhm = S.ruhm && typeof S.ruhm === "object" ? S.ruhm : {};
     S.taskRun = S.taskRun && typeof S.taskRun === "object" ? S.taskRun : { day: "", n: 0 };
+    S.staub = typeof S.staub === "number" ? S.staub : 0;
+    S.pets = Array.isArray(S.pets) ? S.pets : [];
+    if (typeof S.petActive !== "string") S.petActive = null;
+    S.jagd = S.jagd && typeof S.jagd === "object" ? S.jagd : {};
+    if (typeof S.title !== "string") S.title = null;
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
@@ -734,6 +742,14 @@
     const rr = E.ruhmRanks(S);
     if (rr.zaehigkeit) f.maxHp = Math.round(f.maxHp * (1 + rr.zaehigkeit * 0.01));
     if (rr.macht) f.prof.dmgMult *= 1 + rr.macht * 0.01;
+    const pe = E.petEffects(S);
+    if (pe) {
+      if (pe.dmg) f.prof.dmgMult *= 1 + pe.dmg;
+      if (pe.hp) f.maxHp = Math.round(f.maxHp * (1 + pe.hp));
+      if (pe.armor) f.armor = Math.round(f.armor * (1 + pe.armor));
+      if (pe.crit) f.prof.critBonus = (f.prof.critBonus || 0) + pe.crit;
+      if (pe.evade) f.prof.evade = (f.prof.evade || 0) + pe.evade;
+    }
     return f;
   };
   E.summaryOf = function (f) {
@@ -1518,7 +1534,7 @@
   /* ---------------- Mondtor: nur bei Nacht ---------------- */
   E.C.NIGHT_HUNTS = 3;
   E.NIGHT_POWER = { minion: 0.69, boss: 0.9 };
-  E.nightHuntsLeft = (S) => Math.max(0, E.C.NIGHT_HUNTS - ((S.daily && S.daily.nightHunts) || 0));
+  E.nightHuntsLeft = (S, now) => Math.max(0, E.nightHuntsMax(S, now) - ((S.daily && S.daily.nightHunts) || 0));
   // Die Nachtjagd: zwei Nachtwesen der eigenen Heimatinsel nacheinander
   E.nightHuntFoes = function (S, hero, n) {
     const list = D.NIGHT_FOES[S.realm] || D.NIGHT_FOES.albion;
@@ -1527,9 +1543,11 @@
     let b = U.pick(r, list);
     for (let k = 0; k < 6 && b.id === a.id; k++) b = U.pick(r, list);
     const L = S.level;
+    const ev = E.moonEvent();
+    const w = ev && ev.id === "blutmond" ? 1.15 : 1;
     return [
-      E.monsterFighter(a, L, E.adaptPower(hero, L, E.NIGHT_POWER.minion), {}),
-      E.monsterFighter(b, L + 1, E.adaptPower(hero, L + 1, E.NIGHT_POWER.boss), { boss: true }),
+      E.monsterFighter(a, L, E.adaptPower(hero, L, E.NIGHT_POWER.minion * w), {}),
+      E.monsterFighter(b, L + 1, E.adaptPower(hero, L + 1, E.NIGHT_POWER.boss * w), { boss: true }),
     ];
   };
   E.nightHuntPreview = function (S, now) {
@@ -1553,12 +1571,14 @@
     const rew = { won, xp: 0, gold: 0, item: null, itemSold: 0, perle: 0 };
     const L = S.level;
     if (won) {
-      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (1 + E.xpBonus(S)));
-      rew.gold = Math.round(E.goldBase(L) * 1.8 * (1 + E.goldBonus(S)));
+      const ev = E.moonEvent();
+      const blut = ev && ev.id === "blutmond";
+      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (blut ? 1.5 : 1) * (1 + E.xpBonus(S)));
+      rew.gold = Math.round(E.goldBase(L) * 1.8 * (blut ? 2 : 1) * (1 + E.goldBonus(S)));
       E.gainGold(S, rew.gold);
       const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
-      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: "selten", boost: 0.8 + E.lootBoost(S) }), rew);
-      if (r() < 0.35) {
+      giveItem(S, E.makeItem(r, { level: L + 1, cls: S.cls, minRarity: blut ? "episch" : "selten", boost: (blut ? 1.4 : 0.8) + E.lootBoost(S) }), rew);
+      if ((ev && ev.id === "sternennacht") || r() < 0.35) {
         S.perlen += 1;
         rew.perle = 1;
       }
@@ -1566,6 +1586,7 @@
       S.stats.wins++;
       S.stats.nightHunts = (S.stats.nightHunts || 0) + 1;
       E.dailyProgress(S, "nacht");
+      E.tryCapture(S, fight.foes, "nacht", S.daily.day + ":" + fight.n);
     } else {
       rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 0.3);
       S.stats.losses++;
@@ -2009,6 +2030,7 @@
       S.bestiary[b.mon.id] = (S.bestiary[b.mon.id] || 0) + 1;
       E.grantAch(S, "boss1");
       E.dailyProgress(S, "verlies", now);
+      E.tryCapture(S, fight.foes, "verlies", now);
     } else S.stats.losses++;
     E.checkAch(S, now);
     return rew;
@@ -2067,6 +2089,7 @@
   E.taskRun = (S) => S.taskRun || { day: "", n: 0 };
   E.dailyProgress = function (S, ev, now) {
     now = now || E.now();
+    if (FIGHT_EVS.indexOf(ev) >= 0) E.petFought(S);
     E.dailyTasks(S);
     for (const x of S.daily.tasks) {
       const t = TASKS.find((d) => d.id === x.id);
@@ -2220,9 +2243,199 @@
       S.stats.wins++;
       for (const f of fight.foes) if (f.id) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
       E.dailyProgress(S, "turm", now);
+      if (floor % 5 === 0) E.tryCapture(S, fight.foes, "turmboss", now);
     } else S.stats.losses++;
     E.checkAch(S, now);
     return rew;
+  };
+
+  /* ---------------- Brumms Amboss: Zerlegen, Veredeln, Umschmieden, Mythisch (0.77) ----------------
+     Sternenstaub (S.staub) entsteht beim Zerlegen von Gegenstaenden und bezahlt das Veredeln (+1 Stufe bis
+     zur Heldenstufe), das Umschmieden (Werte neu wuerfeln) und das Mythisch-Schmieden (nur legendaere
+     Stuecke; Mythisch faellt nie als Beute, weight 0). Erscheinung und Name bleiben dabei erhalten. */
+  E.C.STAUB_VALUE = { gewoehnlich: 1, ungewoehnlich: 2, selten: 5, episch: 12, legendaer: 30, mythisch: 60 };
+  E.C.REFINE_COST = { gewoehnlich: 2, ungewoehnlich: 3, selten: 6, episch: 14, legendaer: 35, mythisch: 70 };
+  E.C.REFORGE_COST = { gewoehnlich: 1, ungewoehnlich: 2, selten: 4, episch: 10, legendaer: 25, mythisch: 50 };
+  E.C.MYTH_STAUB = 150;
+  E.mythGold = (L) => Math.round(E.goldBase(L) * 20);
+  // Gegenstand hinter einer Rucksack- oder Ausruestungs-Referenz ("inv:3", "eq:waffe")
+  E.itemAt = function (S, ref) {
+    const p = String(ref || "").split(":");
+    if (p[0] === "inv") {
+      const i = +p[1];
+      return S.inv[i] ? { it: S.inv[i], put: (x) => (S.inv[i] = x), take: () => S.inv.splice(i, 1) } : null;
+    }
+    if (p[0] === "eq") return S.equip[p[1]] ? { it: S.equip[p[1]], put: (x) => (S.equip[p[1]] = x) } : null;
+    return null;
+  };
+  // Werte neu bauen; Kennung, Name und Erscheinung bleiben, die Werte wiegen zur Klasse des Helden
+  function reshape(S, it, level, rarity, seed) {
+    const r = U.rng(U.hash(it.id + ":" + seed));
+    const fresh = E.makeItem(r, { level, slot: it.slot, base: it.base, rarity, cls: S.cls });
+    fresh.id = it.id;
+    fresh.name = rarity === it.rarity ? it.name : fresh.name;
+    fresh.vis = it.vis;
+    fresh.tint = it.tint;
+    fresh.variant = it.variant;
+    fresh.style = it.style;
+    return fresh;
+  }
+  E.dismantle = function (S, ref) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    if (!loc.take) return { ok: false, msg: "Lege den Gegenstand erst ab, dann kann Brumm ihn zerlegen." };
+    const staub = E.C.STAUB_VALUE[loc.it.rarity] || 1;
+    const name = loc.it.name;
+    loc.take();
+    S.staub = (S.staub || 0) + staub;
+    return { ok: true, staub, name };
+  };
+  E.refine = function (S, ref, now) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    const it = loc.it;
+    if (it.level >= S.level) return { ok: false, msg: "Brumm veredelt höchstens bis zu deiner Stufe." };
+    const cost = E.C.REFINE_COST[it.rarity] || 10;
+    if ((S.staub || 0) < cost) return { ok: false, msg: "Dafür brauchst du " + cost + " Sternenstaub. Zerlege alte Gegenstände." };
+    S.staub -= cost;
+    const out = reshape(S, it, it.level + 1, it.rarity, "veredeln" + (now || E.now()));
+    loc.put(out);
+    return { ok: true, item: out, cost };
+  };
+  E.reforge = function (S, ref, now) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    const it = loc.it;
+    const cost = E.C.REFORGE_COST[it.rarity] || 10;
+    if ((S.staub || 0) < cost) return { ok: false, msg: "Dafür brauchst du " + cost + " Sternenstaub. Zerlege alte Gegenstände." };
+    S.staub -= cost;
+    const out = reshape(S, it, it.level, it.rarity, "umschmieden" + (now || E.now()));
+    loc.put(out);
+    return { ok: true, item: out, cost };
+  };
+  E.mythify = function (S, ref, now) {
+    const loc = E.itemAt(S, ref);
+    if (!loc) return { ok: false, msg: "Diesen Gegenstand gibt es nicht mehr." };
+    const it = loc.it;
+    if (it.rarity !== "legendaer") return { ok: false, msg: "Nur legendäre Gegenstände lassen sich mythisch schmieden." };
+    const gold = E.mythGold(it.level);
+    if ((S.staub || 0) < E.C.MYTH_STAUB) return { ok: false, msg: "Dafür brauchst du " + E.C.MYTH_STAUB + " Sternenstaub." };
+    if (S.gold < gold) return { ok: false, msg: "Dafür brauchst du " + U.fmt(gold) + " Gold." };
+    S.staub -= E.C.MYTH_STAUB;
+    S.gold -= gold;
+    const out = reshape(S, it, it.level, "mythisch", "mythisch" + (now || E.now()));
+    loc.put(out);
+    return { ok: true, item: out };
+  };
+
+  /* ---------------- Jagdziele im Bestiarium (0.77) ----------------
+     Siege je Monsterfamilie (Bestiarium nach arch gefaltet): bei 25 Wolkenperlen, bei 100 dazu ein Titel,
+     den der Held tragen kann (S.title). Ausgezahlt wird einmalig ueber S.jagd in checkAch. */
+  E.familyKills = function (S) {
+    const out = {};
+    for (const id in S.bestiary) {
+      const m = E.monById(id);
+      if (m && m.arch) out[m.arch] = (out[m.arch] || 0) + S.bestiary[id];
+    }
+    return out;
+  };
+  E.jagdTitle = (arch) => D.JAGD_TITEL[arch] || "Schrecken der " + (D.ARCH_NAMES[arch] || arch);
+  E.earnedTitles = function (S) {
+    const kills = E.familyKills(S);
+    const out = [];
+    for (const arch in kills) if (kills[arch] >= D.JAGD.steps[1]) out.push(E.jagdTitle(arch));
+    return out;
+  };
+  E.setTitle = function (S, title) {
+    if (title && E.earnedTitles(S).indexOf(title) < 0) return { ok: false, msg: "Diesen Titel hast du noch nicht errungen." };
+    S.title = title || null;
+    return { ok: true };
+  };
+  E.checkJagd = function (S) {
+    const kills = E.familyKills(S);
+    S.jagd = S.jagd || {};
+    for (const arch in kills)
+      D.JAGD.steps.forEach((need, i) => {
+        const key = arch + ":" + need;
+        if (kills[arch] < need || S.jagd[key]) return;
+        S.jagd[key] = 1;
+        S.perlen += D.JAGD.perlen[i];
+        toast(
+          i === 0
+            ? "Jagdziel erreicht: " + need + " Siege gegen die Familie " + (D.ARCH_NAMES[arch] || arch) + ". +" + D.JAGD.perlen[i] + " Wolkenperlen"
+            : "Großes Jagdziel erreicht! Du darfst jetzt den Titel „" + E.jagdTitle(arch) + "“ tragen. +" + D.JAGD.perlen[i] + " Wolkenperlen",
+          "good"
+        );
+      });
+  };
+
+  /* ---------------- Mondereignisse (0.77) ----------------
+     Manche Naechte sind besonders, fest aus dem Tagesschluessel gewuerfelt: Im Blutmond sind die
+     Nachtjagd-Gegner staerker, dafuer ist die Beute deutlich besser; in der Sternennacht gibt es eine
+     vierte Jagd und sicher eine Wolkenperle je Sieg. */
+  E.moonEvent = function (now) {
+    const h = Math.abs(U.hash("mond" + U.dayKey(now || E.now())));
+    if (h % 7 === 0) return { id: "blutmond", name: "Blutmond", desc: "Die Nachtwesen sind wilder als sonst, ihre Beute dafür umso reicher: doppeltes Gold, Gegenstände mindestens episch." };
+    if (h % 7 === 3) return { id: "sternennacht", name: "Sternennacht", desc: "Der Himmel steht günstig: eine vierte Jagd heute Nacht, und jeder Sieg bringt sicher eine Wolkenperle." };
+    return null;
+  };
+  E.nightHuntsMax = function (S, now) {
+    const ev = E.moonEvent(now);
+    return E.C.NIGHT_HUNTS + (ev && ev.id === "sternennacht" ? 1 : 0);
+  };
+
+  /* ---------------- Gefaehrten (0.77 Teil 3) ----------------
+     Junge Bestien lassen sich nach gewonnenen Kaempfen einfangen (Nachtjagd am ehesten, Boss-Etagen des
+     Wolkenturms, Dungeons) und leben im Stall. Eine begleitet den Helden: sie steht im Kampf an seiner
+     Seite (nur zur Schau, src/r3d-scenes.js) und gibt einen kleinen Bonus je Familie, der mit ihrer Stufe
+     waechst. Die Stufe steigt durchs Mitkaempfen (alle 5 Siege eine, nie ueber die Heldenstufe). */
+  E.C.PET_MAX = 12;
+  E.C.PET_FIGHTS_PER_LV = 5;
+  E.C.PET_CHANCE = { nacht: 0.2, turmboss: 0.15, verlies: 0.1 };
+  E.PET_FAMS = ["wolf", "spinne", "drache", "krebs", "schlund", "fledermaus"];
+  E.PET_EFF = { wolf: { dmg: 0.05 }, drache: { dmg: 0.06 }, spinne: { crit: 0.03 }, krebs: { armor: 0.1 }, schlund: { hp: 0.06 }, fledermaus: { evade: 0.02 } };
+  E.activePet = (S) => ((S.pets || []).find((p) => p.id === S.petActive) || null);
+  E.petLevel = (S, pet) => Math.max(1, Math.min(S.level, pet.lv + Math.floor((pet.fights || 0) / E.C.PET_FIGHTS_PER_LV)));
+  E.petMon = (pet) => E.monById(pet.mon) || { id: pet.mon, name: pet.name, arch: pet.arch, color: pet.color, accent: pet.accent };
+  // Bonus des Begleiters, voll bei Gefaehrtenstufe = Heldenstufe
+  E.petEffects = function (S) {
+    const pet = E.activePet(S);
+    if (!pet) return null;
+    const base = E.PET_EFF[pet.arch];
+    if (!base) return null;
+    const k = E.petLevel(S, pet) / Math.max(1, S.level);
+    const out = {};
+    for (const key in base) out[key] = base[key] * k;
+    return out;
+  };
+  E.petFought = function (S) {
+    const pet = E.activePet(S);
+    if (pet) pet.fights = (pet.fights || 0) + 1;
+  };
+  E.tryCapture = function (S, foes, source, seed) {
+    const chance = E.C.PET_CHANCE[source] || 0;
+    if (!chance || (S.pets || []).length >= E.C.PET_MAX) return null;
+    const r = U.rng(U.hash(S.name + "fang" + source + (seed != null ? seed : E.now())));
+    if (r() >= chance) return null;
+    const beasts = (foes || []).filter((f) => f && f.id && E.PET_FAMS.indexOf(f.arch) >= 0);
+    if (!beasts.length) return null;
+    const f = U.pick(r, beasts);
+    const pet = { id: U.uid(), mon: f.id, name: f.name, arch: f.arch, color: f.color, accent: f.accent, lv: Math.max(1, Math.round(S.level * 0.6)), fights: 0, caught: E.now() };
+    S.pets.push(pet);
+    toast("Du hast ein Jungtier eingefangen: " + f.name + "! Es wartet im Stall auf dich.", "good");
+    return pet;
+  };
+  E.setActivePet = function (S, id) {
+    if (id && !(S.pets || []).some((p) => p.id === id)) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    S.petActive = id || null;
+    return { ok: true };
+  };
+  E.releasePet = function (S, id) {
+    const i = (S.pets || []).findIndex((p) => p.id === id);
+    if (i < 0) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    const pet = S.pets.splice(i, 1)[0];
+    if (S.petActive === id) S.petActive = null;
+    return { ok: true, pet };
   };
 
   /* ---------------- Laeden ---------------- */
@@ -2425,6 +2638,7 @@
     }
   };
   E.checkAch = function (S, now) {
+    E.checkJagd(S);
     if (S.stats.quests >= 10) E.grantAch(S, "quest10");
     if (S.stats.quests >= 50) E.grantAch(S, "quest50");
     if (S.stats.quests >= 150) E.grantAch(S, "quest150");

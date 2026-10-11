@@ -23,6 +23,7 @@
   --r-selten: #4fa9ff;
   --r-episch: #c47bff;
   --r-legendaer: #ffb13b;
+  --r-mythisch: #ff5a4a;
   --font-display: "Pirata One", "Luminari", "Georgia", serif;
   --font-body: "Alegreya Sans", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
   --side-w: 188px;
@@ -284,11 +285,13 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; letter-spac
 .r-selten { border-color: var(--r-selten); box-shadow: 0 0 10px rgba(79, 169, 255, 0.4), inset 0 0 0 1px #000; }
 .r-episch { border-color: var(--r-episch); box-shadow: 0 0 12px rgba(196, 123, 255, 0.5), inset 0 0 0 1px #000; }
 .r-legendaer { border-color: var(--r-legendaer); box-shadow: 0 0 16px rgba(255, 177, 59, 0.6), inset 0 0 0 1px #000; }
+.r-mythisch { border-color: var(--r-mythisch); box-shadow: 0 0 20px rgba(255, 90, 74, 0.7), inset 0 0 0 1px #000; }
 .t-gewoehnlich { color: var(--r-gewoehnlich); }
 .t-ungewoehnlich { color: var(--r-ungewoehnlich); }
 .t-selten { color: var(--r-selten); }
 .t-episch { color: var(--r-episch); }
 .t-legendaer { color: var(--r-legendaer); }
+.t-mythisch { color: var(--r-mythisch); }
 .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .grid6.shop { row-gap: 18px; }
 

@@ -162,11 +162,47 @@
           }
           h += "</div>";
         }
-        h += invSection("Rucksack: zum Verkaufen anklicken");
+        if (shop === "schmiede") {
+          h += '<div class="section-title">' + I.ui("schmiede") + ' Brumms Amboss <span class="muted small">' + I.ui("staub") + ' <b class="num">' + (s.staub || 0) + "</b> Sternenstaub</span></div>";
+          h += '<div class="muted" style="font-size:13px;margin-bottom:8px">Klicke einen Gegenstand an: Brumm zerlegt Altes zu Sternenstaub und veredelt damit deine Ausrüstung auf deine Stufe, würfelt Werte neu oder schmiedet Legendäres zu <span class="t-mythisch">Mythischem</span>.</div>';
+          h += '<div class="grid6">' + D.SLOTS.map((sl) => (s.equip[sl] ? UI.slotHtml(s.equip[sl], "eq:" + sl, {}) : '<div class="slot empty"></div>')).join("") + "</div>";
+        }
+        h += invSection(shop === "schmiede" ? "Rucksack: anklicken zum Verkaufen oder Schmieden" : "Rucksack: zum Verkaufen anklicken");
         return h;
       },
     };
   }
+  A.wearTitle = (el) => {
+    const t = el.dataset.t || null;
+    if (!done(E.setTitle(S(), t))) return;
+    SB.audio.play("chime");
+    if (t) UI.toast("Du trägst jetzt den Titel „" + t + "“. Er steht oben neben deinem Namen.", "good", "abzeichen");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.dismantle = (el) => {
+    const res = E.dismantle(S(), el.dataset.ref);
+    if (!done(res)) return;
+    UI.closeDialog();
+    SB.audio.play("coin");
+    UI.toast("Brumm zerlegt „" + res.name + "“: +" + res.staub + " Sternenstaub.", "good", "schmiede");
+    UI.saveNow();
+    UI.refresh();
+  };
+  const smithAct = (fn, sound, text) => (el) => {
+    const ref = el.dataset.ref;
+    const res = fn(S(), ref);
+    if (!done(res)) return;
+    UI.closeDialog();
+    SB.audio.play(sound);
+    UI.toast(text(res), "good", "schmiede");
+    UI.saveNow();
+    UI.refresh();
+    UI.ACTIONS.itemInfo({ dataset: { ref } });
+  };
+  A.refineItem = smithAct(E.refine, "levelup", (r) => "Veredelt: „" + r.item.name + "“ ist jetzt Stufe " + r.item.level + ".");
+  A.reforgeItem = smithAct(E.reforge, "chime", (r) => "Neu geschmiedet: die Werte von „" + r.item.name + "“ sind neu gewürfelt.");
+  A.mythifyItem = smithAct(E.mythify, "levelup", (r) => "Brumms Meisterstück: „" + r.item.name + "“ ist jetzt mythisch!");
   function invSection(title) {
     const s = S();
     const size = E.invSize(s);
@@ -464,7 +500,26 @@
     // Meshy-Figuren der entdeckten Wesen nachladen (die Portraits entstehen danach neu); unentdeckte bleiben Umrisse
     UI.loadMonsters([...new Set(all.filter((m) => s.bestiary[m.id]).map((m) => m.desc.arch))]);
     let h = '<div class="muted" style="margin-bottom:10px">' + found + " von " + all.length + " Wesen entdeckt. Jedes entdeckte Wesen bringt dir dauerhaft +0,5 % Erfahrung und Gold aus Aufträgen (derzeit +" + (found * 0.5).toFixed(1).replace(".", ",") + " %).</div>";
-    h += '<div class="bestiary">';
+    // Jagdziele (0.77): Siege je Familie, bei 25 Wolkenperlen, bei 100 ein tragbarer Titel
+    const kills = E.familyKills(s);
+    const fams = Object.keys(D.ARCH_NAMES).filter((a) => kills[a]).sort((a, b) => (kills[b] || 0) - (kills[a] || 0));
+    if (fams.length) {
+      h += '<div class="section-title">' + I.ui("abzeichen") + ' Jagdziele <span class="muted small">' + D.JAGD.steps[0] + " Siege gegen eine Familie: +" + D.JAGD.perlen[0] + " " + I.ui("perle") + " · " + D.JAGD.steps[1] + ": +" + D.JAGD.perlen[1] + " " + I.ui("perle") + " und ein Titel</span></div>";
+      if (s.title) h += '<div class="row" style="margin-bottom:8px"><span class="chip">Dein Titel: <b>' + esc(s.title) + '</b></span><button class="btn small ghost" data-act="wearTitle" data-t="">Ablegen</button></div>';
+      h += '<div class="bestiary">';
+      for (const a of fams) {
+        const n = kills[a] || 0;
+        const next = D.JAGD.steps.find((x) => n < x);
+        const title = E.jagdTitle(a);
+        const earned = n >= D.JAGD.steps[1];
+        h +=
+          '<div class="beast"><b>' + esc(D.ARCH_NAMES[a] || a) + '</b><div class="muted num">' + n + "× besiegt" + (next ? " · nächstes Ziel: " + next : "") + "</div>" +
+          (earned ? (s.title === title ? '<span class="tag">' + esc(title) + "</span>" : '<button class="btn small" data-act="wearTitle" data-t="' + esc(title) + '">Titel „' + esc(title) + "“ tragen</button>") : '<div class="muted small">Titel bei ' + D.JAGD.steps[1] + ": „" + esc(title) + "“</div>") +
+          "</div>";
+      }
+      h += "</div>";
+    }
+    h += '<div class="section-title">Alle Wesen</div><div class="bestiary">';
     for (const m of all) {
       const n = s.bestiary[m.id] || 0;
       h += '<div class="beast' + (n ? "" : " unknown") + '"><div class="pic">' + UI.portrait(m.desc, 112) + "</div>" + (n ? esc(m.name) + '<div class="muted">' + n + "× besiegt</div>" : "???") + "</div>";
@@ -616,6 +671,8 @@
         h += '<div class="section-title">Was dich nachts erwartet</div><ul class="muted" style="margin:0;padding-left:20px"><li>Nachtjagd: zwei Nachtwesen deiner Heimatinsel nacheinander, ' + E.C.NIGHT_HUNTS + " Jagden pro Tag, kostet keinen Tatendrang.</li><li>Sichere Beute: immer mindestens ein seltener Gegenstand.</li><li>Selene Silberblick verkauft drei besondere Stücke, eines davon episch.</li></ul>";
         return h;
       }
+      const ev = E.moonEvent(now);
+      if (ev) h += '<div class="lore" style="border-color:' + (ev.id === "blutmond" ? "#b33" : "#7af") + '"><h3>' + I.ui("mond") + " " + esc(ev.name) + '</h3><p class="muted">' + esc(ev.desc) + "</p></div>";
       const tab = UI.tabs.mondtor || "jagd";
       h += '<div class="tabs">' + [["jagd", "Nachtjagd"], ["laden", "Mondhändlerin"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="mondtor" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
       const wait = E.nightChangeIn(mode, now);
@@ -638,7 +695,7 @@
       h +=
         '<div class="quest rare"><div class="mon">' + UI.portrait(UI.monDesc(foes[1], true), 128) + "</div><div><h3>Die Nachtjagd</h3><p>Wenn der Mond über " + esc(D.REALMS[s.realm].isle) + " steht, kriechen Wesen aus dem Nebel, die das Tageslicht meiden. Zuerst " + esc(foes[0].name) + ", danach " + esc(foes[1].name) + ". Du kämpfst gegen beide nacheinander.</p>" +
         '<div class="wavepics">' + foes.map((f, k) => '<span class="wp' + (k ? " boss" : "") + '" title="' + esc(f.name) + '">' + UI.portrait(UI.monDesc(f, !!k), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div>" +
-        '<div class="foot">' + chanceTxt(c) + '<span class="muted small">Noch ' + left + " von " + E.C.NIGHT_HUNTS + ' Jagden heute</span><span class="spacer"></span>' +
+        '<div class="foot">' + chanceTxt(c) + '<span class="muted small">Noch ' + left + " von " + E.nightHuntsMax(s, now) + ' Jagden heute</span><span class="spacer"></span>' +
         (busy ? '<span class="muted">Du bist gerade beschäftigt.</span>' : '<button class="btn" data-act="nightHunt"' + (left <= 0 ? " disabled" : "") + ">Zur Jagd</button>") +
         "</div></div></div>";
       h += '<div class="muted small">Belohnung bei Sieg: viel Erfahrung und Gold, ein Gegenstand mindestens „selten“, manchmal eine Wolkenperle.</div>';
@@ -868,10 +925,42 @@
   };
 
   /* ================= Stall ================= */
+  // Wirkung eines Gefaehrten in Worten, bei voller Staerke (Gefaehrtenstufe = Heldenstufe)
+  function petEffText(arch) {
+    const e = E.PET_EFF[arch] || {};
+    if (e.dmg) return "bis zu +" + Math.round(e.dmg * 100) + " % Schaden";
+    if (e.crit) return "bis zu +" + Math.round(e.crit * 100) + " Punkte kritische Trefferchance";
+    if (e.armor) return "bis zu +" + Math.round(e.armor * 100) + " % Rüstung";
+    if (e.hp) return "bis zu +" + Math.round(e.hp * 100) + " % Lebenspunkte";
+    if (e.evade) return "bis zu +" + Math.round(e.evade * 100) + " Punkte Ausweichen";
+    return "";
+  }
+  function petsTab(s) {
+    let h = '<div class="muted" style="margin-bottom:10px">Junge Bestien fängst du nach gewonnenen Kämpfen: am ehesten bei der <b>Nachtjagd</b>, auf den <b>Boss-Etagen des Wolkenturms</b> und in den <b>Dungeons</b>. Eine davon begleitet dich: sie steht im Kampf an deiner Seite und stärkt dich je nach Familie. Mitkämpfen macht sie stärker, alle ' + E.C.PET_FIGHTS_PER_LV + " Siege eine Stufe (nie über deine).</div>";
+    if (!(s.pets || []).length) return h + '<div class="say">Dein Stall hat noch keine Gefährten. Zieh zur Nachtjagd, wenn das Mondtor offen ist, dort streifen die meisten Jungtiere umher.</div>';
+    h += '<div class="cards">';
+    for (const pet of s.pets) {
+      const lv = E.petLevel(s, pet);
+      const next = lv >= s.level ? null : E.C.PET_FIGHTS_PER_LV - ((pet.fights || 0) % E.C.PET_FIGHTS_PER_LV);
+      const active = s.petActive === pet.id;
+      h +=
+        '<div class="card"><div class="pic">' + UI.portrait(UI.monDesc(E.petMon(pet)), 96) + "</div>" +
+        "<div><h4>" + esc(pet.name) + (active ? ' <span class="tag">begleitet dich</span>' : "") + "</h4>" +
+        '<div class="muted small">Stufe ' + lv + " · " + esc(D.ARCH_NAMES[pet.arch] || pet.arch) + " · " + petEffText(pet.arch) + (next ? " · nächste Stufe in " + next + " Siegen" : " · auf deiner Stufe") + "</div></div>" +
+        '<div class="row" style="gap:6px">' +
+        (active ? '<button class="btn small ghost" data-act="petActive" data-id="">Zurücklassen</button>' : '<button class="btn small" data-act="petActive" data-id="' + pet.id + '">Begleiten lassen</button>') +
+        '<button class="btn small ghost" data-act="petRelease" data-id="' + pet.id + '">Freilassen</button></div></div>';
+    }
+    UI.loadMonsters([...new Set(s.pets.map((p0) => p0.arch))]);
+    return h + "</div>";
+  }
   P.stall = {
     render() {
       const s = S();
       let h = say("hufnagel");
+      const tab = UI.tabs.stall || "tiere";
+      h += '<div class="tabs">' + [["tiere", "Reittiere"], ["gefaehrten", "Gefährten" + ((s.pets || []).length ? ' <span class="badge">' + s.pets.length + "</span>" : "")]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="stall" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      if (tab === "gefaehrten") return h + petsTab(s);
       h += '<div class="muted" style="margin-bottom:10px">Reittiere verkürzen die Reisezeit zu jedem Auftrag dauerhaft. Es zählt immer dein schnellstes Tier.</div><div class="cards">';
       for (const m of D.MOUNTS) {
         const owned = s.mounts.owned.indexOf(m.id) >= 0;
@@ -883,6 +972,29 @@
       }
       return h + "</div>";
     },
+  };
+  A.petActive = (el) => {
+    if (!done(E.setActivePet(S(), el.dataset.id || null))) return;
+    SB.audio.play("chime");
+    if (el.dataset.id) UI.toast("Dein Gefährte trottet dir hinterher. Er kämpft ab jetzt an deiner Seite.", "good", "stall");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.petRelease = (el) => {
+    const pet = (S().pets || []).find((p0) => p0.id === el.dataset.id);
+    if (!pet) return;
+    UI.dialog(
+      "<h3>" + esc(pet.name) + " freilassen?</h3><p>Das Tier kehrt in die Wildnis zurück. Das lässt sich nicht rückgängig machen.</p>" +
+        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Behalten</button><button class="btn" data-act="petReleaseYes" data-id="' + esc(pet.id) + '">Freilassen</button></div>'
+    );
+  };
+  A.petReleaseYes = (el) => {
+    const res = E.releasePet(S(), el.dataset.id);
+    if (!done(res)) return;
+    UI.closeDialog();
+    UI.toast(res.pet.name + " verschwindet zwischen den Wolkeninseln. Leb wohl!", "", "stall");
+    UI.saveNow();
+    UI.refresh();
   };
   A.mount = (el) => {
     if (!done(E.buyMount(S(), el.dataset.id))) return;

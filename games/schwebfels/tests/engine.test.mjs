@@ -849,3 +849,91 @@ test("Tagespruefungen: Fortschritt, Belohnung, Perle und Serie", () => {
   // echte Siege zaehlen ueber die Aufloesungswege
   assert.ok(E.dailyTasks(S).every((t) => t.done));
 });
+
+test("Amboss: Zerlegen, Veredeln, Umschmieden, Mythisch", () => {
+  const { E, S } = fresh();
+  S.level = 20;
+  const it = E.makeItem(Math.random, { level: 10, slot: "helm", cls: S.cls, rarity: "episch" });
+  S.inv.push(it);
+  const ref = "inv:" + (S.inv.length - 1);
+  S.staub = 0;
+  assert.ok(!E.refine(S, ref).ok, "ohne Staub kein Veredeln");
+  S.staub = 100;
+  const v = E.refine(S, ref);
+  assert.ok(v.ok);
+  assert.equal(v.item.level, 11);
+  assert.equal(v.item.id, it.id, "derselbe Gegenstand");
+  assert.equal(v.item.name, it.name, "der Name bleibt");
+  assert.equal(S.inv[S.inv.length - 1].level, 11);
+  const u = E.reforge(S, ref);
+  assert.ok(u.ok && u.item.level === 11 && u.item.rarity === "episch");
+  const leg = E.makeItem(Math.random, { level: 20, slot: "waffe", cls: S.cls, rarity: "legendaer" });
+  S.inv.push(leg);
+  const lref = "inv:" + (S.inv.length - 1);
+  S.staub = 200;
+  S.gold = 1e9;
+  const m = E.mythify(S, lref);
+  assert.ok(m.ok);
+  assert.equal(m.item.rarity, "mythisch");
+  assert.ok(m.item.min > leg.min, "mythische Waffe schlaegt haerter");
+  const st0 = S.staub;
+  const d = E.dismantle(S, lref);
+  assert.ok(d.ok);
+  assert.equal(S.staub, st0 + E.C.STAUB_VALUE.mythisch);
+  assert.ok(!E.dismantle(S, "eq:waffe").ok, "Angelegtes wird nicht zerlegt");
+  for (let i = 0; i < 400; i++) assert.notEqual(E.rollRarity(Math.random, { minRarity: "legendaer", boost: 5 }), "mythisch");
+});
+
+test("Jagdziele zahlen einmal aus, Titel sind tragbar, Mondereignisse kommen vor", () => {
+  const { E, S, D, now } = fresh();
+  S.bestiary = {};
+  const wolf = D.MONSTERS.find((m) => m.arch === "wolf");
+  S.bestiary[wolf.id] = 100;
+  const p0 = S.perlen;
+  E.checkJagd(S);
+  assert.equal(S.perlen, p0 + D.JAGD.perlen[0] + D.JAGD.perlen[1]);
+  E.checkJagd(S);
+  assert.equal(S.perlen, p0 + D.JAGD.perlen[0] + D.JAGD.perlen[1], "keine doppelte Auszahlung");
+  const titel = E.jagdTitle("wolf");
+  assert.ok(E.earnedTitles(S).indexOf(titel) >= 0);
+  assert.ok(E.setTitle(S, titel).ok);
+  assert.equal(S.title, titel);
+  assert.ok(!E.setTitle(S, E.jagdTitle("drache")).ok, "nicht errungene Titel sind tabu");
+  // Mondereignisse: fest je Tag, beide Arten kommen binnen vier Wochen vor
+  let blut = 0, stern = 0, sternTag = -1;
+  for (let d = 0; d < 28; d++) {
+    const ev = E.moonEvent(now() + d * 864e5);
+    if (ev && ev.id === "blutmond") blut++;
+    if (ev && ev.id === "sternennacht") { stern++; if (sternTag < 0) sternTag = d; }
+  }
+  assert.ok(blut > 0 && stern > 0, "Blutmond " + blut + ", Sternennacht " + stern);
+  assert.equal(E.nightHuntsMax(S, now() + sternTag * 864e5), E.C.NIGHT_HUNTS + 1, "Sternennacht: eine Jagd mehr");
+});
+
+test("Gefaehrten: fangen, begleiten, mitwachsen, Bonus im Kampf", () => {
+  const { E, S, D } = fresh();
+  S.level = 30;
+  const old = E.C.PET_CHANCE.nacht;
+  E.C.PET_CHANCE.nacht = 1;
+  const wolf = D.MONSTERS.find((m) => m.arch === "wolf");
+  const pet = E.tryCapture(S, [E.monsterFighter(wolf, 10, 1, {})], "nacht", 1);
+  assert.ok(pet && S.pets.length === 1);
+  assert.equal(pet.lv, 18, "Jungtier startet bei 60 % der Heldenstufe");
+  const dm0 = E.heroFighter(S).prof.dmgMult;
+  assert.ok(E.setActivePet(S, pet.id).ok);
+  assert.ok(E.heroFighter(S).prof.dmgMult > dm0, "Wolf gibt Schaden");
+  for (let i = 0; i < 5; i++) E.petFought(S);
+  assert.equal(E.petLevel(S, pet), 19, "fuenf Siege sind eine Stufe");
+  pet.fights = 500;
+  assert.equal(E.petLevel(S, pet), 30, "nie ueber die Heldenstufe");
+  assert.ok(E.releasePet(S, pet.id).ok);
+  assert.equal(S.pets.length, 0);
+  assert.equal(S.petActive, null);
+  assert.ok(!E.setActivePet(S, "fremd").ok);
+  const kult = D.MONSTERS.find((m) => m.arch === "kultist");
+  assert.equal(E.tryCapture(S, [E.monsterFighter(kult, 10, 1, {})], "nacht", 2), null, "nur Bestien lassen sich fangen");
+  E.C.PET_CHANCE.nacht = old;
+  // migrate ergaenzt die Felder
+  const m = E.migrate(JSON.parse(JSON.stringify(S)));
+  assert.ok(Array.isArray(m.pets) && m.petActive === null && typeof m.staub === "number");
+});
