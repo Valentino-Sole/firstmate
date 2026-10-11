@@ -327,6 +327,7 @@
       house: { tier: 0, furn: {} },
       guild: null,
       talents: {},
+      ruhm: {},
       shops: {},
       buffs: [],
       mounts: { owned: [] },
@@ -400,6 +401,8 @@
     if (typeof S.wellNext !== "number") S.wellNext = 0;
     delete S.daily.wellFree;
     S.talents = S.talents && typeof S.talents === "object" ? S.talents : {};
+    S.ruhm = S.ruhm && typeof S.ruhm === "object" ? S.ruhm : {};
+    S.taskRun = S.taskRun && typeof S.taskRun === "object" ? S.taskRun : { day: "", n: 0 };
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] }, S.arena || {});
     S.look = Object.assign(E.defaultLook(S.race), S.look || {});
     S.inv = (S.inv || []).filter(Boolean);
@@ -466,6 +469,7 @@
       const it = S.equip[s];
       if (it) for (const a in it.stats) out[a] += it.stats[a];
     }
+    out.glueck += E.ruhmRanks(S).spuersinn || 0;
     const mult = { kraft: 1, geschick: 1, verstand: 1, konstitution: 1, glueck: 1 };
     mult[C.main] += E.furn(S, "altar") * 0.02;
     for (const b of E.activeBuffs(S, now)) {
@@ -595,6 +599,53 @@
     S.talents = {};
     return { ok: true };
   };
+  /* ---------------- Ruhm (Stufen ueber 50) ----------------
+     Jede Stufe ueber 50 bringt einen Ruhmpunkt fuer die vier Wege in D.RUHM. Die Boni wirken auf den
+     Kaempfer (heroFighter), das Glueck (heroAttrs) und den Tatendrang (energyRegenMs); Aufgaben, die mit
+     der Heldenstaerke wachsen, rechnen sie dadurch automatisch mit ein. */
+  E.C.RUHM_START = 50;
+  E.ruhmPoints = (S) => Math.max(0, (S.level || 0) - E.C.RUHM_START);
+  // bereinigte Verteilung: nur bekannte Wege, je Weg bis zum Hoechstwert, zusammen nie mehr als verdient
+  E.ruhmRanks = function (S) {
+    const out = {};
+    let budget = E.ruhmPoints(S);
+    for (const t of D.RUHM) {
+      const n = Math.min(t.max, Math.max(0, Math.floor((S.ruhm && S.ruhm[t.id]) || 0)), budget);
+      if (n > 0) {
+        out[t.id] = n;
+        budget -= n;
+      }
+    }
+    return out;
+  };
+  E.ruhmSpent = (S) => {
+    const r = E.ruhmRanks(S);
+    return Object.keys(r).reduce((a, k) => a + r[k], 0);
+  };
+  E.ruhmFree = (S) => E.ruhmPoints(S) - E.ruhmSpent(S);
+  E.ruhmCheck = function (S, id) {
+    const t = D.RUHM.find((x) => x.id === id);
+    if (!t) return { ok: false, msg: "Diesen Weg des Ruhms gibt es nicht." };
+    const cur = E.ruhmRanks(S)[id] || 0;
+    if (cur >= t.max) return { ok: false, msg: "Schon voll ausgebaut." };
+    if (E.ruhmFree(S) <= 0) return { ok: false, msg: "Keine Ruhmpunkte frei. Jede Stufe über " + E.C.RUHM_START + " bringt einen." };
+    return { ok: true, t };
+  };
+  E.learnRuhm = function (S, id) {
+    const c = E.ruhmCheck(S, id);
+    if (!c.ok) return c;
+    S.ruhm = E.ruhmRanks(S);
+    S.ruhm[id] = (S.ruhm[id] || 0) + 1;
+    return { ok: true, t: c.t, rank: S.ruhm[id] };
+  };
+  E.resetRuhm = function (S) {
+    if (!E.ruhmSpent(S)) return { ok: false, msg: "Du hast noch keine Ruhmpunkte verteilt." };
+    if (S.perlen < E.C.TALENT_RESET_PERLEN) return { ok: false, msg: "Das Zurücksetzen kostet " + E.C.TALENT_RESET_PERLEN + " Wolkenperlen." };
+    S.perlen -= E.C.TALENT_RESET_PERLEN;
+    S.ruhm = {};
+    return { ok: true };
+  };
+
   // Alle Raenge zusammengefasst zu Wirkungen; ungueltige Eintraege (fremde Klasse, zu viele Punkte) fallen weg
   E.talentEffects = function (cls, ranks, L) {
     const tree = E.talentTree(cls);
@@ -679,7 +730,11 @@
       armor: E.armorTotal(S),
       ranged: !!(w && D.BASES[w.base] && D.BASES[w.base].ranged),
     };
-    return E.applyTalents(f, E.talentEffects(S.cls, S.talents, L));
+    E.applyTalents(f, E.talentEffects(S.cls, S.talents, L));
+    const rr = E.ruhmRanks(S);
+    if (rr.zaehigkeit) f.maxHp = Math.round(f.maxHp * (1 + rr.zaehigkeit * 0.01));
+    if (rr.macht) f.prof.dmgMult *= 1 + rr.macht * 0.01;
+    return f;
   };
   E.summaryOf = function (f) {
     const red = E.damageReduction(f.prof, f.armor, f.level);
@@ -1014,12 +1069,14 @@
   };
 
   /* ---------------- Zeit, Energie, Tageswechsel ---------------- */
+  // Tatendrang-Nachfuellzeit je Punkt; Tatkraft aus dem Ruhm beschleunigt sie
+  E.energyRegenMs = (S) => E.C.ENERGY_REGEN_MS / (1 + 0.02 * (E.ruhmRanks(S).tatkraft || 0));
   E.energy = function (S, now) {
     now = now || E.now();
     const e = S.energy;
     const max = E.energyMax(S);
     if (e.val >= max) return e.val;
-    return Math.min(max, e.val + (now - e.ts) / E.C.ENERGY_REGEN_MS);
+    return Math.min(max, e.val + (now - e.ts) / E.energyRegenMs(S));
   };
   E.setEnergy = function (S, val, now) {
     S.energy = { val, ts: now || E.now() };
@@ -1028,7 +1085,7 @@
     now = now || E.now();
     const cur = E.energy(S, now);
     if (cur >= E.energyMax(S)) return 0;
-    return (1 - (cur - Math.floor(cur))) * E.C.ENERGY_REGEN_MS;
+    return (1 - (cur - Math.floor(cur))) * E.energyRegenMs(S);
   };
   /* Tageszeit: 0 = Mitternacht, 0.5 = Mittag. Modi: zyklus (20 Minuten), echtzeit, tag, nacht */
   E.C.DAY_CYCLE_MS = 20 * 60 * 1000;
@@ -1367,6 +1424,7 @@
       S.stats.streak++;
       if (fight.hero && fight.chain.hpLeft <= fight.hero.maxHp * 0.05) E.grantAch(S, "knapp");
       E.grantAch(S, "ersterSieg");
+      E.dailyProgress(S, "auftrag");
     } else {
       rew.xp = Math.round(o.xp * 0.25);
       rew.gold = Math.round(o.gold * 0.25);
@@ -1452,6 +1510,7 @@
     for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
     S.stats.wins++;
     if (Object.keys(S.story.done).length >= 3) E.grantAch(S, "kapitel3");
+    E.dailyProgress(S, "chronik", now);
     E.checkAch(S, now);
     return rew;
   };
@@ -1506,6 +1565,7 @@
       for (const f of fight.foes) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
       S.stats.wins++;
       S.stats.nightHunts = (S.stats.nightHunts || 0) + 1;
+      E.dailyProgress(S, "nacht");
     } else {
       rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 0.3);
       S.stats.losses++;
@@ -1879,6 +1939,7 @@
       S.stats.arenaWins++;
       if (opp.kind === "npc") S.npcHonor[opp.id] = (S.npcHonor[opp.id] || 0) - Math.round(gain * 0.6);
       E.grantAch(S, "ersterSieg");
+      E.dailyProgress(S, "arena", now);
     } else {
       const loss = hon.loss;
       S.honor = Math.max(0, S.honor - loss);
@@ -1947,6 +2008,7 @@
       S.stats.wins++;
       S.bestiary[b.mon.id] = (S.bestiary[b.mon.id] || 0) + 1;
       E.grantAch(S, "boss1");
+      E.dailyProgress(S, "verlies", now);
     } else S.stats.losses++;
     E.checkAch(S, now);
     return rew;
@@ -1958,6 +2020,209 @@
     S.perlen -= 1;
     S.dungeons.next = now;
     return { ok: true };
+  };
+
+  /* ---------------- Wolkenturm, Wochenboss, Tagespruefungen (0.77) ----------------
+     Endgame-Inhalte fuer hohe Stufen: ein endlos skalierender Turm mit Wochenbestmarke, ein ueberstarker
+     Wochenboss mit garantiert legendaerer Erstbeute und drei Tagespruefungen mit Serienbonus. Gegnerstaerke
+     folgt wie bei den Auftraegen der gemessenen Heldenstaerke (adaptPower), damit alles mitwaechst. */
+  E.C.TURM_UNLOCK = 10;
+  E.C.TURM_ENERGY = 8;
+  E.C.TURM_POWER0 = 0.8;
+  E.C.TURM_RAMP = 1.035;
+  E.C.WBOSS_UNLOCK = 15;
+  E.C.WBOSS_ENERGY = 15;
+  E.C.WBOSS_HP = 1.5;
+  // Ueberstaerke waechst leicht mit der Stufe, weil Modellhelden mit Talenten und Ausruestung schneller wachsen als Monster
+  E.wbossPower = (L) => 1.02 + 0.0018 * L;
+  // Wochenschluessel: der Tagesschluessel des Montags dieser Woche (Ortszeit wie U.dayKey)
+  E.weekKey = function (now) {
+    const d = new Date(now || E.now());
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+    return U.dayKey(mon.getTime());
+  };
+
+  /* --- Tagespruefungen: drei Aufgaben je Tag, Belohnung sofort beim Erfuellen, alle drei geben eine
+     Wolkenperle und zaehlen die Serie hoch (jeder 7. Serientag gibt zwei Perlen extra). */
+  const TASKS = [
+    { id: "auftrag2", ev: "auftrag", need: 2, text: "Schließe 2 Tavernenaufträge siegreich ab" },
+    { id: "arena1", ev: "arena", need: 1, text: "Gewinne einen Arenakampf" },
+    { id: "verlies1", ev: "verlies", need: 1, text: "Bestehe ein Dungeon-Stockwerk", avail: (S) => D.DUNGEONS.some((d, i) => E.dungeonState(S, i).unlocked && !E.dungeonState(S, i).done) },
+    { id: "nacht1", ev: "nacht", need: 1, text: "Gewinne eine Nachtjagd am Mondtor", avail: (S) => S.level >= 5 },
+    { id: "sieg4", ev: "sieg", need: 4, text: "Gewinne 4 Kämpfe, ganz gleich wo" },
+    { id: "brunnen1", ev: "brunnen", need: 1, text: "Wirf eine Münze in den Wunschbrunnen" },
+    { id: "turm3", ev: "turm", need: 3, text: "Erklimme 3 Etagen des Wolkenturms", avail: (S) => S.level >= E.C.TURM_UNLOCK },
+  ];
+  const FIGHT_EVS = ["auftrag", "arena", "verlies", "nacht", "turm", "chronik", "wboss"];
+  E.dailyTasks = function (S) {
+    if (!S.daily.tasks) {
+      const r = U.rng(U.hash(S.name + "tag" + S.daily.day));
+      const pool = TASKS.filter((t) => !t.avail || t.avail(S));
+      const picks = [];
+      while (picks.length < 3 && pool.length) picks.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
+      S.daily.tasks = picks.map((t) => ({ id: t.id, got: 0, done: false }));
+    }
+    return S.daily.tasks.map((x) => Object.assign({ def: TASKS.find((t) => t.id === x.id) }, x)).filter((x) => x.def);
+  };
+  E.taskRun = (S) => S.taskRun || { day: "", n: 0 };
+  E.dailyProgress = function (S, ev, now) {
+    now = now || E.now();
+    E.dailyTasks(S);
+    for (const x of S.daily.tasks) {
+      const t = TASKS.find((d) => d.id === x.id);
+      if (!t || x.done) continue;
+      if (t.ev !== ev && !(t.ev === "sieg" && FIGHT_EVS.indexOf(ev) >= 0)) continue;
+      x.got++;
+      if (x.got < t.need) continue;
+      x.done = true;
+      const gold = Math.round(E.goldBase(S.level) * 2 * (1 + E.goldBonus(S)));
+      const xp = Math.round(E.xpNeed(S.level) * 0.05 * (1 + E.xpBonus(S)));
+      E.gainGold(S, gold);
+      E.gainXp(S, xp);
+      toast("Tagesprüfung bestanden: " + t.text + " (+" + U.fmt(gold) + " Gold)", "good");
+      if (S.daily.tasks.every((y) => y.done)) {
+        const prev = E.taskRun(S);
+        const n = prev.day === U.dayKey(now - 864e5) ? prev.n + 1 : 1;
+        S.taskRun = { day: S.daily.day, n };
+        let perlen = 1 + (n % 7 === 0 ? 2 : 0);
+        S.perlen += perlen;
+        toast("Alle Tagesprüfungen geschafft! +" + perlen + " Wolkenperle" + (perlen > 1 ? "n" : "") + (n > 1 ? " · Serie: " + n + " Tage" : ""), "good");
+      }
+    }
+  };
+
+  /* --- Wochenboss: jede Woche bewacht ein anderer Endboss in Ueberstaerke den Turm; die erste Niederlage
+     der Woche bringt einen garantiert legendaeren Gegenstand. Danach ruht er bis Montag. */
+  E.weeklyBoss = function (S, now) {
+    now = now || E.now();
+    const week = E.weekKey(now);
+    if (!S.wboss || S.wboss.week !== week) S.wboss = { week, won: false, tries: 0 };
+    const di = Math.abs(U.hash("wboss" + week)) % D.DUNGEONS.length;
+    const D0 = D.DUNGEONS[di];
+    const fi = D0.bosses.length - 1;
+    const mon = E.dungeonMon(D0.id + "-" + fi);
+    return { week, mon, L: S.level, dungeon: D0, won: S.wboss.won, tries: S.wboss.tries };
+  };
+  // der Wochenboss als Kaempfer: Ueberstaerke und fast doppelte Lebenspunkte (Anzeige und Kampf identisch)
+  E.wbossFoe = function (b, hero) {
+    const foe = E.monsterFighter(b.mon, b.L, E.adaptPower(hero, b.L, E.wbossPower(b.L)), { boss: true, final: true });
+    foe.maxHp = Math.round(foe.maxHp * E.C.WBOSS_HP);
+    return foe;
+  };
+  E.wbossFight = function (S, now) {
+    now = now || E.now();
+    if (S.level < E.C.WBOSS_UNLOCK) return { ok: false, msg: "Der Wochenboss zeigt sich erst ab Stufe " + E.C.WBOSS_UNLOCK + "." };
+    if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
+    const b = E.weeklyBoss(S, now);
+    if (b.won) return { ok: false, msg: "Der Wochenboss ist diese Woche schon bezwungen. Montag kommt der nächste." };
+    const en = E.energy(S, now);
+    if (en < E.C.WBOSS_ENERGY) return { ok: false, msg: "Dir fehlt der Tatendrang. Ein Krug Nebelmet hilft." };
+    E.setEnergy(S, en - E.C.WBOSS_ENERGY, now);
+    const hero = E.heroFighter(S, now);
+    const foe = E.wbossFoe(b, hero);
+    S.wboss.tries++;
+    const chain = E.simulateChain(hero, [foe], U.hash(S.name + "wboss" + b.week + now));
+    return { ok: true, fight: { hero, foes: [foe], chain, wboss: b } };
+  };
+  E.resolveWboss = function (S, fight, now) {
+    now = now || E.now();
+    const won = fight.chain.winner === 0;
+    const b = fight.wboss;
+    const rew = { won, xp: 0, gold: 0, item: null, perlen: 0, itemSold: 0 };
+    if (won) {
+      S.wboss.won = true;
+      rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * 0.5 * E.bestiaryBonus(S));
+      rew.gold = Math.round(E.goldBase(b.L) * 12 * (1 + E.goldBonus(S)));
+      const r = U.rng(U.hash(S.name + "wbossbeute" + b.week));
+      giveItem(S, E.makeItem(r, { level: b.L + 1, cls: S.cls, minRarity: "legendaer", boost: 1 + E.lootBoost(S) }), rew);
+      rew.perlen = 2;
+      S.perlen += 2;
+      E.gainGold(S, rew.gold);
+      E.gainXp(S, rew.xp);
+      S.stats.bosses++;
+      S.stats.wins++;
+      S.bestiary[b.mon.id] = (S.bestiary[b.mon.id] || 0) + 1;
+      E.dailyProgress(S, "wboss", now);
+    } else S.stats.losses++;
+    E.checkAch(S, now);
+    return rew;
+  };
+
+  /* --- Wolkenturm: Etage um Etage staerkere Gegner, jede 5. ein Boss mit Beute, Etage 10/20/30 eine
+     Wolkenperle extra. Jede Woche beginnt der Aufstieg neu; Bestmarken bleiben. Gegner je Etage stehen
+     je Woche fest, nur der Kampfverlauf wuerfelt neu, so bleibt eine Etage ein benennbares Hindernis. */
+  E.turmState = function (S, now) {
+    const week = E.weekKey(now || E.now());
+    if (!S.turm) S.turm = { week, floor: 1, wbest: 0, best: 0 };
+    if (S.turm.week !== week) {
+      S.turm.week = week;
+      S.turm.floor = 1;
+      S.turm.wbest = 0;
+    }
+    return S.turm;
+  };
+  E.turmPower = (floor) => E.C.TURM_POWER0 * Math.pow(E.C.TURM_RAMP, floor - 1);
+  E.turmFoes = function (S, floor, hero, now) {
+    const L = S.level;
+    const r = U.rng(U.hash(S.name + "turm" + E.weekKey(now || E.now()) + ":" + floor));
+    const power = E.turmPower(floor);
+    const boss = floor % 5 === 0;
+    const pair = !boss && floor % 5 === 3;
+    if (boss) {
+      const pool = E.tavernBosses(Math.max(L, 12));
+      const mon = pool.length ? U.pick(r, pool) : U.pick(r, E.monstersFor(L));
+      return [E.monsterFighter(mon, L, E.adaptPower(hero, L, power), { boss: true })];
+    }
+    const pool = E.monstersFor(L);
+    if (pair) {
+      const a = U.pick(r, pool);
+      let b = U.pick(r, pool);
+      if (b === a && pool.length > 1) b = pool[(pool.indexOf(a) + 1) % pool.length];
+      return [E.monsterFighter(a, L, E.adaptPower(hero, L, power * 0.72), {}), E.monsterFighter(b, L, E.adaptPower(hero, L, power * 0.72), {})];
+    }
+    return [E.monsterFighter(U.pick(r, pool), L, E.adaptPower(hero, L, power), {})];
+  };
+  E.turmFight = function (S, now) {
+    now = now || E.now();
+    if (S.level < E.C.TURM_UNLOCK) return { ok: false, msg: "Der Wolkenturm öffnet sich ab Stufe " + E.C.TURM_UNLOCK + "." };
+    if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
+    const T = E.turmState(S, now);
+    const en = E.energy(S, now);
+    if (en < E.C.TURM_ENERGY) return { ok: false, msg: "Dir fehlt der Tatendrang. Ein Krug Nebelmet hilft." };
+    E.setEnergy(S, en - E.C.TURM_ENERGY, now);
+    const hero = E.heroFighter(S, now);
+    const foes = E.turmFoes(S, T.floor, hero, now);
+    const chain = E.simulateChain(hero, foes, U.hash(S.name + "turmkampf" + T.floor + now));
+    return { ok: true, fight: { hero, foes, chain, floor: T.floor } };
+  };
+  E.resolveTurm = function (S, fight, now) {
+    now = now || E.now();
+    const T = E.turmState(S, now);
+    const won = fight.chain.winner === 0;
+    const floor = fight.floor;
+    const rew = { won, floor, xp: 0, gold: 0, item: null, perlen: 0, itemSold: 0 };
+    if (won) {
+      rew.gold = Math.round(E.goldBase(S.level) * (0.8 + floor * 0.12) * (1 + E.goldBonus(S)));
+      rew.xp = Math.round(E.xpNeed(S.level) * (0.02 + floor * 0.004) * (1 + E.xpBonus(S)));
+      E.gainGold(S, rew.gold);
+      E.gainXp(S, rew.xp);
+      if (floor % 5 === 0) {
+        const r = U.rng(U.hash(S.name + "turmbeute" + T.week + floor));
+        giveItem(S, E.makeItem(r, Object.assign({ level: S.level + 1, cls: S.cls }, E.bossLoot(S.level, floor >= 20, 0.4 + floor * 0.05, E.lootBoost(S)))), rew);
+      }
+      if (floor % 10 === 0) {
+        rew.perlen = 1;
+        S.perlen += 1;
+      }
+      T.floor = floor + 1;
+      if (floor > T.wbest) T.wbest = floor;
+      if (floor > T.best) T.best = floor;
+      S.stats.wins++;
+      for (const f of fight.foes) if (f.id) S.bestiary[f.id] = (S.bestiary[f.id] || 0) + 1;
+      E.dailyProgress(S, "turm", now);
+    } else S.stats.losses++;
+    E.checkAch(S, now);
+    return rew;
   };
 
   /* ---------------- Laeden ---------------- */
@@ -2074,6 +2339,7 @@
     const r = U.rng(U.hash(S.name + "well" + now));
     const prize = U.wpick(r, D.WELL_PRIZES);
     const out = { ok: true, prize: prize.id, label: prize.label, paid };
+    E.dailyProgress(S, "brunnen", now);
     switch (prize.id) {
       case "gold":
         out.gold = Math.round(E.goldBase(S.level) * U.rf(r, 2, 4));

@@ -224,7 +224,7 @@
     },
     render() {
       const tab = UI.tabs.held || "ausruestung";
-      const free = E.talentFree(S());
+      const free = E.talentFree(S()) + E.ruhmFree(S());
       let h = '<div class="tabs">' + [["ausruestung", "Ausrüstung"], ["talente", "Talente" + (free > 0 ? ' <span class="badge">' + free + "</span>" : "")], ["aussehen", "Aussehen"], ["geschichte", "Geschichte"], ["bestiarium", "Bestiarium"], ["abzeichen", "Abzeichen"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="held" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
       if (tab === "talente") return h + talents();
       if (tab === "bestiarium") return h + bestiary();
@@ -305,13 +305,63 @@
       .filter(Boolean)
       .join(", ");
   }
+  // Ruhm (Stufen ueber 50): vier Wege mit kleinen dauerhaften Boni, oben im Talente-Reiter
+  function ruhmText(id, n) {
+    if (id === "macht") return "+" + n + " % Schaden";
+    if (id === "zaehigkeit") return "+" + n + " % Lebenspunkte";
+    if (id === "spuersinn") return "+" + n + " Glück";
+    return "Tatendrang füllt sich " + 2 * n + " % schneller";
+  }
+  function ruhmSection(s) {
+    const pts = E.ruhmPoints(s);
+    if (pts <= 0) return s.level >= 45 ? '<div class="say">Ab Stufe 51 sammelst du <b>Ruhm</b>: Jede weitere Stufe bringt einen Punkt für dauerhafte Boni, zusätzlich zu den Talenten.</div>' : "";
+    const free = E.ruhmFree(s);
+    const ranks = E.ruhmRanks(s);
+    let h =
+      '<div class="row talhead"><span class="chip">' + I.ui("abzeichen") + " <b>" + free + "</b> von " + pts + " Ruhmpunkten frei</span>" +
+      '<span class="muted small">Jede Stufe über ' + E.C.RUHM_START + " bringt einen Ruhmpunkt. Ruhm wirkt überall, zusätzlich zu den Talenten.</span><span class=\"spacer\"></span>" +
+      '<button class="btn small ghost" data-act="resetRuhm"' + (!E.ruhmSpent(s) || s.perlen < E.C.TALENT_RESET_PERLEN ? " disabled" : "") + ">Zurücksetzen · " + E.C.TALENT_RESET_PERLEN + " " + I.ui("perle") + "</button></div>";
+    h += '<div class="ruhmrow">';
+    for (const t of D.RUHM) {
+      const r = ranks[t.id] || 0;
+      const can = free > 0 && r < t.max;
+      h +=
+        '<button class="talent' + (r > 0 ? " has" : "") + (r >= t.max ? " full" : "") + '" data-act="learnRuhm" data-id="' + t.id + '"' + (can ? "" : ' aria-disabled="true"') + ">" +
+        '<span class="tn">' + esc(t.name) + '</span><span class="tr">' + r + "/" + t.max + "</span>" +
+        '<span class="td">' + esc(t.desc) + (r > 0 ? "<br><i>Jetzt: " + esc(ruhmText(t.id, r)) + "</i>" : "") + "</span></button>";
+    }
+    h += "</div>";
+    return h;
+  }
+  A.learnRuhm = (el) => {
+    const res = E.learnRuhm(S(), el.dataset.id);
+    if (!done(res)) return;
+    SB.audio.play("chime");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.resetRuhm = () => {
+    UI.dialog(
+      "<h3>Ruhm zurücksetzen?</h3><p>Alle Ruhmpunkte kommen zurück und du kannst sie neu verteilen. Das kostet " + E.C.TALENT_RESET_PERLEN + " Wolkenperlen, du hast " + S().perlen + ".</p>" +
+        '<div class="actions"><button class="btn ghost" data-act="closeDialog">Abbrechen</button><button class="btn" data-act="resetRuhmYes">Zurücksetzen</button></div>'
+    );
+  };
+  A.resetRuhmYes = () => {
+    if (!done(E.resetRuhm(S()))) return;
+    UI.closeDialog();
+    SB.audio.play("well");
+    UI.toast("Dein Ruhm ist zurückgesetzt. Verteile die Punkte neu.", "good", "abzeichen");
+    UI.saveNow();
+    UI.refresh();
+  };
   function talents() {
     const s = S();
     const tree = E.talentTree(s.cls);
     const pts = E.talentPoints(s);
     const free = E.talentFree(s);
     const ranks = s.talents || {};
-    let h =
+    let h = ruhmSection(s);
+    h +=
       '<div class="row talhead"><span class="chip">' + I.ui("abzeichen") + " <b>" + free + "</b> von " + pts + " Talentpunkten frei</span>" +
       '<span class="muted small">Alle zwei Stufen gibt es einen Punkt. Talente wirken in jedem Kampf: Aufträge, Chronik, Arena, Dungeons und Nachtjagd.</span><span class="spacer"></span>' +
       '<button class="btn small ghost" data-act="resetTalents"' + (!E.talentSpent(s) || s.perlen < E.C.TALENT_RESET_PERLEN ? " disabled" : "") + ">Zurücksetzen · " + E.C.TALENT_RESET_PERLEN + " " + I.ui("perle") + "</button></div>";
@@ -721,6 +771,99 @@
     UI.saveNow();
     SB.audio.play("roar");
     await UI.runBattle(res.fight, { setting: "dungeon", dungeon: D.DUNGEONS[d].id, tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
+    UI.refresh();
+  };
+
+  /* ================= Wolkenturm: Endlosaufstieg, Wochenboss, Tagespruefungen (0.77) ================= */
+  const nextMonday = (now) => {
+    const d = new Date(now);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (7 - ((d.getDay() + 6) % 7)), 0, 0, 0).getTime();
+  };
+  function turmTab(s, now) {
+    const T = E.turmState(s, now);
+    const hero = E.heroFighter(s, now);
+    const foes = E.turmFoes(s, T.floor, hero, now);
+    const busy = E.busy(s, now);
+    const boss = T.floor % 5 === 0;
+    const c = estimate(hero, foes, "turm" + T.week + ":" + T.floor);
+    const en = E.energy(s, now);
+    let h = '<div class="lore"><h3>' + I.ui("wolkenturm") + ' Der Aufstieg</h3><p class="muted">Etage um Etage werden die Wächter stärker, ohne Ende. Jeden Montag beginnt der Aufstieg von vorn; deine Bestmarken bleiben.</p></div>';
+    h +=
+      '<div class="row" style="gap:14px;flex-wrap:wrap;margin-bottom:10px"><span class="chip">Diese Woche: Etage <b class="num">' + T.wbest + '</b></span><span class="chip">Bestmarke: Etage <b class="num">' + T.best + '</b></span><span class="muted small">Neuer Aufstieg in <b class="num" data-until="' + nextMonday(now) + '"></b></span></div>';
+    if (busy) h += busyNote();
+    h +=
+      '<div class="chapter open"><div class="ch-head"><span class="ch-kind">Etage ' + T.floor + (boss ? " · ein Wächter mit Schatz" : foes.length > 1 ? " · zwei Gegner nacheinander" : "") + "</span><h3>" + foes.map((f) => esc(f.name)).join(" und ") + "</h3></div>" +
+      '<div class="wavepics">' + foes.map((f, k) => '<span class="wp' + (f.boss ? " boss" : "") + '" title="' + esc(f.name) + '">' + UI.portrait(UI.monDesc(f, f.boss, false), 96) + "<i>" + (k + 1) + "</i></span>").join("") + "</div>" +
+      '<div class="foot">' + chanceTxt(c) + '<span style="margin-left:10px">' + I.ui("tatendrang") + " " + E.C.TURM_ENERGY + '</span><span class="spacer"></span><button class="btn" data-act="turmFight"' + (busy || en < E.C.TURM_ENERGY ? " disabled" : "") + ">Erstürmen</button></div></div>";
+    h += '<div class="muted small" style="margin-top:8px">Jede Etage gibt Gold und Erfahrung, jede 5. bewacht ein Boss einen Schatz, Etage 10, 20 und 30 geben eine Wolkenperle. Eine Niederlage kostet nichts außer Tatendrang.</div>';
+    UI.loadMonsters(foes.map((f) => f.arch));
+    return h;
+  }
+  function wbossTab(s, now) {
+    if (s.level < E.C.WBOSS_UNLOCK) return '<div class="say">Der Wochenboss zeigt sich erst ab Stufe ' + E.C.WBOSS_UNLOCK + ".</div>";
+    const b = E.weeklyBoss(s, now);
+    const hero = E.heroFighter(s, now);
+    const foe = E.wbossFoe(b, hero);
+    const busy = E.busy(s, now);
+    const en = E.energy(s, now);
+    const c = estimate(hero, [foe], "wboss" + b.week, 60);
+    let h = '<div class="lore"><h3>' + I.ui("schaedel") + " Wochenboss: " + esc(b.mon.name) + '</h3><p class="muted">Jede Woche steigt ein anderer Schrecken aus der Tiefe auf die Turmspitze, stärker als je zuvor. Diese Woche: ' + esc(b.mon.name) + " aus " + esc(b.dungeon.name) + ", Stufe " + b.L + ".</p></div>";
+    if (busy) h += busyNote();
+    h += '<div class="chapter' + (b.won ? " done" : " open") + '"><div class="ch-head"><span class="ch-kind">Überstärke · fast doppelte Lebenspunkte</span><h3>' + esc(b.mon.name) + "</h3></div>" +
+      '<div class="wavepics"><span class="wp boss" title="' + esc(b.mon.name) + '">' + UI.portrait(UI.monDesc(b.mon, true, true), 128) + "</span></div>" +
+      '<div class="foot">' +
+      (b.won
+        ? '<span class="tag">Diese Woche bezwungen</span><span class="muted small" style="margin-left:10px">Der nächste kommt in <b class="num" data-until="' + nextMonday(now) + '"></b></span>'
+        : chanceTxt(c) + '<span style="margin-left:10px">' + I.ui("tatendrang") + " " + E.C.WBOSS_ENERGY + "</span>" + (b.tries ? '<span class="muted small" style="margin-left:10px">Versuche: ' + b.tries + "</span>" : "") + '<span class="spacer"></span><button class="btn" data-act="wbossFight"' + (busy || en < E.C.WBOSS_ENERGY ? " disabled" : "") + ">Herausfordern</button>") +
+      "</div></div>";
+    h += '<div class="muted small" style="margin-top:8px">Der erste Sieg der Woche bringt einen <b>legendären Gegenstand</b>, 2 Wolkenperlen und einen Beutel Gold. Versuche kosten nur Tatendrang.</div>';
+    UI.loadMonsters([b.mon.arch]);
+    return h;
+  }
+  function tagTab(s, tasks) {
+    const run = E.taskRun(s);
+    let h = '<div class="lore"><h3>' + I.ui("abzeichen") + ' Tagesprüfungen</h3><p class="muted">Drei Prüfungen je Tag, jede gibt sofort Gold und Erfahrung. Alle drei zusammen geben eine Wolkenperle, und jeder siebte Tag in Folge zwei extra.</p></div>';
+    if (run.n > 1) h += '<div class="row" style="margin-bottom:10px"><span class="chip">Serie: <b class="num">' + run.n + "</b> Tage in Folge</span></div>";
+    for (const t of tasks) {
+      const bar = t.done ? "" : '<div class="ach-prog"><i style="width:' + Math.round((t.got / t.def.need) * 100) + '%"></i></div>';
+      h += '<div class="ach' + (t.done ? "" : " locked") + '">' + I.ui(t.done ? "abzeichen" : "uhr") + "<div><b>" + esc(t.def.text) + "</b>" + bar + '</div><span>' + (t.done ? "✓" : t.got + " / " + t.def.need) + "</span></div>";
+    }
+    h += '<div class="muted small" style="margin-top:8px">Um Mitternacht gibt es drei neue Prüfungen.</div>';
+    return h;
+  }
+  P.wolkenturm = {
+    render() {
+      const s = S();
+      const now = E.now();
+      if (s.level < E.C.TURM_UNLOCK) return '<div class="lore"><h3>' + I.ui("wolkenturm") + ' Der Wolkenturm</h3><p class="muted">Hoch über der Insel ragt ein Turm aus Wolkenstein bis in den Himmel. Ab Stufe ' + E.C.TURM_UNLOCK + " öffnet sich sein Tor.</p></div>";
+      const tab = UI.tabs.wolkenturm || "turm";
+      const tasks = E.dailyTasks(s);
+      const open = tasks.filter((t) => !t.done).length;
+      let h = '<div class="tabs">' + [["turm", "Aufstieg"], ["boss", "Wochenboss"], ["tag", "Tagesprüfungen" + (open ? ' <span class="badge">' + open + "</span>" : "")]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="wolkenturm" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+      if (tab === "boss") return h + wbossTab(s, now);
+      if (tab === "tag") return h + tagTab(s, tasks);
+      return h + turmTab(s, now);
+    },
+  };
+  A.turmFight = async () => {
+    const s = S();
+    const res = E.turmFight(s);
+    if (!done(res)) return;
+    const rew = E.resolveTurm(s, res.fight);
+    UI.saveNow();
+    SB.audio.play("roar");
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: "sturmkern", tint: "#8f7cff", title: "Wolkenturm · Etage " + res.fight.floor, rewards: rew });
+    UI.refresh();
+  };
+  A.wbossFight = async () => {
+    const s = S();
+    const res = E.wbossFight(s);
+    if (!done(res)) return;
+    const rew = E.resolveWboss(s, res.fight);
+    UI.saveNow();
+    SB.audio.play("roar");
+    const b = res.fight.wboss;
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: b.dungeon.id, tint: b.dungeon.theme, title: "Wochenboss: " + b.mon.name, rewards: rew });
     UI.refresh();
   };
 

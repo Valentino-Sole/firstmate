@@ -836,6 +836,7 @@
     { id: "arena", name: "Ring der Reiche", short: "Arena", npc: "krawall" },
     { id: "leuchtturm", name: "Der Wachturm", short: "Wache", npc: "funzel" },
     { id: "tiefen", name: "Das Tor zur Tiefe", short: "Dungeons" },
+    { id: "wolkenturm", name: "Der Wolkenturm", short: "Wolkenturm" },
     { id: "stall", name: "Greifenstall", short: "Stall", npc: "hufnagel" },
     { id: "ruhmeshalle", name: "Halle der Helden", short: "Rangliste" },
     { id: "gildenhalle", name: "Gildenhalle", short: "Gilde" },
@@ -844,10 +845,18 @@
     { id: "mondtor", name: "Das Mondtor", short: "Mondtor", npc: "mondhaendler", night: true },
   ];
 
+  /* Ruhm: dauerhafte kleine Boni fuer Stufen ueber 50, je Stufe ein Punkt (engine.js, Abschnitt Ruhm) */
+  const RUHM = [
+    { id: "macht", name: "Macht", desc: "Jeder Punkt gibt 1 % mehr Schaden." },
+    { id: "zaehigkeit", name: "Zähigkeit", desc: "Jeder Punkt gibt 1 % mehr Lebenspunkte." },
+    { id: "spuersinn", name: "Spürsinn", desc: "Jeder Punkt gibt 1 Glück: bessere Beute, öfter kritische Treffer." },
+    { id: "tatkraft", name: "Tatkraft", desc: "Je Punkt füllt sich dein Tatendrang 2 % schneller." },
+  ].map((t) => Object.assign(t, { max: 30 }));
+
   SB.data = {
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
     MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
-    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS,
+    POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS, RUHM,
   };
 })();

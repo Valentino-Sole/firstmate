@@ -606,6 +606,7 @@
     ["arena", "arena", "Arena"],
     ["leuchtturm", "leuchtturm", "Wache"],
     ["tiefen", "tiefen", "Dungeons"],
+    ["wolkenturm", "wolkenturm", "Wolkenturm"],
     ["schmiede", "schmiede", "Schmiede"],
     ["arkanum", "arkanum", "Kuriositäten"],
     ["stall", "stall", "Stall"],
@@ -673,8 +674,13 @@
         }
       }
     }
+    if (S.level >= E.C.TURM_UNLOCK) {
+      const open = E.dailyTasks(S).filter((t) => !t.done).length;
+      if (open) b.wolkenturm = String(open);
+      else if (S.level >= E.C.WBOSS_UNLOCK && !E.weeklyBoss(S, now).won) b.wolkenturm = "!";
+    }
     const C = D.CLASSES[S.cls];
-    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it)) || E.talentFree(S) > 0) b.held = "+";
+    if (S.gold >= E.attrCost(S.bought[C.main]) || S.inv.some((it) => UI.isUpgrade(it)) || E.talentFree(S) > 0 || E.ruhmFree(S) > 0) b.held = "+";
     if (!S.guild) b.gildenhalle = "?";
     if (UI.isNight() && E.nightHuntsLeft(S) > 0 && !E.busy(S, now)) b.mondtor = "☾";
     return b;

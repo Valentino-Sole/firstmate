@@ -716,3 +716,136 @@ test("Chronik geht nach Stufe 30 weiter: zweiter Akt bis Stufe 50, Kapitel der R
   const hero = E.heroFighter(S);
   for (const c of E.storyChapters(S)) for (const f of E.storyFoes(S, c, hero)) assert.ok(f.maxHp > 0 && f.name, c.t);
 });
+
+test("Ruhm: Punkte ab Stufe 51, Boni wirken auf Kampf, Glueck und Tatendrang", () => {
+  const { E, S } = fresh();
+  S.level = 69;
+  assert.equal(E.ruhmPoints(S), 19);
+  assert.equal(E.ruhmFree(S), 19);
+  const hp0 = E.heroFighter(S).maxHp;
+  const g0 = E.heroAttrs(S).glueck;
+  const regen0 = E.energyRegenMs(S);
+  for (let i = 0; i < 10; i++) assert.ok(E.learnRuhm(S, "zaehigkeit").ok);
+  for (let i = 0; i < 5; i++) assert.ok(E.learnRuhm(S, "spuersinn").ok);
+  for (let i = 0; i < 4; i++) assert.ok(E.learnRuhm(S, "tatkraft").ok);
+  assert.ok(!E.learnRuhm(S, "macht").ok, "keine Punkte mehr frei");
+  assert.equal(E.heroFighter(S).maxHp, Math.round(hp0 * 1.1));
+  assert.equal(E.heroAttrs(S).glueck, g0 + 5);
+  assert.ok(E.energyRegenMs(S) < regen0, "Tatendrang fuellt sich schneller");
+  S.perlen = 5;
+  assert.ok(E.resetRuhm(S).ok);
+  assert.equal(E.ruhmFree(S), 19);
+  assert.equal(E.heroFighter(S).maxHp, hp0);
+});
+
+test("Ruhm: fremde Wege und zu viele Punkte werden bereinigt, migrate ergaenzt das Feld", () => {
+  const { E, S } = fresh();
+  S.level = 52;
+  S.ruhm = { macht: 99, fremd: 3 };
+  const r = E.ruhmRanks(S);
+  assert.equal(r.macht, 2);
+  assert.equal(r.fremd, undefined);
+  assert.equal(E.ruhmFree(S), 0);
+  delete S.ruhm;
+  const m = E.migrate(JSON.parse(JSON.stringify(S)));
+  assert.ok(m.ruhm && typeof m.ruhm === "object" && Object.keys(m.ruhm).length === 0);
+  // unter Stufe 51 gibt es nichts zu verteilen
+  S.level = 40;
+  S.ruhm = {};
+  assert.ok(!E.learnRuhm(S, "macht").ok);
+});
+
+test("Wolkenturm: Aufstieg, Bossetagen, Belohnungen und Wochenwechsel", () => {
+  const { E, S, advance, now } = fresh();
+  S.level = 20;
+  S.energy = { val: 100, ts: now() };
+  assert.ok(!E.turmFight(Object.assign({}, S, { level: 5 })).ok, "unter Stufe 10 verschlossen");
+  const res = E.turmFight(S);
+  assert.ok(res.ok);
+  assert.equal(res.fight.floor, 1);
+  res.fight.chain = { winner: 0, hpLeft: 1 };
+  const rew = E.resolveTurm(S, res.fight);
+  assert.ok(rew.won && rew.gold > 0 && rew.xp > 0);
+  assert.equal(S.turm.floor, 2);
+  assert.equal(S.turm.best, 1);
+  // Etage 5: ein Boss mit Schatz
+  S.turm.floor = 5;
+  const r5 = E.turmFight(S);
+  assert.equal(r5.fight.foes.length, 1);
+  assert.ok(r5.fight.foes[0].boss);
+  r5.fight.chain = { winner: 0 };
+  const rw5 = E.resolveTurm(S, r5.fight);
+  assert.ok(rw5.item || rw5.itemSold, "Bossetage gibt Beute");
+  // Etage 8: zwei Gegner nacheinander, Etage 10: Perle
+  const hero = E.heroFighter(S);
+  assert.equal(E.turmFoes(S, 8, hero).length, 2);
+  S.turm.floor = 10;
+  const r10 = E.turmFight(S);
+  r10.fight.chain = { winner: 0 };
+  const p0 = S.perlen;
+  E.resolveTurm(S, r10.fight);
+  assert.equal(S.perlen, p0 + 1);
+  // Niederlage: Etage bleibt
+  S.turm.floor = 11;
+  const r11 = E.turmFight(S);
+  r11.fight.chain = { winner: 1 };
+  E.resolveTurm(S, r11.fight);
+  assert.equal(S.turm.floor, 11);
+  // Montag: Aufstieg beginnt neu, Bestmarken bleiben
+  const best = S.turm.best;
+  advance(7 * 864e5);
+  const T = E.turmState(S);
+  assert.equal(T.floor, 1);
+  assert.equal(T.wbest, 0);
+  assert.equal(T.best, best);
+});
+
+test("Wochenboss: einmal je Woche, Erstbeute legendaer", () => {
+  const { E, S, advance, now } = fresh();
+  S.level = 30;
+  S.energy = { val: 100, ts: now() };
+  const b = E.weeklyBoss(S);
+  assert.ok(b.mon && b.mon.name && b.L >= 30);
+  const res = E.wbossFight(S);
+  assert.ok(res.ok);
+  assert.ok(res.fight.foes[0].maxHp > 0);
+  res.fight.chain = { winner: 0 };
+  const rew = E.resolveWboss(S, res.fight);
+  assert.ok(rew.won);
+  assert.equal(rew.item && rew.item.rarity, "legendaer");
+  assert.ok(S.wboss.won);
+  assert.ok(!E.wbossFight(S).ok, "diese Woche schon bezwungen");
+  advance(7 * 864e5);
+  assert.equal(E.weeklyBoss(S).won, false);
+  const b2 = E.weeklyBoss(S);
+  assert.notEqual(b2.week, b.week);
+});
+
+test("Tagespruefungen: Fortschritt, Belohnung, Perle und Serie", () => {
+  const { E, S, advance } = fresh();
+  E.dailyTasks(S);
+  S.daily.tasks = [{ id: "arena1", got: 0, done: false }, { id: "brunnen1", got: 0, done: false }, { id: "sieg4", got: 0, done: false }];
+  const gold0 = S.gold;
+  E.dailyProgress(S, "arena");
+  assert.ok(S.daily.tasks[0].done, "Arenasieg erfuellt die Arenapruefung");
+  assert.equal(S.daily.tasks[2].got, 1, "Arenasieg zaehlt auch als Kampf");
+  assert.ok(S.gold > gold0, "Belohnung sofort");
+  E.dailyProgress(S, "brunnen");
+  assert.ok(S.daily.tasks[1].done);
+  assert.equal(S.daily.tasks[2].got, 1, "Brunnenwurf ist kein Kampf");
+  const p0 = S.perlen;
+  for (let i = 0; i < 3; i++) E.dailyProgress(S, "auftrag");
+  assert.ok(S.daily.tasks[2].done);
+  assert.equal(S.perlen, p0 + 1, "alle drei geben eine Wolkenperle");
+  assert.equal(S.taskRun.n, 1);
+  // naechster Tag in Folge: Serie 2
+  advance(864e5);
+  E.tick(S);
+  assert.ok(!S.daily.tasks, "neuer Tag leert die Aufgaben");
+  S.daily.tasks = [{ id: "arena1", got: 0, done: false }, { id: "brunnen1", got: 0, done: false }, { id: "sieg4", got: 3, done: false }];
+  E.dailyProgress(S, "arena");
+  E.dailyProgress(S, "brunnen");
+  assert.equal(S.taskRun.n, 2, "Serie zaehlt hoch");
+  // echte Siege zaehlen ueber die Aufloesungswege
+  assert.ok(E.dailyTasks(S).every((t) => t.done));
+});
