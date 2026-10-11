@@ -9,9 +9,9 @@ const GENERATORS := [
 	{"id": "handtaucher", "base_cost": 15.0, "growth": 1.15, "base_prod": 0.5},
 	{"id": "bohrdrohne", "base_cost": 220.0, "growth": 1.15, "base_prod": 4.0},
 	{"id": "tiefseekran", "base_cost": 3200.0, "growth": 1.16, "base_prod": 24.0},
-	{"id": "uboot_flotte", "base_cost": 46000.0, "growth": 1.17, "base_prod": 140.0},
-	{"id": "magmabohrer", "base_cost": 720000.0, "growth": 1.18, "base_prod": 900.0},
-	{"id": "abyss_portal", "base_cost": 12000000.0, "growth": 1.2, "base_prod": 6500.0},
+	{"id": "uboot_flotte", "base_cost": 46000.0, "growth": 1.14, "base_prod": 140.0},
+	{"id": "magmabohrer", "base_cost": 720000.0, "growth": 1.13, "base_prod": 3200.0},
+	{"id": "abyss_portal", "base_cost": 6000000.0, "growth": 1.12, "base_prod": 24000.0},
 ]
 
 ## Tiefenschichten: jede erreichte Tiefe aendert genau eine Spielregel.
@@ -31,10 +31,10 @@ const DEPTH_EARLY_BOOST := 5.0       # ab Mitternachtszone fuer Stufe 1-2
 const DEPTH_COST_DISCOUNT := 0.9     # ab Abgrund
 const DEPTH_PRESTIGE_FACTOR := 1.5   # ab Abyss-Tor
 
-const MAX_UPGRADE_TIERS := 3
-const UPGRADE_OWNED_STEP := 25       # Tier t braucht 25*(t+1) Exemplare
-const UPGRADE_COST_FACTOR := 150.0
-const UPGRADE_COST_GROWTH := 12.0
+const MAX_UPGRADE_TIERS := 4
+const UPGRADE_OWNED_STEP := 10       # Tier t braucht 10*(t+1) Exemplare
+const UPGRADE_COST_FACTOR := 80.0
+const UPGRADE_COST_GROWTH := 10.0
 
 const OFFLINE_CAP_SECONDS := 8 * 3600
 const OFFLINE_RATE_BASE := 0.5

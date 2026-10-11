@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Tiefsee Konzern</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap">
+<style>
+/* Layout: links Zähler und Abbau, rechts die Anlagenliste; Hintergrund dunkelt mit der Tiefe ab. */
+:root{
+  --bg:#114a63;
+  --panel:#0b1c30cc;
+  --panel-solid:#0b1c30;
+  --border:#1e3a5f;
+  --text:#dbeafe;
+  --text-dim:#7a9cc0;
+  --text-off:#4a6584;
+  --gold:#fbbf24;
+  --gold-dark:#b45309;
+  --gold-text:#211203;
+  --green:#4ade80;
+  --cyan:#7dd3fc;
+  color-scheme:dark;
+}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding-inline:16px;
+  padding-block:16px 32px;
+  transition:background-color 2.5s ease;
+  min-height:100%;
+}
+@media (prefers-reduced-motion: reduce){ body{transition:none} }
+.num{font-family:"Chakra Petch",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;max-width:1100px;margin:0 auto 18px}
+header h1{font-family:"Chakra Petch",sans-serif;font-size:22px;letter-spacing:3px;margin:0;color:var(--cyan)}
+.badge{font-size:11px;letter-spacing:1px;color:var(--text-dim);border:1px solid var(--border);border-radius:999px;padding:3px 10px}
+main{display:flex;gap:40px;flex-wrap:wrap;max-width:1100px;margin:0 auto}
+.col-left{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.col-right{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:8px}
+#pearls{font-size:52px;font-weight:700;line-height:1.05;color:#fff}
+#rate{font-size:18px;color:var(--green);font-weight:600}
+.depthbox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+#depth{font-size:15px;color:var(--cyan);font-weight:600}
+#depthnext{font-size:12px;color:var(--text-dim)}
+.bar{height:8px;background:#0516257f;border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.bar>div{height:100%;width:0%;background:linear-gradient(90deg,var(--gold-dark),var(--gold))}
+button{font-family:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--border);background:var(--panel-solid);color:var(--text);padding:10px 14px;font-size:14px;text-align:left}
+button:hover:not(:disabled){background:#11253e}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button:disabled{background:#091626;color:var(--text-off);cursor:default}
+#mine{background:linear-gradient(180deg,var(--gold),#d97706);color:var(--gold-text);border:1px solid var(--gold-dark);font-family:"Chakra Petch",sans-serif;font-size:21px;font-weight:700;text-align:center;padding:16px;box-shadow:0 4px 0 #92400e}
+#mine:hover{background:linear-gradient(180deg,#fcd34d,#d97706)}
+#mine:active{transform:translateY(2px);box-shadow:0 2px 0 #92400e}
+#prestige{text-align:center;font-weight:600}
+#prestige:not(:disabled){color:var(--gold);border-color:var(--gold-dark)}
+.toast{font-size:14px;color:var(--gold);font-weight:600;min-height:20px}
+#offline{font-size:13px;color:var(--cyan)}
+.genrow{display:flex;gap:8px}
+.genrow .buy{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:10px 14px}
+.genrow .buy .l1{font-weight:700;font-size:14px}
+.genrow .buy .l2{font-size:12px;color:var(--text-dim)}
+.genrow .buy:disabled .l2{color:var(--text-off)}
+.genrow .up{flex:0 0 108px;text-align:center;font-size:13px;font-weight:700;color:var(--gold)}
+.genrow .up:disabled{color:var(--text-off)}
+footer{max-width:1100px;margin:26px auto 0;font-size:11px;color:var(--text-off)}
+</style>
+
+<header>
+  <h1>TIEFSEE KONZERN</h1>
+  <span class="badge">v0.3 · Browser-Testversion</span>
+</header>
+
+<main>
+  <section class="col-left">
+    <div id="pearls" class="num">0 Perlen</div>
+    <div id="rate" class="num">+0 pro Sekunde</div>
+    <div class="depthbox">
+      <div id="depth">Tiefe 1: Schelfmeer · Der Tauchgang beginnt</div>
+      <div class="bar" aria-hidden="true"><div id="depthbar"></div></div>
+      <div id="depthnext">Nächste Tiefe bei 50,00 Tsd</div>
+    </div>
+    <button id="mine" type="button">ABBAUEN&nbsp; +1</button>
+    <div class="toast" id="toast" role="status"></div>
+    <div id="offline" hidden></div>
+    <button id="prestige" type="button" disabled>Neustart ab 1 Mrd Perlen dieser Runde</button>
+  </section>
+  <section class="col-right" id="gens"></section>
+</main>
+
+<footer>Testversion der Godot-Fassung mit identischen Spielregeln. Der Spielstand wird nur in diesem Browser gespeichert.</footer>
+
+<script>
+'use strict';
+// Spielregeln und Zahlen: 1:1 aus src/economy.gd (v0.3)
+const GENS=[
+  {id:'handtaucher', name:'Handtaucher',  base:15,      growth:1.15, prod:0.5},
+  {id:'bohrdrohne',  name:'Bohrdrohne',   base:220,     growth:1.15, prod:4},
+  {id:'tiefseekran', name:'Tiefseekran',  base:3200,    growth:1.16, prod:24},
+  {id:'uboot',       name:'U-Boot-Flotte',base:46000,   growth:1.14, prod:140},
+  {id:'magma',       name:'Magmabohrer',  base:720000,  growth:1.13, prod:3200},
+  {id:'portal',      name:'Abyss-Portal', base:6000000, growth:1.12, prod:24000},
+];
+const DEPTHS=[
+  {th:0,     name:'Schelfmeer',       rule:'Der Tauchgang beginnt',                 bg:'#114a63'},
+  {th:5e4,   name:'Dämmerzone',       rule:'Klicks zählen dreifach',                bg:'#0d3a52'},
+  {th:5e6,   name:'Mitternachtszone', rule:'Taucher und Drohnen produzieren x5',    bg:'#092a41'},
+  {th:5e8,   name:'Abgrund',          rule:'Alle Käufe 10 % günstiger',             bg:'#061b2e'},
+  {th:5e10,  name:'Hadalzone',        rule:'Offline volle Rate',                    bg:'#040f1d'},
+  {th:5e12,  name:'Abyss-Tor',        rule:'Abyss-Punkte +50 %',                    bg:'#05060f'},
+];
+const OFFLINE_CAP=8*3600, PRESTIGE_UNLOCK=1e9, UPG_STEP=10, UPG_MAX=4, UPG_FACTOR=80, UPG_GROWTH=10;
+
+let eco={pearls:0, run:0, life:0, owned:[0,0,0,0,0,0], upg:[0,0,0,0,0,0], abyss:0};
+
+const depthLevel=()=>{let l=1;for(let i=0;i<DEPTHS.length;i++)if(eco.run>=DEPTHS[i].th)l=i+1;return l};
+const globalMult=()=>1+eco.abyss*0.02;
+const clickMult=()=>depthLevel()>=2?3:1;
+const earlyBoost=i=>(depthLevel()>=3&&i<2)?5:1;
+const costDiscount=()=>depthLevel()>=4?0.9:1;
+const offlineRate=()=>depthLevel()>=5?1:0.5;
+const genCost=i=>GENS[i].base*Math.pow(GENS[i].growth,eco.owned[i])*costDiscount();
+const genProd=i=>eco.owned[i]*GENS[i].prod*Math.pow(2,eco.upg[i])*earlyBoost(i);
+const pps=()=>GENS.reduce((s,_,i)=>s+genProd(i),0)*globalMult();
+const clickValue=()=>(1+pps()*0.02)*clickMult()*globalMult();
+const upgRequired=i=>UPG_STEP*(eco.upg[i]+1);
+const upgCost=i=>GENS[i].base*UPG_FACTOR*Math.pow(UPG_GROWTH,eco.upg[i]);
+const upgAvailable=i=>eco.upg[i]<UPG_MAX&&eco.owned[i]>=upgRequired(i);
+const prestigePoints=()=>{if(eco.run<PRESTIGE_UNLOCK)return 0;let b=Math.floor(Math.sqrt(eco.run/PRESTIGE_UNLOCK));if(depthLevel()>=6)b=Math.floor(b*1.5);return b};
+
+function earn(a){eco.pearls+=a;eco.run+=a;eco.life+=a}
+function buy(i){const c=genCost(i);if(eco.pearls<c)return false;eco.pearls-=c;eco.owned[i]++;return true}
+function buyUpg(i){if(!upgAvailable(i)||eco.pearls<upgCost(i))return false;eco.pearls-=upgCost(i);eco.upg[i]++;return true}
+function doPrestige(){const g=prestigePoints();if(g<=0)return false;eco.abyss+=g;eco.pearls=0;eco.run=0;eco.owned=[0,0,0,0,0,0];eco.upg=[0,0,0,0,0,0];return true}
+
+const UNITS=['Tsd','Mio','Mrd','Bio','Brd'];
+function fmt(v){
+  if(!isFinite(v))return'0';
+  if(v<1000)return String(Math.floor(v));
+  let idx=-1;while(v>=1000&&idx<UNITS.length-1){v/=1000;idx++}
+  return v.toFixed(2).replace('.',',')+' '+UNITS[idx];
+}
+
+// --- Spielstand ---
+const SAVE_KEY='tiefsee_konzern_v2';
+function saveGame(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({saved_at:Date.now()/1000,eco}))}catch(e){}}
+function loadGame(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);if(!raw)return;
+    const d=JSON.parse(raw);if(!d||!d.eco)return;
+    for(const k of['pearls','run','life','abyss'])if(typeof d.eco[k]==='number')eco[k]=d.eco[k];
+    for(let i=0;i<6;i++){eco.owned[i]=(d.eco.owned&&d.eco.owned[i])|0;eco.upg[i]=(d.eco.upg&&d.eco.upg[i])|0}
+    const away=Math.max(0,Date.now()/1000-(d.saved_at||0));
+    const gain=pps()*Math.min(away,OFFLINE_CAP)*offlineRate();
+    if(gain>0.5){earn(gain);const o=document.getElementById('offline');o.textContent='Willkommen zurück! Offline verdient: '+fmt(gain)+' Perlen';o.hidden=false}
+  }catch(e){}
+}
+
+// --- Oberfläche ---
+const $=id=>document.getElementById(id);
+const buyBtns=[],upBtns=[];
+function buildRows(){
+  const host=$('gens');
+  GENS.forEach((g,i)=>{
+    const row=document.createElement('div');row.className='genrow';
+    const b=document.createElement('button');b.type='button';b.className='buy';b.id='buy_'+g.id;
+    b.innerHTML='<span class="l1"></span><span class="l2 num"></span>';
+    b.addEventListener('click',()=>{if(buy(i))render()});
+    const u=document.createElement('button');u.type='button';u.className='up num';u.id='up_'+g.id;
+    u.addEventListener('click',()=>{if(buyUpg(i))render()});
+    row.append(b,u);host.append(row);buyBtns.push(b);upBtns.push(u);
+  });
+}
+let lastDepth=1,toastTimer=null;
+function render(){
+  const d=depthLevel(),dep=DEPTHS[d-1];
+  if(d!==lastDepth){
+    lastDepth=d;
+    document.documentElement.style.setProperty('--bg',dep.bg);
+    const t=$('toast');t.textContent='Neue Tiefe erreicht! '+dep.name+' · '+dep.rule;
+    clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.textContent=''},6000);
+  }
+  $('pearls').textContent=fmt(eco.pearls)+' Perlen';
+  $('rate').textContent='+'+fmt(pps())+' pro Sekunde';
+  $('mine').innerHTML='ABBAUEN&nbsp; +'+fmt(clickValue());
+  $('depth').textContent='Tiefe '+d+': '+dep.name+' · '+dep.rule;
+  const next=d<DEPTHS.length?DEPTHS[d].th:-1;
+  if(next>0){
+    $('depthnext').textContent='Nächste Tiefe bei '+fmt(next);
+    const lo=dep.th;$('depthbar').style.width=(Math.min(1,(eco.run-lo)/(next-lo))*100).toFixed(1)+'%';
+  }else{$('depthnext').textContent='Tiefste Zone erreicht';$('depthbar').style.width='100%'}
+  GENS.forEach((g,i)=>{
+    const b=buyBtns[i];
+    b.querySelector('.l1').textContent=g.name;
+    let l2='Besitz: '+eco.owned[i]+'   ·   Kosten: '+fmt(genCost(i));
+    if(eco.owned[i]>0)l2+='   ·   +'+fmt(genProd(i)*globalMult())+'/s';
+    b.querySelector('.l2').textContent=l2;
+    b.disabled=eco.pearls<genCost(i);
+    const u=upBtns[i];
+    if(eco.upg[i]>=UPG_MAX){u.textContent='MAX';u.disabled=true}
+    else if(upgAvailable(i)){u.textContent='x2 · '+fmt(upgCost(i));u.disabled=eco.pearls<upgCost(i)}
+    else{u.textContent='x2 ab '+upgRequired(i);u.disabled=true}
+  });
+  const p=prestigePoints(),pb=$('prestige');
+  if(p>0){pb.textContent='Neustart: +'+p+' Abyss-Punkte (je +2 % Produktion)';pb.disabled=false}
+  else{pb.textContent=eco.abyss>0?('Abyss-Punkte: '+eco.abyss+' · Neustart ab 1 Mrd dieser Runde'):'Neustart ab 1 Mrd Perlen dieser Runde';pb.disabled=true}
+}
+
+function start(hot){
+  if(hot&&hot.eco){eco=hot.eco}
+  buildRows();
+  if(!(hot&&hot.eco))loadGame();
+  lastDepth=depthLevel();
+  document.documentElement.style.setProperty('--bg',DEPTHS[lastDepth-1].bg);
+  render();
+  let last=performance.now(),acc=0;
+  setInterval(()=>{
+    const now=performance.now(),dt=Math.min(1,(now-last)/1000);last=now;
+    earn(pps()*dt);
+    render();
+    acc+=dt;if(acc>=10){acc=0;saveGame()}
+  },100);
+  $('mine').addEventListener('click',()=>{earn(clickValue());render()});
+  $('prestige').addEventListener('click',()=>{if(doPrestige()){saveGame();render()}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveGame()});
+}
+
+window.claude?.hot?.snapshot?.(()=>({eco}));
+window.claude?.hot?.ready?window.claude.hot.ready(start):start(window.claude?.hot?.data??{});
+</script>
+
+</body>
+</html>

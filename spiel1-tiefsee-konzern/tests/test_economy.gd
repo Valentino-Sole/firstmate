@@ -36,6 +36,7 @@ func _init() -> void:
 	_test_dict_roundtrip()
 	_test_save_file_roundtrip()
 	_test_progression_curve()
+	_test_long_session_depth()
 	if checks == 0:
 		fails += 1
 		printerr("FAIL  Keine Checks gelaufen (Kompilierfehler?)")
@@ -115,18 +116,21 @@ func _test_depth_rules() -> void:
 
 func _test_upgrades() -> void:
 	var eco = EconomyScript.new()
-	check(not eco.upgrade_available(0), "Upgrade vor 25 Exemplaren gesperrt")
-	eco.owned[0] = 25
-	check(eco.upgrade_available(0), "Upgrade ab 25 Exemplaren verfuegbar")
-	check(approx(eco.upgrade_cost(0), 15.0 * 150.0), "Upgrade-Kosten Stufe 1 = 150x Basis")
+	var step: int = EconomyScript.UPGRADE_OWNED_STEP
+	var factor: float = EconomyScript.UPGRADE_COST_FACTOR
+	var growth: float = EconomyScript.UPGRADE_COST_GROWTH
+	check(not eco.upgrade_available(0), "Upgrade ohne Besitz gesperrt")
+	eco.owned[0] = step
+	check(eco.upgrade_available(0), "Upgrade ab Besitzschwelle verfuegbar")
+	check(approx(eco.upgrade_cost(0), 15.0 * factor), "Upgrade-Kosten Stufe 1 = Faktor x Basis")
 	check(not eco.buy_upgrade(0), "Upgrade ohne Perlen schlaegt fehl")
-	eco.pearls = 3000.0
+	eco.pearls = 15.0 * factor + 100.0
 	check(eco.buy_upgrade(0), "Upgrade-Kauf klappt")
-	check(eco.upgrades[0] == 1 and approx(eco.pearls, 750.0), "Upgrade kostet und zaehlt")
-	check(approx(eco.production_per_second(), 25.0 * 0.5 * 2.0), "Upgrade verdoppelt Produktion")
-	check(not eco.upgrade_available(0), "Naechstes Upgrade braucht 50 Exemplare")
-	eco.owned[0] = 50
-	check(approx(eco.upgrade_cost(0), 15.0 * 150.0 * 12.0), "Upgrade-Kosten steigen mit Faktor 12")
+	check(eco.upgrades[0] == 1 and approx(eco.pearls, 100.0), "Upgrade kostet und zaehlt")
+	check(approx(eco.production_per_second(), float(step) * 0.5 * 2.0), "Upgrade verdoppelt Produktion")
+	check(not eco.upgrade_available(0), "Naechstes Upgrade braucht doppelte Schwelle")
+	eco.owned[0] = step * 2
+	check(approx(eco.upgrade_cost(0), 15.0 * factor * growth), "Upgrade-Kosten steigen mit dem Wachstumsfaktor")
 	eco.upgrades[0] = EconomyScript.MAX_UPGRADE_TIERS
 	eco.owned[0] = 999
 	check(not eco.upgrade_available(0), "Upgrade-Stufen sind gedeckelt")
@@ -227,3 +231,31 @@ func _test_progression_curve() -> void:
 			break
 	check(crane_at > 0 and crane_at <= 1200, "Tiefseekran in unter 20 min erreichbar (war: %d s)" % crane_at)
 	check(eco.production_per_second() > 20.0, "Produktion traegt nach dem Kran")
+
+
+## Langzeit-Kurve: In 3 Stunden aktivem Spiel (inkl. Upgrades) muss der
+## Abgrund (Tiefe 4, 500 Mio kumuliert) erreichbar sein, damit die erste
+## lange Sitzung sichtbar Fortschritt durch die Zonen macht.
+func _test_long_session_depth() -> void:
+	var eco = EconomyScript.new()
+	var abgrund_at := -1
+	for seconds in range(1, 10801):
+		eco.advance(1.0)
+		for c in 3:
+			eco.click()
+		var acted := true
+		while acted:
+			acted = false
+			for i in range(EconomyScript.GENERATORS.size() - 1, -1, -1):
+				if eco.can_upgrade(i):
+					eco.buy_upgrade(i)
+					acted = true
+					break
+				if eco.can_buy(i):
+					eco.buy(i)
+					acted = true
+					break
+		if abgrund_at < 0 and eco.depth_level() >= 4:
+			abgrund_at = seconds
+			break
+	check(abgrund_at > 0, "Abgrund (Tiefe 4) in unter 3 h aktivem Spiel erreichbar (war: %d s)" % abgrund_at)
