@@ -15,10 +15,13 @@ var locale := "de"
 
 var pearl_label: Label
 var rate_label: Label
+var depth_label: Label
+var depth_progress_label: Label
 var offline_label: Label
 var click_button: Button
 var prestige_button: Button
 var generator_buttons: Array[Button] = []
+var upgrade_buttons: Array[Button] = []
 
 var _autosave_accum := 0.0
 var _ui_accum := 0.0
@@ -78,6 +81,14 @@ func _build_ui() -> void:
 	rate_label.add_theme_font_size_override("font_size", 20)
 	left.add_child(rate_label)
 
+	depth_label = Label.new()
+	depth_label.add_theme_font_size_override("font_size", 18)
+	left.add_child(depth_label)
+
+	depth_progress_label = Label.new()
+	depth_progress_label.add_theme_font_size_override("font_size", 14)
+	left.add_child(depth_progress_label)
+
 	click_button = Button.new()
 	click_button.custom_minimum_size = Vector2(260, 72)
 	click_button.add_theme_font_size_override("font_size", 26)
@@ -100,19 +111,39 @@ func _build_ui() -> void:
 	columns.add_child(right)
 
 	for i in EconomyScript.GENERATORS.size():
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(420, 56)
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		right.add_child(row)
+
+		var buy_button := Button.new()
+		buy_button.custom_minimum_size = Vector2(380, 56)
+		buy_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		buy_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		var index := i
-		button.pressed.connect(func() -> void: _on_buy(index))
-		right.add_child(button)
-		generator_buttons.append(button)
+		buy_button.pressed.connect(func() -> void: _on_buy(index))
+		row.add_child(buy_button)
+		generator_buttons.append(buy_button)
+
+		var upgrade_button := Button.new()
+		upgrade_button.custom_minimum_size = Vector2(130, 56)
+		upgrade_button.pressed.connect(func() -> void: _on_upgrade(index))
+		row.add_child(upgrade_button)
+		upgrade_buttons.append(upgrade_button)
 
 
 func _refresh() -> void:
 	pearl_label.text = "%s %s" % [I18nScript.fmt(locale, eco.pearls), I18nScript.t(locale, "pearls")]
 	rate_label.text = "+%s %s" % [I18nScript.fmt(locale, eco.production_per_second()), I18nScript.t(locale, "per_second")]
 	click_button.text = "%s  +%s" % [I18nScript.t(locale, "mine"), I18nScript.fmt(locale, eco.click_value())]
+
+	var depth_name: String = I18nScript.t(locale, eco.depth_id())
+	var depth_rule: String = I18nScript.t(locale, "rule_" + eco.depth_id())
+	depth_label.text = "%s: %s · %s" % [I18nScript.t(locale, "depth") % eco.depth_level(), depth_name, depth_rule]
+	var next_threshold: float = eco.next_depth_threshold()
+	if next_threshold > 0.0:
+		depth_progress_label.text = I18nScript.t(locale, "next_depth") % I18nScript.fmt(locale, next_threshold)
+	else:
+		depth_progress_label.text = I18nScript.t(locale, "max_depth")
 
 	for i in generator_buttons.size():
 		var g: Dictionary = EconomyScript.GENERATORS[i]
@@ -126,7 +157,17 @@ func _refresh() -> void:
 		]
 		generator_buttons[i].disabled = not eco.can_buy(i)
 
-	var points := eco.prestige_points_on_reset()
+		if eco.upgrades[i] >= EconomyScript.MAX_UPGRADE_TIERS:
+			upgrade_buttons[i].text = I18nScript.t(locale, "upgrade_maxed")
+			upgrade_buttons[i].disabled = true
+		elif eco.upgrade_available(i):
+			upgrade_buttons[i].text = I18nScript.t(locale, "upgrade") % I18nScript.fmt(locale, eco.upgrade_cost(i))
+			upgrade_buttons[i].disabled = not eco.can_upgrade(i)
+		else:
+			upgrade_buttons[i].text = I18nScript.t(locale, "upgrade_locked") % eco.upgrade_owned_required(i)
+			upgrade_buttons[i].disabled = true
+
+	var points: int = eco.prestige_points_on_reset()
 	if points > 0:
 		prestige_button.text = I18nScript.t(locale, "prestige") % points
 		prestige_button.disabled = false
@@ -142,6 +183,11 @@ func _on_click() -> void:
 
 func _on_buy(index: int) -> void:
 	if eco.buy(index):
+		_refresh()
+
+
+func _on_upgrade(index: int) -> void:
+	if eco.buy_upgrade(index):
 		_refresh()
 
 
