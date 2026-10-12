@@ -1,0 +1,12 @@
+{
+  "version": "0.4.3",
+  "_quelle": "Texte aus FABELBRUCH_Wachskarten_v043/00_FUER_CLAUDE_ZUERST_LESEN.txt (Kartenzustaende). EN-Uebersetzung von Claude, zur Freigabe.",
+  "strings_de": [
+    { "id": "ui.missing_short", "text": "Es fehlen {amount}." },
+    { "id": "ui.release_offer", "text": "Angebot lösen" }
+  ],
+  "strings_en": [
+    { "id": "ui.missing_short", "text": "{amount} short." },
+    { "id": "ui.release_offer", "text": "Release offer" }
+  ]
+}

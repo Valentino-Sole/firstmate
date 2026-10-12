@@ -1,0 +1,71 @@
+{
+  "version": "0.4.2",
+  "note": "Kombinationen ergeben sich ausschließlich aus Einzelregeln; keine Setboni.",
+  "combinations": [
+    {
+      "weapons": [
+        "W007",
+        "W008"
+      ],
+      "name": "Anzünden und löschen",
+      "sequence": "Dochtlanze legt Brand. Löschkeule verbraucht verbleibende Ticks für 50 % Sofortschaden, begrenzt auf 1,5 D der Keule. Kein zusätzlicher versteckter Setbonus."
+    },
+    {
+      "weapons": [
+        "W033",
+        "W034",
+        "W035"
+      ],
+      "name": "Ofenrunde",
+      "sequence": "Ofenfaust entzündet; Glutzange erhält gegen Brand +0,5 D; Aschestreuer verteilt eigenen schwächeren Brand auf bis zu drei Nachbarn."
+    },
+    {
+      "weapons": [
+        "W015",
+        "W018"
+      ],
+      "name": "Dorn und Säge",
+      "sequence": "Dornzange legt Risswunde, Tintensäge verursacht an verwundeten Zielen +0,3 D."
+    },
+    {
+      "weapons": [
+        "W019",
+        "W017"
+      ],
+      "name": "Falz und Feder",
+      "sequence": "Falzklinge setzt Lesemarke, ein späterer Federbolzer-Haupttreffer verbraucht sie für 0,5 D der Falzklinge."
+    },
+    {
+      "weapons": [
+        "W023",
+        "W027"
+      ],
+      "name": "Zusammenziehen und brechen",
+      "sequence": "Ösenflegel zieht normale Gegner heran; Tonhammer trifft Fläche und zeitversetzt äußeren Ring. Keine erzwungene gemeinsame Zielwahl."
+    },
+    {
+      "weapons": [
+        "W025",
+        "W032"
+      ],
+      "name": "Spröder Moment",
+      "sequence": "Glockenblaster erzeugt 2-s-Brüchig-Fenster. Sekundendorn-Markierung profitiert nur, wenn dieses Fenster beim tatsächlichen Ablauf noch aktiv ist; vorher gesetzte Marke gezielt nutzen."
+    },
+    {
+      "weapons": [
+        "W021",
+        "W039"
+      ],
+      "name": "Geteilte Last",
+      "sequence": "Nadelwerfer verbindet; spätere Haupttreffer der Risslanze übertragen 30 % tatsächlichen Haupt-Lebensverlust, mit Nadelwerfer-Deckel. Risslanzen-Zusatzschaden wird nicht übertragen."
+    },
+    {
+      "weapons": [
+        "W030",
+        "W010"
+      ],
+      "name": "Festhalten und nachhallen",
+      "sequence": "Sandlast erleichtert Verbleib im fixierten Rechteck des verzögerten Spiegelstrahls. Kein automatisches Treffen außerhalb der Geometrie."
+    }
+  ]
+}

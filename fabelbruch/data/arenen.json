@@ -1,0 +1,1338 @@
+{
+  "version": "0.4",
+  "camera": "Orthografische 2D-Draufsicht mit sichtbaren Objektfronten; feste Arena vollständig sichtbar. Keine Perspektivflucht.",
+  "coordinates": "Ursprung links oben; x rechts, y unten; 1600×900 Referenzeinheiten. Skalierung auf 1920×1080 Faktor 1.2.",
+  "art_vs_layout": "Illustration legt Materialien und Licht fest. SVG und JSON definieren echte Grenze, Hindernisse und Schaden. Randornamente aus der Illustration niemals als zusätzliche Collider übernehmen.",
+  "arenas": [
+    {
+      "id": "AR01",
+      "name": "Glockenhof",
+      "family_id": "glockenhof",
+      "boss_id": "B01",
+      "monster_ids": [
+        "M001",
+        "M002",
+        "M003",
+        "M004",
+        "M005",
+        "M006",
+        "M007",
+        "M008",
+        "M009",
+        "M010"
+      ],
+      "failed_wish": "Endlich Ruhe.",
+      "art_description": "Ein versunkener Glockenplatz mit vier niedrigen Sockeln, umgestürzten Glockengestellen am Rand, gedämpften Messingfugen im Petrolpflaster.",
+      "floor_color": "#334B4C",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Vier Glockensockel",
+      "obstacles": [
+        {
+          "id": "AR01_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR01_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR01_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR01_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR01_HZ",
+        "name": "Schallfuge",
+        "description": "Zwei waagerechte Fugen leuchten nacheinander auf.",
+        "geometry": "rects",
+        "zones": [
+          [
+            200,
+            260,
+            1200,
+            36
+          ],
+          [
+            200,
+            610,
+            1200,
+            36
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR01.png",
+      "layout_file": "arenen/AR01-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR02",
+      "name": "Wachsmoor",
+      "family_id": "wachsmoor",
+      "boss_id": "B02",
+      "monster_ids": [
+        "M011",
+        "M012",
+        "M013",
+        "M014",
+        "M015",
+        "M016",
+        "M017",
+        "M018",
+        "M019",
+        "M020"
+      ],
+      "failed_wish": "Diese Wärme soll niemals vergehen.",
+      "art_description": "Eine tragfähige matte Wachskruste, niedrige erkaltete Wachshügel, Dochtbäume und zähe rote Seen ausschließlich außerhalb der begehbaren Grenze.",
+      "floor_color": "#4B3A40",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Erkaltete Gussbuckel",
+      "obstacles": [
+        {
+          "id": "AR02_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR02_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR02_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR02_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR02_HZ",
+        "name": "Warmer Guss",
+        "description": "Zwei runde Gussblasen werden sichtbar und platzen.",
+        "geometry": "circles",
+        "zones": [
+          [
+            400,
+            450,
+            65
+          ],
+          [
+            1200,
+            450,
+            65
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR02.png",
+      "layout_file": "arenen/AR02-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR03",
+      "name": "Spiegelhain",
+      "family_id": "spiegelhain",
+      "boss_id": "B03",
+      "monster_ids": [
+        "M021",
+        "M022",
+        "M023",
+        "M024",
+        "M025",
+        "M026",
+        "M027",
+        "M028",
+        "M029",
+        "M030"
+      ],
+      "failed_wish": "Ich will die ganze Wahrheit sehen.",
+      "art_description": "Stumpfes blaugraues Glas als Boden, messinggefasste Spiegelstämme am Rand, vier niedrige matte Glassockel. Keine kontrastreichen Reflexionen im Zentrum.",
+      "floor_color": "#354652",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Blinde Spiegelstümpfe",
+      "obstacles": [
+        {
+          "id": "AR03_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR03_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR03_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR03_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR03_HZ",
+        "name": "Spiegelbahn",
+        "description": "Eine senkrechte Lichtbahn wandert als einzelne angekündigte Zone von links nach rechts.",
+        "geometry": "rects",
+        "zones": [
+          [
+            430,
+            180,
+            34,
+            540
+          ],
+          [
+            1140,
+            180,
+            34,
+            540
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR03.png",
+      "layout_file": "arenen/AR03-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR04",
+      "name": "Wurzelkammer",
+      "family_id": "wurzelkammer",
+      "boss_id": "B04",
+      "monster_ids": [
+        "M031",
+        "M032",
+        "M033",
+        "M034",
+        "M035",
+        "M036",
+        "M037",
+        "M038",
+        "M039",
+        "M040"
+      ],
+      "failed_wish": "Niemand soll mehr hungern.",
+      "art_description": "Eine unterirdische Vorratskammer in riesigen Wurzeln, moosige erdige Laufmitte, Speichernischen am äußeren Rand und vier kurze Baumstümpfe.",
+      "floor_color": "#3D4739",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Wurzelknollen",
+      "obstacles": [
+        {
+          "id": "AR04_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR04_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR04_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR04_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR04_HZ",
+        "name": "Wurzelgriff",
+        "description": "Zwei kleine Wurzelkreise drücken aus der Erde.",
+        "geometry": "circles",
+        "zones": [
+          [
+            420,
+            450,
+            65
+          ],
+          [
+            1180,
+            450,
+            65
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR04.png",
+      "layout_file": "arenen/AR04-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR05",
+      "name": "Tintenarchiv",
+      "family_id": "tintenarchiv",
+      "boss_id": "B05",
+      "monster_ids": [
+        "M041",
+        "M042",
+        "M043",
+        "M044",
+        "M045",
+        "M046",
+        "M047",
+        "M048",
+        "M049",
+        "M050"
+      ],
+      "failed_wish": "Nichts soll je vergessen werden.",
+      "art_description": "Ein offenes Archiv mit flachem vergilbtem Papierboden, dunklen Tintenrändern, versetzten Buchrücken und vier niedrigen versiegelten Bücherstapeln.",
+      "floor_color": "#39414A",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Versiegelte Buchstapel",
+      "obstacles": [
+        {
+          "id": "AR05_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR05_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR05_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR05_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR05_HZ",
+        "name": "Randstrich",
+        "description": "Zwei rechteckige Zeilen werden nacheinander unterstrichen.",
+        "geometry": "rects",
+        "zones": [
+          [
+            330,
+            270,
+            940,
+            32
+          ],
+          [
+            330,
+            610,
+            940,
+            32
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR05.png",
+      "layout_file": "arenen/AR05-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR06",
+      "name": "Nahtheide",
+      "family_id": "nahtheide",
+      "boss_id": "B06",
+      "monster_ids": [
+        "M051",
+        "M052",
+        "M053",
+        "M054",
+        "M055",
+        "M056",
+        "M057",
+        "M058",
+        "M059",
+        "M060"
+      ],
+      "failed_wish": "Alles soll wieder heil werden.",
+      "art_description": "Eine staubig mauve Filzheide, flache breite Stoffbahnen als Spielfeld, riesige stumpfe Nadeln und Nähbäume am Rand, vier kleine Spulenstümpfe.",
+      "floor_color": "#51464F",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Schwere Spulen",
+      "obstacles": [
+        {
+          "id": "AR06_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR06_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR06_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR06_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR06_HZ",
+        "name": "Spannnaht",
+        "description": "Eine straffe Naht wird in zwei getrennten Streifen gespannt.",
+        "geometry": "rects",
+        "zones": [
+          [
+            430,
+            200,
+            30,
+            500
+          ],
+          [
+            1140,
+            200,
+            30,
+            500
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR06.png",
+      "layout_file": "arenen/AR06-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR07",
+      "name": "Porzellanbruch",
+      "family_id": "porzellanbruch",
+      "boss_id": "B07",
+      "monster_ids": [
+        "M061",
+        "M062",
+        "M063",
+        "M064",
+        "M065",
+        "M066",
+        "M067",
+        "M068",
+        "M069",
+        "M070"
+      ],
+      "failed_wish": "Nichts soll mehr zerbrechen.",
+      "art_description": "Eine ruhige kreidige Tonplatte mit großen wenigen Fugen, zerbrochene Schalen als Randmauer, vier niedrige Keramiksockel, keine kleinen Scherben im Laufweg.",
+      "floor_color": "#59605A",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Keramiksockel",
+      "obstacles": [
+        {
+          "id": "AR07_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR07_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR07_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR07_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR07_HZ",
+        "name": "Tonstoß",
+        "description": "Zwei markierte Tonfelder heben sich kurz.",
+        "geometry": "circles",
+        "zones": [
+          [
+            430,
+            450,
+            65
+          ],
+          [
+            1170,
+            450,
+            65
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR07.png",
+      "layout_file": "arenen/AR07-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR08",
+      "name": "Stundenmoor",
+      "family_id": "stundenmoor",
+      "boss_id": "B08",
+      "monster_ids": [
+        "M071",
+        "M072",
+        "M073",
+        "M074",
+        "M075",
+        "M076",
+        "M077",
+        "M078",
+        "M079",
+        "M080"
+      ],
+      "failed_wish": "Ich brauche nur etwas mehr Zeit.",
+      "art_description": "Ein blaugraues trockenes Sandbett, eingestürzte Uhrbögen am Rand, Sand in bernsteinfarbenen Glasbehältern, vier stehende niedrige Pendelgewichte.",
+      "floor_color": "#3C464D",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Pendelgewichte",
+      "obstacles": [
+        {
+          "id": "AR08_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR08_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR08_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR08_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR08_HZ",
+        "name": "Zeitnachhall",
+        "description": "Zwei Sandkreise schlagen mit derselben sichtbaren Verzögerung ein.",
+        "geometry": "circles",
+        "zones": [
+          [
+            420,
+            450,
+            65
+          ],
+          [
+            1180,
+            450,
+            65
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR08.png",
+      "layout_file": "arenen/AR08-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR09",
+      "name": "Aschenschmiede",
+      "family_id": "aschenschmiede",
+      "boss_id": "B09",
+      "monster_ids": [
+        "M081",
+        "M082",
+        "M083",
+        "M084",
+        "M085",
+        "M086",
+        "M087",
+        "M088",
+        "M089",
+        "M090"
+      ],
+      "failed_wish": "Dieses Licht soll ewig brennen.",
+      "art_description": "Ein dunkler Ofenhof aus großen matten violettgrauen Kacheln, geschlossene Ofenmäuler und Blasebälge am Rand, vier kalte Ofensockel.",
+      "floor_color": "#3D3541",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Kalte Öfen",
+      "obstacles": [
+        {
+          "id": "AR09_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR09_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR09_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR09_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR09_HZ",
+        "name": "Ofenatem",
+        "description": "Zwei getrennte Bodenroste geben kurz warme Luft ab.",
+        "geometry": "rects",
+        "zones": [
+          [
+            330,
+            260,
+            940,
+            36
+          ],
+          [
+            330,
+            610,
+            940,
+            36
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR09.png",
+      "layout_file": "arenen/AR09-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    },
+    {
+      "id": "AR10",
+      "name": "Wunschbruch",
+      "family_id": "wunschbruch",
+      "boss_id": "B10",
+      "monster_ids": [
+        "M091",
+        "M092",
+        "M093",
+        "M094",
+        "M095",
+        "M096",
+        "M097",
+        "M098",
+        "M099",
+        "M100"
+      ],
+      "failed_wish": "Alle Wünsche sollen wahr werden.",
+      "art_description": "Der stille Kern der Wunschmaschine, eine zusammenhängende auberginefarbene Platte aus Keramik und Papier, Messingringe und schwebende Fragmente weit außerhalb der Laufgrenze.",
+      "floor_color": "#3C3043",
+      "reference_size": [
+        1600,
+        900
+      ],
+      "playable_rect": [
+        80,
+        100,
+        1440,
+        720
+      ],
+      "hero_spawn": [
+        800,
+        460
+      ],
+      "boss_spawn": [
+        800,
+        210
+      ],
+      "obstacle_name": "Gebrochene Siegelanker",
+      "obstacles": [
+        {
+          "id": "AR10_O1",
+          "center": [
+            300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR10_O2",
+          "center": [
+            1300,
+            300
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR10_O3",
+          "center": [
+            300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        },
+        {
+          "id": "AR10_O4",
+          "center": [
+            1300,
+            650
+          ],
+          "radius": 42,
+          "height_px": 45,
+          "blocks_player": true,
+          "blocks_enemies": true,
+          "blocks_projectiles": false
+        }
+      ],
+      "hazard": {
+        "id": "AR10_HZ",
+        "name": "Siegelriss",
+        "description": "Zwei kleine Siegelkreise werden nacheinander ausgelöst.",
+        "geometry": "circles",
+        "zones": [
+          [
+            420,
+            450,
+            65
+          ],
+          [
+            1180,
+            450,
+            65
+          ]
+        ],
+        "enabled_from_wave": 5,
+        "period_seconds": 14,
+        "sequence": "Zone 1, Pause bis zum nächsten Periodenbeginn, Zone 2; wiederholen. Niemals beide gleichzeitig.",
+        "warning_seconds": 1.2,
+        "active_seconds": 0.65,
+        "damage": 8,
+        "slow": null,
+        "hit_limit_per_activation": 1,
+        "color": "#E87768",
+        "disabled_during_boss": true,
+        "new_spawn_safety_seconds": 2
+      },
+      "image_file": "arenen/AR10.png",
+      "layout_file": "arenen/AR10-layout.svg",
+      "environment_damage_other_than_hazard": false,
+      "border_rule": "Keine Abgründe in der Laufzone. Rand stoppt Körper; keine unsichtbaren Todeszonen.",
+      "visual_layers": [
+        "Boden und Fugen",
+        "Bodenschatten",
+        "Bodenwarnungen",
+        "Figuren und niedrige Hindernisse nach Fußpunkt-Y sortiert",
+        "Angriffseffekte",
+        "Randdekoration hinter Spielfeld",
+        "HUD"
+      ]
+    }
+  ]
+}

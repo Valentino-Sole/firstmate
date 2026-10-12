@@ -1,0 +1,715 @@
+{
+  "version": "0.4.2",
+  "effects": [
+    {
+      "id": "E001",
+      "weapon_id": "W001",
+      "name": "Dritter Nachhall",
+      "trigger": "primary_hit",
+      "parameters": {
+        "hits_required": 3,
+        "window_s": 4,
+        "bonus_D": 0.6
+      },
+      "implementation": "Zähle pro Waffeninstanz und Gegner Haupttreffer. Jeder Treffer erneuert das 4-s-Fenster. Beim dritten Treffer folgt sofort 0,6 D Zusatzschaden am selben Ziel; Zähler danach auf 0. Kein Übertrag zwischen Gegnern oder Waffen.",
+      "visual": "Je Treffer ein mintfarbener Kerbring am Ziel; beim dritten Ring kurzer nach außen laufender Schallkreis ohne zusätzliche Fläche.",
+      "diagram_kind": "mark",
+      "status_ids": [],
+      "role": "Konstanter Schaden gegen zähe Einzelziele"
+    },
+    {
+      "id": "E002",
+      "weapon_id": "W002",
+      "name": "Glockenstoß",
+      "trigger": "primary_hit",
+      "parameters": {
+        "knockback_u": 80,
+        "travel_s": 0.2,
+        "slow": 0.2,
+        "duration_s": 2
+      },
+      "implementation": "Schiebe jedes getroffene normale Ziel 80 Einheiten radial vom Einschlagzentrum weg und verlangsame es anschließend 2 s um 20 %. Bosse werden nicht verschoben, erhalten aber 10 % Verlangsamung.",
+      "visual": "Zwei breite Stoßbögen am Glockenkopf; mintfarbene Bodenspuren zeigen die Schieberichtung, zwei kurze Striche am verlangsamten Fußpunkt.",
+      "diagram_kind": "push",
+      "status_ids": [
+        "slow"
+      ],
+      "role": "Abstand schaffen"
+    },
+    {
+      "id": "E003",
+      "weapon_id": "W003",
+      "name": "Springender Klöppel",
+      "trigger": "primary_projectile_hit",
+      "parameters": {
+        "additional_targets": 2,
+        "search_radius_u": 140,
+        "damage_D": [
+          0.6,
+          0.36
+        ],
+        "speed_u_s": 420
+      },
+      "implementation": "Nach dem Haupttreffer fliegt der Klöppel zum nächsten ungetroffenen Gegner innerhalb 140 Einheiten. Maximal zwei Folgeziele, 0,6 D und 0,36 D Schaden. Je Sprung wird das Ziel neu gewählt; während des Flugs keine Verfolgung. Keine weiteren Ziele: entfernen.",
+      "visual": "Messingkugel zieht eine unterbrochene Mintspur; erster und zweiter Sprung tragen einen bzw. zwei kleine Lichtpunkte.",
+      "diagram_kind": "chain",
+      "status_ids": [],
+      "role": "Verteilte Gegner treffen"
+    },
+    {
+      "id": "E004",
+      "weapon_id": "W004",
+      "name": "Verstimmter Mut",
+      "trigger": "primary_hit",
+      "parameters": {
+        "outgoing_damage_reduction": 0.2,
+        "duration_s": 2.5
+      },
+      "implementation": "Belege jedes getroffene Ziel 2,5 s mit Schwäche: sein verursachter Schaden sinkt um 20 %. Bei Bossen 10 %.",
+      "visual": "Ein geknicktes Notenzeichen über jedem betroffenen Ziel; blasser Schallkegel bleibt klar von roten Gegnerwarnungen getrennt.",
+      "diagram_kind": "cone",
+      "status_ids": [
+        "weakness"
+      ],
+      "role": "Gefährliche Gegner entschärfen"
+    },
+    {
+      "id": "E005",
+      "weapon_id": "W005",
+      "name": "Weiches Siegel",
+      "trigger": "primary_hit",
+      "parameters": {
+        "incoming_damage_bonus": 0.1,
+        "duration_s": 3
+      },
+      "implementation": "Belege getroffene Ziele nach dem Hauptschaden 3 s mit Brüchig: +10 % eingehender Heldenschaden; bei Bossen +5 %. Der auslösende Treffer selbst erhält diesen Bonus noch nicht.",
+      "visual": "Eine runde Siegelprägung mit drei Rissen sitzt am Ziel; goldene Risslinien statt einer neuen Bodengefahr.",
+      "diagram_kind": "mark",
+      "status_ids": [
+        "brittle"
+      ],
+      "role": "Andere Waffen vorbereiten"
+    },
+    {
+      "id": "E006",
+      "weapon_id": "W006",
+      "name": "Klebendes Pech",
+      "trigger": "impact",
+      "parameters": {
+        "radius_u": 60,
+        "duration_s": 3,
+        "slow": 0.3,
+        "max_fields_per_instance": 2
+      },
+      "implementation": "Am Einschlagort bleibt 3 s ein Pechkreis mit Radius 60. Darin 30 % Bewegungslangsamkeit, bei Bossen 15 %. Beim Verlassen sofort weg. Kein Flächenschaden. Bei drittem Feld das älteste dieser Waffeninstanz entfernen.",
+      "visual": "Dunkles Pech mit durchgezogenem Mintsaum und drei trägen Blasen. Der Saum zeigt exakt Radius 60.",
+      "diagram_kind": "pool",
+      "status_ids": [
+        "slow"
+      ],
+      "role": "Gegnerwege bremsen"
+    },
+    {
+      "id": "E007",
+      "weapon_id": "W007",
+      "name": "Lebender Docht",
+      "trigger": "primary_hit",
+      "parameters": {
+        "tick_D": 0.15,
+        "tick_s": 0.5,
+        "ticks": 6,
+        "duration_s": 3
+      },
+      "implementation": "Entzündet getroffene Ziele für 3 s. Sechs Brandticks mit je 0,15 D, erster Tick nach 0,5 s. Brand erneuert sich nach den gemeinsamen Statusregeln.",
+      "visual": "Kleine goldene Flamme mit mintfarbenem Docht an der Zieloberkante; sechs kleine Funken schrumpfen über die Dauer.",
+      "diagram_kind": "burn",
+      "status_ids": [
+        "burn"
+      ],
+      "role": "Brand aufbauen"
+    },
+    {
+      "id": "E008",
+      "weapon_id": "W008",
+      "name": "Löschschlag",
+      "trigger": "primary_hit",
+      "parameters": {
+        "remaining_burn_conversion": 0.5,
+        "max_bonus_D": 1.5
+      },
+      "implementation": "Wenn das Ziel vor dem Haupttreffer brennt: verbleibende noch nicht ausgeführte Brandticks vor Statusänderungen erfassen. Nach Hauptschaden den Brand entfernen und 50 % dieses verbleibenden Basisschadens sofort zufügen, höchstens 1,5 D der Löschkeule. Kein Brand: kein Zusatzschaden.",
+      "visual": "Eine kurze elfenbeinfarbene Dampfwolke löscht das Flammensymbol; sichtbarer kleiner Druckring am Ziel, keine Flächentreffer.",
+      "diagram_kind": "consume",
+      "status_ids": [
+        "burn"
+      ],
+      "role": "Brand in sofortigen Schaden umwandeln"
+    },
+    {
+      "id": "E009",
+      "weapon_id": "W009",
+      "name": "Rückspiegel",
+      "trigger": "enemy_projectile_blocked",
+      "parameters": {
+        "reflections_per_activation": 3,
+        "base_reflection_damage": 16,
+        "speed_u_s": 420,
+        "range_u": 320,
+        "projectile_radius_u": 7
+      },
+      "implementation": "Die ersten drei im aktiven Frontbogen geblockten feindlichen Projektile je Schildaktivierung werden gelöscht und durch je ein Heldenprojektil ersetzt. Rückflug exakt entgegen der eingehenden Flugrichtung; 16 × Waffenstufenfaktor × (1+Schadensbonus) Schaden, aufgerundet. Danach blockt der Schild weiter ohne Rückwurf. Keine Krits, kein Auslösen anderer Waffeneffekte.",
+      "visual": "Spiegelfläche blitzt elfenbeinfarben; das reflektierte Geschoss wird vollständig mintfarben und erhält eine klare Spitze in Rückflugrichtung.",
+      "diagram_kind": "reflect",
+      "status_ids": [],
+      "role": "Projektile in Gegenangriffe verwandeln"
+    },
+    {
+      "id": "E010",
+      "weapon_id": "W010",
+      "name": "Versetztes Spiegelbild",
+      "trigger": "activation",
+      "parameters": {
+        "delay_after_primary_active_start_s": 0.45,
+        "echo_D": 0.5
+      },
+      "implementation": "0,45 s nach Beginn der Hauptaktivphase trifft eine Kopie des ursprünglichen Strahl-Rechtecks einmal für 0,5 D. Startpunkt, Richtung, Breite und Reichweite aus der Aktivierung einfrieren. Die Kopie prüft zu ihrem Zeitpunkt alle lebenden Gegner im Rechteck; der Haupttreffer ist keine Voraussetzung.",
+      "visual": "Erster Strahl hell; versetztes Echo als doppelt gestrichelte Vorschau, dann 0,1 s geschlossen leuchtend. Nur die geschlossene Echoform trifft.",
+      "diagram_kind": "echo",
+      "status_ids": [],
+      "role": "Ein Gebiet zweimal abdecken"
+    },
+    {
+      "id": "E011",
+      "weapon_id": "W011",
+      "name": "Prismenbruch",
+      "trigger": "primary_hit",
+      "parameters": {
+        "hp_threshold": 0.35,
+        "bonus_D": 0.35
+      },
+      "implementation": "Liegt der Lebensanteil des Ziels unmittelbar vor dem Haupttreffer bei höchstens 35 %, folgt 0,35 D Zusatzschaden. Gilt ebenso für Bosse; kein sofortiges Töten und kein Prozent-Maximallebensschaden.",
+      "visual": "Unter 35 % Ziel-Leben spaltet sich die Speerspitze optisch in drei Lichtkanten; am Treffer zerbricht ein kleines Prisma.",
+      "diagram_kind": "mark",
+      "status_ids": [],
+      "role": "Angeschlagene Gegner beenden"
+    },
+    {
+      "id": "E012",
+      "weapon_id": "W012",
+      "name": "Fünffaches Prisma",
+      "trigger": "activation",
+      "parameters": {
+        "every_n_activations": 3,
+        "enhanced_offsets_deg": [
+          -30,
+          -15,
+          0,
+          15,
+          30
+        ]
+      },
+      "implementation": "Jede dritte tatsächliche Aktivierung erzeugt fünf statt drei Hauptprojektile mit Winkeln −30/−15/0/15/30°. Schaden, Radius, Tempo und Reichweite unverändert. Geteilte Haupttrefferliste: pro Ziel trotzdem höchstens ein Haupttreffer je Aktivierung. Zähler startet bei 0.",
+      "visual": "Zwei seitliche Prismen laden sichtbar nach den ersten beiden Schüssen; beim dritten Schuss fünf klar getrennte Flugspuren.",
+      "diagram_kind": "fan",
+      "status_ids": [],
+      "role": "Regelmäßige breite Salve"
+    },
+    {
+      "id": "E013",
+      "weapon_id": "W013",
+      "name": "Wurzelgriff",
+      "trigger": "primary_hit",
+      "parameters": {
+        "hits_required": 3,
+        "window_s": 4,
+        "root_duration_s": 0.7,
+        "immunity_after_end_s": 3
+      },
+      "implementation": "Dritter Treffer derselben Instanz auf dasselbe Ziel innerhalb eines erneuerten 4-s-Fensters wurzelt es 0,7 s fest, Zähler danach 0. Danach 3 s globale Wurzelimmunität dieses Ziels. Bei Immunität Zähler ebenfalls zurücksetzen. Bosse erhalten statt Wurzel 10 % Bewegungslangsamkeit für 0,7 s.",
+      "visual": "Nach zwei kleinen Wurzelhaken schließt sich ein sichtbarer Wurzelring um die Füße. Beim Boss bleiben zwei offene Haken.",
+      "diagram_kind": "root",
+      "status_ids": [
+        "root",
+        "slow"
+      ],
+      "role": "Kurzzeitig Platz sichern"
+    },
+    {
+      "id": "E014",
+      "weapon_id": "W014",
+      "name": "Bohrspitze",
+      "trigger": "primary_hit",
+      "parameters": {
+        "outer_range_fraction": 0.65,
+        "bonus_D": 0.4
+      },
+      "implementation": "Liegt das Ziel beim Haupttreffer mindestens bei 65 % der effektiven Reichweite in Angriffsrichtung, folgt 0,4 D Zusatzschaden. Distanz als Projektion Zielzentrum auf die eingefrorene Angriffsachse messen.",
+      "visual": "Das äußere 35-%-Stück der Bohrspur hat eine goldene Spitze; Treffer dort erzeugen drei Holzsplitter.",
+      "diagram_kind": "line",
+      "status_ids": [],
+      "role": "Distanzhaltung belohnen"
+    },
+    {
+      "id": "E015",
+      "weapon_id": "W015",
+      "name": "Dornriss",
+      "trigger": "primary_hit",
+      "parameters": {
+        "tick_D": 0.12,
+        "tick_s": 0.5,
+        "ticks": 6,
+        "duration_s": 3
+      },
+      "implementation": "Belegt jedes getroffene Ziel 3 s mit Risswunde: sechs Ticks mit je 0,12 D, erster Tick nach 0,5 s. Es handelt sich um austretende Wunschenergie, ohne Blutdarstellung.",
+      "visual": "Zwei diagonale elfenbeinfarbene Risse, aus denen kleine Mauvefäden austreten; niemals rote Blutstropfen.",
+      "diagram_kind": "bleed",
+      "status_ids": [
+        "rend"
+      ],
+      "role": "Schaden über Zeit"
+    },
+    {
+      "id": "E016",
+      "weapon_id": "W016",
+      "name": "Harzfaden",
+      "trigger": "primary_hit",
+      "parameters": {
+        "slow": 0.25,
+        "duration_s": 3
+      },
+      "implementation": "Getroffene Ziele bewegen sich 3 s um 25 % langsamer, Bosse um 12,5 %. Klebrigkeit ist kein zusätzlicher Schaden und verändert keine gegnerischen Vorbereitungszeiten.",
+      "visual": "Goldene Harztropfen zwischen zwei Mintfäden; an den Füßen kurze zähe Nachbilder.",
+      "diagram_kind": "line",
+      "status_ids": [
+        "slow"
+      ],
+      "role": "Verlässliche mobile Verlangsamung"
+    },
+    {
+      "id": "E017",
+      "weapon_id": "W017",
+      "name": "Durchschrieb",
+      "trigger": "projectile_traversal",
+      "parameters": {
+        "additional_pierces": 2,
+        "primary_damage_factors": [
+          1,
+          0.8,
+          0.6
+        ]
+      },
+      "implementation": "Das Hauptprojektil trifft bis zu drei verschiedene Ziele auf derselben geraden Flugbahn. Schaden der Haupttreffer in Reihenfolge 1 D / 0,8 D / 0,6 D. Entfernen nach drittem Treffer oder Reichweitenende. Jeder Haupttreffer kann separat kritisch sein; global pro Ziel und Aktivierung einmal.",
+      "visual": "Federprojektil verliert bei jedem Durchschlag einen kleinen Papierstreifen; drei sichtbare Kerben am Schaft.",
+      "diagram_kind": "pierce",
+      "status_ids": [],
+      "role": "Gegnerreihen durchbrechen"
+    },
+    {
+      "id": "E018",
+      "weapon_id": "W018",
+      "name": "Offene Zeile",
+      "trigger": "primary_hit",
+      "parameters": {
+        "bonus_D": 0.3
+      },
+      "implementation": "Hat das Ziel unmittelbar vor dem Haupttreffer eine aktive Risswunde, folgt 0,3 D Zusatzschaden. Die Risswunde bleibt bestehen und wird nicht erneuert.",
+      "visual": "Die Säge zieht eine gezackte Mauvelinie durch das bestehende Risssymbol.",
+      "diagram_kind": "consume",
+      "status_ids": [
+        "rend"
+      ],
+      "role": "Risswunden ausnutzen"
+    },
+    {
+      "id": "E019",
+      "weapon_id": "W019",
+      "name": "Lesemarke",
+      "trigger": "primary_hit",
+      "parameters": {
+        "mark_duration_s": 4,
+        "detonation_D": 0.5
+      },
+      "implementation": "Setze nach dem Treffer eine 4-s-Lesemarke. Der nächste Haupttreffer einer ANDEREN Waffeninstanz desselben Helden verbraucht sie und verursacht zusätzlich 0,5 D der markierenden Falzklinge, beim Setzen gespeichert. Nur eine Lesemarke pro Ziel; erneutes Setzen ersetzt die alte. Markieren und Auslösen in derselben Trefferverarbeitung sind verboten.",
+      "visual": "Ein kleiner geknickter Papierwinkel über dem Ziel; beim Auslösen klappt er in einen hellen Querstrich um.",
+      "diagram_kind": "mark",
+      "status_ids": [
+        "bookmark"
+      ],
+      "role": "Waffen miteinander verbinden"
+    },
+    {
+      "id": "E020",
+      "weapon_id": "W020",
+      "name": "Stilles Tintenbecken",
+      "trigger": "impact",
+      "parameters": {
+        "radius_u": 60,
+        "duration_s": 3,
+        "outgoing_damage_reduction": 0.2,
+        "max_fields_per_instance": 2
+      },
+      "implementation": "Nach dem Einschlag bleibt ein 3-s-Tintenkreis mit Radius 60. Gegner darin verursachen 20 % weniger Schaden, Bosse 10 %. Beim Verlassen endet diese Quelle sofort. Kein zusätzlicher Bodenschaden. Maximal zwei Felder je Instanz, ältestes ersetzen.",
+      "visual": "Flache petrolfarbene Tinte mit elfenbeinfarbenen Randklammern. Innerhalb des Kreises erscheint ein geknicktes Notenzeichen am Gegner.",
+      "diagram_kind": "pool",
+      "status_ids": [
+        "weakness"
+      ],
+      "role": "Eine sicherere Kampfzone schaffen"
+    },
+    {
+      "id": "E021",
+      "weapon_id": "W021",
+      "name": "Zwillingsnaht",
+      "trigger": "primary_hit",
+      "parameters": {
+        "partner_search_radius_u": 160,
+        "link_duration_s": 3,
+        "transfer_fraction": 0.3,
+        "max_transfer_D": 0.6,
+        "transfer_cooldown_s": 0.5,
+        "max_links_per_instance": 1
+      },
+      "implementation": "Verbinde das getroffene Ziel mit dem nächsten anderen lebenden Gegner innerhalb 160 Einheiten für 3 s. Pro Instanz höchstens ein Paar, ein neuer Treffer ersetzt es; ohne Partner keine neue Verbindung. Haupttrefferschaden an einem Partner überträgt 30 % des tatsächlich verlorenen Lebens auf den anderen, maximal 0,6 D des Nadelwerfers beim Verknüpfen. Höchstens eine Übertragung pro Paar je 0,5 s. Erst Haupttreffer nach dem Verknüpfen zählen. Verbindung endet bei Tod eines Partners oder Abstand über 240 Einheiten. Mehrere Verbindungen am gleichen Ziel: nur älteste gültige, auslösebereite Verbindung reagiert auf diesen Haupttreffer. Bei einem tödlichen Haupttreffer darf eine vorher bestehende Verbindung dessen Haupt-Lebensverlust noch genau einmal übertragen; erst danach wird sie entfernt.",
+      "visual": "Eine dünne mauve Naht mit zwei Nadelköpfen verbindet die Zielzentren; bei Übertragung ein einzelner heller Impuls, keine begehbare Gefahr.",
+      "diagram_kind": "link",
+      "status_ids": [
+        "seam_link"
+      ],
+      "role": "Einzelzieltreffer verteilen"
+    },
+    {
+      "id": "E022",
+      "weapon_id": "W022",
+      "name": "Aufgetrennte Naht",
+      "trigger": "first_primary_hit_per_activation",
+      "parameters": {
+        "spread_radius_u": 80,
+        "additional_targets": 3,
+        "tick_D": 0.08,
+        "tick_s": 0.5,
+        "ticks": 6,
+        "duration_s": 3
+      },
+      "implementation": "Nur der erste Haupttreffer jeder Aktivierung belegt sein Ziel und die bis zu drei nächsten anderen Gegner innerhalb Radius 80 mit Risswunde: sechs Ticks je 0,08 D über 3 s. Keine sofortigen Zusatztreffer.",
+      "visual": "Vom ersten Treffer laufen maximal drei kurze Mauvenähte zu Nachbarn; jedes Ziel erhält die zwei Rissstriche.",
+      "diagram_kind": "spread",
+      "status_ids": [
+        "rend"
+      ],
+      "role": "Risswunden in Gruppen verteilen"
+    },
+    {
+      "id": "E023",
+      "weapon_id": "W023",
+      "name": "Ösenzug",
+      "trigger": "primary_hit",
+      "parameters": {
+        "pull_u": 40,
+        "travel_s": 0.2
+      },
+      "implementation": "Ziehe normale getroffene Gegner über 0,2 s um bis zu 40 Einheiten in Richtung Knorz-Position beim Treffer. Stoppe spätestens an der Summe beider Körperradien plus 8 Einheiten Abstand. Bosse immun; Angriffe werden nicht abgebrochen.",
+      "visual": "Eine kurze grobe Stoffschlaufe spannt sich vom Gegner zum Umlaufpunkt und löst sich sofort wieder.",
+      "diagram_kind": "pull",
+      "status_ids": [],
+      "role": "Gegner für Flächentreffer sammeln"
+    },
+    {
+      "id": "E024",
+      "weapon_id": "W024",
+      "name": "Schutznaht",
+      "trigger": "active_phase",
+      "parameters": {
+        "projectiles_destroyed_per_activation": 2
+      },
+      "implementation": "Das aktive Strahlrechteck zerstört zusätzlich die ersten zwei feindlichen Projektile, deren Mittelpunkt es berührt. Kein Rückwurf. Trefferreihenfolge nach Kontaktzeit, dann Projektil-ID. Die Grenze gilt über die gesamte Aktivphase.",
+      "visual": "Zwei helle Knoten auf dem Faden; pro abgefangenem Geschoss löst sich einer auf.",
+      "diagram_kind": "barrier",
+      "status_ids": [],
+      "role": "Eine kurze Projektilbarriere bilden"
+    },
+    {
+      "id": "E025",
+      "weapon_id": "W025",
+      "name": "Spröder Klang",
+      "trigger": "primary_hit",
+      "parameters": {
+        "incoming_damage_bonus": 0.2,
+        "duration_s": 2
+      },
+      "implementation": "Belege getroffene Gegner nach Hauptschaden 2 s mit Brüchig: +20 % eingehender Heldenschaden, bei Bossen +10 %. Überschneidung mit anderen Brüchig-Quellen folgt der stärksten Quelle.",
+      "visual": "Drei breite geometrische Keramikrisse leuchten am Ziel elfenbeinfarben; der Kegel trägt eine doppelte Kontur.",
+      "diagram_kind": "cone",
+      "status_ids": [
+        "brittle"
+      ],
+      "role": "Kurze Schadensfenster öffnen"
+    },
+    {
+      "id": "E026",
+      "weapon_id": "W026",
+      "name": "Scherbensaat",
+      "trigger": "primary_projectile_ends",
+      "parameters": {
+        "mine_radius_u": 45,
+        "arm_delay_s": 0.25,
+        "lifetime_s": 3,
+        "blast_D": 0.35,
+        "max_mines_per_instance": 9,
+        "max_blast_hits_per_target_per_activation": 1
+      },
+      "implementation": "Jedes Hauptprojektil hinterlässt beim Treffer oder Reichweitenende eine Scherbe am Endpunkt. Nach 0,25 s scharf; explodiert beim ersten lebenden Gegnerzentrum innerhalb Radius 45 oder nach insgesamt 3 s, jeweils einmal für 0,35 D. Auch bei drei Scherben pro Salve erhält jedes Ziel insgesamt höchstens einen Scherben-Zusatztreffer dieser Aktivierung. Maximal neun Scherben je Instanz; älteste bei Überschreitung schadlos entfernen.",
+      "visual": "Eine klare helle Keramikscherbe im kleinen Mintkreis; während Scharfstellung gepunktet, danach geschlossene Kontur. Explosion zeigt exakt Radius 45.",
+      "diagram_kind": "mine",
+      "status_ids": [],
+      "role": "Zurückbleibende Flächenkontrolle"
+    },
+    {
+      "id": "E027",
+      "weapon_id": "W027",
+      "name": "Nachbebende Kachel",
+      "trigger": "impact",
+      "parameters": {
+        "delay_s": 0.35,
+        "inner_radius_u": 65,
+        "outer_radius_u": 130,
+        "damage_D": 0.4
+      },
+      "implementation": "0,35 s nach dem Hauptschlag trifft ein Ring um dessen eingefrorenes Einschlagzentrum. Zielzentrum muss weiter als 65 und höchstens 130 Einheiten entfernt sein. Einmal 0,4 D pro Ziel. Auch zuvor getroffene Ziele können bei Bewegung in den Ring getroffen werden.",
+      "visual": "Ein heller Kachelriss läuft nach außen; Vorschau gepunkteter Ring, im Treffermoment geschlossene mintfarbene Ringfläche, Mitte bleibt leer.",
+      "diagram_kind": "ring",
+      "status_ids": [],
+      "role": "Nahen und äußeren Bereich zeitversetzt treffen"
+    },
+    {
+      "id": "E028",
+      "weapon_id": "W028",
+      "name": "Kachelwache",
+      "trigger": "active_phase",
+      "parameters": {
+        "projectiles_destroyed_per_activation": 3,
+        "collision_radius_u": 14
+      },
+      "implementation": "Die umlaufende Kachel zerstört die ersten drei feindlichen Projektile, deren Mittelpunkt den bewegten Kachelkreis Radius 14 berührt. Der gesamte Umlaufkreis ist keine Barriere. Hauptschaden gegen Gegner bleibt unverändert.",
+      "visual": "Drei helle Kantenstücke an der Kachel verblassen einzeln beim Blocken; nur die Kachel hat einen geschlossenen Mintsaum.",
+      "diagram_kind": "orbit",
+      "status_ids": [],
+      "role": "Beweglichen Projektilschutz bieten"
+    },
+    {
+      "id": "E029",
+      "weapon_id": "W029",
+      "name": "Schwere Sekunde",
+      "trigger": "activation",
+      "parameters": {
+        "every_n_activations": 3,
+        "primary_damage_factor": 1.5,
+        "root_duration_s": 0.35
+      },
+      "implementation": "Jede dritte Aktivierung verstärkt alle Haupttreffer auf 1,5 D und wurzelt normale getroffene Gegner 0,35 s. Globale Wurzelimmunität von 3 s danach beachten. Bosse erhalten stattdessen 10 % Verlangsamung für 0,35 s. Schaden gilt auch bei Wurzelimmunität. Zähler beginnt bei 0.",
+      "visual": "Zwei kleine Pendelmarken laden; dritter Schwung erzeugt ein geschlossenes gold-mintfarbenes Zifferblatt am Ziel.",
+      "diagram_kind": "clock",
+      "status_ids": [
+        "root",
+        "slow"
+      ],
+      "role": "Rhythmischer schwerer Treffer"
+    },
+    {
+      "id": "E030",
+      "weapon_id": "W030",
+      "name": "Sandlast",
+      "trigger": "primary_hit",
+      "parameters": {
+        "slow_per_stack": 0.05,
+        "max_stacks": 5,
+        "refresh_duration_s": 3
+      },
+      "implementation": "Jeder Haupttreffer fügt pro Ziel global einen Sandlast-Stapel hinzu, maximal fünf. Jeder Stapel senkt Bewegung um 5 %, bei Bossen 2,5 %. Jeder neue Treffer erneuert die gemeinsame Dauer auf 3 s, dann verfallen alle Stapel zusammen. Mehrere Sandspucker teilen diesen Stapelbestand.",
+      "visual": "Bis zu fünf kleine Sandkörner kreisen an den Füßen; ein transparenter Sandhaufen wächst ohne die Figur zu verdecken.",
+      "diagram_kind": "mark",
+      "status_ids": [
+        "sand_load"
+      ],
+      "role": "Dauerbeschuss zur Verlangsamung nutzen"
+    },
+    {
+      "id": "E031",
+      "weapon_id": "W031",
+      "name": "Unruh-Takt",
+      "trigger": "orbit_completed",
+      "parameters": {
+        "attack_speed_bonus": 0.15,
+        "duration_s": 2,
+        "internal_cooldown_s": 4
+      },
+      "implementation": "Nach vollständig beendetem Umlauf erhält Knorz für 2 s +15 Prozentpunkte Angriffstempo. Auslöser hat pro Waffeninstanz 4 s Abklingzeit. Mehrere Unruhscheiben stapeln den Bonus nicht; längste verbleibende Dauer gilt. Kein rückwirkendes Kürzen laufender Cooldowns; neue Aktivierungen berechnen ihren Abstand mit aktuellem Bonus. Spiegelschild behält seinen festen Cooldown.",
+      "visual": "Zwei kleine mintfarbene Taktstriche neben Knorz-Ring pulsieren; kleines Uhrsymbol beim Angriffstempo-Wert.",
+      "diagram_kind": "buff",
+      "status_ids": [
+        "tempo_buff"
+      ],
+      "role": "Das gesamte Waffenarsenal kurz beschleunigen"
+    },
+    {
+      "id": "E032",
+      "weapon_id": "W032",
+      "name": "Fällige Sekunde",
+      "trigger": "primary_hit",
+      "parameters": {
+        "delay_s": 2,
+        "damage_D": 0.75,
+        "max_marks_per_target_per_instance": 1
+      },
+      "implementation": "Setze eine 2-s-Zeitmarke. Nach Ablauf erleidet das noch lebende Ziel einmal 0,75 D, beim Setzen gespeichert. Solange diese Instanz dort eine Marke hat, weitere Treffer ohne Erneuerung ignorieren. Tod entfernt die Marke ohne Flächeneffekt. Andere Instanzen dürfen eigene Marken setzen.",
+      "visual": "Ein halbkreisförmiges Uhrzeichen schließt sich über 2 s; beim Schließen ein kurzer gerader Lichtstich.",
+      "diagram_kind": "clock",
+      "status_ids": [
+        "time_mark"
+      ],
+      "role": "Verzögerten Einzelzielschaden aufbauen"
+    },
+    {
+      "id": "E033",
+      "weapon_id": "W033",
+      "name": "Ofenglut",
+      "trigger": "primary_hit",
+      "parameters": {
+        "tick_D": 0.2,
+        "tick_s": 0.5,
+        "ticks": 4,
+        "duration_s": 2
+      },
+      "implementation": "Entzündet getroffene Gegner 2 s: vier Brandticks zu je 0,2 D, erster Tick nach 0,5 s. Derselbe Brandstatus wie Dochtlanze; Quellen nicht addieren.",
+      "visual": "Breite goldene Glutkante an der Faust, danach vier helle Funkenteilchen um das kleine Flammensymbol.",
+      "diagram_kind": "burn",
+      "status_ids": [
+        "burn"
+      ],
+      "role": "Kurzen kräftigen Brand zufügen"
+    },
+    {
+      "id": "E034",
+      "weapon_id": "W034",
+      "name": "Heißer Griff",
+      "trigger": "primary_hit",
+      "parameters": {
+        "bonus_D": 0.5
+      },
+      "implementation": "Brennt das Ziel unmittelbar vor dem Haupttreffer, folgt 0,5 D Zusatzschaden. Der Brand wird weder verbraucht noch erneuert.",
+      "visual": "Zangenbacken leuchten nur beim Treffer auf brennende Ziele; ein kleiner elfenbeinfarbener Funkenstern kennzeichnet den Bonus.",
+      "diagram_kind": "consume",
+      "status_ids": [
+        "burn"
+      ],
+      "role": "Brand dauerhaft ausnutzen"
+    },
+    {
+      "id": "E035",
+      "weapon_id": "W035",
+      "name": "Funkenwanderung",
+      "trigger": "first_burning_primary_target_per_activation",
+      "parameters": {
+        "spread_radius_u": 120,
+        "additional_targets": 3,
+        "tick_D": 0.1,
+        "tick_s": 0.5,
+        "ticks": 4,
+        "duration_s": 2
+      },
+      "implementation": "Pro Aktivierung beim ersten Haupttreffer auf ein bereits brennendes Ziel: Entzünde bis zu drei nächste andere Gegner innerhalb 120 Einheiten für 2 s mit vier Ticks je 0,1 D des Aschestreuers. Die Quelle selbst erhält keinen neuen Brand. Gibt es kein brennendes Hauptziel, keine Ausbreitung.",
+      "visual": "Bis zu drei goldene Aschefunken springen in klaren Bögen zu Nachbarn; Flugspuren sind rein dekorativ und verursachen keine Streifentreffer.",
+      "diagram_kind": "spread",
+      "status_ids": [
+        "burn"
+      ],
+      "role": "Brand auf Gruppen verteilen"
+    },
+    {
+      "id": "E036",
+      "weapon_id": "W036",
+      "name": "Druckkessel",
+      "trigger": "primary_projectile_hit",
+      "parameters": {
+        "blast_radius_u": 70,
+        "blast_D": 0.5,
+        "exclude_primary_target": true
+      },
+      "implementation": "Beim Hauptprojektiltreffer entsteht eine Explosion Radius 70 um den Treffpunkt. Alle anderen Gegnerzentren darin erleiden einmal 0,5 D. Das Hauptziel ist von dieser Explosion ausgeschlossen. Bei Reichweitenende ohne Treffer keine Explosion.",
+      "visual": "Dicker elfenbeinfarbener Druckring mit Mintsaum; dunkle Ascheteilchen bleiben innerhalb des angezeigten Radius.",
+      "diagram_kind": "blast",
+      "status_ids": [],
+      "role": "Starken Einzelschuss um Gruppenschaden ergänzen"
+    },
+    {
+      "id": "E037",
+      "weapon_id": "W037",
+      "name": "Überladener Wunsch",
+      "trigger": "activation",
+      "parameters": {
+        "every_n_activations": 4,
+        "primary_damage_factor": 1.5,
+        "incoming_damage_bonus": 0.1,
+        "duration_s": 3
+      },
+      "implementation": "Jede vierte Aktivierung verursacht 1,5 D Hauptschaden und belegt getroffene Gegner danach 3 s mit +10 % eingehendem Heldenschaden, Bosse +5 %. Andere Aktivierungen unverändert. Zähler beginnt bei 0.",
+      "visual": "Drei unvollständige Siegelstücke laden am Hammer; der vierte Schlag schließt kurz einen unregelmäßigen Wunschstern.",
+      "diagram_kind": "burst",
+      "status_ids": [
+        "brittle"
+      ],
+      "role": "Planbarer großer Vorbereitungsschlag"
+    },
+    {
+      "id": "E038",
+      "weapon_id": "W038",
+      "name": "Rückgewonnenes Wachs",
+      "trigger": "primary_hit",
+      "parameters": {
+        "healing_fraction": 0.06,
+        "max_heal_per_activation": 2,
+        "rounding": "ceil_then_cap"
+      },
+      "implementation": "Heile Knorz um aufgerundete 6 % des durch diesen Haupttreffer tatsächlich verlorenen Ziel-Lebens, höchstens insgesamt 2 Leben je Aktivierung. Über Heilung am Lebensmaximum hinaus nichts speichern. Sekundärschaden, Status-Ticks, Schild und Übertrefferschaden heilen nicht.",
+      "visual": "Ein kleiner mintfarbener Wachstropfen fliegt vom Ziel zu Knorz; ein Pluszeichen bestätigt die tatsächlich erhaltene Heilung.",
+      "diagram_kind": "heal",
+      "status_ids": [],
+      "role": "Selbsterhaltung im Nahkampf"
+    },
+    {
+      "id": "E039",
+      "weapon_id": "W039",
+      "name": "Riss im Wunsch",
+      "trigger": "primary_hit",
+      "parameters": {
+        "target_max_hp_fraction": 0.02,
+        "max_bonus_D": 0.5
+      },
+      "implementation": "Nach dem Haupttreffer folgt Zusatzschaden gleich min(2 % des Ziel-Maximallebens, 0,5 D), aufgerundet. Gilt mit identischem Deckel für Bosse. Keine Rüstungsdurchdringung und kein Soforttod.",
+      "visual": "Ein schmaler vertikaler Mintspalt öffnet sich für 0,12 s am Zielkörper, ohne dessen Silhouette oder Bosswarnungen zu verdecken.",
+      "diagram_kind": "rift",
+      "status_ids": [],
+      "role": "Zusatzschaden gegen große Ziele begrenzen und nutzen"
+    },
+    {
+      "id": "E040",
+      "weapon_id": "W040",
+      "name": "Zurückgerufener Wunsch",
+      "trigger": "activation",
+      "parameters": {
+        "delay_after_primary_active_start_s": 0.6,
+        "echo_D": 0.4,
+        "offsets_deg": [
+          -22,
+          0,
+          22
+        ],
+        "speed_u_s": 380
+      },
+      "implementation": "0,6 s nach Beginn der Hauptaktivphase entsteht am eingefrorenen Abschusspunkt eine zweite Drei-Projektil-Salve mit ursprünglicher Richtung und Reichweite, je 0,4 D. Radius 7, Tempo 380, kein Durchschlag. Geteilte Echo-Trefferliste: jedes Ziel höchstens einmal pro Echo-Salve; darf zuvor von Hauptsalve getroffen worden sein.",
+      "visual": "Drei leere Klammerformen bleiben am Abschusspunkt; sie schließen sich nach 0,6 s und senden drei blasse, klar sichtbare Mintgeschosse.",
+      "diagram_kind": "echo_fan",
+      "status_ids": [],
+      "role": "Zwei zeitversetzte Salven"
+    }
+  ]
+}

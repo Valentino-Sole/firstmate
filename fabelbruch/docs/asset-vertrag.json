@@ -1,0 +1,126 @@
+{
+  "version": "0.4",
+  "purpose": "Grafische Produktion und Engineimport ohne neue Designentscheidungen. Kein Spielcode in diesem Paket.",
+  "precedence": [
+    "Fachdatei aus design.authoritative_files für ihr Gebiet",
+    "design.json für Monster/Bosse/Knorz",
+    "Native SVG für Treffergeometrie und UI-Struktur",
+    "PNG-Konzept für Form, Material und Inszenierung"
+  ],
+  "images": {
+    "hero": "Freigestellte neutrale Pose ist vorhanden, weitere Richtungen und echte Bewegungsclips fehlen.",
+    "monster_boss": "Vier-Posen- bzw. Phasen-Konzeptkarten sind keine Spriteatlanten. Nicht einfach als fertige Animation zuschneiden.",
+    "weapons": "Vier eindeutig beschriftete Waffen pro Familienblatt, Positionen in waffen.json; für Spielimport separat freistellen und Pivot setzen.",
+    "arenas": "Vollständige Hintergrundillustrationen mit eingebrannten Hindernissen. Für eine statische Vorschau nutzbar; für korrekte Y-Sortierung Boden und Hindernisse später trennen. Keine zusätzlichen Collider aus Dekoration erfinden.",
+    "ui": "3 ausgearbeitete PNG-Stilreferenzen plus 26 native SVG-Layouts; PNG-Schrift und Buttons nicht als klickbare gesamte Bildschirmgrafik verwenden.",
+    "icons": "26 native SVG-Einzelgrafiken mit transparentem Hintergrund. Können als UI-Icons gerastert werden."
+  },
+  "sprite_export": {
+    "normal_canvas": [
+      512,
+      512
+    ],
+    "boss_canvas": [
+      1024,
+      1024
+    ],
+    "weapon_canvas": [
+      256,
+      256
+    ],
+    "color_space": "sRGB",
+    "alpha": "straight alpha",
+    "transparent_padding": 24,
+    "pivot": "Bodenkontaktpunkt; Waffen am Griffansatz; keine Bildmitte pauschal verwenden.",
+    "atlas_padding": 4,
+    "extrusion": 2,
+    "names": "M001_move_front_00.png, B01_P2_attack_front_00.png, W001_idle.png",
+    "hero_mirroring": "Nie horizontal spiegeln; Ring und großer Arm bleiben anatomisch links."
+  },
+  "animation": {
+    "directions": [
+      "front",
+      "back",
+      "left",
+      "right"
+    ],
+    "idle": {
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "motion": "Maximal 2 % Körperhöhe atmen; Füße bleiben am Pivot."
+    },
+    "move": {
+      "frames": 6,
+      "fps": 10,
+      "loop": true,
+      "motion": "Zwei Gewichtswechsel; keine Größenänderung der Figur."
+    },
+    "windup": {
+      "frames": 3,
+      "timing": "Auf attack.windup_seconds strecken; letzte Pose fixiert die angekündigte Richtung."
+    },
+    "attack": {
+      "frames": 3,
+      "timing": "Treffer ausschließlich während attack.active_seconds; keine Kollisionszeit aus Bildzahl ableiten."
+    },
+    "recovery": {
+      "frames": 3,
+      "timing": "Auf recovery_seconds strecken; klarer Rückweg in Neutralhaltung."
+    },
+    "hit": {
+      "frames": 2,
+      "seconds": 0.1,
+      "motion": "Kurzer Helligkeitswechsel ohne langes Weißbild; keine Unterbrechung des Bossphasenplans."
+    },
+    "death": {
+      "frames": 5,
+      "seconds": 0.35,
+      "motion": "Materialbruch ohne Blut; keine Schaden verursachenden dekorativen Fragmente."
+    },
+    "boss_transition": {
+      "frames": 6,
+      "seconds": 1.2,
+      "motion": "Große Silhouette in folgende Phasenpose überführen."
+    }
+  },
+  "fx": {
+    "hostile": "Koralle #E87768, Vorbereitung gestrichelt, Aktivphase solide, sichere Lücken frei.",
+    "friendly": "Mint #B6DDD0 und Elfenbein #F1E3C8.",
+    "support": "Violett #B5A2CB; kein Schaden ohne ausdrückliche Angriffsregel.",
+    "max_flash": ".08 s, abschaltbar; kein Vollbild-Stroboskop.",
+    "danger_priority": "Gefahrenkonturen vor Bodendekor. UI immer oben.",
+    "particle_budget": "Als Startwert höchstens 3 dekorative Partikel pro normalem Treffer; zusätzlich auf 60 gleichzeitig begrenzen."
+  },
+  "audio_brief": {
+    "status": "Klangregie als Vorgabe; keine Audiodateien mitgeliefert.",
+    "ui_focus": "Leises trockenes Messing-Tick",
+    "ui_confirm": "Kurzer warmer Siegel-Plopp",
+    "level_up": "Drei aufsteigende weiche Glockentöne, unter 1 s",
+    "warning": "Pro Angriffsgrundform kurzer unterschiedlicher Anlaut; nie alleiniger Gefahrenhinweis",
+    "hero_hit": "Gedämpfter Keramikklack und Wachsstoß",
+    "boss_transition": "Tiefer Materialbruch plus kurze Ruhe",
+    "music": "Gedämpftes Märchenensemble, Zupfer/Glas/kleines Schlagwerk; Kampf dicht, Laden ruhig."
+  },
+  "acceptance": [
+    "Alle IDs eindeutig und referenziert",
+    "Knorz ohne Gesichtszähne in jeder Ansicht",
+    "Alle 10 Arenen besitzen richtige Familie und Boss",
+    "3 Level-up-Karten, genau ein Bonus je Auswahl",
+    "Text ausschließlich aus Textdatei",
+    "Keine zusätzliche Schadensfläche aus Dekoration",
+    "Ringlücken sichtbar und kollisionsfrei",
+    "Kein persistenter Laufbonus nach Neustart",
+    "Alle 26 UI-Zustände mit Maus, Tastatur und Controller erreichbar",
+    "Lesbarkeit bei 50 Gegnern und stärkster Effektkombination in Engine prüfen"
+  ],
+  "not_delivered_as_finished_media": [
+    "110 freigestellte animierte Monster-/Bossatlanten",
+    "Vollständige Heldenrichtungsanimation",
+    "40 separate transparente Waffenbilder",
+    "Getrennte Arena-Ebenen und Hindernisgrafiken",
+    "Gemalte UI-Komponenten als finale Einzelexporte",
+    "Lizenzierte Schriftdateien",
+    "Audiodateien"
+  ]
+}

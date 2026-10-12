@@ -1,0 +1,40 @@
+FABELBRUCH – Ergänzung v0.4.1: Glück und lesbare Waffenfähigkeiten
+
+DIESE ZIP IST EINE ERGÄNZUNG zu den bereits gelieferten elf ZIP-Teilen v0.4.
+Die elf ursprünglichen ZIPs und das Originalpaket wurden nicht verändert.
+Beide Pakete behalten. Diese Ergänzung neben dem Hauptpaket entpacken.
+Keine Monster-, Arena-, Boss- oder Waffenbilder sind erneut enthalten.
+
+AUFTRAG AN CLAUDE
+1. Lies die Hauptanleitungen aus FABELBRUCH_v04 und danach diese Datei.
+2. Für Boni und Laden ersetzt systeme/boni-und-laden.json DIESER ERGÄNZUNG
+   vollständig die gleichnamige Fachdatei aus v0.4. Sie enthält auch alle
+   bisherigen Boni/Relikte. Importiere genau einen vollständigen Datensatz;
+   niemals beide Listen addieren. U001–U012 und R001–R024 bleiben unverändert.
+3. Neu: U013 (+5 Glück), R025 (+8 Glück), R026 (+13 Glück). Startumfang jetzt
+   13 Level-up-Boni und 26 Relikte. Alte Mengenangaben 12/24 in Hauptanleitung,
+   design.json.target und Hauptkatalog sind durch diese Angaben überholt.
+4. luck_rules definiert alle Formeln, Geltungsbereiche und RNG-/Speicherregeln.
+   Glück startet bei 0, maximal 100 Punkte. Es beeinflusst neue Ladenangebote.
+   Höhere Stufen bleiben an die bisherigen Wellenfreigaben gebunden.
+5. UI-Ergänzung aus ui/glueck-ergaenzung.json und neue Texte aus
+   texte/glueck.de.json zusätzlich übernehmen. Bestehende Text-IDs beibehalten.
+   symbole/glueck.svg ist neu; alle anderen icon_file-Pfade der Bonusdatei
+   verweisen auf bereits vorhandene Symbole im Hauptpaket.
+6. WAFFENFAEHIGKEITEN_40.txt erklärt die bereits festgelegten Angriffe.
+   Die Waffenwerte und Designs wurden nicht geändert. Verbindlich bleibt
+   waffen/waffen.json im Hauptpaket. Keine Brand-/Gift-/Ketteneffekte erfinden.
+7. index.html zeigt alle Fähigkeiten und neuen Boni lesbar. Beispielkarten
+   illustrieren Texte und Stil; bestehende UI-Geometrie bleibt verbindlich.
+8. pruefbericht.json dokumentiert Daten-/Formelprüfung; die ergänzenden Fälle
+   sind im späteren Spiel zu testen. Das ist ein Designpaket, kein Spielcode.
+
+VORRANG
+Diese Ergänzung hat Vorrang ausschließlich für Glück, die Bonus-/Reliktanzahl
+und die hier beschriebenen Laden-Auswahlregeln sowie die ergänzten UI-Texte.
+Alle anderen Fachdateien des Hauptpakets behalten ihre Gültigkeit.
+Die Manifeste gelten jeweils nur für ihr eigenes Paket. Nicht das ergänzte
+Spielprojekt gegen das unveränderte alte Dateimanifest prüfen.
+
+Glückspfennig R001 war bereits vorhanden und gibt weiterhin +3 Prozentpunkte
+kritische Trefferchance. Sein Name bezeichnet keinen Glück-Stat.

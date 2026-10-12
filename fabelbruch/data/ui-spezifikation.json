@@ -1,0 +1,713 @@
+{
+  "version": "0.4",
+  "reference_canvas": [
+    1920,
+    1080
+  ],
+  "logical_layout": [
+    1600,
+    900
+  ],
+  "scale": 1.2,
+  "minimum_body_text_px": 21.6,
+  "spacing_grid_px": 8,
+  "colors": {
+    "bg": "#10262C",
+    "panel": "#19373D",
+    "line": "#657571",
+    "ink": "#F1E3C8",
+    "muted": "#AEC0B9",
+    "gold": "#D6AD64",
+    "red": "#E87768",
+    "mint": "#B6DDD0"
+  },
+  "typography": {
+    "preview": "Segoe UI, Arial",
+    "shipping_font": "Für Layoutvorschau Segoe UI/Arial. Keine Schriftdatei mitgeliefert; vor Veröffentlichung eine ausdrücklich für das Projekt lizenzierte Schrift einbinden. Schriftmetriken gegen 26 SVGs prüfen."
+  },
+  "input_rules": {
+    "default_focus": "Erste sichere primäre Aktion; bei Abbruchdialog standardmäßig Abbrechen.",
+    "keyboard": "Tab/Shift+Tab, Pfeile innerhalb Kartengruppen; Enter bestätigen, ESC zurück.",
+    "controller": "D-Pad/Stick folgt visueller Reihenfolge; A bestätigen, B zurück. Angepasste Belegung in Hinweisen verwenden.",
+    "focus_state": "3 px Mintkontur außen, nicht nur Farbumschlag.",
+    "tooltips": "Nach 350 ms Hover oder sofort bei Fokus; bleiben innerhalb Sicherheitsabstand 24 px.",
+    "text_overflow": "Zwei Zeilen für Kartentitel, danach Schrift nicht unter 18 px; längere Beschreibung im Detailfenster.",
+    "localization": "30 % Reserve für Übersetzungen; Werte tabellarisch ausrichten.",
+    "ui_scale": "80–140 %, Vorschau vor Übernahme.",
+    "pause_rule": "Shop, Aufstieg, Inventar, Optionen und Bestiarium pausieren den lokalen Einzelspieler-Lauf."
+  },
+  "shared_component_states": [
+    "normal",
+    "hover",
+    "pressed",
+    "focus",
+    "disabled",
+    "selected",
+    "locked",
+    "new",
+    "error"
+  ],
+  "screen_status": "26 statische UI-Vorlagen einschließlich relevanter Nebenfenster; kein implementiertes Spiel.",
+  "screens": [
+    {
+      "id": "UI01",
+      "title": "Hauptmenü",
+      "file": "ui01.svg",
+      "purpose": "Fortsetzen oder neuen Lauf beginnen.",
+      "actions": [
+        {
+          "label": "Fortsetzen",
+          "target": "saved_checkpoint",
+          "condition": "Gespeicherter Lauf vorhanden"
+        },
+        {
+          "label": "Neuer Lauf",
+          "target": "UI03"
+        },
+        {
+          "label": "Werkstatt",
+          "target": "UI11"
+        },
+        {
+          "label": "Bestiarium",
+          "target": "UI10"
+        },
+        {
+          "label": "Einstellungen",
+          "target": "UI14"
+        },
+        {
+          "label": "Beenden",
+          "target": "UI21_quit"
+        }
+      ],
+      "required_states": [
+        "Neues Profil: Neuer Lauf fokussiert, Fortsetzen deaktiviert",
+        "Gespeicherter Lauf: Fortsetzen fokussiert",
+        "Beenden: UI21 mit Texten ui.quit_*"
+      ]
+    },
+    {
+      "id": "UI02",
+      "title": "Profil wählen",
+      "file": "ui02.svg",
+      "purpose": "Drei klar getrennte lokale Spielstände.",
+      "actions": [
+        {
+          "label": "Auswählen",
+          "target": "UI01"
+        },
+        {
+          "label": "Profil anlegen",
+          "target": "UI01",
+          "effect": "Neues Profil initialisieren; Intro in UI17, danach Hauptmenü."
+        }
+      ],
+      "required_states": [
+        "leer",
+        "belegt",
+        "aktiv",
+        "Löschen nur nach namentlicher Bestätigung"
+      ]
+    },
+    {
+      "id": "UI03",
+      "title": "Knorz ausrüsten",
+      "file": "ui03.svg",
+      "purpose": "Heldenidentität, Ausrüstung und Startwaffe festlegen.",
+      "actions": [
+        {
+          "label": "Startwaffe ändern",
+          "target": "UI09_starting_weapon_selection"
+        },
+        {
+          "label": "Bezirk wählen",
+          "target": "UI04"
+        }
+      ],
+      "required_states": [
+        "Knorz als einzige Startfigur",
+        "Stimmgabel zu Beginn",
+        "Weitere Startwaffen nach Bossfreischaltung",
+        "keine zusätzlichen Helden erfinden"
+      ]
+    },
+    {
+      "id": "UI04",
+      "title": "Bezirkskarte",
+      "file": "ui04.svg",
+      "purpose": "Nächsten Bezirk und seine Monsterfamilie erkennen.",
+      "actions": [
+        {
+          "label": "Bezirk auswählen",
+          "target": "UI04_detail"
+        },
+        {
+          "label": "Betreten",
+          "target": "UI05"
+        }
+      ],
+      "required_states": [
+        "gesperrt",
+        "offen",
+        "abgeschlossen",
+        "Boss-/Familienvorschau",
+        "ausgewählt"
+      ]
+    },
+    {
+      "id": "UI05",
+      "title": "Spiel-HUD",
+      "file": "ui05.svg",
+      "purpose": "Leben, Welle, Zeit, Beute, Waffen und Bossstatus ohne verdeckte Kampfmitte.",
+      "actions": [
+        {
+          "label": "Pause / ESC",
+          "target": "UI06"
+        },
+        {
+          "label": "Levelaufstieg",
+          "target": "UI07"
+        },
+        {
+          "label": "Wellenende",
+          "target": "UI08"
+        },
+        {
+          "label": "Tod",
+          "target": "UI13"
+        }
+      ],
+      "required_states": [
+        "normal",
+        "kritisches Leben: Randpuls optional abschaltbar",
+        "Boss anwesend",
+        "Ausweichen bereit/Abklingzeit",
+        "Tooltip nur bei Pause"
+      ]
+    },
+    {
+      "id": "UI06",
+      "title": "Pause",
+      "file": "ui06.svg",
+      "purpose": "Lauf kontrolliert unterbrechen.",
+      "actions": [
+        {
+          "label": "Weiter",
+          "target": "UI05"
+        },
+        {
+          "label": "Einstellungen",
+          "target": "UI14"
+        },
+        {
+          "label": "Lauf neu starten",
+          "target": "UI_confirm_restart"
+        },
+        {
+          "label": "Zur Werkstatt",
+          "target": "UI_confirm_abandon"
+        }
+      ],
+      "required_states": [
+        "Fokus auf Weiter",
+        "Neustart bestätigt",
+        "Abbruch bestätigt; Konsequenz genannt"
+      ]
+    },
+    {
+      "id": "UI07",
+      "title": "Wunschsplitter wählen",
+      "file": "ui07.svg",
+      "purpose": "Drei vergleichbare Verbesserungen; Werte vor Auswahl sichtbar.",
+      "actions": [
+        {
+          "label": "Wählen",
+          "target": "UI05_or_pending_shop"
+        },
+        {
+          "label": "Neu würfeln",
+          "target": "UI07",
+          "condition": "Ladung vorhanden"
+        },
+        {
+          "label": "Überspringen",
+          "target": "UI05_or_pending_shop"
+        }
+      ],
+      "required_states": [
+        "drei Optionen",
+        "gewählt",
+        "Neuwurf nicht verfügbar",
+        "mehrere aufgestaute Level nacheinander"
+      ]
+    },
+    {
+      "id": "UI08",
+      "title": "Glimms Laden",
+      "file": "ui08.svg",
+      "purpose": "Vier Angebote, Vergleich, Sperren und eindeutiger Kaufabschluss.",
+      "actions": [
+        {
+          "label": "Kaufen",
+          "target": "UI08",
+          "effect": "Beute abziehen, Besitz aktualisieren; Angebot als verkauft markieren"
+        },
+        {
+          "label": "Sperren",
+          "target": "UI08",
+          "effect": "Angebot bleibt beim Neuwurf"
+        },
+        {
+          "label": "Inventar ansehen",
+          "target": "UI09"
+        },
+        {
+          "label": "Nächste Welle",
+          "target": "UI05"
+        }
+      ],
+      "required_states": [
+        "normal",
+        "zu teuer",
+        "gesperrt",
+        "verkauft",
+        "Waffenplätze voll: Tauschauswahl",
+        "Zusammenführen mit Vorschau"
+      ]
+    },
+    {
+      "id": "UI09",
+      "title": "Inventar",
+      "file": "ui09.svg",
+      "purpose": "Waffenplätze und Werte getrennt, Änderungen direkt vergleichbar.",
+      "actions": [
+        {
+          "label": "Waffe wählen",
+          "target": "UI09_detail"
+        },
+        {
+          "label": "Zurück",
+          "target": "previous"
+        }
+      ],
+      "required_states": [
+        "leer",
+        "belegt",
+        "verglichen",
+        "Zusammenführen möglich",
+        "Verkauf bestätigt"
+      ]
+    },
+    {
+      "id": "UI10",
+      "title": "Bestiarium",
+      "file": "ui10.svg",
+      "purpose": "Alle Wesen mit Herkunft, Warnsignal und Ausweichregel.",
+      "actions": [
+        {
+          "label": "Familie",
+          "target": "UI10",
+          "effect": "Filter anwenden"
+        },
+        {
+          "label": "Monster",
+          "target": "UI10_detail",
+          "effect": "Karte und Angriffsdaten öffnen"
+        }
+      ],
+      "required_states": [
+        "unentdeckt: Silhouette",
+        "entdeckt",
+        "neuer Eintrag",
+        "Familienfilter",
+        "Detail mit Animationssteuerung"
+      ]
+    },
+    {
+      "id": "UI11",
+      "title": "Brassas Werkstatt",
+      "file": "ui11.svg",
+      "purpose": "Dauerhafte Fortschritte und nächste Freischaltung.",
+      "actions": [
+        {
+          "label": "Freischalten",
+          "target": "UI11",
+          "effect": "Kosten und genauen dauerhaften Bonus vorher anzeigen"
+        },
+        {
+          "label": "Zurück",
+          "target": "UI01"
+        }
+      ],
+      "required_states": [
+        "erreichbar",
+        "zu teuer",
+        "Voraussetzung fehlt",
+        "erworben",
+        "nächster Knoten sichtbar"
+      ]
+    },
+    {
+      "id": "UI12",
+      "title": "Sieg",
+      "file": "ui12.svg",
+      "purpose": "Bossbelohnung und erzählerische Folge verständlich zeigen.",
+      "actions": [
+        {
+          "label": "Belohnung ansehen",
+          "target": "UI09_reward"
+        },
+        {
+          "label": "Zur Werkstatt",
+          "target": "UI11"
+        }
+      ],
+      "required_states": [
+        "erster Sieg",
+        "wiederholter Nachhall-Sieg",
+        "neue Waffe",
+        "keine doppelte Freischaltung"
+      ]
+    },
+    {
+      "id": "UI13",
+      "title": "Niederlage",
+      "file": "ui13.svg",
+      "purpose": "Verlust, verbleibender Fortschritt und Wiederholung klar benennen.",
+      "actions": [
+        {
+          "label": "Erneut versuchen",
+          "target": "UI04_last_selection"
+        },
+        {
+          "label": "Zur Werkstatt",
+          "target": "UI11"
+        }
+      ],
+      "required_states": [
+        "normale Niederlage",
+        "neue Entdeckung gesichert",
+        "Fortschritt gespeichert",
+        "keine Schuld-/Spotttexte"
+      ]
+    },
+    {
+      "id": "UI14",
+      "title": "Einstellungen",
+      "file": "ui14.svg",
+      "purpose": "Bedienung, Audio und Lesbarkeit jederzeit erreichbar.",
+      "actions": [
+        {
+          "label": "Kategorie",
+          "target": "UI14"
+        },
+        {
+          "label": "Übernehmen",
+          "target": "UI14",
+          "effect": "Speichern; kritischen Bildschirmmodus nach 15 s ohne Bestätigung zurücksetzen"
+        }
+      ],
+      "required_states": [
+        "unverändert",
+        "ungespeichert",
+        "Fokus",
+        "Tastenbelegungskonflikt",
+        "Vorschau mit Rücksetzen"
+      ]
+    },
+    {
+      "id": "UI15",
+      "title": "Hilfe",
+      "file": "ui15.svg",
+      "purpose": "Angriffssprache und Steuerung ohne Leseflut erklären.",
+      "actions": [
+        {
+          "label": "Zurück",
+          "target": "previous"
+        }
+      ],
+      "required_states": [
+        "Tastatur",
+        "Controller",
+        "angepasste Belegung",
+        "Tutorial übersprungen/wiederholbar"
+      ]
+    },
+    {
+      "id": "UI16",
+      "title": "Mitwirkende",
+      "file": "ui16.svg",
+      "purpose": "Produktinformationen und Quellen der mitgelieferten Inhalte.",
+      "actions": [
+        {
+          "label": "Zurück",
+          "target": "UI01"
+        }
+      ],
+      "required_states": [
+        "scrollbar bei langen Credits",
+        "externe Links separat und erkennbar"
+      ]
+    },
+    {
+      "id": "UI17",
+      "title": "Dialog / Erinnerung",
+      "file": "ui17.svg",
+      "purpose": "Spieltexte mit festen IDs, pausiert, überspringbar.",
+      "actions": [
+        {
+          "label": "Weiter",
+          "target": "next_line_or_previous"
+        },
+        {
+          "label": "Szene überspringen",
+          "target": "scene_complete"
+        }
+      ],
+      "required_states": [
+        "neuer Text",
+        "vollständig angezeigt",
+        "Szenenende",
+        "Wiederholung im Erinnerungsbuch"
+      ]
+    },
+    {
+      "id": "UI18",
+      "title": "Bossbelohnung",
+      "file": "ui18.svg",
+      "purpose": "Erst- und Folgesieg getrennt, keine doppelte Freischaltung.",
+      "actions": [
+        {
+          "label": "Zur Werkstatt",
+          "target": "UI11"
+        }
+      ],
+      "required_states": [
+        "erster Sieg: 5 Erinnerungen",
+        "Folgesieg: 2 Erinnerungen",
+        "bereits freigeschaltet: kein zweiter Unlock"
+      ]
+    },
+    {
+      "id": "UI19",
+      "title": "Waffentausch",
+      "file": "ui19.svg",
+      "purpose": "Kauf erst nach bestätigtem Tausch.",
+      "actions": [
+        {
+          "label": "Abbrechen",
+          "target": "UI08",
+          "effect": "Keine Kosten"
+        },
+        {
+          "label": "Tausch bestätigen",
+          "target": "UI08",
+          "effect": "45 abziehen und gewählten Slot ersetzen"
+        }
+      ],
+      "required_states": [
+        "Slot gewählt",
+        "kein Slot gewählt: Bestätigung aus",
+        "Preis nicht verfügbar: Bestätigung aus",
+        "Im dargestellten Beispiel ist Stimmgabel bereits gewählt; Mintkontur und GEWÄHLT markieren den Slot."
+      ]
+    },
+    {
+      "id": "UI20",
+      "title": "Zusammenführen",
+      "file": "ui20.svg",
+      "purpose": "Kostenlose Fusion gleicher Waffen.",
+      "actions": [
+        {
+          "label": "Abbrechen",
+          "target": "UI09"
+        },
+        {
+          "label": "Zusammenführen",
+          "target": "UI09"
+        }
+      ],
+      "required_states": [
+        "gleiche ID und Stufe",
+        "bis Stufe V",
+        "Ausgangswaffen werden gemeinsam geprüft"
+      ]
+    },
+    {
+      "id": "UI21",
+      "title": "Bestätigungsdialog",
+      "file": "ui21.svg",
+      "purpose": "Sichere Voreinstellung bei Laufabbruch.",
+      "actions": [
+        {
+          "label": "Abbrechen",
+          "target": "previous"
+        },
+        {
+          "label": "Lauf beenden",
+          "target": "UI11"
+        }
+      ],
+      "required_states": [
+        "Fokus immer Abbrechen",
+        "kein Bestätigen durch durchgereichten Kampftastendruck"
+      ]
+    },
+    {
+      "id": "UI22",
+      "title": "Ladenzustände",
+      "file": "ui22.svg",
+      "purpose": "Halten, verkauft, zu teuer und normal klar trennen.",
+      "actions": [
+        {
+          "label": "Halten aufheben",
+          "target": "UI08"
+        },
+        {
+          "label": "Nächste Welle",
+          "target": "UI05"
+        }
+      ],
+      "required_states": [
+        "Text und Symbol zusätzlich zu Farbe",
+        "gehalten bleibt beim nächsten Laden",
+        "verkauft beim Neuwurf ersetzen"
+      ]
+    },
+    {
+      "id": "UI23",
+      "title": "Auswahl bestätigt",
+      "file": "ui23.svg",
+      "purpose": "Doppelbestätigung verhindern und mehrere Level abarbeiten.",
+      "actions": [
+        {
+          "label": "Nächsten Wunschsplitter wählen",
+          "target": "UI07"
+        }
+      ],
+      "required_states": [
+        "Eingaben 250 ms sperren",
+        "Bonus genau einmal",
+        "letzte Auswahl: Zurück zum Kampf oder Laden"
+      ]
+    },
+    {
+      "id": "UI24",
+      "title": "Waffendetails / Tooltip",
+      "file": "ui24.svg",
+      "purpose": "Werte, Seltenheit und Wirkung sichtbar.",
+      "actions": [
+        {
+          "label": "Zurück",
+          "target": "previous"
+        }
+      ],
+      "required_states": [
+        "an Bildschirmrand ausrichten",
+        "keine Roh-JSON-Feldnamen im Spiel",
+        "alle Werte aus Datenquelle"
+      ]
+    },
+    {
+      "id": "UI25",
+      "title": "Laden / Übergang",
+      "file": "ui25.svg",
+      "purpose": "Keine erfundenen Prozentzahlen.",
+      "actions": [],
+      "required_states": [
+        "nur belegten echten Fortschritt zeigen",
+        "reduzierte Bewegung: statische Anzeige"
+      ]
+    },
+    {
+      "id": "UI26",
+      "title": "Speicherfehler",
+      "file": "ui26.svg",
+      "purpose": "Erfolg nicht vortäuschen; erneuter Versuch.",
+      "actions": [
+        {
+          "label": "Erneut speichern",
+          "target": "save_retry"
+        },
+        {
+          "label": "Im Spiel bleiben",
+          "target": "previous"
+        }
+      ],
+      "required_states": [
+        "kein stiller Verlust",
+        "kein erfundenes Erfolgssymbol",
+        "Fehlergrund im separaten Detailfeld"
+      ]
+    }
+  ],
+  "reference_images": {
+    "UI01": "ui/startbildschirm.png",
+    "UI07": "ui/levelaufstieg.png",
+    "UI08": "ui/shop-stil.png"
+  },
+  "authority": "PNG legt die Materialgestaltung fest; SVG die Bedienstruktur. Exakte Werte aus systeme/*.json, Texte aus texte/spieltexte.de.json. Veraltete Beispielfüllwerte nicht als eigene Regeln übernehmen.",
+  "route_aliases": {
+    "UI04_detail": {
+      "screen": "UI04",
+      "mode": "Ausgewählter Bezirk: Name, Bild, Familie, Boss und Freigabebedingung im Detailbereich."
+    },
+    "UI04_last_selection": {
+      "screen": "UI04",
+      "mode": "Zuletzt gespielten Bezirk vorauswählen; neuer Lauf erst nach Betreten."
+    },
+    "UI05_or_pending_shop": {
+      "screen": "UI05",
+      "mode": "Zuerst weitere Levelauswahlen in UI07; sonst bei Wellenende UI08; sonst Kampf UI05."
+    },
+    "UI09_detail": {
+      "screen": "UI24",
+      "mode": "Details der gewählten Waffe; Rückkehr nach UI09."
+    },
+    "UI09_reward": {
+      "screen": "UI18",
+      "mode": "Belohnung des aktuellen Sieges; Erst-/Nachhallsieg berücksichtigen."
+    },
+    "UI09_starting_weapon_selection": {
+      "screen": "UI09",
+      "mode": "Nur W001 und Signaturwaffen besiegter Bosse anzeigen. Keine Verkäufe/Fusion im Startwaffenmodus. Wahl zurück nach UI03."
+    },
+    "UI10_detail": {
+      "screen": "UI10",
+      "mode": "Liste durch Detail des gewählten Monsters ersetzen: Körperbild, Beschreibung, Angriffsvorbereitung, Diagramm, Zurück zur Liste."
+    },
+    "UI21_quit": {
+      "screen": "UI21",
+      "mode": "Texte ui.quit_confirm und ui.quit_body, Abbrechen fokussiert; bei Bestätigung Anwendung nach sicherem Speichern schließen."
+    },
+    "UI_confirm_abandon": {
+      "screen": "UI21",
+      "mode": "Texte ui.abandon_*; bestätigt nach UI11 und Lauf verwerfen."
+    },
+    "UI_confirm_restart": {
+      "screen": "UI21",
+      "mode": "Texte ui.restart_*; bestätigt denselben Bezirk bei Welle 1 mit gewählter Startwaffe starten."
+    },
+    "next_line_or_previous": {
+      "screen": "UI17",
+      "mode": "Nächste Text-ID; nach letzter Zeile Szenenflag sichern und zum registrierten Auslöser zurückkehren."
+    },
+    "scene_complete": {
+      "screen": "UI17",
+      "mode": "Szenenflag als gesehen sichern, ohne Resttext fortfahren; Fortschrittsereignis dennoch auslösen."
+    },
+    "previous": {
+      "screen": "history_stack",
+      "mode": "Vorheriges UI einschließlich Fokus wiederherstellen; nie ungewollt pausierten Kampf fortsetzen."
+    },
+    "save_retry": {
+      "screen": "UI26",
+      "mode": "Speichern erneut versuchen; bei Erfolg zu vorherigem UI, sonst UI26 offen lassen."
+    },
+    "saved_checkpoint": {
+      "screen": "saved_ui_state",
+      "mode": "Gesicherten Laden-/Aufstiegszustand oder Anfang der gesicherten Welle wiederherstellen. Nicht pauschal mitten im Kampf starten."
+    }
+  }
+}

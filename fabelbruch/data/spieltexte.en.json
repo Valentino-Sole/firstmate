@@ -1,0 +1,2094 @@
+{
+  "version": "0.4",
+  "locale": "en-US",
+  "encoding": "UTF-8",
+  "source": "Uebersetzung von spieltexte.de.json; de-DE bleibt fuehrend.",
+  "rules": {
+    "authority": "Exakte Spieltexte hier; Schreibweise nicht aus generierten Bildern ablesen.",
+    "tokens": "Geschweifte Platzhalter ersetzen; keine sichtbaren Roh-IDs.",
+    "speaker_ids": "B01–B10 aus design.json in Bossnamen auflösen.",
+    "unvoiced": "Für Startfassung keine Sprachausgabe voraussetzen. Text und optionale kurze Materiallaute.",
+    "skip": "Überspringen darf Fortschrittsflags nicht verhindern.",
+    "save": "once_per_profile erst nach Abschluss oder bewusstem Überspringen speichern.",
+    "line_wrapping": "Nicht an festen Pixeln umbrechen; UI-Skalierung und 30 % Übersetzungsreserve."
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "trigger": "Neues Profil, vor erster Arenaauswahl",
+      "once_per_profile": true,
+      "line_ids": [
+        "intro.01",
+        "intro.02",
+        "intro.03",
+        "intro.04",
+        "intro.05",
+        "intro.06",
+        "intro.07",
+        "intro.08"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR01.entry",
+      "trigger": "Erstes Betreten von AR01, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR01.entry.01",
+        "AR01.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B01.intro",
+      "trigger": "Erster Bossbeginn B01, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B01.intro.01",
+        "B01.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B01.victory",
+      "trigger": "Erster Sieg über B01, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B01.victory.01",
+        "B01.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B01.echo",
+      "trigger": "Wiederholter Bossbeginn B01",
+      "once_per_profile": false,
+      "line_ids": [
+        "B01.echo.01",
+        "B01.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR02.entry",
+      "trigger": "Erstes Betreten von AR02, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR02.entry.01",
+        "AR02.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B02.intro",
+      "trigger": "Erster Bossbeginn B02, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B02.intro.01",
+        "B02.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B02.victory",
+      "trigger": "Erster Sieg über B02, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B02.victory.01",
+        "B02.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B02.echo",
+      "trigger": "Wiederholter Bossbeginn B02",
+      "once_per_profile": false,
+      "line_ids": [
+        "B02.echo.01",
+        "B02.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR03.entry",
+      "trigger": "Erstes Betreten von AR03, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR03.entry.01",
+        "AR03.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B03.intro",
+      "trigger": "Erster Bossbeginn B03, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B03.intro.01",
+        "B03.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B03.victory",
+      "trigger": "Erster Sieg über B03, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B03.victory.01",
+        "B03.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B03.echo",
+      "trigger": "Wiederholter Bossbeginn B03",
+      "once_per_profile": false,
+      "line_ids": [
+        "B03.echo.01",
+        "B03.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR04.entry",
+      "trigger": "Erstes Betreten von AR04, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR04.entry.01",
+        "AR04.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B04.intro",
+      "trigger": "Erster Bossbeginn B04, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B04.intro.01",
+        "B04.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B04.victory",
+      "trigger": "Erster Sieg über B04, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B04.victory.01",
+        "B04.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B04.echo",
+      "trigger": "Wiederholter Bossbeginn B04",
+      "once_per_profile": false,
+      "line_ids": [
+        "B04.echo.01",
+        "B04.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR05.entry",
+      "trigger": "Erstes Betreten von AR05, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR05.entry.01",
+        "AR05.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B05.intro",
+      "trigger": "Erster Bossbeginn B05, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B05.intro.01",
+        "B05.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B05.victory",
+      "trigger": "Erster Sieg über B05, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B05.victory.01",
+        "B05.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B05.echo",
+      "trigger": "Wiederholter Bossbeginn B05",
+      "once_per_profile": false,
+      "line_ids": [
+        "B05.echo.01",
+        "B05.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR06.entry",
+      "trigger": "Erstes Betreten von AR06, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR06.entry.01",
+        "AR06.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B06.intro",
+      "trigger": "Erster Bossbeginn B06, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B06.intro.01",
+        "B06.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B06.victory",
+      "trigger": "Erster Sieg über B06, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B06.victory.01",
+        "B06.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B06.echo",
+      "trigger": "Wiederholter Bossbeginn B06",
+      "once_per_profile": false,
+      "line_ids": [
+        "B06.echo.01",
+        "B06.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR07.entry",
+      "trigger": "Erstes Betreten von AR07, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR07.entry.01",
+        "AR07.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B07.intro",
+      "trigger": "Erster Bossbeginn B07, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B07.intro.01",
+        "B07.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B07.victory",
+      "trigger": "Erster Sieg über B07, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B07.victory.01",
+        "B07.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B07.echo",
+      "trigger": "Wiederholter Bossbeginn B07",
+      "once_per_profile": false,
+      "line_ids": [
+        "B07.echo.01",
+        "B07.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR08.entry",
+      "trigger": "Erstes Betreten von AR08, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR08.entry.01",
+        "AR08.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B08.intro",
+      "trigger": "Erster Bossbeginn B08, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B08.intro.01",
+        "B08.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B08.victory",
+      "trigger": "Erster Sieg über B08, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B08.victory.01",
+        "B08.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B08.echo",
+      "trigger": "Wiederholter Bossbeginn B08",
+      "once_per_profile": false,
+      "line_ids": [
+        "B08.echo.01",
+        "B08.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR09.entry",
+      "trigger": "Erstes Betreten von AR09, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR09.entry.01",
+        "AR09.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B09.intro",
+      "trigger": "Erster Bossbeginn B09, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B09.intro.01",
+        "B09.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B09.victory",
+      "trigger": "Erster Sieg über B09, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B09.victory.01",
+        "B09.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B09.echo",
+      "trigger": "Wiederholter Bossbeginn B09",
+      "once_per_profile": false,
+      "line_ids": [
+        "B09.echo.01",
+        "B09.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "AR10.entry",
+      "trigger": "Erstes Betreten von AR10, vor Welle 1",
+      "once_per_profile": true,
+      "line_ids": [
+        "AR10.entry.01",
+        "AR10.entry.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B10.intro",
+      "trigger": "Erster Bossbeginn B10, nach sicherem Leeren der Arena",
+      "once_per_profile": true,
+      "line_ids": [
+        "B10.intro.01",
+        "B10.intro.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B10.victory",
+      "trigger": "Erster Sieg über B10, vor Belohnungsfenster",
+      "once_per_profile": true,
+      "line_ids": [
+        "B10.victory.01",
+        "B10.victory.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "B10.echo",
+      "trigger": "Wiederholter Bossbeginn B10",
+      "once_per_profile": false,
+      "line_ids": [
+        "B10.echo.01",
+        "B10.echo.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "ending",
+      "trigger": "Nach B10.victory, erster Abschluss",
+      "once_per_profile": true,
+      "line_ids": [
+        "ending.01",
+        "ending.02",
+        "ending.03",
+        "ending.04",
+        "ending.05",
+        "ending.06",
+        "ending.07",
+        "ending.08"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "defeat.first",
+      "trigger": "Erste Niederlage, nach Ergebnisanzeige",
+      "once_per_profile": true,
+      "line_ids": [
+        "defeat.first.01",
+        "defeat.first.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "shop.first",
+      "trigger": "Erster Ladenbesuch, einmal pro Profil",
+      "once_per_profile": true,
+      "line_ids": [
+        "shop.first.01",
+        "shop.first.02",
+        "shop.first.03"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    },
+    {
+      "id": "archive.first",
+      "trigger": "Erstes Bestiarium öffnen",
+      "once_per_profile": true,
+      "line_ids": [
+        "archive.first.01",
+        "archive.first.02"
+      ],
+      "presentation": "UI17",
+      "pause_game": true,
+      "advance": "Bestätigung; kein erzwungener Timer",
+      "skip": "Szene überspringen; als gesehen markieren; im Erinnerungsbuch erneut lesbar"
+    }
+  ],
+  "strings": [
+    {
+      "id": "intro.01",
+      "speaker": "Erzähler",
+      "text": "In Bruchwinkel, wishes were cast in wax. Paper gave them limits. Brass carried their power. Ceramic gave them form.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.02",
+      "speaker": "Erzähler",
+      "text": "When winter came, the keepers asked for warmth, food and time. And that their wishes should never end.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.03",
+      "speaker": "Erzähler",
+      "text": "The machine heard every word. Only the word \"enough\" was never spoken.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.04",
+      "speaker": "Brassa",
+      "text": "I am attempting an emergency seal. Protect what still …",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.05",
+      "speaker": "Erzähler",
+      "text": "The mold broke before the sentence could end.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.06",
+      "speaker": "Knorz",
+      "text": "I was only supposed to secure a door.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.07",
+      "speaker": "Brassa",
+      "text": "You were never finished. That is why the machine cannot yet tell you what you must be.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "intro.08",
+      "speaker": "Knorz",
+      "text": "Fine. Doors first. Then the rest.",
+      "context": "Neues Profil, vor erster Arenaauswahl",
+      "max_lines": 3
+    },
+    {
+      "id": "AR01.entry.01",
+      "speaker": "Brassa",
+      "text": "Here they wished for silence. Now the bells swallow every sound.",
+      "context": "Erstes Betreten von AR01, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR01.entry.02",
+      "speaker": "Knorz",
+      "text": "Then let us make a start. With noise.",
+      "context": "Erstes Betreten von AR01, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B01.intro.01",
+      "speaker": "B01",
+      "text": "Silence. Not one more sound.",
+      "context": "Erster Bossbeginn B01, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B01.intro.02",
+      "speaker": "Knorz",
+      "text": "You could simply listen instead.",
+      "context": "Erster Bossbeginn B01, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B01.victory.01",
+      "speaker": "Erzähler",
+      "text": "For the first time, the Hollow King rings without devouring anything.",
+      "context": "Erster Sieg über B01, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B01.victory.02",
+      "speaker": "Brassa",
+      "text": "Silence may end.",
+      "context": "Erster Sieg über B01, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B01.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B01",
+      "max_lines": 3
+    },
+    {
+      "id": "B01.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B01",
+      "max_lines": 3
+    },
+    {
+      "id": "AR02.entry.01",
+      "speaker": "Brassa",
+      "text": "This warmth was never meant to fade. Now it melts the very paths.",
+      "context": "Erstes Betreten von AR02, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR02.entry.02",
+      "speaker": "Knorz",
+      "text": "Warm is good. Ground would also be good.",
+      "context": "Erstes Betreten von AR02, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B02.intro.01",
+      "speaker": "B02",
+      "text": "No one will ever freeze with me.",
+      "context": "Erster Bossbeginn B02, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B02.intro.02",
+      "speaker": "Knorz",
+      "text": "Let them keep their shape anyway.",
+      "context": "Erster Bossbeginn B02, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B02.victory.01",
+      "speaker": "Erzähler",
+      "text": "Mother Drip lowers the heat. Beneath the wax, a path becomes visible.",
+      "context": "Erster Sieg über B02, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B02.victory.02",
+      "speaker": "Brassa",
+      "text": "Warmth must leave room to breathe.",
+      "context": "Erster Sieg über B02, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B02.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B02",
+      "max_lines": 3
+    },
+    {
+      "id": "B02.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B02",
+      "max_lines": 3
+    },
+    {
+      "id": "AR03.entry.01",
+      "speaker": "Brassa",
+      "text": "Every mirror shows one truth. None shows the whole.",
+      "context": "Erstes Betreten von AR03, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR03.entry.02",
+      "speaker": "Knorz",
+      "text": "One of me is quite enough for me.",
+      "context": "Erstes Betreten von AR03, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B03.intro.01",
+      "speaker": "B03",
+      "text": "I see everything you could be.",
+      "context": "Erster Bossbeginn B03, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B03.intro.02",
+      "speaker": "Knorz",
+      "text": "Then watch what I do.",
+      "context": "Erster Bossbeginn B03, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B03.victory.01",
+      "speaker": "Erzähler",
+      "text": "The False Sovereign lets a single reflection stand. It is allowed to be incomplete.",
+      "context": "Erster Sieg über B03, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B03.victory.02",
+      "speaker": "Brassa",
+      "text": "Not every picture has to be right.",
+      "context": "Erster Sieg über B03, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B03.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B03",
+      "max_lines": 3
+    },
+    {
+      "id": "B03.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B03",
+      "max_lines": 3
+    },
+    {
+      "id": "AR04.entry.01",
+      "speaker": "Brassa",
+      "text": "The stores were never meant to run out. Now they are hungry themselves.",
+      "context": "Erstes Betreten von AR04, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR04.entry.02",
+      "speaker": "Knorz",
+      "text": "Let us hope they do not like wax.",
+      "context": "Erstes Betreten von AR04, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B04.intro.01",
+      "speaker": "B04",
+      "text": "More. There must always be more.",
+      "context": "Erster Bossbeginn B04, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B04.intro.02",
+      "speaker": "Knorz",
+      "text": "Share first. Then keep growing.",
+      "context": "Erster Bossbeginn B04, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B04.victory.01",
+      "speaker": "Erzähler",
+      "text": "The Neverfull Stalk opens its chambers. The first creatures take only what they need.",
+      "context": "Erster Sieg über B04, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B04.victory.02",
+      "speaker": "Brassa",
+      "text": "Enough may be enough.",
+      "context": "Erster Sieg über B04, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B04.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B04",
+      "max_lines": 3
+    },
+    {
+      "id": "B04.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B04",
+      "max_lines": 3
+    },
+    {
+      "id": "AR05.entry.01",
+      "speaker": "Brassa",
+      "text": "No memory was ever lost here. But no one ever came back out of them.",
+      "context": "Erstes Betreten von AR05, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR05.entry.02",
+      "speaker": "Knorz",
+      "text": "Then the table of contents is missing an exit.",
+      "context": "Erstes Betreten von AR05, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B05.intro.01",
+      "speaker": "B05",
+      "text": "What I do not write down will disappear.",
+      "context": "Erster Bossbeginn B05, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B05.intro.02",
+      "speaker": "Knorz",
+      "text": "Write down that we are moving on.",
+      "context": "Erster Bossbeginn B05, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B05.victory.01",
+      "speaker": "Erzähler",
+      "text": "The Marginless leaves space at the end of a page. Fleck calls it the future.",
+      "context": "Erster Sieg über B05, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B05.victory.02",
+      "speaker": "Brassa",
+      "text": "A page may end.",
+      "context": "Erster Sieg über B05, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B05.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B05",
+      "max_lines": 3
+    },
+    {
+      "id": "B05.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B05",
+      "max_lines": 3
+    },
+    {
+      "id": "AR06.entry.01",
+      "speaker": "Brassa",
+      "text": "Madam Mend wanted to heal everything. Even things that never belonged together.",
+      "context": "Erstes Betreten von AR06, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR06.entry.02",
+      "speaker": "Knorz",
+      "text": "I am already stitched together crookedly enough.",
+      "context": "Erstes Betreten von AR06, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B06.intro.01",
+      "speaker": "B06",
+      "text": "Hold still. I will make you whole again.",
+      "context": "Erster Bossbeginn B06, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B06.intro.02",
+      "speaker": "Knorz",
+      "text": "Ask me first what is broken.",
+      "context": "Erster Bossbeginn B06, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B06.victory.01",
+      "speaker": "Erzähler",
+      "text": "Madam Mend puts down the needle and waits until someone asks her for help.",
+      "context": "Erster Sieg über B06, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B06.victory.02",
+      "speaker": "Brassa",
+      "text": "Healing needs a yes.",
+      "context": "Erster Sieg über B06, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B06.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B06",
+      "max_lines": 3
+    },
+    {
+      "id": "B06.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B06",
+      "max_lines": 3
+    },
+    {
+      "id": "AR07.entry.01",
+      "speaker": "Brassa",
+      "text": "Nothing was ever meant to break again. Now every shard carries the weight of all the others.",
+      "context": "Erstes Betreten von AR07, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR07.entry.02",
+      "speaker": "Knorz",
+      "text": "That sounds bad for the knees.",
+      "context": "Erstes Betreten von AR07, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B07.intro.01",
+      "speaker": "B07",
+      "text": "No piece may be missing. Ever.",
+      "context": "Erster Bossbeginn B07, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B07.intro.02",
+      "speaker": "Knorz",
+      "text": "Some gaps make you lighter.",
+      "context": "Erster Bossbeginn B07, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B07.victory.01",
+      "speaker": "Erzähler",
+      "text": "The Unbroken sets down its outer shell. For the first time, it can turn around.",
+      "context": "Erster Sieg über B07, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B07.victory.02",
+      "speaker": "Brassa",
+      "text": "A gap is not an ending.",
+      "context": "Erster Sieg über B07, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B07.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B07",
+      "max_lines": 3
+    },
+    {
+      "id": "B07.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B07",
+      "max_lines": 3
+    },
+    {
+      "id": "AR08.entry.01",
+      "speaker": "Brassa",
+      "text": "The people wanted more time. Now it no longer moves forward.",
+      "context": "Erstes Betreten von AR08, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR08.entry.02",
+      "speaker": "Knorz",
+      "text": "I would like some time in which something happens.",
+      "context": "Erstes Betreten von AR08, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B08.intro.01",
+      "speaker": "B08",
+      "text": "One more moment. Just one more.",
+      "context": "Erster Bossbeginn B08, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B08.intro.02",
+      "speaker": "Knorz",
+      "text": "You are holding up the next one.",
+      "context": "Erster Bossbeginn B08, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B08.victory.01",
+      "speaker": "Erzähler",
+      "text": "The Thirteenth Hour releases one stolen moment. Then another.",
+      "context": "Erster Sieg über B08, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B08.victory.02",
+      "speaker": "Brassa",
+      "text": "Time may move on.",
+      "context": "Erster Sieg über B08, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B08.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B08",
+      "max_lines": 3
+    },
+    {
+      "id": "B08.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B08",
+      "max_lines": 3
+    },
+    {
+      "id": "AR09.entry.01",
+      "speaker": "Brassa",
+      "text": "This light was meant to burn forever. To do so, it takes the warmth from everything else.",
+      "context": "Erstes Betreten von AR09, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR09.entry.02",
+      "speaker": "Knorz",
+      "text": "A rather poor sort of heating.",
+      "context": "Erstes Betreten von AR09, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B09.intro.01",
+      "speaker": "B09",
+      "text": "If I go out, nothing remains.",
+      "context": "Erster Bossbeginn B09, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B09.intro.02",
+      "speaker": "Knorz",
+      "text": "Then let us share the fire.",
+      "context": "Erster Bossbeginn B09, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B09.victory.01",
+      "speaker": "Erzähler",
+      "text": "The Cold Furnace opens its doors. Many small flames replace the single great one.",
+      "context": "Erster Sieg über B09, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B09.victory.02",
+      "speaker": "Brassa",
+      "text": "A light may be shared.",
+      "context": "Erster Sieg über B09, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B09.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B09",
+      "max_lines": 3
+    },
+    {
+      "id": "B09.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B09",
+      "max_lines": 3
+    },
+    {
+      "id": "AR10.entry.01",
+      "speaker": "Brassa",
+      "text": "All wishes run together here. The machine is trying to grant every one of them at once.",
+      "context": "Erstes Betreten von AR10, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "AR10.entry.02",
+      "speaker": "Knorz",
+      "text": "Then it probably needs a break.",
+      "context": "Erstes Betreten von AR10, vor Welle 1",
+      "max_lines": 3
+    },
+    {
+      "id": "B10.intro.01",
+      "speaker": "B10",
+      "text": "When nothing moves anymore, no one can be hurt.",
+      "context": "Erster Bossbeginn B10, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B10.intro.02",
+      "speaker": "Knorz",
+      "text": "That is not a life. Just a very tidy box.",
+      "context": "Erster Bossbeginn B10, nach sicherem Leeren der Arena",
+      "max_lines": 3
+    },
+    {
+      "id": "B10.victory.01",
+      "speaker": "Erzähler",
+      "text": "For the first time, the machine waits for an answer instead of forcing one.",
+      "context": "Erster Sieg über B10, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B10.victory.02",
+      "speaker": "Brassa",
+      "text": "To protect does not mean to hold tight.",
+      "context": "Erster Sieg über B10, vor Belohnungsfenster",
+      "max_lines": 3
+    },
+    {
+      "id": "B10.echo.01",
+      "speaker": "Fleck",
+      "text": "Only an echo. The old wish remembers its shape.",
+      "context": "Wiederholter Bossbeginn B10",
+      "max_lines": 3
+    },
+    {
+      "id": "B10.echo.02",
+      "speaker": "Knorz",
+      "text": "Then we remind it of its limit.",
+      "context": "Wiederholter Bossbeginn B10",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.01",
+      "speaker": "Alleswünscher",
+      "text": "You also want to protect. What makes your wish different from mine?",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.02",
+      "speaker": "Knorz",
+      "text": "Mine is not finished yet.",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.03",
+      "speaker": "Knorz",
+      "text": "Protect what wants to live. Even if something breaks along the way.",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.04",
+      "speaker": "Erzähler",
+      "text": "The machine loses its boundless power. The creatures remain. For the first time, they can act differently from their wish.",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.05",
+      "speaker": "Brassa",
+      "text": "And now?",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.06",
+      "speaker": "Knorz",
+      "text": "Now we fix the door.",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.07",
+      "speaker": "Brassa",
+      "text": "It is lying in three pieces.",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "ending.08",
+      "speaker": "Knorz",
+      "text": "It was like that before.",
+      "context": "Nach B10.victory, erster Abschluss",
+      "max_lines": 3
+    },
+    {
+      "id": "defeat.first.01",
+      "speaker": "Brassa",
+      "text": "The mold is done for. The ring holds. I will cast you anew.",
+      "context": "Erste Niederlage, nach Ergebnisanzeige",
+      "max_lines": 3
+    },
+    {
+      "id": "defeat.first.02",
+      "speaker": "Knorz",
+      "text": "This time with a little more footing, please.",
+      "context": "Erste Niederlage, nach Ergebnisanzeige",
+      "max_lines": 3
+    },
+    {
+      "id": "shop.first.01",
+      "speaker": "Glimm",
+      "text": "A usable remnant is far from rubbish.",
+      "context": "Erster Ladenbesuch, einmal pro Profil",
+      "max_lines": 3
+    },
+    {
+      "id": "shop.first.02",
+      "speaker": "Knorz",
+      "text": "As long as the remnant does not bite back.",
+      "context": "Erster Ladenbesuch, einmal pro Profil",
+      "max_lines": 3
+    },
+    {
+      "id": "shop.first.03",
+      "speaker": "Glimm",
+      "text": "Then it goes on the sign.",
+      "context": "Erster Ladenbesuch, einmal pro Profil",
+      "max_lines": 3
+    },
+    {
+      "id": "archive.first.01",
+      "speaker": "Fleck",
+      "text": "Every creature was once a wish. If you understand its shape, you will recognize its attack.",
+      "context": "Erstes Bestiarium öffnen",
+      "max_lines": 3
+    },
+    {
+      "id": "archive.first.02",
+      "speaker": "Knorz",
+      "text": "Write down where I should not be standing.",
+      "context": "Erstes Bestiarium öffnen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.title",
+      "speaker": null,
+      "text": "FABELBRUCH",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.subtitle",
+      "speaker": null,
+      "text": "Wishes need limits.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.new_run",
+      "speaker": null,
+      "text": "New Run",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.continue",
+      "speaker": null,
+      "text": "Continue",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.workshop",
+      "speaker": null,
+      "text": "Workshop",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.bestiary",
+      "speaker": null,
+      "text": "Bestiary",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.settings",
+      "speaker": null,
+      "text": "Settings",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.quit",
+      "speaker": null,
+      "text": "Quit",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.back",
+      "speaker": null,
+      "text": "Back",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.confirm",
+      "speaker": null,
+      "text": "Confirm",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.cancel",
+      "speaker": null,
+      "text": "Cancel",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.choose",
+      "speaker": null,
+      "text": "Choose",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.buy",
+      "speaker": null,
+      "text": "Buy · {price}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.sold",
+      "speaker": null,
+      "text": "Sold",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.lock",
+      "speaker": null,
+      "text": "Hold offer",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.unlock",
+      "speaker": null,
+      "text": "Release hold",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.reroll_shop",
+      "speaker": null,
+      "text": "Reroll · {price}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.reroll_level",
+      "speaker": null,
+      "text": "Reroll · {count} left",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.skip",
+      "speaker": null,
+      "text": "Skip",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.next_wave",
+      "speaker": null,
+      "text": "Next Wave",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.level_title",
+      "speaker": null,
+      "text": "CHOOSE A WISH SPLINTER",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.level_subtitle",
+      "speaker": null,
+      "text": "Level {level} · Choose one improvement",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.shop_title",
+      "speaker": null,
+      "text": "GLIMM'S SHOP",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.shop_subtitle",
+      "speaker": null,
+      "text": "A usable remnant is far from rubbish.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.wave",
+      "speaker": null,
+      "text": "Wave {wave} / 20",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.health",
+      "speaker": null,
+      "text": "{current} / {max}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.currency",
+      "speaker": null,
+      "text": "Wax Shards {count}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.memories",
+      "speaker": null,
+      "text": "Memories {count}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.inventory",
+      "speaker": null,
+      "text": "Inventory",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.pause",
+      "speaker": null,
+      "text": "A moment of quiet.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.resume",
+      "speaker": null,
+      "text": "Resume",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.restart",
+      "speaker": null,
+      "text": "Restart Run",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.abandon",
+      "speaker": null,
+      "text": "To the Workshop",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.victory",
+      "speaker": null,
+      "text": "A wish has its limit again.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.defeat",
+      "speaker": null,
+      "text": "The mold is done for. The ring holds.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.retry",
+      "speaker": null,
+      "text": "Try Again",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.no_save",
+      "speaker": null,
+      "text": "No saved run yet.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.no_money",
+      "speaker": null,
+      "text": "Not enough wax shards. {missing} short.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.weapon_full",
+      "speaker": null,
+      "text": "All six weapon slots are taken.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.swap_title",
+      "speaker": null,
+      "text": "Which weapon shall make way?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.swap_confirm",
+      "speaker": null,
+      "text": "Replace {old} with {new}?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.swap_effect",
+      "speaker": null,
+      "text": "The old weapon is lost. You receive no sale proceeds.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.merge",
+      "speaker": null,
+      "text": "Merge",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.merge_preview",
+      "speaker": null,
+      "text": "2 × {name} {tier} → 1 × {name} {next_tier}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.merge_max",
+      "speaker": null,
+      "text": "Highest tier reached.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.sell",
+      "speaker": null,
+      "text": "Sell · {price}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.sell_confirm",
+      "speaker": null,
+      "text": "Sell {name} for {price} wax shards?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.abandon_confirm",
+      "speaker": null,
+      "text": "End this run?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.abandon_body",
+      "speaker": null,
+      "text": "This run's weapons, improvements and wax shards will be lost. Discoveries and memories remain.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.restart_confirm",
+      "speaker": null,
+      "text": "Restart this run?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.restart_body",
+      "speaker": null,
+      "text": "The current run will be discarded. You start the same district with your chosen starting weapon.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.quit_confirm",
+      "speaker": null,
+      "text": "Quit the game?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.quit_body",
+      "speaker": null,
+      "text": "Your last safe checkpoint will be kept.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.save_error",
+      "speaker": null,
+      "text": "Saving failed. Please try again.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.save_retry",
+      "speaker": null,
+      "text": "Save again",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.saved",
+      "speaker": null,
+      "text": "Saved",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.locked_arena",
+      "speaker": null,
+      "text": "Calm {boss} first.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.boss_warning",
+      "speaker": null,
+      "text": "A keeper awakens.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.reward",
+      "speaker": null,
+      "text": "Reward",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.new_entry",
+      "speaker": null,
+      "text": "New entry in the bestiary",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.dialog_next",
+      "speaker": null,
+      "text": "Next",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.dialog_skip",
+      "speaker": null,
+      "text": "Skip scene",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.dialog_log",
+      "speaker": null,
+      "text": "Reread memory",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.loading",
+      "speaker": null,
+      "text": "Bruchwinkel is piecing itself together …",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.apply",
+      "speaker": null,
+      "text": "Apply",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.reset",
+      "speaker": null,
+      "text": "Reset",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.display_confirm",
+      "speaker": null,
+      "text": "Keep this display mode?",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.display_timer",
+      "speaker": null,
+      "text": "Reverting in {seconds} seconds.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.rarity.1",
+      "speaker": null,
+      "text": "Common · I",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.rarity.2",
+      "speaker": null,
+      "text": "Uncommon · II",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.rarity.3",
+      "speaker": null,
+      "text": "Rare · III",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.rarity.4",
+      "speaker": null,
+      "text": "Mythic · IV",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.rarity.5",
+      "speaker": null,
+      "text": "Fabled · V",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.empty",
+      "speaker": null,
+      "text": "Empty slot",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.profile",
+      "speaker": null,
+      "text": "Profile {number}",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.profile_new",
+      "speaker": null,
+      "text": "Create profile",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.profile_delete",
+      "speaker": null,
+      "text": "Delete profile",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.profile_delete_body",
+      "speaker": null,
+      "text": "All progress of {profile} will be deleted. Type the profile name to confirm.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.no_reroll",
+      "speaker": null,
+      "text": "No rerolls left.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.selection_done",
+      "speaker": null,
+      "text": "Improvement chosen",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.all_capped",
+      "speaker": null,
+      "text": "All improvements are maxed out. Receive 20 wax shards instead.",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.wave_clear",
+      "speaker": null,
+      "text": "Wave survived",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.heal",
+      "speaker": null,
+      "text": "{amount} health restored",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.dodge_ready",
+      "speaker": null,
+      "text": "Dodge ready",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.dodge_cooldown",
+      "speaker": null,
+      "text": "Dodge · {seconds} s",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.pending_levels",
+      "speaker": null,
+      "text": "{count} wish splinters left to choose",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.unseen",
+      "speaker": null,
+      "text": "Not yet discovered",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.first_victory",
+      "speaker": null,
+      "text": "Seal released",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.echo_victory",
+      "speaker": null,
+      "text": "Echo becalmed",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.prologue",
+      "speaker": null,
+      "text": "The First Crack",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.credits",
+      "speaker": null,
+      "text": "Credits",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.reduced_motion",
+      "speaker": null,
+      "text": "Reduce motion effects",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.high_contrast",
+      "speaker": null,
+      "text": "Strengthen hazard outlines",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.no_flash",
+      "speaker": null,
+      "text": "Disable bright flashes",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.ui_scale",
+      "speaker": null,
+      "text": "UI scale",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "ui.text_speed",
+      "speaker": null,
+      "text": "Text speed",
+      "context": "UI; Platzhalter zur Laufzeit ersetzen",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.move",
+      "speaker": "Brassa",
+      "text": "Move with {move_binding}. Your weapons attack on their own.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.dodge",
+      "speaker": "Brassa",
+      "text": "Dodge with {dodge_binding}. The ring shows when you can dodge again.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.warning",
+      "speaker": "Brassa",
+      "text": "Dashed coral announces an attack. Leave the marked area.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.active",
+      "speaker": "Brassa",
+      "text": "Solid coral means danger. Open gaps stay safe.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.pickup",
+      "speaker": "Brassa",
+      "text": "Collect wax shards for Glimm's shop. Bright memory sparks grant experience.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.level",
+      "speaker": "Brassa",
+      "text": "Choose exactly one of three improvements. The fight waits for you.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.shop",
+      "speaker": "Brassa",
+      "text": "Buy equipment or hold an offer for later. \"Next Wave\" ends the shop visit.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.merge",
+      "speaker": "Brassa",
+      "text": "Two identical weapons of the same tier can be merged.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.arena",
+      "speaker": "Brassa",
+      "text": "Floor hazards are announced. Decoration alone never deals damage.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.boss",
+      "speaker": "Brassa",
+      "text": "A keeper changes its attacks at 66% and 33% health.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.death",
+      "speaker": "Brassa",
+      "text": "Your run ends. Discoveries and secured memories remain.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    },
+    {
+      "id": "tutorial.story",
+      "speaker": "Brassa",
+      "text": "You can skip dialogue and reread it later in the book of memories.",
+      "context": "Einmal bei erster passender Situation; pausiertes Tutorialfeld",
+      "max_lines": 3
+    }
+  ]
+}

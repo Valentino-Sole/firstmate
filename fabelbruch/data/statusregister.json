@@ -1,0 +1,57 @@
+{
+  "burn": {
+    "label": "Brand",
+    "type": "damage_over_time",
+    "rule": "Pro Ziel ein globaler Brand. Tickabstand 0,5 s. Stärkere Tick-Basis ersetzt Quelle und setzt Dauer neu; schwächere/gleiche Quelle behält bisherigen Tickschaden und verlängert Restdauer auf max(Restdauer, neue Dauer). Verlängerung in halben Sekunden ab nächstem bestehenden Tick; Gesamtrestzeit maximal 3 s. Ein bestehender Ticktimer wird bei Neuauftrag niemals zurückgesetzt. Beim erstmaligen Auftrag erster Tick nach 0,5 s. Vergleich mit ungerundeten Tick-Basiswerten. Owner bei gleich starkem Auftrag bleibt unverändert. Technische Zeitregel: expires_at = now + neue Dauer bei stärkerem Auftrag, sonst max(altes expires_at, now + neue Dauer), jeweils höchstens now + 3 s. next_tick_at bleibt bei bestehendem Brand erhalten. Ein Tick findet nur statt, wenn next_tick_at <= expires_at; danach next_tick_at += 0,5 s. Dadurch ist die Tickzahl nach Auffrischungen durch die gemeinsame Zeitachse bestimmt."
+  },
+  "rend": {
+    "label": "Risswunde",
+    "type": "damage_over_time",
+    "rule": "Ein globaler Status pro Ziel, exakt dieselben Stapel- und Tickregeln wie Brand, aber unabhängiger Zustand; Höchstdauer 3 s. Brand und Risswunde dürfen gleichzeitig wirken."
+  },
+  "slow": {
+    "label": "Verlangsamt",
+    "type": "movement",
+    "rule": "Zeitliche und Feldquellen separat erfassen. Stärkste aktuelle Quelle einschließlich Sandlast gilt, nicht addieren. Normale Gegner maximal 50 %, Bosse maximal 20 %. Bosswerte im Effekttext sind bereits halbiert und dürfen nicht erneut halbiert werden."
+  },
+  "weakness": {
+    "label": "Schwäche",
+    "type": "outgoing_damage",
+    "rule": "Stärkste aktive Quelle gilt. Maximal 30 % bei normalen Gegnern, 15 % bei Bossen. Ausgehenden Rohschaden vor Heldenschild und Rüstung multiplizieren; Schaden beim Trefferzeitpunkt berechnen, auch für bereits fliegende Geschosse. Tote/entfernte Quelle: letzter Schwächewert aus ihrem Todessnapshot für verbleibende Geschosse. Basiswerte der Angriffe bleiben unverändert."
+  },
+  "brittle": {
+    "label": "Brüchig",
+    "type": "incoming_damage",
+    "rule": "Stärkste aktive Quelle gilt; maximal 25 %, bei Bossen 12,5 %. Haupt-, Sekundär- und Statusschaden des Helden werden damit multipliziert. Quelle während Schadensereignis bestimmen; Anwendung durch denselben Treffer erfolgt erst danach."
+  },
+  "root": {
+    "label": "Verwurzelt",
+    "type": "movement",
+    "rule": "Bewegung 0; Angriff, Vorbereitung, Geschosse und Cooldowns laufen weiter. Normale Gegner nur; Bosse Ersatz-Slow laut Waffe. Keine Verlängerung während Wurzel, danach 3 s Immunität für alle Wurzelquellen. Andere nicht immunitätsgebundene Verlangsamungen bleiben möglich."
+  },
+  "bookmark": {
+    "label": "Lesemarke",
+    "type": "one_shot_mark",
+    "rule": "Eine Marke pro Ziel; zuletzt aufgebrachte ersetzt die alte. Auslöser nur anderer Waffeninstanz. Schadenquelle und D bei Auftrag speichern. Höchstens einmal verbrauchen, atomar vor Zusatzschaden entfernen."
+  },
+  "seam_link": {
+    "label": "Zwillingsnaht",
+    "type": "link",
+    "rule": "Gegnerpaar mit Quellinstanz, D-Snapshot, Ablaufzeit, nächster zulässiger Übertragungszeit. Neue Verbindung löst nicht am erzeugenden Treffer aus; Details E021. Die abschließende Übertragung eines tödlichen Haupttreffers erfolgt vor Entfernung des Paares."
+  },
+  "sand_load": {
+    "label": "Sandlast",
+    "type": "stacked_movement",
+    "rule": "Pro Ziel global 0–5 Stapel. Gesamtdauer 3 s, bei Haupttreffer erneuern. Normale Gegner 5 % je Stapel, Bosse 2,5 %. Fließt als eine Slow-Quelle in Maximumauswahl ein."
+  },
+  "tempo_buff": {
+    "label": "Unruh-Takt",
+    "type": "hero_buff",
+    "rule": "Global am Helden höchstens +0,15 Angriffstempo. Quellen nicht addieren; längste aktuelle Ablaufzeit gilt. Mit regulärem Angriffstempo-Bonus addieren."
+  },
+  "time_mark": {
+    "label": "Fällige Sekunde",
+    "type": "delayed_damage",
+    "rule": "Pro Ziel und Quellinstanz eine Marke. D-Snapshot und Ablaufzeit speichern, keine Erneuerung. Tod entfernt Marke ohne Explosion."
+  }
+}

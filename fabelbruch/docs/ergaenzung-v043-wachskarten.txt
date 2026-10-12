@@ -1,0 +1,96 @@
+FABELBRUCH – Wachskarten / neue Stilreferenz v0.4.3
+
+AUFTRAG
+Nutze glimms-laden-wachskarten.png als neue visuelle Zielrichtung für die
+Ladenkarten. Der Nutzer wünscht Wachs, leichte 3D-Wirkung und eine hochwertigere,
+zum Spiel passende Gestaltung. Alle bisherigen ZIP-Dateien bleiben unverändert.
+Diese Ergänzung ändert die Darstellung, nicht Preise, Fähigkeiten oder Spielregeln.
+Für Waffen bleiben die Effekte v0.4.2 maßgeblich; für Glück die Ergänzung v0.4.1.
+
+KERN DER GESTALTUNG
+Die Karten wirken wie flache gegossene Wachstafeln: abgerundete plastische
+Wachsränder, dezente Tropfen an Außenkanten, kleine Messingecken und geprägte
+Siegel. Innen liegt ein ruhiges helles Textfeld. Keine Wachstropfen auf Texten.
+Leichte 2,5D-Wirkung durch gleichmäßiges Licht von links oben, weiche Kantenlichter,
+schmale Innenschatten und kurze Kontaktschatten. Karten bleiben frontal und gerade.
+Keine perspektivische Verzerrung von Texten, kein permanentes Wackeln oder Kippen.
+
+Die Waffenillustrationen bleiben ihren vorhandenen Designs treu. Das neue Bild
+zeigt eine passende ausgearbeitete Richtung für Reliktbilder, damit diese nicht
+mehr wie flache Platzhaltersymbole aussehen. Bei weiterer Ausarbeitung alle
+Relikte in derselben Material- und Lichtwirkung halten.
+
+PALETTE UND MATERIAL
+Hintergrund: dunkles Petrol #10262C; Paneele #19373D.
+Lesefläche: warmes Elfenbein #F1E3C8; Text sehr dunkles Petrol #10262C.
+Messing: #D6AD64 mit helleren Kanten, ohne Spiegelglanz.
+Gewöhnliche Karten: gedämpfter roter Siegelwachsrahmen; keine rote Fehlerfläche.
+Seltene Karten: gedeckter grünpetrolfarbener Wachsrahmen mit Messing.
+Fokus: dünne Mintkontur #B6DDD0 um die ganze Karte, kombiniert mit klarer Form.
+Die neue Darstellung zeigt nur die hier vorhandenen Seltenheiten I und II.
+Weitere Stufen nicht mit frei erfundenen Gameplay-Boni verbinden.
+Kerzenlicht und Werkstattkulisse bleiben an den Rändern und hinter den Karten.
+Kein Rauch, Flimmern oder Detailmuster unter den funktionalen Texten.
+
+KARTENAUFBAU, VON OBEN NACH UNTEN
+1. Gegenstand in einer leicht eingelassenen Bildfläche, Schatten nur darunter.
+2. Gegenstandsname und gegebenenfalls Waffenstufe.
+3. Seltenheit als Text plus geprägtes Siegel, niemals nur über Farbe.
+4. Fähigkeitsname und kurze Wirkung bzw. Reliktbonus und Stapelzahl.
+5. Kaufknopf mit Preis, bei fehlender Währung sichtbar deaktiviert.
+6. Ein kurzer Fehlbetrag statt langer mehrfacher Warntexte.
+7. Eigenständiger Knopf zum Halten des Angebots als Messinglasche.
+Alle vier Karten haben gleiche Maße; Namen, Preis- und Halteknöpfe liegen auf
+gleichen Grundlinien. Bei langen Texten im vorgesehenen Inhaltsfeld umbrechen.
+Details über vorhandenen Tooltip-/Detailmechanismus, nicht in die Karte quetschen.
+
+ZUSTÄNDE
+Normal: Wachsrahmen, kurzer Schatten, kein Leuchten.
+Maus-Hover oder Tastatur-/Controllerfokus: klare dünne Mintkontur plus leicht
+hellere obere Kante. Fokus hat Vorrang vor bloßem Hover. Kein Größenwechsel.
+Gedrückt: aktiver Knopf 2 logische Einheiten nach unten, Schatten verkürzt;
+Animationsdauer 80 ms, Freigabe 120 ms. Bei reduzierter Bewegung statisch.
+Nicht bezahlbar: dunkler entsättigter Kaufknopf mit Schloss, Preis lesbar,
+Text 'Es fehlen {amount}'. Kein Klick, keine Kaufanimation. Karte und Details
+bleiben zugänglich; Halten des Angebots ist weiterhin erlaubt.
+Gehalten: zusätzlich geschlossene Siegelklammer und Text 'Angebot lösen'.
+Status bleibt bei Neuwurf gemäß bestehenden Regeln. Das Bild zeigt ungehaltene
+Angebote, deshalb steht dort 'Angebot halten'.
+Verkauft: Bild leicht entsättigt, Prägung 'Verkauft', Kauf/Halten deaktiviert.
+Die Funktionsregeln bleiben unverändert aus dem Ladenvertrag.
+
+DER KONKRETE BILDZUSTAND
+Wachssplitter = 11, Glück = 0 / 100.
+Stimmgabel I kostet 32: Es fehlen 21.
+Echotröte I kostet 38: Es fehlen 27.
+Saubere Kante kostet 52: Es fehlen 41, +9 % Schaden, 0 / 2.
+Vorratsfach kostet 28: Es fehlen 17, +5 % Wachssplitter, 0 / 3.
+Alle vier Kaufknöpfe sind deaktiviert. Neu würfeln für 8 ist bezahlbar.
+'Nächste Welle' ist die große warme bernsteinfarbene Hauptaktion unten rechts.
+Die Mintkontur an der ersten Karte zeigt Auswahl/Fokus, keine Kaufbarkeit.
+
+TEXTGENAUIGKEIT
+Die Texte im generierten Bild sind ein Kompositionsbeispiel. In der Umsetzung
+bleiben Texte, Werte und Symbole getrennte Elemente und werden nicht aus einem
+Screenshot herausgeschnitten oder als Gesamtbild anklickbar gemacht.
+W001: Der kurze Bildtext '+60 % Zusatzschaden' bedeutet exakt 0,6 D der Stimmgabel
+beim dritten Haupttreffer derselben Waffeninstanz auf dasselbe Ziel innerhalb
+des erneuerten 4-s-Fensters. Kein dauerhafter +60-%-Schadensbonus.
+W004: Schwäche hält 2,5 s und senkt ausgehenden Schaden um 20 %, bei Bossen 10 %.
+Vollständige Waffenregeln aus v0.4.2 weiterhin in den Details anzeigen.
+
+TECHNISCHE ÜBERGABE
+Das PNG ist eine vollständige Stil- und Kompositionsreferenz, kein fertiges
+UI-Atlas und kein Satz freigestellter Kartenrahmen. Bildgröße und Seitenverhältnis
+beibehalten. Logische UI bleibt im bestehenden 1600 × 900-Koordinatensystem;
+Skalierung des Referenzbilds ist gleichmäßig, Texte im Spiel nativ rendern.
+Für Produktion benötigt: getrennte Rahmen, Siegel, Knöpfe, Hintergrund und
+Gegenstandsfreisteller. Rahmen als skalierbare Teile mit geschützten Ecken
+aufbauen; Texte und Fokus niemals in die Hintergrundtextur einbacken.
+Das beiliegende Bild darf nicht als bereits fertige Komponentenbibliothek
+ausgegeben werden. Keine Spielprogrammierung Bestandteil dieser ZIP.
+
+PRÜFUNG UND HERKUNFT
+Bild visuell geprüft: vier Karten, passende Wachsmaterialien, Preise, Währung,
+deaktivierte Kaufknöpfe, Fehlbeträge und Hauptnavigation vorhanden.
+Generierung mit integriertem Imagegen; vollständiger Prompt in IMAGEGEN_PROMPT.txt.

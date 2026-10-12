@@ -1,0 +1,16 @@
+{
+  "version": "0.4.1",
+  "affected_screens": [
+    "UI07",
+    "UI08",
+    "UI09",
+    "UI24"
+  ],
+  "UI07": "U013 als reguläre kostenlose Karte im bestehenden Dreierlayout. Symbol, Name, +5 Glück, aktueller → neuer effektiver Wert und Stapelzahl zeigen. Keine vierte Karte.",
+  "UI08": "R025/R026 in vorhandenen Reliktslots. Preis, Bonus, Stapelzahl, Glück-Vorschau. Nach Kauf Hinweis shop.luck.snapshot. Bei 100 Glück ist ein noch nicht ausgereiztes Relikt weiter kaufbar; vor Bestätigung klar +0 wirksames Glück zeigen. Rückverkauf berechnet Wert aus verbleibenden Quellen neu.",
+  "UI09": "Zeile Glück im Bereich Beute & Laden nach Wachssplitterbonus: Symbol + Wert / 100. Tooltip aus Text-ID stat.luck.tooltip. Tastatur-/Controllerfokus öffnet denselben Tooltip wie Maus.",
+  "UI24": "Glück nur in Reliktdetails R025/R026; es ist kein Waffenbonus. Bei R001 ausdrücklich kritische Trefferchance anzeigen.",
+  "preview": "Alle Quellen summieren, dann kappen. Bei 98 + 8 zeigt Vorschau 98 → 100 (+2 wirksam). Beim Entfernen aus der ungekappte Summe neu berechnen, nicht vom gekappten Wert abziehen.",
+  "style": "Bestehende Farben, Typografie, Abstände und Fokuszustände aus ui/ui-spezifikation.json des Hauptpakets. Neues Symbol symbole/glueck.svg.",
+  "mockup": "index.html zeigt Inhalts- und Stilbeispiele, keine neue Bildschirmgeometrie."
+}

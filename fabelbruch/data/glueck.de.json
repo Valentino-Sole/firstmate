@@ -1,0 +1,58 @@
+{
+  "version": "0.4.1",
+  "language": "de-DE",
+  "strings": [
+    {
+      "id": "stat.luck.name",
+      "text": "Glück"
+    },
+    {
+      "id": "stat.luck.value",
+      "text": "{value} / 100"
+    },
+    {
+      "id": "stat.luck.tooltip",
+      "text": "Verbessert die Chance auf höhere bereits verfügbare Waffenstufen und seltene Relikte bei neuen Ladenangeboten. Beeinflusst weder kritische Treffer noch Beute oder Level-up-Karten."
+    },
+    {
+      "id": "upgrade.U013.name",
+      "text": "Günstiger Zufall"
+    },
+    {
+      "id": "upgrade.U013.effect",
+      "text": "+5 Glück"
+    },
+    {
+      "id": "relic.R025.name",
+      "text": "Schiefer Wunschknopf"
+    },
+    {
+      "id": "relic.R025.effect",
+      "text": "+8 Glück"
+    },
+    {
+      "id": "relic.R026.name",
+      "text": "Zufallssiegel"
+    },
+    {
+      "id": "relic.R026.effect",
+      "text": "+13 Glück"
+    },
+    {
+      "id": "stat.luck.preview",
+      "text": "Glück: {before} → {after}"
+    },
+    {
+      "id": "stat.luck.cap",
+      "text": "Obergrenze: 100 Glück. Überschüssige Punkte haben keine Wirkung."
+    },
+    {
+      "id": "shop.luck.snapshot",
+      "text": "Wirkt ab dem nächsten Neuwurf oder Ladenbesuch."
+    },
+    {
+      "id": "relic.R001.clarification",
+      "text": "+3 Prozentpunkte kritische Trefferchance. Kein Glück-Bonus."
+    }
+  ]
+}

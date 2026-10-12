@@ -1,0 +1,4080 @@
+{
+  "version": "0.4",
+  "status": "Konkreter erster Spielregelstand, kein getestetes Balancing.",
+  "campaign": "Jede Arena ist ein separater 20-Wellen-Lauf. Sieg schaltet nächste Arena frei. Keine dauerhafte Übernahme von Laufwaffen oder Levelboni.",
+  "loop": [
+    "Profil",
+    "Intro einmal",
+    "Hauptmenü",
+    "Knorz / Startwaffe",
+    "Arena wählen",
+    "Arena-Eintrittsdialog einmal",
+    "Wellen 1–19 mit Aufstiegen und Laden",
+    "Bossdialog",
+    "Welle 20 Boss",
+    "Siegesdialog",
+    "Ende nur nach erstem B10-Sieg",
+    "Belohnung / Werkstatt"
+  ],
+  "start": {
+    "hero_id": "H001",
+    "hp": 100,
+    "level": 1,
+    "wax": 0,
+    "weapon_id": "W001",
+    "available_heroes": [
+      "H001"
+    ],
+    "other_hero_forms": "Nicht Bestandteil der Startfassung; alte Platzhalternamen nicht implementieren.",
+    "starting_weapon_selection": "W001 immer verfügbar; zusätzlich Signaturwaffen bereits erstmals besiegter Bosse. Wahl wird vor Laufstart gespeichert."
+  },
+  "wave_end": "Bei Zeitablauf normale Gegner ohne Beute ausblenden, alle feindlichen Projektile und Flächen entfernen; liegende Beute automatisch einsammeln. Dann ausstehende Levelauswahlen, dann Laden.",
+  "boss_end": "Bosskampf ohne Countdown bis Sieg/Niederlage. Keine normalen Spawns, Arenagefahr deaktiviert. Beim Sieg sämtliche Gefahren entfernen.",
+  "spawn_rule": {
+    "edge_points": [
+      [
+        140,
+        150
+      ],
+      [
+        480,
+        150
+      ],
+      [
+        1120,
+        150
+      ],
+      [
+        1460,
+        150
+      ],
+      [
+        140,
+        770
+      ],
+      [
+        480,
+        770
+      ],
+      [
+        1120,
+        770
+      ],
+      [
+        1460,
+        770
+      ],
+      [
+        140,
+        450
+      ],
+      [
+        1460,
+        450
+      ]
+    ],
+    "order": "Zyklisch; mindestens 240 Einheiten Abstand zu Knorz. Nicht erfüllte Spawns bis höchstens 3 s zurückstellen, dann entfallen lassen.",
+    "warning": ".8 s matter Einblendring, .4 s Einblenden, dann aktiv; kein Schaden beim Erscheinen.",
+    "alive_cap": "Wenn erreicht, diesen Zeit-Slot überspringen; am Wellenende keine Nachholspawns."
+  },
+  "drops": {
+    "normal": "1 Wachssplitter (Shop) und 1 Erinnerungsfunke (Erfahrung), jeweils unter ihren Boni. Bruchteile akkumulieren als Rest statt je Gegner aufzurunden.",
+    "summoned": "Keine Währung, Erfahrung oder weiteren Beschwörungen durch vom Gegner beschworene Kinder.",
+    "wave_heal": "Nach automatischem Einsammeln und vor Laden.",
+    "memory": "Dauerhafte Erinnerungen: 1 nach Welle 5, 10, 15; sofort sichern. Bossbelohnung zusätzlich."
+  },
+  "save": {
+    "safe_points": [
+      "Nach Aufstiegsauswahl",
+      "Nach Ladenkauf/Verkauf/Merge/Neuwurf",
+      "Vor Beginn jeder Welle",
+      "Nach Sieg/Niederlage",
+      "Nach Dialogabschluss"
+    ],
+    "mid_wave_quit": "Gespeicherter Anfang derselben Welle, mit damaligem Leben, Inventar, Erfahrung, Währung, RNG-Zustand. Kein Beutefarmen durch Fortsetzen.",
+    "persistent": [
+      "Freigeschaltete Arenen",
+      "Erste Siege",
+      "Entdeckte Monster",
+      "Gesehene Dialoge",
+      "Erinnerungen",
+      "Werkstattboni",
+      "Optionen"
+    ],
+    "run_only": [
+      "Wachssplitter",
+      "Laufwaffen",
+      "Level",
+      "Levelboni",
+      "Relikte",
+      "aktuelle Welle"
+    ]
+  },
+  "workshop": [
+    {
+      "id": "P01",
+      "name": "Stabiler Guss",
+      "max_rank": 5,
+      "cost_per_rank": [
+        4,
+        6,
+        8,
+        10,
+        12
+      ],
+      "effect": "+5 Startleben pro Rang"
+    },
+    {
+      "id": "P02",
+      "name": "Ruhiger Schritt",
+      "max_rank": 3,
+      "cost_per_rank": [
+        4,
+        7,
+        10
+      ],
+      "effect": "+5 Bewegung pro Rang"
+    },
+    {
+      "id": "P03",
+      "name": "Glimms Dank",
+      "max_rank": 1,
+      "cost_per_rank": [
+        8
+      ],
+      "effect": "Erster Laden-Neuwurf pro Lauf kostenlos; danach normale Kosten."
+    }
+  ],
+  "runs": [
+    {
+      "arena_id": "AR01",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M001",
+            "M002"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M001",
+            "M002"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008",
+            "M009"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008",
+            "M009"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008",
+            "M009",
+            "M010"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008",
+            "M009",
+            "M010"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M001",
+            "M002",
+            "M003",
+            "M004",
+            "M005",
+            "M006",
+            "M007",
+            "M008",
+            "M009",
+            "M010"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B01",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Start frei",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.0,
+        "enemy_damage_multiplier": 1.0,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W002",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR02",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M011",
+            "M012"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M011",
+            "M012"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018",
+            "M019"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018",
+            "M019"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018",
+            "M019",
+            "M020"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018",
+            "M019",
+            "M020"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M011",
+            "M012",
+            "M013",
+            "M014",
+            "M015",
+            "M016",
+            "M017",
+            "M018",
+            "M019",
+            "M020"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B02",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B01",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.1,
+        "enemy_damage_multiplier": 1.06,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W006",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR03",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M021",
+            "M022"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M021",
+            "M022"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028",
+            "M029"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028",
+            "M029"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028",
+            "M029",
+            "M030"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028",
+            "M029",
+            "M030"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M021",
+            "M022",
+            "M023",
+            "M024",
+            "M025",
+            "M026",
+            "M027",
+            "M028",
+            "M029",
+            "M030"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B03",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B02",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.2,
+        "enemy_damage_multiplier": 1.12,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W010",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR04",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M031",
+            "M032"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M031",
+            "M032"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038",
+            "M039"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038",
+            "M039"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038",
+            "M039",
+            "M040"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038",
+            "M039",
+            "M040"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M031",
+            "M032",
+            "M033",
+            "M034",
+            "M035",
+            "M036",
+            "M037",
+            "M038",
+            "M039",
+            "M040"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B04",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B03",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.3,
+        "enemy_damage_multiplier": 1.18,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W014",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR05",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M041",
+            "M042"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M041",
+            "M042"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048",
+            "M049"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048",
+            "M049"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048",
+            "M049",
+            "M050"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048",
+            "M049",
+            "M050"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M041",
+            "M042",
+            "M043",
+            "M044",
+            "M045",
+            "M046",
+            "M047",
+            "M048",
+            "M049",
+            "M050"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B05",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B04",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.4,
+        "enemy_damage_multiplier": 1.24,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W018",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR06",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M051",
+            "M052"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M051",
+            "M052"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058",
+            "M059"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058",
+            "M059"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058",
+            "M059",
+            "M060"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058",
+            "M059",
+            "M060"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M051",
+            "M052",
+            "M053",
+            "M054",
+            "M055",
+            "M056",
+            "M057",
+            "M058",
+            "M059",
+            "M060"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B06",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B05",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.5,
+        "enemy_damage_multiplier": 1.3,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W022",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR07",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M061",
+            "M062"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M061",
+            "M062"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068",
+            "M069"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068",
+            "M069"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068",
+            "M069",
+            "M070"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068",
+            "M069",
+            "M070"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M061",
+            "M062",
+            "M063",
+            "M064",
+            "M065",
+            "M066",
+            "M067",
+            "M068",
+            "M069",
+            "M070"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B07",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B06",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.6,
+        "enemy_damage_multiplier": 1.36,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W026",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR08",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M071",
+            "M072"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M071",
+            "M072"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078",
+            "M079"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078",
+            "M079"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078",
+            "M079",
+            "M080"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078",
+            "M079",
+            "M080"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M071",
+            "M072",
+            "M073",
+            "M074",
+            "M075",
+            "M076",
+            "M077",
+            "M078",
+            "M079",
+            "M080"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B08",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B07",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.7,
+        "enemy_damage_multiplier": 1.42,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W029",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR09",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M081",
+            "M082"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M081",
+            "M082"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088",
+            "M089"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088",
+            "M089"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088",
+            "M089",
+            "M090"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088",
+            "M089",
+            "M090"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M081",
+            "M082",
+            "M083",
+            "M084",
+            "M085",
+            "M086",
+            "M087",
+            "M088",
+            "M089",
+            "M090"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B09",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B08",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.8,
+        "enemy_damage_multiplier": 1.48,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W033",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    },
+    {
+      "arena_id": "AR10",
+      "waves": [
+        {
+          "wave": 1,
+          "duration_seconds": 32,
+          "spawn_budget": 14,
+          "max_alive": 14,
+          "monster_pool": [
+            "M091",
+            "M092"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 2.286,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 2,
+          "duration_seconds": 34,
+          "spawn_budget": 18,
+          "max_alive": 16,
+          "monster_pool": [
+            "M091",
+            "M092"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.889,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 3,
+          "duration_seconds": 36,
+          "spawn_budget": 22,
+          "max_alive": 18,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.636,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 4,
+          "duration_seconds": 38,
+          "spawn_budget": 26,
+          "max_alive": 20,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.462,
+          "boss_id": null,
+          "hazard_enabled": false,
+          "shop_after": true
+        },
+        {
+          "wave": 5,
+          "duration_seconds": 40,
+          "spawn_budget": 30,
+          "max_alive": 22,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.333,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 6,
+          "duration_seconds": 42,
+          "spawn_budget": 34,
+          "max_alive": 24,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.235,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 7,
+          "duration_seconds": 44,
+          "spawn_budget": 38,
+          "max_alive": 26,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.158,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 8,
+          "duration_seconds": 46,
+          "spawn_budget": 42,
+          "max_alive": 28,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.095,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 9,
+          "duration_seconds": 48,
+          "spawn_budget": 46,
+          "max_alive": 30,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.043,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 10,
+          "duration_seconds": 50,
+          "spawn_budget": 50,
+          "max_alive": 32,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 1.0,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 11,
+          "duration_seconds": 52,
+          "spawn_budget": 54,
+          "max_alive": 34,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.963,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 12,
+          "duration_seconds": 54,
+          "spawn_budget": 58,
+          "max_alive": 36,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.931,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 13,
+          "duration_seconds": 56,
+          "spawn_budget": 62,
+          "max_alive": 38,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.903,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 14,
+          "duration_seconds": 58,
+          "spawn_budget": 66,
+          "max_alive": 40,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.879,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 15,
+          "duration_seconds": 60,
+          "spawn_budget": 70,
+          "max_alive": 42,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098",
+            "M099"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.857,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 16,
+          "duration_seconds": 60,
+          "spawn_budget": 74,
+          "max_alive": 44,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098",
+            "M099"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.811,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 17,
+          "duration_seconds": 60,
+          "spawn_budget": 78,
+          "max_alive": 46,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098",
+            "M099",
+            "M100"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.769,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 18,
+          "duration_seconds": 60,
+          "spawn_budget": 82,
+          "max_alive": 48,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098",
+            "M099",
+            "M100"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.732,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 19,
+          "duration_seconds": 60,
+          "spawn_budget": 86,
+          "max_alive": 50,
+          "monster_pool": [
+            "M091",
+            "M092",
+            "M093",
+            "M094",
+            "M095",
+            "M096",
+            "M097",
+            "M098",
+            "M099",
+            "M100"
+          ],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": 0.698,
+          "boss_id": null,
+          "hazard_enabled": true,
+          "shop_after": true
+        },
+        {
+          "wave": 20,
+          "duration_seconds": null,
+          "spawn_budget": 0,
+          "max_alive": 0,
+          "monster_pool": [],
+          "selection": "Rundlauf durch IDs, beginnt jede Welle beim ersten Eintrag.",
+          "spawn_interval_seconds": null,
+          "boss_id": "B10",
+          "hazard_enabled": false,
+          "shop_after": false
+        }
+      ],
+      "unlock_condition": "Erster Sieg über B09",
+      "stat_scaling": {
+        "enemy_hp_multiplier": 1.9,
+        "enemy_damage_multiplier": 1.54,
+        "movement_speed_multiplier": 1,
+        "rounding": "LP und Schaden aufrunden; Zeiten und Geschwindigkeiten unverändert."
+      },
+      "first_win_memories": 5,
+      "repeat_win_memories": 2,
+      "boss_reward_weapon_id": "W037",
+      "reward_rule": "Signaturwaffe dauerhaft als Startwaffe wählbar. Shopverfügbarkeit weiterhin ab Betreten der zugehörigen Arena."
+    }
+  ]
+}

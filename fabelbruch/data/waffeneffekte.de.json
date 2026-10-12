@@ -1,0 +1,487 @@
+{
+  "version": "0.4.2",
+  "language": "de-DE",
+  "display_rule": "D-Formeln im Detailmodus mit aktuellem berechnetem Zahlenwert ergänzen; D-Erklärung in der Hilfe. Prozent- und Zeitangaben beibehalten.",
+  "strings": [
+    {
+      "id": "weapon.W001.ability.name",
+      "text": "Dritter Nachhall"
+    },
+    {
+      "id": "weapon.W001.ability.description",
+      "text": "Zähle pro Waffeninstanz und Gegner Haupttreffer. Jeder Treffer erneuert das 4-s-Fenster. Beim dritten Treffer folgt sofort 0,6 D Zusatzschaden am selben Ziel; Zähler danach auf 0. Kein Übertrag zwischen Gegnern oder Waffen."
+    },
+    {
+      "id": "weapon.W001.ability.role",
+      "text": "Konstanter Schaden gegen zähe Einzelziele"
+    },
+    {
+      "id": "weapon.W002.ability.name",
+      "text": "Glockenstoß"
+    },
+    {
+      "id": "weapon.W002.ability.description",
+      "text": "Schiebe jedes getroffene normale Ziel 80 Einheiten radial vom Einschlagzentrum weg und verlangsame es anschließend 2 s um 20 %. Bosse werden nicht verschoben, erhalten aber 10 % Verlangsamung."
+    },
+    {
+      "id": "weapon.W002.ability.role",
+      "text": "Abstand schaffen"
+    },
+    {
+      "id": "weapon.W003.ability.name",
+      "text": "Springender Klöppel"
+    },
+    {
+      "id": "weapon.W003.ability.description",
+      "text": "Nach dem Haupttreffer fliegt der Klöppel zum nächsten ungetroffenen Gegner innerhalb 140 Einheiten. Maximal zwei Folgeziele, 0,6 D und 0,36 D Schaden. Je Sprung wird das Ziel neu gewählt; während des Flugs keine Verfolgung. Keine weiteren Ziele: entfernen."
+    },
+    {
+      "id": "weapon.W003.ability.role",
+      "text": "Verteilte Gegner treffen"
+    },
+    {
+      "id": "weapon.W004.ability.name",
+      "text": "Verstimmter Mut"
+    },
+    {
+      "id": "weapon.W004.ability.description",
+      "text": "Belege jedes getroffene Ziel 2,5 s mit Schwäche: sein verursachter Schaden sinkt um 20 %. Bei Bossen 10 %."
+    },
+    {
+      "id": "weapon.W004.ability.role",
+      "text": "Gefährliche Gegner entschärfen"
+    },
+    {
+      "id": "weapon.W005.ability.name",
+      "text": "Weiches Siegel"
+    },
+    {
+      "id": "weapon.W005.ability.description",
+      "text": "Belege getroffene Ziele nach dem Hauptschaden 3 s mit Brüchig: +10 % eingehender Heldenschaden; bei Bossen +5 %. Der auslösende Treffer selbst erhält diesen Bonus noch nicht."
+    },
+    {
+      "id": "weapon.W005.ability.role",
+      "text": "Andere Waffen vorbereiten"
+    },
+    {
+      "id": "weapon.W006.ability.name",
+      "text": "Klebendes Pech"
+    },
+    {
+      "id": "weapon.W006.ability.description",
+      "text": "Am Einschlagort bleibt 3 s ein Pechkreis mit Radius 60. Darin 30 % Bewegungslangsamkeit, bei Bossen 15 %. Beim Verlassen sofort weg. Kein Flächenschaden. Bei drittem Feld das älteste dieser Waffeninstanz entfernen."
+    },
+    {
+      "id": "weapon.W006.ability.role",
+      "text": "Gegnerwege bremsen"
+    },
+    {
+      "id": "weapon.W007.ability.name",
+      "text": "Lebender Docht"
+    },
+    {
+      "id": "weapon.W007.ability.description",
+      "text": "Entzündet getroffene Ziele für 3 s. Sechs Brandticks mit je 0,15 D, erster Tick nach 0,5 s. Brand erneuert sich nach den gemeinsamen Statusregeln."
+    },
+    {
+      "id": "weapon.W007.ability.role",
+      "text": "Brand aufbauen"
+    },
+    {
+      "id": "weapon.W008.ability.name",
+      "text": "Löschschlag"
+    },
+    {
+      "id": "weapon.W008.ability.description",
+      "text": "Wenn das Ziel vor dem Haupttreffer brennt: verbleibende noch nicht ausgeführte Brandticks vor Statusänderungen erfassen. Nach Hauptschaden den Brand entfernen und 50 % dieses verbleibenden Basisschadens sofort zufügen, höchstens 1,5 D der Löschkeule. Kein Brand: kein Zusatzschaden."
+    },
+    {
+      "id": "weapon.W008.ability.role",
+      "text": "Brand in sofortigen Schaden umwandeln"
+    },
+    {
+      "id": "weapon.W009.ability.name",
+      "text": "Rückspiegel"
+    },
+    {
+      "id": "weapon.W009.ability.description",
+      "text": "Die ersten drei im aktiven Frontbogen geblockten feindlichen Projektile je Schildaktivierung werden gelöscht und durch je ein Heldenprojektil ersetzt. Rückflug exakt entgegen der eingehenden Flugrichtung; 16 × Waffenstufenfaktor × (1+Schadensbonus) Schaden, aufgerundet. Danach blockt der Schild weiter ohne Rückwurf. Keine Krits, kein Auslösen anderer Waffeneffekte."
+    },
+    {
+      "id": "weapon.W009.ability.role",
+      "text": "Projektile in Gegenangriffe verwandeln"
+    },
+    {
+      "id": "weapon.W010.ability.name",
+      "text": "Versetztes Spiegelbild"
+    },
+    {
+      "id": "weapon.W010.ability.description",
+      "text": "0,45 s nach Beginn der Hauptaktivphase trifft eine Kopie des ursprünglichen Strahl-Rechtecks einmal für 0,5 D. Startpunkt, Richtung, Breite und Reichweite aus der Aktivierung einfrieren. Die Kopie prüft zu ihrem Zeitpunkt alle lebenden Gegner im Rechteck; der Haupttreffer ist keine Voraussetzung."
+    },
+    {
+      "id": "weapon.W010.ability.role",
+      "text": "Ein Gebiet zweimal abdecken"
+    },
+    {
+      "id": "weapon.W011.ability.name",
+      "text": "Prismenbruch"
+    },
+    {
+      "id": "weapon.W011.ability.description",
+      "text": "Liegt der Lebensanteil des Ziels unmittelbar vor dem Haupttreffer bei höchstens 35 %, folgt 0,35 D Zusatzschaden. Gilt ebenso für Bosse; kein sofortiges Töten und kein Prozent-Maximallebensschaden."
+    },
+    {
+      "id": "weapon.W011.ability.role",
+      "text": "Angeschlagene Gegner beenden"
+    },
+    {
+      "id": "weapon.W012.ability.name",
+      "text": "Fünffaches Prisma"
+    },
+    {
+      "id": "weapon.W012.ability.description",
+      "text": "Jede dritte tatsächliche Aktivierung erzeugt fünf statt drei Hauptprojektile mit Winkeln −30/−15/0/15/30°. Schaden, Radius, Tempo und Reichweite unverändert. Geteilte Haupttrefferliste: pro Ziel trotzdem höchstens ein Haupttreffer je Aktivierung. Zähler startet bei 0."
+    },
+    {
+      "id": "weapon.W012.ability.role",
+      "text": "Regelmäßige breite Salve"
+    },
+    {
+      "id": "weapon.W013.ability.name",
+      "text": "Wurzelgriff"
+    },
+    {
+      "id": "weapon.W013.ability.description",
+      "text": "Dritter Treffer derselben Instanz auf dasselbe Ziel innerhalb eines erneuerten 4-s-Fensters wurzelt es 0,7 s fest, Zähler danach 0. Danach 3 s globale Wurzelimmunität dieses Ziels. Bei Immunität Zähler ebenfalls zurücksetzen. Bosse erhalten statt Wurzel 10 % Bewegungslangsamkeit für 0,7 s."
+    },
+    {
+      "id": "weapon.W013.ability.role",
+      "text": "Kurzzeitig Platz sichern"
+    },
+    {
+      "id": "weapon.W014.ability.name",
+      "text": "Bohrspitze"
+    },
+    {
+      "id": "weapon.W014.ability.description",
+      "text": "Liegt das Ziel beim Haupttreffer mindestens bei 65 % der effektiven Reichweite in Angriffsrichtung, folgt 0,4 D Zusatzschaden. Distanz als Projektion Zielzentrum auf die eingefrorene Angriffsachse messen."
+    },
+    {
+      "id": "weapon.W014.ability.role",
+      "text": "Distanzhaltung belohnen"
+    },
+    {
+      "id": "weapon.W015.ability.name",
+      "text": "Dornriss"
+    },
+    {
+      "id": "weapon.W015.ability.description",
+      "text": "Belegt jedes getroffene Ziel 3 s mit Risswunde: sechs Ticks mit je 0,12 D, erster Tick nach 0,5 s. Es handelt sich um austretende Wunschenergie, ohne Blutdarstellung."
+    },
+    {
+      "id": "weapon.W015.ability.role",
+      "text": "Schaden über Zeit"
+    },
+    {
+      "id": "weapon.W016.ability.name",
+      "text": "Harzfaden"
+    },
+    {
+      "id": "weapon.W016.ability.description",
+      "text": "Getroffene Ziele bewegen sich 3 s um 25 % langsamer, Bosse um 12,5 %. Klebrigkeit ist kein zusätzlicher Schaden und verändert keine gegnerischen Vorbereitungszeiten."
+    },
+    {
+      "id": "weapon.W016.ability.role",
+      "text": "Verlässliche mobile Verlangsamung"
+    },
+    {
+      "id": "weapon.W017.ability.name",
+      "text": "Durchschrieb"
+    },
+    {
+      "id": "weapon.W017.ability.description",
+      "text": "Das Hauptprojektil trifft bis zu drei verschiedene Ziele auf derselben geraden Flugbahn. Schaden der Haupttreffer in Reihenfolge 1 D / 0,8 D / 0,6 D. Entfernen nach drittem Treffer oder Reichweitenende. Jeder Haupttreffer kann separat kritisch sein; global pro Ziel und Aktivierung einmal."
+    },
+    {
+      "id": "weapon.W017.ability.role",
+      "text": "Gegnerreihen durchbrechen"
+    },
+    {
+      "id": "weapon.W018.ability.name",
+      "text": "Offene Zeile"
+    },
+    {
+      "id": "weapon.W018.ability.description",
+      "text": "Hat das Ziel unmittelbar vor dem Haupttreffer eine aktive Risswunde, folgt 0,3 D Zusatzschaden. Die Risswunde bleibt bestehen und wird nicht erneuert."
+    },
+    {
+      "id": "weapon.W018.ability.role",
+      "text": "Risswunden ausnutzen"
+    },
+    {
+      "id": "weapon.W019.ability.name",
+      "text": "Lesemarke"
+    },
+    {
+      "id": "weapon.W019.ability.description",
+      "text": "Setze nach dem Treffer eine 4-s-Lesemarke. Der nächste Haupttreffer einer ANDEREN Waffeninstanz desselben Helden verbraucht sie und verursacht zusätzlich 0,5 D der markierenden Falzklinge, beim Setzen gespeichert. Nur eine Lesemarke pro Ziel; erneutes Setzen ersetzt die alte. Markieren und Auslösen in derselben Trefferverarbeitung sind verboten."
+    },
+    {
+      "id": "weapon.W019.ability.role",
+      "text": "Waffen miteinander verbinden"
+    },
+    {
+      "id": "weapon.W020.ability.name",
+      "text": "Stilles Tintenbecken"
+    },
+    {
+      "id": "weapon.W020.ability.description",
+      "text": "Nach dem Einschlag bleibt ein 3-s-Tintenkreis mit Radius 60. Gegner darin verursachen 20 % weniger Schaden, Bosse 10 %. Beim Verlassen endet diese Quelle sofort. Kein zusätzlicher Bodenschaden. Maximal zwei Felder je Instanz, ältestes ersetzen."
+    },
+    {
+      "id": "weapon.W020.ability.role",
+      "text": "Eine sicherere Kampfzone schaffen"
+    },
+    {
+      "id": "weapon.W021.ability.name",
+      "text": "Zwillingsnaht"
+    },
+    {
+      "id": "weapon.W021.ability.description",
+      "text": "Verbinde das getroffene Ziel mit dem nächsten anderen lebenden Gegner innerhalb 160 Einheiten für 3 s. Pro Instanz höchstens ein Paar, ein neuer Treffer ersetzt es; ohne Partner keine neue Verbindung. Haupttrefferschaden an einem Partner überträgt 30 % des tatsächlich verlorenen Lebens auf den anderen, maximal 0,6 D des Nadelwerfers beim Verknüpfen. Höchstens eine Übertragung pro Paar je 0,5 s. Erst Haupttreffer nach dem Verknüpfen zählen. Verbindung endet bei Tod eines Partners oder Abstand über 240 Einheiten. Mehrere Verbindungen am gleichen Ziel: nur älteste gültige, auslösebereite Verbindung reagiert auf diesen Haupttreffer. Bei einem tödlichen Haupttreffer darf eine vorher bestehende Verbindung dessen Haupt-Lebensverlust noch genau einmal übertragen; erst danach wird sie entfernt."
+    },
+    {
+      "id": "weapon.W021.ability.role",
+      "text": "Einzelzieltreffer verteilen"
+    },
+    {
+      "id": "weapon.W022.ability.name",
+      "text": "Aufgetrennte Naht"
+    },
+    {
+      "id": "weapon.W022.ability.description",
+      "text": "Nur der erste Haupttreffer jeder Aktivierung belegt sein Ziel und die bis zu drei nächsten anderen Gegner innerhalb Radius 80 mit Risswunde: sechs Ticks je 0,08 D über 3 s. Keine sofortigen Zusatztreffer."
+    },
+    {
+      "id": "weapon.W022.ability.role",
+      "text": "Risswunden in Gruppen verteilen"
+    },
+    {
+      "id": "weapon.W023.ability.name",
+      "text": "Ösenzug"
+    },
+    {
+      "id": "weapon.W023.ability.description",
+      "text": "Ziehe normale getroffene Gegner über 0,2 s um bis zu 40 Einheiten in Richtung Knorz-Position beim Treffer. Stoppe spätestens an der Summe beider Körperradien plus 8 Einheiten Abstand. Bosse immun; Angriffe werden nicht abgebrochen."
+    },
+    {
+      "id": "weapon.W023.ability.role",
+      "text": "Gegner für Flächentreffer sammeln"
+    },
+    {
+      "id": "weapon.W024.ability.name",
+      "text": "Schutznaht"
+    },
+    {
+      "id": "weapon.W024.ability.description",
+      "text": "Das aktive Strahlrechteck zerstört zusätzlich die ersten zwei feindlichen Projektile, deren Mittelpunkt es berührt. Kein Rückwurf. Trefferreihenfolge nach Kontaktzeit, dann Projektil-ID. Die Grenze gilt über die gesamte Aktivphase."
+    },
+    {
+      "id": "weapon.W024.ability.role",
+      "text": "Eine kurze Projektilbarriere bilden"
+    },
+    {
+      "id": "weapon.W025.ability.name",
+      "text": "Spröder Klang"
+    },
+    {
+      "id": "weapon.W025.ability.description",
+      "text": "Belege getroffene Gegner nach Hauptschaden 2 s mit Brüchig: +20 % eingehender Heldenschaden, bei Bossen +10 %. Überschneidung mit anderen Brüchig-Quellen folgt der stärksten Quelle."
+    },
+    {
+      "id": "weapon.W025.ability.role",
+      "text": "Kurze Schadensfenster öffnen"
+    },
+    {
+      "id": "weapon.W026.ability.name",
+      "text": "Scherbensaat"
+    },
+    {
+      "id": "weapon.W026.ability.description",
+      "text": "Jedes Hauptprojektil hinterlässt beim Treffer oder Reichweitenende eine Scherbe am Endpunkt. Nach 0,25 s scharf; explodiert beim ersten lebenden Gegnerzentrum innerhalb Radius 45 oder nach insgesamt 3 s, jeweils einmal für 0,35 D. Auch bei drei Scherben pro Salve erhält jedes Ziel insgesamt höchstens einen Scherben-Zusatztreffer dieser Aktivierung. Maximal neun Scherben je Instanz; älteste bei Überschreitung schadlos entfernen."
+    },
+    {
+      "id": "weapon.W026.ability.role",
+      "text": "Zurückbleibende Flächenkontrolle"
+    },
+    {
+      "id": "weapon.W027.ability.name",
+      "text": "Nachbebende Kachel"
+    },
+    {
+      "id": "weapon.W027.ability.description",
+      "text": "0,35 s nach dem Hauptschlag trifft ein Ring um dessen eingefrorenes Einschlagzentrum. Zielzentrum muss weiter als 65 und höchstens 130 Einheiten entfernt sein. Einmal 0,4 D pro Ziel. Auch zuvor getroffene Ziele können bei Bewegung in den Ring getroffen werden."
+    },
+    {
+      "id": "weapon.W027.ability.role",
+      "text": "Nahen und äußeren Bereich zeitversetzt treffen"
+    },
+    {
+      "id": "weapon.W028.ability.name",
+      "text": "Kachelwache"
+    },
+    {
+      "id": "weapon.W028.ability.description",
+      "text": "Die umlaufende Kachel zerstört die ersten drei feindlichen Projektile, deren Mittelpunkt den bewegten Kachelkreis Radius 14 berührt. Der gesamte Umlaufkreis ist keine Barriere. Hauptschaden gegen Gegner bleibt unverändert."
+    },
+    {
+      "id": "weapon.W028.ability.role",
+      "text": "Beweglichen Projektilschutz bieten"
+    },
+    {
+      "id": "weapon.W029.ability.name",
+      "text": "Schwere Sekunde"
+    },
+    {
+      "id": "weapon.W029.ability.description",
+      "text": "Jede dritte Aktivierung verstärkt alle Haupttreffer auf 1,5 D und wurzelt normale getroffene Gegner 0,35 s. Globale Wurzelimmunität von 3 s danach beachten. Bosse erhalten stattdessen 10 % Verlangsamung für 0,35 s. Schaden gilt auch bei Wurzelimmunität. Zähler beginnt bei 0."
+    },
+    {
+      "id": "weapon.W029.ability.role",
+      "text": "Rhythmischer schwerer Treffer"
+    },
+    {
+      "id": "weapon.W030.ability.name",
+      "text": "Sandlast"
+    },
+    {
+      "id": "weapon.W030.ability.description",
+      "text": "Jeder Haupttreffer fügt pro Ziel global einen Sandlast-Stapel hinzu, maximal fünf. Jeder Stapel senkt Bewegung um 5 %, bei Bossen 2,5 %. Jeder neue Treffer erneuert die gemeinsame Dauer auf 3 s, dann verfallen alle Stapel zusammen. Mehrere Sandspucker teilen diesen Stapelbestand."
+    },
+    {
+      "id": "weapon.W030.ability.role",
+      "text": "Dauerbeschuss zur Verlangsamung nutzen"
+    },
+    {
+      "id": "weapon.W031.ability.name",
+      "text": "Unruh-Takt"
+    },
+    {
+      "id": "weapon.W031.ability.description",
+      "text": "Nach vollständig beendetem Umlauf erhält Knorz für 2 s +15 Prozentpunkte Angriffstempo. Auslöser hat pro Waffeninstanz 4 s Abklingzeit. Mehrere Unruhscheiben stapeln den Bonus nicht; längste verbleibende Dauer gilt. Kein rückwirkendes Kürzen laufender Cooldowns; neue Aktivierungen berechnen ihren Abstand mit aktuellem Bonus. Spiegelschild behält seinen festen Cooldown."
+    },
+    {
+      "id": "weapon.W031.ability.role",
+      "text": "Das gesamte Waffenarsenal kurz beschleunigen"
+    },
+    {
+      "id": "weapon.W032.ability.name",
+      "text": "Fällige Sekunde"
+    },
+    {
+      "id": "weapon.W032.ability.description",
+      "text": "Setze eine 2-s-Zeitmarke. Nach Ablauf erleidet das noch lebende Ziel einmal 0,75 D, beim Setzen gespeichert. Solange diese Instanz dort eine Marke hat, weitere Treffer ohne Erneuerung ignorieren. Tod entfernt die Marke ohne Flächeneffekt. Andere Instanzen dürfen eigene Marken setzen."
+    },
+    {
+      "id": "weapon.W032.ability.role",
+      "text": "Verzögerten Einzelzielschaden aufbauen"
+    },
+    {
+      "id": "weapon.W033.ability.name",
+      "text": "Ofenglut"
+    },
+    {
+      "id": "weapon.W033.ability.description",
+      "text": "Entzündet getroffene Gegner 2 s: vier Brandticks zu je 0,2 D, erster Tick nach 0,5 s. Derselbe Brandstatus wie Dochtlanze; Quellen nicht addieren."
+    },
+    {
+      "id": "weapon.W033.ability.role",
+      "text": "Kurzen kräftigen Brand zufügen"
+    },
+    {
+      "id": "weapon.W034.ability.name",
+      "text": "Heißer Griff"
+    },
+    {
+      "id": "weapon.W034.ability.description",
+      "text": "Brennt das Ziel unmittelbar vor dem Haupttreffer, folgt 0,5 D Zusatzschaden. Der Brand wird weder verbraucht noch erneuert."
+    },
+    {
+      "id": "weapon.W034.ability.role",
+      "text": "Brand dauerhaft ausnutzen"
+    },
+    {
+      "id": "weapon.W035.ability.name",
+      "text": "Funkenwanderung"
+    },
+    {
+      "id": "weapon.W035.ability.description",
+      "text": "Pro Aktivierung beim ersten Haupttreffer auf ein bereits brennendes Ziel: Entzünde bis zu drei nächste andere Gegner innerhalb 120 Einheiten für 2 s mit vier Ticks je 0,1 D des Aschestreuers. Die Quelle selbst erhält keinen neuen Brand. Gibt es kein brennendes Hauptziel, keine Ausbreitung."
+    },
+    {
+      "id": "weapon.W035.ability.role",
+      "text": "Brand auf Gruppen verteilen"
+    },
+    {
+      "id": "weapon.W036.ability.name",
+      "text": "Druckkessel"
+    },
+    {
+      "id": "weapon.W036.ability.description",
+      "text": "Beim Hauptprojektiltreffer entsteht eine Explosion Radius 70 um den Treffpunkt. Alle anderen Gegnerzentren darin erleiden einmal 0,5 D. Das Hauptziel ist von dieser Explosion ausgeschlossen. Bei Reichweitenende ohne Treffer keine Explosion."
+    },
+    {
+      "id": "weapon.W036.ability.role",
+      "text": "Starken Einzelschuss um Gruppenschaden ergänzen"
+    },
+    {
+      "id": "weapon.W037.ability.name",
+      "text": "Überladener Wunsch"
+    },
+    {
+      "id": "weapon.W037.ability.description",
+      "text": "Jede vierte Aktivierung verursacht 1,5 D Hauptschaden und belegt getroffene Gegner danach 3 s mit +10 % eingehendem Heldenschaden, Bosse +5 %. Andere Aktivierungen unverändert. Zähler beginnt bei 0."
+    },
+    {
+      "id": "weapon.W037.ability.role",
+      "text": "Planbarer großer Vorbereitungsschlag"
+    },
+    {
+      "id": "weapon.W038.ability.name",
+      "text": "Rückgewonnenes Wachs"
+    },
+    {
+      "id": "weapon.W038.ability.description",
+      "text": "Heile Knorz um aufgerundete 6 % des durch diesen Haupttreffer tatsächlich verlorenen Ziel-Lebens, höchstens insgesamt 2 Leben je Aktivierung. Über Heilung am Lebensmaximum hinaus nichts speichern. Sekundärschaden, Status-Ticks, Schild und Übertrefferschaden heilen nicht."
+    },
+    {
+      "id": "weapon.W038.ability.role",
+      "text": "Selbsterhaltung im Nahkampf"
+    },
+    {
+      "id": "weapon.W039.ability.name",
+      "text": "Riss im Wunsch"
+    },
+    {
+      "id": "weapon.W039.ability.description",
+      "text": "Nach dem Haupttreffer folgt Zusatzschaden gleich min(2 % des Ziel-Maximallebens, 0,5 D), aufgerundet. Gilt mit identischem Deckel für Bosse. Keine Rüstungsdurchdringung und kein Soforttod."
+    },
+    {
+      "id": "weapon.W039.ability.role",
+      "text": "Zusatzschaden gegen große Ziele begrenzen und nutzen"
+    },
+    {
+      "id": "weapon.W040.ability.name",
+      "text": "Zurückgerufener Wunsch"
+    },
+    {
+      "id": "weapon.W040.ability.description",
+      "text": "0,6 s nach Beginn der Hauptaktivphase entsteht am eingefrorenen Abschusspunkt eine zweite Drei-Projektil-Salve mit ursprünglicher Richtung und Reichweite, je 0,4 D. Radius 7, Tempo 380, kein Durchschlag. Geteilte Echo-Trefferliste: jedes Ziel höchstens einmal pro Echo-Salve; darf zuvor von Hauptsalve getroffen worden sein."
+    },
+    {
+      "id": "weapon.W040.ability.role",
+      "text": "Zwei zeitversetzte Salven"
+    }
+  ]
+}

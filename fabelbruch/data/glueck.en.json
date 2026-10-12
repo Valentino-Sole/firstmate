@@ -1,0 +1,20 @@
+{
+  "version": "0.4.1",
+  "language": "en-US",
+  "_hinweis": "Englische Uebersetzung von glueck.de.json. Von Claude uebersetzt am 2026-10-12; zur Freigabe.",
+  "strings": [
+    { "id": "stat.luck.name", "text": "Luck" },
+    { "id": "stat.luck.value", "text": "{value} / 100" },
+    { "id": "stat.luck.tooltip", "text": "Improves the chance of higher already-unlocked weapon tiers and rare relics in new shop offers. Affects neither critical hits nor loot nor level-up cards." },
+    { "id": "upgrade.U013.name", "text": "Favorable Chance" },
+    { "id": "upgrade.U013.effect", "text": "+5 Luck" },
+    { "id": "relic.R025.name", "text": "Crooked Wish Button" },
+    { "id": "relic.R025.effect", "text": "+8 Luck" },
+    { "id": "relic.R026.name", "text": "Seal of Chance" },
+    { "id": "relic.R026.effect", "text": "+13 Luck" },
+    { "id": "stat.luck.preview", "text": "Luck: {before} → {after}" },
+    { "id": "stat.luck.cap", "text": "Cap: 100 Luck. Excess points have no effect." },
+    { "id": "shop.luck.snapshot", "text": "Takes effect from the next reroll or shop visit." },
+    { "id": "relic.R001.clarification", "text": "+3 percentage points critical hit chance. Not a Luck bonus." }
+  ]
+}

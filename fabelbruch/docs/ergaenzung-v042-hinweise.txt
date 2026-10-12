@@ -1,0 +1,59 @@
+FABELBRUCH v0.4.2 – 40 Waffen mit individuellen Effekten
+
+DIESE NEUE ZIP IST EINE ERGÄNZUNG. ALLE BISHERIGEN ZIPs BLEIBEN UNVERÄNDERT.
+Benötigt Hauptpaket v0.4 (elf Teile). Glück-Ergänzung v0.4.1 ist kompatibel und
+bleibt für Glück/Laden/Relikte maßgeblich. Keine großen Bilddateien doppelt.
+
+AUFTRAG AN CLAUDE / VERBINDLICHER VORRANG
+1. Hauptpaket lesen, ggf. Glück-Ergänzung lesen, zuletzt diese Ergänzung.
+2. waffen/waffen.json dieser ZIP ersetzt vollständig die Waffenfachdatei des
+   Hauptpakets. Genau 40 Waffen mit denselben IDs. Nicht zu 80 addieren.
+   Die duplizierte Waffenliste in design.json des Hauptpakets ist überholt;
+   aus der neuen Fachdatei synchronisieren, nicht alte Werte zurückkopieren.
+3. effekte/gemeinsame-regeln.json zuerst implementieren, dann Statusregister
+   und 40 Effektdatensätze. Die ability_id jeder Waffe verweist auf E001–E040.
+   secondary_status ist jetzt eine Liste referenzierter Status-IDs, kein
+   pauschaler On-Hit-Auftrag. Nur die einzelnen Effekt-Auslöser anwenden.
+4. Die bisherige Aussage „keine Brand-/Gift-/Ketteneffekte“ aus v0.4.1 gilt
+   für diese Waffen nicht mehr. Nun gelten exakt die hier definierten Effekte.
+   Gift ist weiterhin nicht vorgesehen; Brand, Risswunde und weitere Effekte
+   sind definiert. Keine zusätzlichen Fähigkeiten frei erfinden.
+5. Neue UI-Texte aus texte/waffeneffekte.de.json übernehmen; alter Titel und
+   Grundwerte bleiben. Fähigkeitstitel, Rolle, genaue Wirkung im Waffentooltip
+   zeigen. Vorschau rechnet mit aktueller Stufe/Schaden; Schwellwerte klar zeigen.
+6. SVGs in effekte/diagramme sind technische Storyboards und VFX-Vorgaben.
+   Vorhandene 40 Waffendesigns bleiben gültig. Dies sind keine fertigen
+   animierten VFX-Sprites. Procedurale Effekte sind anhand der Geometrie möglich;
+   Fertigstellung von Effektmedien nicht mit fertigen Bilddateien verwechseln.
+7. Kombinationen ergeben sich aus den Einzelregeln, ohne versteckte Setboni.
+   Die Begrenzung sekundärer Auslöser verhindert Endlosschleifen.
+8. pruefbericht.json enthält Datenprüfungen und Abnahmefälle. Es wurde kein
+   Spiel programmiert und keine Spielbalance behauptet. Erst die Engine-
+   Implementierung kann Timing, Kollisionsqualität und Balance bestätigen.
+
+WICHTIGE ÄNDERUNGEN
+Grundschaden, Preise, Basisabstände, Figuren und Waffenbilder sind unverändert.
+Effekte können Hauptangriffe gezielt modifizieren: W012 dritte Salve fünf
+Projektile, W017 Durchschlag, W029/W037 rhythmisch verstärkter Hauptschaden.
+Status-/Zusatzschaden skaliert mit Waffenstufe und Schaden; Glück erhöht ihn nicht.
+Boss-Sonderregeln, Pause, Speicherzustand, Fusion, Verkauf und Wellenende sind
+ausdrücklich geregelt. Bestehende Treffergrenze gilt weiterhin für Haupttreffer;
+neue Sekundärereignisse haben ausdrücklich eigene begrenzte Trefferlisten.
+
+DATEIEN
+index.html                         Alle 40 Effekte mit Diagrammen und Regeln
+WAFFENEFFEKTE_40.txt               Vollständige lesbare Einzelbeschreibungen
+GEMEINSAME_REGELN.txt              Lesbare globale Kampf-/Statusregeln
+waffen/waffen.json                 Vollständiger neuer Waffenfachdatensatz
+effekte/waffeneffekte.json          40 eindeutige Fähigkeiten
+effekte/statusregister.json        Dauer, Stapelung, Immunitäten
+effekte/gemeinsame-regeln.json      Timing, Schaden, Instanzen, Bosse, Lifecycle
+effekte/kombinationen.json         Acht konkrete Synergiebeispiele
+texte/waffeneffekte.de.json         Fähigkeitstexte mit festen IDs
+effekte/diagramme/W001.svg … W040.svg  40 technische VFX-Storyboards
+pruefbericht.json                  Tatsächlich geprüfte Daten + Engine-Abnahme
+dateimanifest.json                 SHA-256 nur für diese Ergänzung
+
+Bildpfade waffen/WFxx.png in der neuen Waffenfachdatei verweisen auf das
+Hauptpaket. Effektpfade verweisen auf diese Ergänzung. Beim Import gemeinsam
+unter derselben logischen Assetwurzel auflösen. Die ZIPs selbst nicht ändern.
