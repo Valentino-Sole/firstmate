@@ -4,6 +4,7 @@
 
 import { onUiAction, setUiActiveCheck, input } from '../input.js';
 import { sfx } from '../audio.js';
+import { assetUrl } from '../assetpack.js';
 
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -12,6 +13,7 @@ export function el(tag, attrs = {}, ...children) {
     else if (k === 'text') node.textContent = v;
     else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else if (k === 'src') node.setAttribute(k, assetUrl(v));
     else if (v !== null && v !== undefined) node.setAttribute(k, v);
   }
   for (const c of children) {

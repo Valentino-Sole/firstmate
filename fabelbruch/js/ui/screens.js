@@ -13,6 +13,7 @@ import { D } from '../data.js';
 import { save, listProfiles, createProfile, openProfile, deleteProfile, persist, saveOptions } from '../save.js';
 import { App } from '../app.js';
 import { sfx } from '../audio.js';
+import { assetUrl } from '../assetpack.js';
 
 // ---------- Gemeinsame Bausteine ----------
 
@@ -197,7 +198,7 @@ export function mainMenu() {
       panel.append(el('div', { class: 'hint', text: t('ui.no_save') }));
     }
     root.append(el('div', { class: 'screen menu-screen' },
-      el('div', { class: 'menu-bg', style: "background-image:url('assets/ui/startbildschirm.webp')" }),
+      el('div', { class: 'menu-bg', style: `background-image:url('${assetUrl('assets/ui/startbildschirm.webp')}')` }),
       el('div', { class: 'menu-title' },
         el('h1', { text: t('ui.title') }),
         el('div', { class: 'sub', text: t('ui.subtitle') }),

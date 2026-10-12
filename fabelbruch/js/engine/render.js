@@ -9,6 +9,7 @@
 import { D } from '../data.js';
 import { telegraphShape, activeShape } from './attacks.js';
 import { zoneHits } from './hazards.js';
+import { assetUrl } from '../assetpack.js';
 
 const COLORS = {
   hostile: '#E87768',
@@ -22,7 +23,7 @@ function img(path) {
   let entry = imageCache.get(path);
   if (!entry) {
     entry = new Image();
-    entry.src = path;
+    entry.src = assetUrl(path);
     imageCache.set(path, entry);
   }
   return entry;

@@ -259,6 +259,10 @@ async function boot() {
   let progress = () => {};
   showScreen('UI25', (root) => { progress = loadingScreen(root); }, {}, { clearStack: true });
 
+  // Gebündelte Auslieferung (packs/) zuerst auflösen; ohne Pakete ein No-Op.
+  const { initAssetPack } = await import('./assetpack.js');
+  await initAssetPack();
+
   i18nRef = await import('./i18n.js');
   await loadTexts();
   // Textfortschritt ist echt: 6 Fachdateien + Texte.
