@@ -2,7 +2,8 @@
 """Baut eine buendelbare Auslieferung des Spiels fuer Hosting mit
 Dateianzahl-Grenzen (z. B. claude.ai-Artefakte): Code, Daten und Symbole
 werden kopiert, alle uebrigen zur Laufzeit genutzten Bilder in wenige
-Paketdateien (packs/pack<N>.bin) mit manifest.json gebuendelt.
+Paketdateien (packs/pack<N>.wasm, eigenes Rohformat) mit manifest.json
+gebuendelt.
 js/assetpack.js loest die Pfade im Browser wieder auf; ohne packs/-Ordner
 laeuft das Spiel unveraendert von den Einzeldateien.
 
@@ -47,7 +48,9 @@ def flush():
     global buf
     if not buf:
         return
-    name = f"pack{len(packs)}.bin"
+    # .wasm: von Artefakt-Hostern als Binaertyp ausgeliefert und nie
+    # bildseitig umkodiert; der Inhalt ist unser eigenes Paketformat.
+    name = f"pack{len(packs)}.wasm"
     with open(os.path.join(OUT, "packs", name), "wb") as fh:
         fh.write(buf)
     packs.append(name)
@@ -81,6 +84,25 @@ marker = '<meta name="fabelbruch-packs" content="1">\n'
 needle = "<title>"
 assert needle in html and "fabelbruch-packs" not in html
 open(index_path, "w").write(html.replace(needle, marker + needle, 1))
+
+# Zusaetzlich eine Seitenvariante ohne eigenes Dokumentgeruest fuer Hoster,
+# die die Seite selbst in ein Geruest einbetten (z. B. claude.ai-Artefakte).
+ARTIFACT_PAGE = """<title>Fabelbruch</title>
+<meta name="fabelbruch-packs" content="1">
+<link rel="stylesheet" href="css/ui.css">
+<style>#app { width: 100%; height: 100%; }</style>
+<div id="app">
+  <div id="stage">
+    <canvas id="game-canvas" width="1600" height="900"></canvas>
+    <div id="hud" class="hidden"></div>
+    <div id="screen-root"></div>
+    <div id="toast-root"></div>
+  </div>
+</div>
+<noscript>Fabelbruch benötigt JavaScript. / Fabelbruch requires JavaScript.</noscript>
+<script type="module" src="js/main.js"></script>
+"""
+open(os.path.join(OUT, "artifact.html"), "w").write(ARTIFACT_PAGE)
 
 total = sum(
     os.path.getsize(os.path.join(dp, f))
