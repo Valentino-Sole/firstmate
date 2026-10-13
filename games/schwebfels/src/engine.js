@@ -112,7 +112,12 @@
     GUILD_COST: 500,
     CHAIN_BREATHER: 0.12,
   };
-  E.xpNeed = (L) => Math.round(80 * Math.pow(L, 1.75) + 40);
+  /* Belohnungsbasis und Stufenbedarf (0.79): Bis Stufe 50 sind beide dieselbe Kurve, dann trennen sie sich.
+     Belohnungen (Auftraege, Nachtjagd, Arena, Chronik, Turm, Pruefungen, Bosse) skalieren weiter mit der alten
+     Kurve, der Bedarf je Stufe steigt darueber zusaetzlich linear an. Vorher wuchsen Belohnung und Bedarf im
+     Gleichschritt, jede Stufe dauerte gleich lang und der Kapitaen sprang in zwei, drei Tagen von 69 auf 74. */
+  E.xpReward = (L) => Math.round(80 * Math.pow(L, 1.75) + 40);
+  E.xpNeed = (L) => Math.round(E.xpReward(L) * (L > 50 ? 1 + 0.3 * (L - 50) : 1));
   E.goldBase = (L) => Math.round(6 + 3.2 * Math.pow(L, 1.42));
   E.questXpFrac = (L) => Math.max(0.07, 0.3 - 0.0075 * (L - 1));
   E.attrCost = (b) => Math.round(3 + 0.45 * Math.pow(b, 1.62) + b * 1.5);
@@ -1254,7 +1259,7 @@
       id: U.uid(), tpl: tpl.t, title: fill(tpl.t), text: U.cap(fill(tpl.x)), place, tier: tier.id,
       sec: U.ri(r, tier.sec[0], tier.sec[1]) + 20, energy, diff, rare: false, boss: D0.id, monster: boss.id, mlevel,
       waves: [{ monster: boss.id, mlevel, power: DIFF[diff].power, boss: true }],
-      xp: Math.max(5, Math.round(E.xpNeed(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
+      xp: Math.max(5, Math.round(E.xpReward(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
       gold: Math.max(3, Math.round(E.goldBase(L) * ef * dm * U.rf(r, 0.85, 1.15) * bonus * (1 + E.goldBonus(S)))),
       item: E.makeItem(r, Object.assign({ level: L + 1, cls: S.cls, slot: U.pick(r, D.SLOTS) }, E.bossLoot(L, false, 0.25 * diff + 1.2, E.lootBoost(S)))),
       perle: r() < 0.35 + 0.05 * diff ? 1 : 0,
@@ -1304,7 +1309,7 @@
     const offer = {
       id: U.uid(), tpl: tpl.t, title: fill(tpl.t), text: U.cap(fill(tpl.x)), place, tier: tier.id,
       sec: U.ri(r, tier.sec[0], tier.sec[1]) + (rare ? 20 : 0), energy, diff, rare, monster: mon.id, mlevel, waves,
-      xp: Math.max(5, Math.round(E.xpNeed(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
+      xp: Math.max(5, Math.round(E.xpReward(L) * E.questXpFrac(L) * ef * dm * U.rf(r, 0.9, 1.1) * bonus * (1 + E.xpBonus(S)))),
       gold: Math.max(3, Math.round(E.goldBase(L) * ef * dm * U.rf(r, 0.85, 1.15) * bonus * (1 + E.goldBonus(S)))),
       item: null,
       perle: r() < 0.05 + 0.02 * diff + (rare ? 0.2 : 0) ? 1 : 0,
@@ -1515,7 +1520,7 @@
     }
     S.story.done[ch.key] = now;
     const final = ch.foes.some((f) => f.final);
-    rew.xp = Math.round(E.xpNeed(S.level) * (ch.kind === "realm" ? 0.45 : 0.35));
+    rew.xp = Math.round(E.xpReward(S.level) * (ch.kind === "realm" ? 0.45 : 0.35));
     rew.gold = Math.round(E.goldBase(S.level) * (final ? 10 : 5));
     rew.perlen = final ? 4 : 2;
     S.perlen += rew.perlen;
@@ -1573,7 +1578,7 @@
     if (won) {
       const ev = E.moonEvent();
       const blut = ev && ev.id === "blutmond";
-      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 1.6 * (blut ? 1.5 : 1) * (1 + E.xpBonus(S)));
+      rew.xp = Math.round(E.xpReward(L) * E.questXpFrac(L) * 1.6 * (blut ? 1.5 : 1) * (1 + E.xpBonus(S)));
       rew.gold = Math.round(E.goldBase(L) * 1.8 * (blut ? 2 : 1) * (1 + E.goldBonus(S)));
       E.gainGold(S, rew.gold);
       const r = U.rng(U.hash(S.name + "mondbeute" + S.daily.day + fight.n));
@@ -1588,7 +1593,7 @@
       E.dailyProgress(S, "nacht");
       E.tryCapture(S, fight.foes, "nacht", S.daily.day + ":" + fight.n);
     } else {
-      rew.xp = Math.round(E.xpNeed(L) * E.questXpFrac(L) * 0.3);
+      rew.xp = Math.round(E.xpReward(L) * E.questXpFrac(L) * 0.3);
       S.stats.losses++;
     }
     E.gainXp(S, rew.xp);
@@ -1953,7 +1958,7 @@
       E.gainGold(S, rew.gold);
       if (S.daily.arenaXp < 10) {
         S.daily.arenaXp++;
-        rew.xp = Math.round(E.xpNeed(S.level) * 0.035);
+        rew.xp = Math.round(E.xpReward(S.level) * 0.035);
         E.gainXp(S, rew.xp);
       }
       S.arena.wins++;
@@ -2014,7 +2019,7 @@
     if (won) {
       const D0 = D.DUNGEONS[fight.dungeon];
       S.dungeons.progress[D0.id] = (S.dungeons.progress[D0.id] || 0) + 1;
-      rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
+      rew.xp = Math.round(E.xpReward(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * (b.final ? 8 : 3));
       const r = U.rng(U.hash(b.mon.id + now));
       giveItem(S, E.makeItem(r, Object.assign({ level: b.L, cls: S.cls }, E.bossLoot(b.L, b.final, b.final ? 2 : 0.6, E.lootBoost(S)))), rew);
@@ -2099,7 +2104,7 @@
       if (x.got < t.need) continue;
       x.done = true;
       const gold = Math.round(E.goldBase(S.level) * 2 * (1 + E.goldBonus(S)));
-      const xp = Math.round(E.xpNeed(S.level) * 0.05 * (1 + E.xpBonus(S)));
+      const xp = Math.round(E.xpReward(S.level) * 0.05 * (1 + E.xpBonus(S)));
       E.gainGold(S, gold);
       E.gainXp(S, xp);
       toast("Tagesprüfung bestanden: " + t.text + " (+" + U.fmt(gold) + " Gold)", "good");
@@ -2154,7 +2159,7 @@
     const rew = { won, xp: 0, gold: 0, item: null, perlen: 0, itemSold: 0 };
     if (won) {
       S.wboss.won = true;
-      rew.xp = Math.round(E.xpNeed(Math.min(S.level, b.L)) * 0.5 * E.bestiaryBonus(S));
+      rew.xp = Math.round(E.xpReward(Math.min(S.level, b.L)) * 0.5 * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * 12 * (1 + E.goldBonus(S)));
       const r = U.rng(U.hash(S.name + "wbossbeute" + b.week));
       giveItem(S, E.makeItem(r, { level: b.L + 1, cls: S.cls, minRarity: "legendaer", boost: 1 + E.lootBoost(S) }), rew);
@@ -2226,7 +2231,7 @@
     const rew = { won, floor, xp: 0, gold: 0, item: null, perlen: 0, itemSold: 0 };
     if (won) {
       rew.gold = Math.round(E.goldBase(S.level) * (0.8 + floor * 0.12) * (1 + E.goldBonus(S)));
-      rew.xp = Math.round(E.xpNeed(S.level) * (0.02 + floor * 0.004) * (1 + E.xpBonus(S)));
+      rew.xp = Math.round(E.xpReward(S.level) * (0.02 + floor * 0.004) * (1 + E.xpBonus(S)));
       E.gainGold(S, rew.gold);
       E.gainXp(S, rew.xp);
       if (floor % 5 === 0) {
@@ -2575,7 +2580,7 @@
         E.setEnergy(S, E.energy(S, now) + 30, now);
         break;
       case "xp":
-        out.xp = Math.round(E.xpNeed(S.level) * 0.1);
+        out.xp = Math.round(E.xpReward(S.level) * 0.1);
         E.gainXp(S, out.xp);
         break;
       case "item": {
