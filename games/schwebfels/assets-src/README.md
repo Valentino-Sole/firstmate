@@ -284,7 +284,12 @@ Wichtige Regeln der Strecke:
   Blutkultisten, zusammen mit `--arme-loesen`): Armgewicht weiten Stoffs (gehaltener Umhang, weite Ärmel) geht je nach
   Abstand vom Arm an Hüfte, Bauch, Brust oder Oberschenkel, bis 12 cm bleibt es am Arm, ab 24 cm ganz am Körper,
   dazwischen anteilig (bei 1,8 m Höhe; `STOFF_R0`, `STOFF_R1` zum Ausprobieren). Geprüft mit Bildfolgen der Bewegungen
-  im Kampf; vorher stand beim Blutkultisten eine Umhanghälfte als Flügel ab.
+  im Kampf; vorher stand beim Blutkultisten eine Umhanghälfte als Flügel ab. `--stoff-vom-bein` (0.79, für den
+  Nebeldruiden) ist dieselbe Staffel für Beingewicht weiten Stoffs (bodenlanger Mantel, Robe): es geht je nach Abstand
+  von Oberschenkel, Schienbein und Fuß an Hüfte, Bauch oder Brust; vorher hing fast ein Drittel des Mantels am linken
+  Oberschenkel, bei der Niederlage schwebte die Figur und der Saum segelte bei jedem Schritt. Grenze beider Staffeln:
+  ist ein gehaltener Stab mit dem Umhang zu einem Netz verschweißt und auf Arm und Rumpf gemischt gewichtet, bleibt
+  beim Geraderichten der Arme ein aufgespannter Stoffkeil zurück; das behebt nur ein neues Rigging.
 - Waffen und Schilde: `python weapon.py <aus>/waffen/axt_bart.npz axt.glb --base axt` legt den Griffpunkt in den
   Ursprung, Klinge oder Schaft entlang +Y und Schneide oder Axtblatt entlang X, wie bei den gebauten Waffen. Das
   Griffende erkennt es an der breitesten Stelle (Parierstange nahe am Griff, Axt- oder Hammerkopf weit davon); sitzt

@@ -644,6 +644,38 @@ def free_cloth(pos, Wd, TP, tmap, height):
     return int(changed.sum())
 
 
+def free_cloth_legs(pos, Wd, TP, tmap, height):
+    """Weiter Stoff am Bein (bodenlanger Mantel, Robe): Beingewicht einer Ecke geht an den naechsten Rumpfabschnitt,
+    je weiter sie vom Bein entfernt ist (gemessen an Oberschenkel, Schienbein und Fuss in der Ruhelage; gleiche
+    Staffel wie beim Arm, STOFF_R0 und STOFF_R1 zum Ausprobieren). Sonst segelt beim Nebeldruiden der Mantelsaum
+    bei jedem Beinschwung mit und die Figur wirkt schwebend. Gibt die Zahl der geaenderten Ecken zurueck."""
+    def segd(a, b):
+        d = b - a
+        t = np.clip(((pos - a) @ d) / max(float(d @ d), 1e-9), 0, 1)
+        return np.linalg.norm(pos - (a + t[:, None] * d), axis=1)
+    k = height / 1.8
+    R0, R1 = float(os.environ.get("STOFF_R0", 0.12)), float(os.environ.get("STOFF_R1", 0.24))
+    # Ziel ist nur der Rumpf (Huefte, Bauch, Brust): die Oberschenkel sind hier selbst Quelle
+    body = [(tmap["hips"], segd(TP[tmap["hips"]], TP[tmap["spine"]])), (tmap["spine"], segd(TP[tmap["spine"]], TP[tmap["chest"]])), (tmap["chest"], segd(TP[tmap["chest"]], TP[tmap["neck"]]))]
+    D = np.stack([d for _, d in body], 1)
+    near = np.array([bn for bn, _ in body])[np.argmin(D, 1)]
+    changed = np.zeros(len(pos), bool)
+    for s_ in SIDES:
+        th, sh, ft = tmap["thigh." + s_], tmap["shin." + s_], tmap["foot." + s_]
+        cols = sorted({th, sh, ft, tmap["toe." + s_]})
+        tip = TP[ft] + (TP[ft] - TP[sh]) * 0.4
+        d = np.minimum.reduce([segd(TP[th], TP[sh]), segd(TP[sh], TP[ft]), segd(TP[ft], tip)])
+        f = np.clip((d - R0 * k) / ((R1 - R0) * k), 0, 1)
+        m = (f > 0) & (Wd[:, cols].sum(1) > 0)
+        if m.any():
+            idx = np.where(m)[0]
+            mv = Wd[np.ix_(idx, cols)] * f[idx, None]
+            Wd[np.ix_(idx, cols)] -= mv
+            np.add.at(Wd, (idx, near[idx]), mv.sum(1))
+            changed[idx] = True
+    return int(changed.sum())
+
+
 def free_shoulders(pos, Wd, TP, tmap, height):
     """Armgewicht oberhalb der Schulter (Pilzhut, Laternen und Schornsteine auf dem Ruecken) geht an die Brust; sonst
     reisst ein gehobener Arm den Aufbau mit hoch. Uebergang weich ueber 10 cm (bei 1,8 m Hoehe), damit nichts aufreisst.
@@ -800,6 +832,7 @@ def main():
     ap.add_argument("--schultern-loesen", action="store_true", help="Armgewicht oberhalb der Schulter an die Brust (Huete, Aufbauten auf dem Ruecken)")
     ap.add_argument("--stoff-vom-arm", action="store_true", help="weiten Stoff am Arm (gehaltener Umhang, weite Aermel) je nach Abstand vom Arm an den Koerper (Blutkultist)")
     ap.add_argument("--arme-loesen", action="store_true", help="Stoff, den Meshy an Arm oder Hand gehaengt hat (Schaerpenenden neben der Hand), vom Arm loesen; fuer Heldenkoerper")
+    ap.add_argument("--stoff-vom-bein", action="store_true", help="weiten Stoff am Bein (bodenlanger Mantel, Robe) je nach Abstand vom Bein an den Rumpf (Nebeldruide)")
     ap.add_argument("--pack", default=PACK)
     a = ap.parse_args()
     log = {"quelle": os.path.basename(a.figure), "warnungen": []}
@@ -915,6 +948,10 @@ def main():
         n = free_cloth(pos, Wd, TP, tmap, height)
         print("Stoff vom Arm an den Koerper:", n, "Ecken")
         log["stoff_vom_arm"] = n
+    if a.stoff_vom_bein:
+        n = free_cloth_legs(pos, Wd, TP, tmap, height)
+        print("Stoff vom Bein an den Rumpf:", n, "Ecken")
+        log["stoff_vom_bein"] = n
     order = np.argsort(-Wd, axis=1)[:, :4]
     w4 = np.take_along_axis(Wd, order, axis=1)
     w4 = w4 / np.maximum(w4.sum(1, keepdims=True), 1e-9)
