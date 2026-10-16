@@ -3064,32 +3064,37 @@
       return { m, home, side, shadow: sh, desc, front };
     }
     const F = [makeFighter(opts.left, 0), makeFighter(opts.right, 1)];
-    // Gefaehrte (0.77): eine junge Bestie steht halb so gross hinter dem Helden und kaempft nur zur Schau
-    let PET = null;
-    if (opts.pet) {
+    // Gefaehrten (0.77, zwei ab 0.80): junge Bestien stehen halb so gross hinter dem Helden und kaempfen nur zur Schau;
+    // der zweite steht schraeg davor, damit er den ersten nicht verdeckt
+    const PETS = [];
+    const petList = opts.pets || (opts.pet ? [opts.pet] : []);
+    petList.slice(0, 2).forEach((pd, i) => {
       try {
-        const pm = R.buildFighter(opts.pet);
+        const pm = R.buildFighter(pd);
         pm.obj.scale.multiplyScalar(0.5);
         if (pm.headY) pm.headY *= 0.5;
-        const phome = new T.Vector3(-sep - 1.5, 0, -1.2);
+        const phome = i === 0 ? new T.Vector3(-sep - 1.5, 0, -1.2) : new T.Vector3(-sep - 1.9, 0, 1.3);
         pm.obj.position.copy(phome);
-        pm.obj.rotation.y = PI / 2 - 0.4;
+        pm.obj.rotation.y = PI / 2 - (i === 0 ? 0.4 : -0.3);
         const psh = new T.Mesh(new T.CircleGeometry(1, 20), KUL ? softShadowMat() : basic("#000000", 0.3));
         psh.rotation.x = -PI / 2;
         psh.position.set(phome.x, 0.03, phome.z);
         psh.scale.setScalar(0.55);
         scene.add(psh);
         scene.add(pm.obj);
-        PET = { m: pm, home: phome, shadow: psh };
+        PETS.push({ m: pm, home: phome, shadow: psh });
       } catch (e) {
         console.warn("Gefaehrte nicht aufgebaut", e);
-        PET = null;
       }
-    }
+    });
     function petPlay(name, lunge) {
-      if (!PET) return;
-      PET.m.play(name, 0.6);
-      if (lunge) tween(0.5, (u) => (PET.m.obj.position.x = PET.home.x + Math.sin(u * PI) * 0.8));
+      PETS.forEach((P0, i) => {
+        // der zweite setzt einen Augenblick spaeter nach
+        setTimeout(() => {
+          P0.m.play(name, 0.6);
+          if (lunge) tween(0.5, (u) => (P0.m.obj.position.x = P0.home.x + Math.sin(u * PI) * 0.8));
+        }, i * 140);
+      });
     }
     // Schritte auf dem Boden des Schauplatzes; der Gegner meldet sich beim Erscheinen (der Drache bruellt)
     const SURFACE = setting === "arena" || setting === "dungeon" ? "stein" : opts.realm === "midgard" ? "schnee" : "gras";
@@ -3166,7 +3171,7 @@
           f.poisonFx.rotation.y += dt * 2;
         }
       }
-      if (PET) {
+      for (const PET of PETS) {
         PET.m.speed = speed;
         PET.m.update(dt * speed);
         PET.shadow.position.x = PET.m.obj.position.x;

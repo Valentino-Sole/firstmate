@@ -157,7 +157,7 @@ test("Seltene Hordenauftraege: mehrere Gegner nacheinander, Lebenspunkte werden 
 test("Chronik: Kapitel von Reich und Klasse, freigeschaltet nach Stufe und Reihenfolge", () => {
   const { E, S, now } = fresh("runenwirker");
   let ch = E.storyChapters(S);
-  assert.equal(ch.length, 15); // 10 Reichs- und 5 Klassenkapitel (zweiter Akt seit 0.74)
+  assert.equal(ch.length, 22); // 15 Reichs- und 7 Klassenkapitel (zweiter Akt seit 0.74, dritter seit 0.80)
   assert.equal(ch.filter((c) => c.available).length, 1);
   S.bought.verstand = 800;
   S.bought.konstitution = 800;
@@ -707,9 +707,9 @@ test("Chronik geht nach Stufe 30 weiter: zweiter Akt bis Stufe 50, Kapitel der R
   const { E, S } = fresh("runenwirker");
   S.level = 50;
   const ch = E.storyChapters(S);
-  assert.equal(Math.max(...ch.map((c) => c.lv)), 50);
-  assert.equal(ch.filter((c) => c.kind === "realm").length, 10);
-  assert.equal(ch.filter((c) => c.kind === "class").length, 5);
+  assert.equal(Math.max(...ch.filter((c) => c.lv <= 50).map((c) => c.lv)), 50);
+  assert.equal(ch.filter((c) => c.kind === "realm" && c.lv <= 50).length, 10);
+  assert.equal(ch.filter((c) => c.kind === "class" && c.lv <= 50).length, 5);
   // ohne die Kapitel davor ist der zweite Akt verschlossen
   assert.ok(!ch.find((c) => c.lv === 32).available);
   for (const c of ch) S.story.done[c.key] = 1;
@@ -936,4 +936,160 @@ test("Gefaehrten: fangen, begleiten, mitwachsen, Bonus im Kampf", () => {
   // migrate ergaenzt die Felder
   const m = E.migrate(JSON.parse(JSON.stringify(S)));
   assert.ok(Array.isArray(m.pets) && m.petActive === null && typeof m.staub === "number");
+});
+
+test("Chronik dritter Akt: Kapitel ab Stufe 55, Reihenfolge und Abschluss", () => {
+  const { E, S, D } = fresh("runenwirker");
+  for (const realm in D.REALM_STORY) assert.equal(D.REALM_STORY[realm].filter((c) => c.lv >= 55).length, 5, realm + " hat fuenf Kapitel im dritten Akt");
+  for (const id in D.CLASSES) assert.deepEqual(Array.from(D.CLASSES[id].story.filter((c) => c.lv > 50), (c) => c.lv), [58, 70], id);
+  S.level = 80;
+  const ch = E.storyChapters(S);
+  const third = ch.filter((c) => c.lv >= 55);
+  assert.equal(third.length, 7);
+  assert.ok(third.every((c) => !c.available), "ohne den zweiten Akt bleibt der dritte zu");
+  for (const c of ch) if (c.lv <= 50) S.story.done[c.key] = 1;
+  const open = Array.from(E.storyChapters(S).filter((c) => c.available), (c) => c.lv);
+  assert.deepEqual(open.sort((a, b) => a - b), [55, 58], "erst Reichskapitel 55 und Klassenkapitel 58");
+  // jedes Gegnermonster existiert, und die Feinabstimmung pow schwaecht den Urriesen
+  for (const c of ch) for (const f of c.foes) if (f.mon) assert.ok(E.monById(f.mon), f.mon);
+  const ur = E.storyChapters(S).find((c) => c.lv === 80 && c.kind === "realm");
+  const hero = E.heroFighter(S);
+  const foes = E.storyFoes(S, ur, hero);
+  const plain = E.monsterFighter({ id: "x", name: "x", arch: "troll" }, 80, E.adaptPower(hero, 81, 0.96 * 1.12), { boss: true, final: true });
+  assert.ok(foes[1].maxHp < plain.maxHp, "Urriese mit pow unter der Formel");
+});
+
+test("Himmelsthron: ab 55 nach dem Auge des Sturms, staerker, mythische Beute, eigenes Abzeichen", () => {
+  const { E, S, D, advance } = fresh();
+  const di = D.DUNGEONS.findIndex((d) => d.id === "himmelsthron");
+  assert.equal(di, 6);
+  S.level = 60;
+  assert.ok(!E.dungeonState(S, di).unlocked, "erst nach dem ersten Boss im Auge des Sturms");
+  S.dungeons.progress.sturmkern = 1;
+  assert.ok(E.dungeonState(S, di).unlocked);
+  const b0 = E.bossFor(di, 0);
+  assert.ok(Math.abs(b0.power - (0.95 + 0.4)) < 1e-9, "Zuschlag 0,4");
+  assert.equal(E.weeklyBoss(S).dungeon.spaet, undefined, "Wochenboss nur aus den ersten sechs");
+  // mythisch: mit erzwungener Chance faellt sicher ein mythischer Gegenstand
+  const myth = D.DUNGEONS[di].myth;
+  const old = myth.boss;
+  myth.boss = 1;
+  S.inv = [];
+  let res = E.dungeonFight(S, di);
+  assert.ok(res.ok);
+  res.fight.chain.winner = 0;
+  const rew = E.resolveDungeon(S, res.fight);
+  assert.ok(rew.myth && rew.item && rew.item.rarity === "mythisch");
+  assert.ok(S.ach.mythisch1, "Abzeichen fuer den ersten mythischen Fund");
+  myth.boss = old;
+  // sechs Verliese zaehlen fuer "Bezwinger der Tiefen", der Himmelsthron hat sein eigenes Abzeichen
+  assert.deepEqual(Array.from(E.achProgress(S, "dungeonAll")), [0, 6]);
+  S.dungeons.progress.himmelsthron = 8;
+  E.checkAch(S);
+  assert.ok(S.ach.himmelsthron);
+});
+
+test("Gefaehrten-Ausbau: Fuettern, Treue, zweiter Begleiter, Umbenennen", () => {
+  const { E, S, D } = fresh();
+  S.level = 45;
+  S.gold = 1e7;
+  const mk = (arch, i) => {
+    const m = D.MONSTERS.find((x) => x.arch === arch);
+    const p = { id: "p" + i, mon: m.id, name: m.name, arch, color: m.color, accent: m.accent, lv: 20, fights: 0 };
+    S.pets.push(p);
+    return p;
+  };
+  const wolf = mk("wolf", 1), wolf2 = mk("wolf", 2), krebs = mk("krebs", 3);
+  assert.ok(E.feedPet(S, wolf.id).ok);
+  assert.equal(E.petLevel(S, wolf), 21);
+  E.feedPet(S, wolf.id);
+  E.feedPet(S, wolf.id);
+  assert.ok(!E.feedPet(S, wolf.id).ok, "hoechstens drei Rationen am Tag");
+  // zweiter Begleiter: andere Familie, ab Stufe 40
+  assert.ok(E.setActivePet(S, wolf.id, 1).ok);
+  assert.ok(!E.setActivePet(S, wolf2.id, 2).ok, "nicht zwei Woelfe");
+  assert.ok(E.setActivePet(S, krebs.id, 2).ok);
+  assert.equal(E.activePets(S).length, 2);
+  const pe = E.petEffects(S);
+  assert.ok(pe.dmg > 0 && pe.armor > 0, "beide Boni wirken");
+  // Treue: auf voller Stufe zaehlen Kaempfe zu Sternen, Sterne erhoehen die Wirkung
+  wolf.fed = 100;
+  const dmg0 = E.petEffects(S).dmg;
+  for (let i = 0; i < 20; i++) E.petFought(S);
+  assert.equal(E.petStars(wolf), 1);
+  assert.ok(E.petEffects(S).dmg > dmg0 * 1.09);
+  wolf.loyal = 1000;
+  assert.equal(E.petStars(wolf), 5);
+  E.checkAch(S);
+  assert.ok(S.ach.gefaehrte5);
+  // der erste wechselt in die Familie des zweiten: der zweite tritt zurueck
+  const krebs2 = mk("krebs", 4);
+  E.setActivePet(S, krebs2.id, 1);
+  assert.equal(S.petActive2, null);
+  // unter Stufe 40 nur einer
+  S.level = 39;
+  assert.ok(!E.setActivePet(S, wolf.id, 2).ok);
+  assert.ok(E.renamePet(S, wolf.id, "Fluffi").ok && wolf.name === "Fluffi");
+  assert.ok(!E.renamePet(S, wolf.id, "x").ok);
+  const m = E.migrate(JSON.parse(JSON.stringify(Object.assign({}, S, { petActive2: undefined }))));
+  assert.equal(m.petActive2, null);
+});
+
+test("Gildenleben: Ruhm und Stufe, Boni, Spenden, Gildenboss mit Abschnitten", () => {
+  const { E, S, D, advance } = fresh();
+  S.level = 30;
+  S.gold = 1e8;
+  S.perlen = 50;
+  assert.ok(!E.guildDonate(S, "gold").ok, "ohne Gilde keine Spende");
+  const g = E.npcGuilds().find((x) => x.realm === S.realm);
+  assert.ok(E.joinGuild(S, g, 8).ok);
+  assert.equal(E.guildLevel(S), 1);
+  const gold0 = E.goldBonus(S);
+  for (let i = 0; i < 3; i++) assert.ok(E.guildDonate(S, i === 2 ? "perle" : "gold").ok);
+  assert.ok(!E.guildDonate(S, "gold").ok, "drei Spenden am Tag");
+  assert.equal(E.guildPoints(S), 35);
+  assert.equal(E.guildLevel(S), 2);
+  assert.ok(E.goldBonus(S) > gold0 && E.xpBonus(S) >= 0.02);
+  // acht Mitglieder tragen je Tag 2 bei
+  advance(10 * 864e5);
+  assert.equal(E.guildPoints(S), 35 + 160);
+  assert.equal(E.guildLevel(S), 4);
+  // Stufe 5 gibt einen Krug mehr
+  E.gilde(S).pts[g.id] = 500;
+  assert.equal(E.brewMax(S), E.C.BREW_MAX + 1);
+  // Gildenboss: ein Sieg bricht einen Abschnitt, die Gilde hilft mit
+  E.setEnergy(S, 100);
+  const b = E.guildBoss(S);
+  assert.equal(b.seg, 0);
+  assert.ok(b.mateSeg >= 0 && b.mateSeg <= E.C.GBOSS_SEG / 2);
+  const res = E.gbossFight(S);
+  assert.ok(res.ok, res.msg);
+  res.fight.chain.winner = 0;
+  const rew = E.resolveGboss(S, res.fight);
+  assert.equal(E.guildBoss(S).seg, 1);
+  assert.ok(rew.gpts >= 5 && rew.gold > 0);
+  // fast alles gebrochen: der naechste Sieg bringt den Boss zu Fall und die Erstbeute
+  E.gilde(S).boss.seg = E.C.GBOSS_SEG - 1;
+  const res2 = E.gbossFight(S);
+  res2.fight.chain.winner = 0;
+  S.inv = [];
+  const rew2 = E.resolveGboss(S, res2.fight);
+  assert.ok(rew2.fell && rew2.perlen === 3 && rew2.item);
+  assert.ok(S.ach.gildenboss);
+  assert.ok(!E.gbossFight(S).ok, "bis Montag ruht er");
+  // eine Niederlage richtet anteilig Schaden an
+  advance(7 * 864e5);
+  E.setEnergy(S, 100);
+  const res3 = E.gbossFight(S);
+  const w = res3.fight.chain.waves[0];
+  res3.fight.chain.winner = 1;
+  w.hp[1] = res3.fight.foes[0].maxHp / 2;
+  E.resolveGboss(S, res3.fight);
+  assert.ok(Math.abs(E.guildBoss(S).seg - 0.5) < 1e-9);
+  // Austritt und Wiedereintritt behalten den eigenen Beitrag, migrate ergaenzt Felder
+  E.leaveGuild(S);
+  assert.equal(E.guildLevel(S), 0);
+  assert.equal(E.goldBonus(S), 0 + (E.furn(S, "trophaeen") ? E.bossesDefeated(S) * 0.01 : 0));
+  const m = E.migrate(JSON.parse(JSON.stringify(Object.assign({}, S, { gilde: undefined, guild: { id: g.id, name: g.name, tag: g.tag, realm: g.realm } }))));
+  assert.ok(m.gilde && m.gilde.pts && m.guild.joined > 0);
 });

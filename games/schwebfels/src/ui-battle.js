@@ -16,9 +16,9 @@
   const BATTLE_WAIT = 15000;
   UI.runBattle = function (fight, opts) {
     const archs = (fight.foes || []).filter((f) => f.kind === "monster" && f.id).map((f) => f.arch);
-    // Gefaehrte des Helden (0.77): seine Figur mitladen und der Buehne geben
-    const pet = fight.hero && fight.hero.kind !== "monster" && E.activePet(UI.S) ? E.activePet(UI.S) : null;
-    if (pet) archs.push(pet.arch);
+    // Gefaehrten des Helden (0.77, zwei ab 0.80): ihre Figuren mitladen und der Buehne geben
+    const pets = fight.hero && fight.hero.kind !== "monster" ? E.activePets(UI.S) : [];
+    for (const pet of pets) archs.push(pet.arch);
     const cap = (p) => Promise.race([p, new Promise((r) => setTimeout(r, BATTLE_WAIT))]);
     // Heldenkoerper aller beteiligten Reiche (Arena, Rangliste): deren Figurendatei ebenfalls vorher laden
     const realms = [...new Set([fight.hero].concat(fight.foes || []).filter((f) => f && f.kind !== "monster" && f.realm).map((f) => f.realm))];
@@ -31,7 +31,7 @@
     root.hidden = false;
     document.body.classList.add("in-battle");
     $("#hint").hidden = true;
-    if (pet) opts = Object.assign({}, opts, { petDesc: UI.monDesc(E.petMon(pet)) });
+    if (pets.length) opts = Object.assign({}, opts, { petDescs: pets.map((pet) => UI.monDesc(E.petMon(pet))) });
     return Promise.all([UI.loadMonsters(archs, BATTLE_WAIT), cap(UI.loadKulissen()), cap(Promise.all(realms.map(UI.loadGenFigures)))]).then(() => runBattle(fight, opts));
   };
   function runBattle(fight, opts) {
@@ -83,7 +83,7 @@
             realm: S.realm,
             left: UI.fighterDesc(hero),
             right: UI.fighterDesc(foes[0]),
-            pet: opts.petDesc || null,
+            pets: opts.petDescs || null,
             hp: max.slice(),
             onImpact: (side, hp) => setHp(side, hp),
             sfx: (n, c) => SB.audio.play(n, c),
@@ -241,6 +241,8 @@
         if (r.honor) chips.push('<span class="chip">' + I.ui("ehre") + " " + (r.honor > 0 ? "+" : "") + U.fmt(r.honor) + " Ehre</span>");
         if (r.perle) chips.push('<span class="chip">' + UI.perlen(r.perle) + "</span>");
         if (r.perlen) chips.push('<span class="chip">' + UI.perlen(r.perlen) + "</span>");
+        if (r.myth) chips.push('<span class="chip t-mythisch">Mythischer Fund!</span>');
+        if (r.gpts) chips.push('<span class="chip">' + I.ui("gilde") + " +" + U.fmt(r.gpts) + " Gildenruhm</span>");
         if (r.itemSold) chips.push('<span class="chip">Rucksack voll: Fund für ' + UI.gold(r.itemSold) + " verkauft</span>");
         let itemHtml = "";
         if (r.item) itemHtml = '<div class="lootcard" style="border-color:' + D.RARITIES[r.item.rarity].color + '"><div class="lootpic r-' + r.item.rarity + '">' + I.item(r.item) + "</div>" + UI.itemCard(r.item) + "</div>";
@@ -248,9 +250,10 @@
         let sub;
         if (win) sub = opts.setting === "arena" ? "Das Publikum tobt! Ehre für " + esc(D.REALMS[S.realm].name) + "." : multi ? "Alle " + foes.length + " Gegner sind besiegt!" : esc(lastFoe.name) + (opts.setting === "dungeon" ? " ist gefallen." : " gibt sich geschlagen.");
         else sub = opts.setting === "arena" ? "Das Publikum buht. Morgen ist ein neuer Tag." : (multi ? "Gegner " + chain.waves.length + " von " + foes.length + " war zu stark: " : "Diesmal war ") + esc(lastFoe.name) + (multi ? "." : " stärker.") + " Bessere Ausrüstung und Attribute helfen." + (r.xp ? " Ein Trostpreis bleibt dir trotzdem." : "");
+        if (r.sub) sub = esc(r.sub);
         const x = UI.xpInfo(S);
         const d = UI.dialog(
-          '<div class="result ' + (win ? "win" : "lose") + '"><h2>' + (win ? (multi ? "Horde besiegt!" : "Sieg!") : "Niederlage") + '</h2><p class="muted">' + sub + '</p><div class="rewardlist">' + chips.join("") + "</div>" + itemHtml +
+          '<div class="result ' + (win || r.head ? "win" : "lose") + '"><h2>' + (r.head ? esc(r.head) : win ? (multi ? "Horde besiegt!" : "Sieg!") : "Niederlage") + '</h2><p class="muted">' + sub + '</p><div class="rewardlist">' + chips.join("") + "</div>" + itemHtml +
             '<div class="xpmini">Stufe ' + S.level + ': <span class="xpbar"><i style="width:' + x.pct.toFixed(1) + '%"></i></span> noch <b class="num">' + U.fmt(x.rest) + "</b> EP bis Stufe " + (S.level + 1) + "</div>" +
             '<div class="actions" style="justify-content:center"><button class="btn big" id="battleDone" data-autofocus>Weiter</button></div></div>'
         );

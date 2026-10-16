@@ -67,8 +67,8 @@
       h +=
         '<div class="row" style="margin-bottom:12px"><span class="gauge" style="padding-right:12px">' + UI.gauge(en, max) + "<span><small>Tatendrang</small>" + Math.floor(en) + " / " + max + "</span></span>" +
         (en < max ? '<span class="muted">+1 in <b class="num" data-until="' + (now + E.nextEnergyIn(s, now)) + '"></b></span>' : "") +
-        '<span class="spacer"></span><button class="btn small" data-act="brew"' + (s.daily.brews >= E.C.BREW_MAX ? " disabled" : "") + ">Nebelmet +" + E.C.BREW_ENERGY + " · 1 " + I.ui("perle") + "</button></div>" +
-        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.C.BREW_MAX - s.daily.brews) + " von " + E.C.BREW_MAX + " Krügen Nebelmet erhältlich." + (s.daily.brews >= E.C.BREW_MAX ? ' Neue Krüge um Mitternacht, in <b class="num" data-until="' + E.nextMidnight(now) + '"></b>.' : "") + "</div>";
+        '<span class="spacer"></span><button class="btn small" data-act="brew"' + (s.daily.brews >= E.brewMax(s) ? " disabled" : "") + ">Nebelmet +" + E.C.BREW_ENERGY + " · 1 " + I.ui("perle") + "</button></div>" +
+        '<div class="muted" style="font-size:12.5px;margin:-6px 0 10px">Heute noch ' + (E.brewMax(s) - s.daily.brews) + " von " + E.brewMax(s) + " Krügen Nebelmet erhältlich." + (s.daily.brews >= E.brewMax(s) ? ' Neue Krüge um Mitternacht, in <b class="num" data-until="' + E.nextMidnight(now) + '"></b>.' : "") + "</div>";
       if (s.guard) return h + busyNote();
       const a = s.quest.active;
       if (a) {
@@ -553,7 +553,13 @@
       const hero = E.heroFighter(s, now);
       h += '<div class="chapters">';
       const archs = [];
+      let act = -1;
       for (const ch of E.storyChapters(s)) {
+        const a = ch.lv >= 51 ? 2 : ch.lv >= 31 ? 1 : 0;
+        if (a !== act) {
+          act = a;
+          h += '<div class="section-title">' + ["Erster Akt: Der Splitter bricht", "Zweiter Akt: Die Tiefe antwortet", "Dritter Akt: Über den Wolken"][a] + "</div>";
+        }
         const foes = ch.foes.map((f) => (f.mon ? Object.assign({}, E.monById(f.mon), { boss: f.boss, final: f.final }) : f));
         if (ch.done || ch.available) for (const f of foes) archs.push(f.arch);
         let status = "";
@@ -810,7 +816,8 @@
         }
         h +=
           '<div class="card' + (st.unlocked ? "" : " locked") + '" style="--theme:' + dg.theme + '"><div class="pic dpic">' + pic + "</div><div><h4>" + esc(dg.name) + '</h4><div class="muted small">' + esc(dg.desc) + "</div>" +
-          '<div class="pips" style="margin:5px 0">' + dg.bosses.map((_, i) => '<i class="' + (i < st.cleared ? "on" : "") + '"></i>').join("") + "</div>" + info + "</div>" + btn + "</div>";
+          '<div class="pips" style="margin:5px 0">' + dg.bosses.map((_, i) => '<i class="' + (i < st.cleared ? "on" : "") + '"></i>').join("") + "</div>" + info +
+          (dg.myth ? '<div class="small t-mythisch">Jeder Boss kann einen <b>mythischen</b> Gegenstand fallen lassen, der Endboss am ehesten.</div>' : "") + "</div>" + btn + "</div>";
       });
       return h + "</div>";
     },
@@ -827,7 +834,7 @@
     const rew = E.resolveDungeon(s, res.fight);
     UI.saveNow();
     SB.audio.play("roar");
-    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: D.DUNGEONS[d].id, tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: D.DUNGEONS[d].kulisse || D.DUNGEONS[d].id, tint: D.DUNGEONS[d].theme, title: D.DUNGEONS[d].name, rewards: rew });
     UI.refresh();
   };
 
@@ -936,19 +943,36 @@
     return "";
   }
   function petsTab(s) {
-    let h = '<div class="muted" style="margin-bottom:10px">Junge Bestien fängst du nach gewonnenen Kämpfen: am ehesten bei der <b>Nachtjagd</b>, auf den <b>Boss-Etagen des Wolkenturms</b> und in den <b>Dungeons</b>. Eine davon begleitet dich: sie steht im Kampf an deiner Seite und stärkt dich je nach Familie. Mitkämpfen macht sie stärker, alle ' + E.C.PET_FIGHTS_PER_LV + " Siege eine Stufe (nie über deine).</div>";
+    const two = s.level >= E.C.PET2_LEVEL;
+    const feeds = s.daily.feeds || 0;
+    let h =
+      '<div class="muted" style="margin-bottom:10px">Junge Bestien fängst du nach gewonnenen Kämpfen: am ehesten bei der <b>Nachtjagd</b>, auf den <b>Boss-Etagen des Wolkenturms</b> und in den <b>Dungeons</b>. ' +
+      (two ? "Zwei aus verschiedenen Familien begleiten dich" : "Eine davon begleitet dich (ab Stufe " + E.C.PET2_LEVEL + " zwei aus verschiedenen Familien)") +
+      ": im Kampf stehen sie an deiner Seite und stärken dich je nach Familie. Mitkämpfen macht sie stärker, alle " + E.C.PET_FIGHTS_PER_LV + " Siege eine Stufe, Füttern sofort eine (nie über deine Stufe). Auf deiner Stufe sammeln sie <b>Treue</b>: alle " + E.C.PET_LOYAL_PER_STAR + " Kämpfe ein Stern, jeder Stern +10 % Wirkung, bis zu " + E.C.PET_STARS + " Sterne.</div>";
     if (!(s.pets || []).length) return h + '<div class="say">Dein Stall hat noch keine Gefährten. Zieh zur Nachtjagd, wenn das Mondtor offen ist, dort streifen die meisten Jungtiere umher.</div>';
+    h += '<div class="row" style="margin-bottom:10px"><span class="chip">Futter heute: <b class="num">' + feeds + " / " + E.C.PET_FEED_MAX + "</b></span><span class=\"muted small\">Eine Ration kostet " + UI.gold(E.petFeedCost(s)) + ".</span></div>";
     h += '<div class="cards">';
+    const first = E.activePet(s);
     for (const pet of s.pets) {
       const lv = E.petLevel(s, pet);
-      const next = lv >= s.level ? null : E.C.PET_FIGHTS_PER_LV - ((pet.fights || 0) % E.C.PET_FIGHTS_PER_LV);
+      const full = lv >= s.level;
+      const next = full ? null : E.C.PET_FIGHTS_PER_LV - ((pet.fights || 0) % E.C.PET_FIGHTS_PER_LV);
+      const stars = E.petStars(pet);
+      const toStar = stars >= E.C.PET_STARS ? 0 : E.C.PET_LOYAL_PER_STAR - ((pet.loyal || 0) % E.C.PET_LOYAL_PER_STAR);
       const active = s.petActive === pet.id;
+      const second = two && s.petActive2 === pet.id;
+      const canSecond = two && !active && !second && first && first.arch !== pet.arch;
+      const starTxt = '<span class="gtag" title="Treue">' + "★".repeat(stars) + '<span class="muted">' + "☆".repeat(E.C.PET_STARS - stars) + "</span></span>";
       h +=
         '<div class="card"><div class="pic">' + UI.portrait(UI.monDesc(E.petMon(pet)), 96) + "</div>" +
-        "<div><h4>" + esc(pet.name) + (active ? ' <span class="tag">begleitet dich</span>' : "") + "</h4>" +
-        '<div class="muted small">Stufe ' + lv + " · " + esc(D.ARCH_NAMES[pet.arch] || pet.arch) + " · " + petEffText(pet.arch) + (next ? " · nächste Stufe in " + next + " Siegen" : " · auf deiner Stufe") + "</div></div>" +
-        '<div class="row" style="gap:6px">' +
-        (active ? '<button class="btn small ghost" data-act="petActive" data-id="">Zurücklassen</button>' : '<button class="btn small" data-act="petActive" data-id="' + pet.id + '">Begleiten lassen</button>') +
+        "<div><h4>" + esc(pet.name) + (active ? ' <span class="tag">begleitet dich</span>' : second ? ' <span class="tag">zweiter Begleiter</span>' : "") + "</h4>" +
+        '<div class="muted small">Stufe ' + lv + " · " + esc(D.ARCH_NAMES[pet.arch] || pet.arch) + " · " + petEffText(pet.arch) + (next ? " · nächste Stufe in " + next + " Siegen" : " · auf deiner Stufe") + "</div>" +
+        '<div class="small">' + starTxt + (full && toStar ? ' <span class="muted">nächster Stern in ' + toStar + " Kämpfen</span>" : !full && stars < E.C.PET_STARS ? ' <span class="muted">Treue sammelt sich auf deiner Stufe</span>' : "") + "</div></div>" +
+        '<div class="row" style="gap:6px;justify-content:flex-end">' +
+        (active || second ? '<button class="btn small ghost" data-act="petActive" data-id="" data-slot="' + (second ? 2 : 1) + '">Zurücklassen</button>' : '<button class="btn small" data-act="petActive" data-id="' + pet.id + '" data-slot="1">Begleiten lassen</button>') +
+        (canSecond ? '<button class="btn small" data-act="petActive" data-id="' + pet.id + '" data-slot="2">Als Zweiten mitnehmen</button>' : "") +
+        '<button class="btn small" data-act="petFeed" data-id="' + pet.id + '"' + (full || feeds >= E.C.PET_FEED_MAX ? " disabled" : "") + ">Füttern</button>" +
+        '<button class="btn small ghost" data-act="petRename" data-id="' + pet.id + '">Umbenennen</button>' +
         '<button class="btn small ghost" data-act="petRelease" data-id="' + pet.id + '">Freilassen</button></div></div>';
     }
     UI.loadMonsters([...new Set(s.pets.map((p0) => p0.arch))]);
@@ -974,9 +998,36 @@
     },
   };
   A.petActive = (el) => {
-    if (!done(E.setActivePet(S(), el.dataset.id || null))) return;
+    if (!done(E.setActivePet(S(), el.dataset.id || null, +el.dataset.slot === 2 ? 2 : 1))) return;
     SB.audio.play("chime");
     if (el.dataset.id) UI.toast("Dein Gefährte trottet dir hinterher. Er kämpft ab jetzt an deiner Seite.", "good", "stall");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.petFeed = (el) => {
+    const res = E.feedPet(S(), el.dataset.id);
+    if (!done(res)) return;
+    SB.audio.play("buy");
+    UI.toast(res.pet.name + " schmatzt zufrieden und ist jetzt Stufe " + res.level + ".", "good", "stall");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.petRename = (el) => {
+    const pet = (S().pets || []).find((p0) => p0.id === el.dataset.id);
+    if (!pet) return;
+    UI.dialog(
+      "<h3>" + esc(pet.name) + ' umbenennen</h3><p class="muted">Wie soll dein Gefährte heißen?</p><input type="text" id="petName" maxlength="24" value="' + esc(pet.name) + '">' +
+        '<p class="muted small" id="petErr"></p><div class="actions"><button class="btn ghost" data-act="closeDialog">Abbrechen</button><button class="btn" data-act="petRenameYes" data-id="' + esc(pet.id) + '">Umbenennen</button></div>'
+    );
+  };
+  A.petRenameYes = (el) => {
+    const res = E.renamePet(S(), el.dataset.id, document.getElementById("petName").value);
+    if (!res.ok) {
+      document.getElementById("petErr").textContent = res.msg;
+      return;
+    }
+    UI.closeDialog();
+    UI.toast("Dein Gefährte hört jetzt auf den Namen " + res.pet.name + ".", "good", "stall");
     UI.saveNow();
     UI.refresh();
   };
@@ -1074,13 +1125,23 @@
       if (s.guild) {
         const g = gl.find((x) => x.id === s.guild.id) || Object.assign({ rank: "?", members: 1, honor: s.honor }, s.guild);
         const members = E.allHeroes(s, now, remote).filter((x) => x.guild && x.guild.id === s.guild.id);
+        // die uebrigen Mitglieder tragen zu Gildenruhm und Gildenboss bei
+        E.setGuildMates(s, members.filter((x) => x.kind !== "me").length);
+        const gb = E.guildBonus(s, now);
         h +=
           '<div class="guildhead r-' + s.realm + '">' + I.ui("gilde") + "<div><h3>" + esc(s.guild.name) + ' <span class="gtag">[' + esc(s.guild.tag) + "]</span></h3>" +
-          '<div class="muted">' + realmChip(s.realm) + " · Platz " + g.rank + " der Gilden · " + U.fmt(g.honor) + " Ehre · " + members.length + " Mitglieder</div></div></div>";
-        h += '<div class="section-title">Mitglieder</div><table class="fame"><thead><tr><th>Held</th><th>Klasse</th><th>Stufe</th><th>Ehre</th></tr></thead><tbody>';
-        h += members.map((x) => "<tr" + (x.kind === "me" ? ' class="me"' : ' data-act="heroInfo" data-id="' + esc(x.id) + '"') + "><td>" + esc(x.name) + (x.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</td><td>" + I.classCrest(x.cls) + '</td><td class="num">' + x.level + '</td><td class="num">' + U.fmt(x.honor) + "</td></tr>").join("");
-        h += '</tbody></table><div class="row" style="margin-top:14px"><span class="muted small">Die Ehre aller Mitglieder zählt für die Gildenrangliste.</span><span class="spacer"></span><button class="btn ghost small" data-act="leaveGuild">Gilde verlassen</button></div>';
-        return h;
+          '<div class="muted">' + realmChip(s.realm) + " · Gildenstufe " + gb.lv + " · Platz " + g.rank + " der Gilden · " + U.fmt(g.honor) + " Ehre · " + members.length + " Mitglieder</div></div></div>";
+        const tab = UI.tabs.gildenhalle || "gilde";
+        const b = E.guildBoss(s, now);
+        h += '<div class="tabs" style="margin-top:12px">' + [["gilde", "Gilde"], ["boss", "Gildenboss" + (!b.done && s.level >= E.C.GBOSS_UNLOCK ? ' <span class="badge">!</span>' : "")], ["mitglieder", "Mitglieder"]].map(([id, n]) => '<button class="tab' + (tab === id ? " on" : "") + '" data-act="tab" data-panel="gildenhalle" data-tab="' + id + '">' + n + "</button>").join("") + "</div>";
+        if (tab === "boss") return h + gbossTab(s, now, b);
+        if (tab === "mitglieder") {
+          h += '<table class="fame"><thead><tr><th>Held</th><th>Klasse</th><th>Stufe</th><th>Ehre</th></tr></thead><tbody>';
+          h += members.map((x) => "<tr" + (x.kind === "me" ? ' class="me"' : ' data-act="heroInfo" data-id="' + esc(x.id) + '"') + "><td>" + esc(x.name) + (x.kind === "real" ? ' <span class="tag">Spieler</span>' : "") + "</td><td>" + I.classCrest(x.cls) + '</td><td class="num">' + x.level + '</td><td class="num">' + U.fmt(x.honor) + "</td></tr>").join("");
+          h += '</tbody></table><div class="row" style="margin-top:14px"><span class="muted small">Die Ehre aller Mitglieder zählt für die Gildenrangliste.</span><span class="spacer"></span><button class="btn ghost small" data-act="leaveGuild">Gilde verlassen</button></div>';
+          return h;
+        }
+        return h + guildTab(s, now, gb);
       }
       h += '<div class="say">Eine Gilde bündelt die Ehre ihrer Mitglieder. Du kannst nur einer Gilde deines eigenen Reiches beitreten.</div>';
       h += '<div class="section-title">Gilden von ' + esc(D.REALMS[s.realm].name) + '</div><div class="cards">';
@@ -1098,10 +1159,74 @@
       return h;
     },
   };
+  // Gildenleben (0.80): Stufe, Boni und Spenden
+  function guildTab(s, now, gb) {
+    const pts = E.guildPoints(s, now);
+    const lv = gb.lv;
+    const cur = E.C.GUILD_LV[lv - 1];
+    const next = E.C.GUILD_LV[lv];
+    const pct = next ? Math.max(0, Math.min(100, ((pts - cur) / (next - cur)) * 100)) : 100;
+    const left = E.C.GUILD_DONATE_MAX - (s.daily.donations || 0);
+    let h = '<div class="xpblock"><div class="xprow"><span class="lv">Gildenstufe ' + lv + "</span><span class=\"spacer\"></span>" + (next ? '<span class="lv next">Stufe ' + (lv + 1) + "</span>" : '<span class="tag">Höchste Stufe</span>') + "</div>" +
+      '<div class="xpbig"><i style="width:' + pct.toFixed(1) + '%"></i><span class="num">' + U.fmt(pts) + (next ? " / " + U.fmt(next) : "") + " Gildenruhm</span></div>" +
+      '<div class="xprest muted small">Gildenruhm entsteht aus deinen Spenden und Kämpfen gegen den Gildenboss. Jedes weitere Mitglied trägt jeden Tag 2 dazu bei.</div></div>';
+    h += '<div class="section-title">' + I.ui("gilde") + " Was die Gilde dir gibt</div>";
+    h += '<div class="stats"><div><span>Gold aus allen Quellen</span><b class="num delta-up">+' + Math.round(gb.gold * 100) + ' %</b></div><div><span>Erfahrung aus allen Quellen</span><b class="num delta-up">+' + Math.round(gb.xp * 100) + ' %</b></div>' +
+      "<div><span>Krüge Nebelmet je Tag</span><b class=\"num" + (gb.brews ? " delta-up" : "") + '">+' + gb.brews + "</b></div><div><span>Nächster Krug</span><b>" + (lv < 5 ? "ab Stufe 5" : lv < 10 ? "ab Stufe 10" : "alle erreicht") + "</b></div></div>";
+    h += '<div class="section-title">' + I.ui("gold") + " Gildenkasse</div>";
+    h += '<div class="muted small" style="margin-bottom:8px">Bis zu ' + E.C.GUILD_DONATE_MAX + " Spenden am Tag. Heute noch <b>" + Math.max(0, left) + "</b>.</div>";
+    h += '<div class="row" style="gap:8px"><button class="btn" data-act="guildDonate" data-k="gold"' + (left <= 0 ? " disabled" : "") + ">Spenden: " + UI.gold(E.guildDonateCost(s)) + " · +" + E.C.GUILD_DONATE_PTS + " Ruhm</button>" +
+      '<button class="btn ghost" data-act="guildDonate" data-k="perle"' + (left <= 0 ? " disabled" : "") + ">Spenden: 1 " + I.ui("perle") + " · +" + E.C.GUILD_PERL_PTS + " Ruhm</button></div>";
+    return h;
+  }
+  function gbossTab(s, now, b) {
+    if (s.level < E.C.GBOSS_UNLOCK) return '<div class="say">Den Gildenboss greifst du ab Stufe ' + E.C.GBOSS_UNLOCK + " an.</div>";
+    const hero = E.heroFighter(s, now);
+    const foe = E.gbossFoe(b, hero);
+    const busy = E.busy(s, now);
+    const en = E.energy(s, now);
+    const c = estimate(hero, [foe], "gboss" + b.week, 60);
+    const seg = E.C.GBOSS_SEG;
+    const pctOwn = (b.seg / seg) * 100;
+    const pctMates = (Math.min(b.mateSeg, seg - b.seg) / seg) * 100;
+    let h = '<div class="lore"><h3>' + I.ui("schaedel") + " Gildenboss: " + esc(b.def.name) + '</h3><p class="muted">' + esc(b.def.desc) + " Sein Leben hat " + seg + " Abschnitte. Jeder deiner Kämpfe bricht einen ganz (Sieg) oder zum Teil (Niederlage), deine Gildenbrüder und -schwestern schlagen jeden Tag mit zu.</p></div>";
+    if (busy) h += busyNote();
+    h += '<div class="chapter' + (b.done ? " done" : " open") + '"><div class="ch-head"><span class="ch-kind">Woche bis Montag · ' + (b.done ? "gefallen" : U.fmt(Math.round(b.left * 10) / 10) + " von " + seg + " Abschnitten übrig") + "</span><h3>" + esc(b.def.name) + "</h3></div>" +
+      '<div class="wavepics"><span class="wp boss" title="' + esc(b.def.name) + '">' + UI.portrait(UI.monDesc(b.mon, true, true), 128) + "</span>" +
+      '<div style="flex:1;min-width:160px"><div class="hp" style="height:18px"><i style="width:' + Math.max(0, 100 - pctOwn - pctMates).toFixed(1) + '%"></i><span class="num">' + (b.done ? "besiegt" : Math.round(100 - pctOwn - pctMates) + " %") + "</span></div>" +
+      '<div class="muted small" style="margin-top:4px">Du: ' + U.fmt(Math.round(b.seg * 10) / 10) + " · Gilde: " + U.fmt(Math.round(b.mateSeg * 10) / 10) + " Abschnitte" + (b.tries ? " · " + b.tries + " Angriffe" : "") + "</div></div></div>" +
+      '<div class="foot">' +
+      (b.done
+        ? '<span class="tag">Diese Woche bezwungen</span><span class="muted small" style="margin-left:10px">Der nächste kommt in <b class="num" data-until="' + nextMonday(now) + '"></b></span>'
+        : chanceTxt(c) + '<span style="margin-left:10px">' + I.ui("tatendrang") + " " + E.C.GBOSS_ENERGY + '</span><span class="spacer"></span><button class="btn" data-act="gbossFight"' + (busy || en < E.C.GBOSS_ENERGY ? " disabled" : "") + ">Angreifen</button>") +
+      "</div></div>";
+    h += '<div class="muted small" style="margin-top:8px">Jeder Angriff gibt Gold, Erfahrung und Gildenruhm nach dem angerichteten Schaden. Fällt der Boss, bekommst du 3 Wolkenperlen, einen Beutel Gold, 40 Gildenruhm und einen Gegenstand ab episch.</div>';
+    UI.loadMonsters([b.mon.arch]);
+    return h;
+  }
+  A.guildDonate = (el) => {
+    const res = E.guildDonate(S(), el.dataset.k);
+    if (!done(res)) return;
+    SB.audio.play("buy");
+    UI.toast("Danke für deine Spende! +" + res.pts + " Gildenruhm" + (res.up ? ". Die Gilde erreicht Stufe " + res.up + "!" : "."), res.up ? "gold" : "good", "gilde");
+    UI.saveNow();
+    UI.refresh();
+  };
+  A.gbossFight = async () => {
+    const s = S();
+    const res = E.gbossFight(s);
+    if (!done(res)) return;
+    const rew = E.resolveGboss(s, res.fight);
+    UI.saveNow();
+    SB.audio.play("roar");
+    await UI.runBattle(res.fight, { setting: "dungeon", dungeon: "arena", tint: "#c9a441", title: "Gildenboss: " + res.fight.gboss.def.name, rewards: rew });
+    UI.refresh();
+  };
   A.joinGuild = (el) => {
     const s = S();
     const g = E.allGuilds(s, SB.remoteGuilds || null).find((x) => x.id === el.dataset.id);
-    if (!done(E.joinGuild(s, g))) return;
+    const L = E.guildLadder(s, E.now(), SB.remoteHeroes || null, SB.remoteGuilds || null).find((x) => g && x.id === g.id);
+    if (!done(E.joinGuild(s, g, L ? L.members : 0))) return;
     SB.audio.play("horn");
     UI.toast("Willkommen in der Gilde „" + g.name + "“!", "good", "gilde");
     UI.saveNow();

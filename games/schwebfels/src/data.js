@@ -171,6 +171,8 @@
         { lv: 30, t: "Der Schild des Reiches", x: "Man nennt dich jetzt den Schild Albions. Das ist eine große Ehre und eine noch größere Zielscheibe. Unter den Klippen erwacht etwas, das es persönlich nimmt.", foes: [{ name: "Der Wurm unter den Klippen", arch: "drache", color: "#e8e2d6", accent: "#c0392b", boss: true, final: true }] },
         { lv: 38, t: "Der Schwur der Sieben", x: "Sieben Ritter schworen einst, Albion bis zum letzten Atemzug zu schützen. Sechs sind tot. Der siebte hat beschlossen, dass Atemzüge überschätzt werden.", foes: [{ mon: "grabritter" }, { name: "Ser Aldric, der Letzte der Sieben", arch: "todesritter", color: "#5a5f68", accent: "#ffd27a", boss: true }] },
         { lv: 48, t: "Der Schild bricht nicht", x: "Die Tiefe schickt einen Koloss aus Kreide und Eisen gegen die Mauern. Er ist größer als die Mauern. Du hast einen Schild. Das muss reichen.", foes: [{ name: "Der Kreidekoloss", arch: "golem", color: "#e8e2d6", accent: "#c0392b", boss: true, final: true }] },
+        { lv: 58, t: "Der Schild aus Licht", x: "Ein Ritter des Himmels trägt einen Schild aus reinem Licht und behauptet, er sei unzerbrechlich. Du hast schon einiges zerbrochen, was das von sich behauptet hat.", foes: [{ name: "Lichtritter Castellan", arch: "todesritter", color: "#e8e2d6", accent: "#ffd27a", boss: true }] },
+        { lv: 70, t: "Die letzte Mauer", x: "Die Herren des Himmels schicken ihr ganzes Heer gegen eine einzige Mauer. Auf der Mauer stehst du. Hinter der Mauer steht ganz Albion und hält die Luft an.", foes: [{ mon: "eisengolem" }, { name: "Der Wolkenbrecher", arch: "golem", color: "#d8dce6", accent: "#c0392b", boss: true, final: true }] },
       ],
     },
     meuchler: {
@@ -183,6 +185,8 @@
         { lv: 30, t: "Niemandes Held", x: "Wenn du alles richtig machst, wird nie jemand erfahren, dass du Albion gerettet hast. Der Schattenkanzler weiß es. Noch.", foes: [{ name: "Der Schattenkanzler", arch: "kultist", color: "#1a1622", accent: "#c47bff", boss: true, final: true }] },
         { lv: 38, t: "Die Gilde der Stillen", x: "Die Gilde der Stillen nimmt keine neuen Mitglieder auf. Sie entfernt alte. Heute stehst du auf ihrer Liste, gleich unter dem König.", foes: [{ mon: "blutkultist" }, { name: "Meisterin Nachtigall", arch: "kultist", color: "#1a1622", accent: "#c47bff", boss: true }] },
         { lv: 48, t: "Der letzte Auftrag", x: "Ein Auftrag ohne Namen, ohne Lohn und ohne Rückweg. Das Ziel trägt dein Gesicht. Das ist entweder ein Spiegel oder ein sehr schlechtes Zeichen.", foes: [{ name: "Der Mann ohne Gesicht", arch: "schemen", color: "#14121c", accent: "#ff5a3d", boss: true, final: true }] },
+        { lv: 58, t: "Ein Auftrag von oben", x: "Ein Brief fällt aus den Wolken: ein Auftrag, unterschrieben von jemandem, der dich längst tot glaubt. Das Ziel ist ein Bote des Himmels. Er sieht dich kommen, glaubt er.", foes: [{ mon: "fahlerschemen" }, { name: "Der Himmelsbote", arch: "schemen", color: "#fff4d6", accent: "#ffd27a", boss: true }] },
+        { lv: 70, t: "Der Schatten der Sonne", x: "Der Himmelsfürst hat einen eigenen Meuchler. Er wirft keinen Schatten, weil er selbst einer ist. Ihr seid euch schon oft begegnet. Nur hast du ihn nie gesehen.", foes: [{ name: "Der Schatten der Sonne", arch: "kultist", color: "#1a1622", accent: "#ffd27a", boss: true, final: true }] },
       ],
     },
     langbogner: {
@@ -195,6 +199,8 @@
         { lv: 30, t: "Ein Schuss für das Reich", x: "Man sagt, ein einziger Pfeil könne eine Schlacht entscheiden. Heute wirst du es herausfinden.", foes: [{ name: "Die Himmelsbestie", arch: "fledermaus", color: "#2f2a3a", accent: "#ff7a3d", boss: true, final: true }] },
         { lv: 38, t: "Die Wilde Jagd", x: "In Sturmnächten reitet die Wilde Jagd über Albion. Wer sie sieht, muss mitreiten. Du hast beschlossen, lieber auf sie zu schießen.", foes: [{ mon: "schattenwolf" }, { name: "Herne der Jäger", arch: "baum", color: "#3a2a1f", accent: "#ffd27a", boss: true }] },
         { lv: 48, t: "Der Pfeil durch die Sonne", x: "Ein Drache hat sich vor die Sonne gelegt und will sie ausbrüten. Man braucht einen Pfeil, der durch die Sonne fliegt. Du hast einen. Hoffentlich.", foes: [{ name: "Der Sonnenschwelwurm", arch: "drache", color: "#8a2f1f", accent: "#ffe27a", boss: true, final: true }] },
+        { lv: 58, t: "Ziel in den Wolken", x: "Über Albion kreist ein Greif aus Sturm und Federn, so hoch, dass ihn kein Pfeil erreicht. Das behaupten jedenfalls alle, die es noch nicht mit dir versucht haben.", foes: [{ name: "Der Sturmgreif", arch: "fledermaus", color: "#d8c8a0", accent: "#9fe3ff", boss: true }] },
+        { lv: 70, t: "Der Pfeil, der zurückkam", x: "Dein allererster Pfeil ist zurückgekommen, nach Jahren, aus dem Himmel. Er steckt im Rücken eines Wesens, das ihn dir sehr gern persönlich zurückgeben möchte.", foes: [{ mon: "sturmdrache" }, { name: "Der Pfeilträger", arch: "drache", color: "#5a4f6a", accent: "#ffd27a", boss: true, final: true }] },
       ],
     },
     lichtweber: {
@@ -207,6 +213,8 @@
         { lv: 30, t: "Die zweite Sonne", x: "Um den Riss im Splitter zu schließen, brauchst du mehr Licht, als ein Mensch tragen kann. Etwas aus der Leere will genau das verhindern.", foes: [{ name: "Der Leerenschemen", arch: "schemen", color: "#1f1b2e", accent: "#c47bff", boss: true, final: true }] },
         { lv: 38, t: "Das verlöschende Licht", x: "In Albion verlöschen die Kerzen von selbst. Im Spiegelsaal der Akademie lacht ein Schatten, der dein Licht trinkt und dabei immer heller wird.", foes: [{ mon: "fahlerschemen" }, { name: "Der Schattenspiegel", arch: "schemen", color: "#2a2a3a", accent: "#e9f6ff", boss: true }] },
         { lv: 48, t: "Die Morgenröte", x: "Die Nacht will nicht mehr enden. Der Ewige Abend hat sich vor den Morgen gestellt. Du bist das Licht, das ihn daran erinnert, dass jeder Abend endet.", foes: [{ name: "Der Ewige Abend", arch: "schemen", color: "#1f1b2e", accent: "#ffd27a", boss: true, final: true }] },
+        { lv: 58, t: "Licht von oben", x: "Das Licht über den Wolken ist heller als deins. Es sagt dir das auch, ununterbrochen, in einem sehr gebildeten Tonfall.", foes: [{ mon: "irrlichtschemen" }, { name: "Der Strahlende Lehrmeister", arch: "schemen", color: "#fff4d6", accent: "#c47bff", boss: true }] },
+        { lv: 70, t: "Die Sonne hinter der Sonne", x: "Hinter der Sonne gibt es eine zweite, und sie ist nicht freundlich. Wenn sie aufgeht, wirft alles in Albion zwei Schatten. Einer davon gehorcht nicht mehr.", foes: [{ name: "Die Sonne hinter der Sonne", arch: "schemen", color: "#ffe27a", accent: "#ff5a3d", boss: true, final: true }] },
       ],
     },
     sturmhuene: {
@@ -219,6 +227,8 @@
         { lv: 30, t: "Gegen den Sturm", x: "Die Skalden sagen, irgendwann kämpft jeder Sturmhüne gegen den Sturm selbst. Heute ist irgendwann.", foes: [{ name: "Der Sturmwurm", arch: "drache", color: "#2f3f9f", accent: "#9fe3ff", boss: true, final: true }] },
         { lv: 38, t: "Der Frostriese", x: "Thrym der Frostriese hat Midgards Hammer gestohlen und will ihn nur gegen eine Braut zurückgeben. Die Jarle haben dich geschickt. Im Kleid.", foes: [{ mon: "bergtroll" }, { name: "Thrym der Frostriese", arch: "troll", color: "#9fbfd8", accent: "#2f5fa8", boss: true }] },
         { lv: 48, t: "Das letzte Gewitter", x: "Ein Wurm aus Donner zieht über Midgard und schlägt in jeden Hof ein. Er sucht den, der dem Sturm einst ins Gesicht gelacht hat. Er hat dich gefunden.", foes: [{ name: "Der Donnerwurm", arch: "drache", color: "#2f3f9f", accent: "#ffe27a", boss: true, final: true }] },
+        { lv: 58, t: "Der Donner fordert dich", x: "Ein Gott des Donners, oder jemand, der sich sehr dafür hält, fordert dich zum Zweikampf. Er bringt seinen Hammer mit. Du bringst deinen. Das wird laut.", foes: [{ name: "Donnerer Thrudvang", arch: "troll", color: "#6a7f9a", accent: "#ffe45a", boss: true }] },
+        { lv: 70, t: "Der Sturm hat einen Namen", x: "Der ewige Sturm über Midgard hat einen Namen, und er hat ihn dir gerade zugeflüstert. Du hast schon schlimmere Drohungen gehört. Wenige. Ehrlich gesagt keine.", foes: [{ mon: "sturmdrache" }, { name: "Der Namensturm", arch: "drache", color: "#2f3f7f", accent: "#9fe3ff", boss: true, final: true }] },
       ],
     },
     nebelschleicher: {
@@ -231,6 +241,8 @@
         { lv: 30, t: "Der unsichtbare Krieg", x: "Den größten Krieg Midgards führt niemand mit Schwertern. Er findet in der Dunkelheit statt, und du bist das Dunkelste darin.", foes: [{ name: "Nachtschlund", arch: "wolf", color: "#1f1b2e", accent: "#c47bff", boss: true, final: true }] },
         { lv: 38, t: "Das Gift der Nornen", x: "Die Nornen spinnen das Schicksal Midgards, und eine von ihnen tränkt den Faden in Gift. Du sollst den Faden durchschneiden, bevor er reißt.", foes: [{ mon: "kristallweberin" }, { name: "Die Nebelnorne", arch: "kultist", color: "#2a3a3a", accent: "#7fff5a", boss: true }] },
         { lv: 48, t: "Im Nebel verloren", x: "Der Nebel hat einen König, und der König will deinen Platz. Im Nebel gibt es keine Richtung, keinen Laut und keine zweite Chance.", foes: [{ name: "Der Nebelkönig", arch: "schemen", color: "#9aa6b2", accent: "#7fff5a", boss: true, final: true }] },
+        { lv: 58, t: "Nebel über den Wolken", x: "Über den Wolken gibt es keinen Nebel. Ein Problem für jemanden wie dich. Also bringst du deinen eigenen mit. Ein Späher des Himmels findet das unfair.", foes: [{ name: "Der Himmelsspäher", arch: "goblin", color: "#cfdcff", accent: "#ffd27a", boss: true }] },
+        { lv: 70, t: "Das Gift der Sterne", x: "Wer die Sterne vergiftet, vergiftet die Nacht. Jemand hat damit angefangen, und er benutzt dein Rezept. Das ist jetzt eine Frage der Ehre.", foes: [{ mon: "leerenspinne" }, { name: "Der Sternenvergifter", arch: "kultist", color: "#2a2a4a", accent: "#9fff5a", boss: true, final: true }] },
       ],
     },
     wolfsjaeger: {
@@ -243,6 +255,8 @@
         { lv: 30, t: "Der Wolf am Ende der Welt", x: "In den Liedern frisst ein Wolf am Ende der Welt die Sonne. Die Lieder hatten recht, nur das Datum stimmte nicht.", foes: [{ name: "Fenrak, der Weltwolf", arch: "wolf", color: "#2a2633", accent: "#9fe3ff", boss: true, final: true }] },
         { lv: 38, t: "Die Jagd auf Skoll", x: "Skoll jagt die Sonne über den Himmel, seit es den Himmel gibt. Diesmal ist er schneller geworden. Jemand muss ihn aufhalten, und alle sehen dich an.", foes: [{ mon: "frostwolf" }, { name: "Skoll der Sonnenjäger", arch: "wolf", color: "#5a4a3a", accent: "#ffb13b", boss: true }] },
         { lv: 48, t: "Hati, der Mondjäger", x: "Skolls Bruder Hati jagt den Mond. Er hat gehört, was du mit Skoll gemacht hast, und er hat beschlossen, vorher dich zu jagen.", foes: [{ name: "Hati der Mondjäger", arch: "wolf", color: "#2a2633", accent: "#e9f6ff", boss: true, final: true }] },
+        { lv: 58, t: "Die Wölfe des Himmels", x: "Am Himmel jagt ein Rudel aus Sturm. Jeder Wolf ist so groß wie ein Langhaus, und sie haben Hunger auf Schafe, Häuser und Jäger, in dieser Reihenfolge.", foes: [{ mon: "frostwolf" }, { name: "Leitwolf Wolkenzahn", arch: "wolf", color: "#c8d4e4", accent: "#9fe3ff", boss: true }] },
+        { lv: 70, t: "Der Vater der Wölfe", x: "Skoll und Hati sind gefallen, aber ihr Vater lebt noch. Er wartet über den Wolken und hat Zeit. Er hatte immer schon Zeit. Bis heute.", foes: [{ name: "Der Vater der Wölfe", arch: "wolf", color: "#2a2633", accent: "#ff5a3d", boss: true, final: true }] },
       ],
     },
     runenwirker: {
@@ -255,6 +269,8 @@
         { lv: 30, t: "Die letzte Rune", x: "Es gibt eine Rune, die nie geschrieben wurde. Wer sie schreibt, kann den Splitter heilen. Wer sie liest, verschwindet.", foes: [{ name: "Der Ungeschriebene", arch: "schemen", color: "#14121c", accent: "#9fe3ff", boss: true, final: true }] },
         { lv: 38, t: "Die Runen der Riesen", x: "Die Riesen kannten Runen, die Berge bewegen. Ein Golem aus diesen Runen bewacht ihr Archiv. Er liest gern, nur nicht vor.", foes: [{ mon: "reifgolem" }, { name: "Runengolem Ur", arch: "golem", color: "#5a5f68", accent: "#9fe3ff", boss: true }] },
         { lv: 48, t: "Das Wort am Anfang", x: "Vor allen Runen gab es ein Wort. Wer es ausspricht, schreibt die Welt neu. Die Tiefe hat es gefunden und spricht es langsam aus, Silbe für Silbe.", foes: [{ name: "Die Erste Rune", arch: "schemen", color: "#14121c", accent: "#9fe3ff", boss: true, final: true }] },
+        { lv: 58, t: "Die Runen am Himmel", x: "Über Nacht sind am Himmel Runen erschienen, groß wie Inseln. Sie buchstabieren ein Wort, und das Wort ist ein Befehl. Der Befehl lautet: Fallt.", foes: [{ mon: "reifgolem" }, { name: "Der Himmelsschreiber", arch: "golem", color: "#cfe8ff", accent: "#4fa9ff", boss: true }] },
+        { lv: 70, t: "Das letzte Wort", x: "Nach dem ersten Wort gibt es ein letztes. Wer es spricht, beendet die Welt. Jemand übt schon die Aussprache, und er wird jeden Tag besser.", foes: [{ mon: "leerenschemen" }, { name: "Das Letzte Wort", arch: "schemen", color: "#14121c", accent: "#9fe3ff", boss: true, final: true }] },
       ],
     },
     hainwaechter: {
@@ -267,6 +283,8 @@
         { lv: 30, t: "Der Hain steht", x: "Alles, was wächst, schaut heute auf dich. Der Moderkönig kommt, um den ältesten Baum zu fällen.", foes: [{ name: "Der Moderkönig", arch: "baum", color: "#2f2a1f", accent: "#7fffb0", boss: true, final: true }] },
         { lv: 38, t: "Der gefallene Wächter", x: "Eibenrinde war der älteste Wächter des Hains, bis die Tiefe ihm etwas ins Ohr flüsterte. Jetzt bewacht er den Hain vor allen, die ihn retten wollen.", foes: [{ mon: "dornenhirte" }, { name: "Wächter Eibenrinde", arch: "baum", color: "#3a2f1f", accent: "#c47bff", boss: true }] },
         { lv: 48, t: "Die Fäule im Weltenbaum", x: "Der Weltenbaum hält Hibernia zusammen. In seinem Stamm sitzt eine Fäule, die so alt ist wie er. Du musst hinein, bevor die Fäule hinauskommt.", foes: [{ name: "Die Fäule im Weltenbaum", arch: "baum", color: "#2a2416", accent: "#7fff5a", boss: true, final: true }] },
+        { lv: 58, t: "Der Hain wächst nach oben", x: "Die Wurzeln des Himmelshains greifen in deinen Hain. Die alten Bäume flüstern, sie wollen mit hinauf. Du bist anderer Meinung, und du hast eine Axt.", foes: [{ name: "Himmelseiche Ardán", arch: "baum", color: "#4a6a3a", accent: "#e6ff8a", boss: true }] },
+        { lv: 70, t: "Der Wächter der Wächter", x: "Jeder Hain hat einen Wächter. Und die Wächter haben einen eigenen, den ältesten von allen. Er hat entschieden, dass ihr alle versagt habt.", foes: [{ mon: "dornenhirte" }, { name: "Der Älteste Wächter", arch: "baum", color: "#2a1f14", accent: "#7fffb0", boss: true, final: true }] },
       ],
     },
     schattentaenzer: {
@@ -279,6 +297,8 @@
         { lv: 30, t: "Der letzte Tanz", x: "Die Nachtkönigin hat Hibernias Schatten gestohlen. Ohne Schatten kein Tanz, und ohne Tanz bist du nur jemand in dunkler Kleidung.", foes: [{ name: "Die Nachtkönigin", arch: "schemen", color: "#1a1622", accent: "#b48cff", boss: true, final: true }] },
         { lv: 38, t: "Der Tanz der Spiegel", x: "Im Spiegelsaal der Feen tanzt dein Schatten ohne dich. Er ist besser als du. Er weiß es. Jetzt will er deinen Körper ausprobieren.", foes: [{ mon: "irrlichtschemen" }, { name: "Dein eigener Schatten", arch: "schemen", color: "#1a1622", accent: "#b48cff", boss: true }] },
         { lv: 48, t: "Der Hof der Nacht", x: "Der Nachtfürst lädt zum letzten Ball. Wer aufhört zu tanzen, bleibt für immer. Du hast vor, aufzuhören, aber erst, wenn er liegt.", foes: [{ name: "Der Nachtfürst", arch: "schemen", color: "#14121c", accent: "#ff5a8a", boss: true, final: true }] },
+        { lv: 58, t: "Ein Tanz über den Wolken", x: "Der Hohe Hof gibt einen Ball. Eingeladen ist, wer unsterblich ist. Du tanzt trotzdem hin. Der Zeremonienmeister findet das gar nicht lustig.", foes: [{ mon: "irrlichtschemen" }, { name: "Zeremonienmeister Fiachra", arch: "todesritter", color: "#e6ecff", accent: "#c47bff", boss: true }] },
+        { lv: 70, t: "Der Tanz mit dem Tod", x: "Am Ende jedes Tanzes wartet einer, der nie auffordert und nie verliert. Er hat dir die Hand gereicht. Ablehnen ist unhöflich. Gewinnen auch.", foes: [{ name: "Der Tänzer ohne Schatten", arch: "schemen", color: "#14121c", accent: "#e6ecff", boss: true, final: true }] },
       ],
     },
     mondschuetze: {
@@ -291,6 +311,8 @@
         { lv: 30, t: "Den Mond zurückholen", x: "Der Mondfresser hat den halben Mond verschlungen. Du hast einen Bogen, einen Pfeil und eine sehr schlechte Idee.", foes: [{ name: "Der Mondfresser", arch: "drache", color: "#1f1b2e", accent: "#e9f6ff", boss: true, final: true }] },
         { lv: 38, t: "Der Sternenfalke", x: "Ein Falke aus Sternenlicht stiehlt die Pfeile aus den Köchern der Mondschützen. Deine hat er noch nicht. Er hat es aber vor.", foes: [{ mon: "aasflatterer" }, { name: "Der Sternenfalke", arch: "fledermaus", color: "#2f2a3a", accent: "#e9f6ff", boss: true }] },
         { lv: 48, t: "Der Mond fällt", x: "Ein Wurm hat sich um den Mond gewickelt und zieht ihn herunter. Wenn er aufschlägt, gibt es kein Hibernia mehr. Ein Pfeil, ein Auge, ein Atemzug.", foes: [{ name: "Der Mondwurm", arch: "drache", color: "#1f1b2e", accent: "#e9f6ff", boss: true, final: true }] },
+        { lv: 58, t: "Die Jägerin am Himmel", x: "Am Nachthimmel steht ein Sternbild, das jagt: eine Jägerin mit einem Bogen aus Sternen. Sie hat beschlossen, dass du ihre Beute bist.", foes: [{ mon: "aasflatterer" }, { name: "Die Sternenjägerin", arch: "schemen", color: "#2a2a4a", accent: "#e6ecff", boss: true }] },
+        { lv: 70, t: "Der Pfeil zum Mond", x: "Der Mond ist zurück, aber er hängt schief. Wer ihn gerade rücken will, braucht einen Pfeil, der bis zum Mond fliegt, und einen Grund. Auf dem Mond sitzt der Grund und wartet.", foes: [{ name: "Der Mondwächter", arch: "drache", color: "#c8d4e4", accent: "#bfd0ff", boss: true, final: true }] },
       ],
     },
     dornenrufer: {
@@ -303,6 +325,8 @@
         { lv: 30, t: "Neues Wachstum", x: "Um den letzten Hain zu retten, musst du etwas Uraltes zu Kompost verarbeiten. Es ist nicht einverstanden.", foes: [{ name: "Uralter Moderhirte", arch: "baum", color: "#2a2416", accent: "#9fffc8", boss: true, final: true }] },
         { lv: 38, t: "Der Garten der Gifte", x: "Mutter Giftmorchel züchtet einen Garten, in dem jede Blume tötet. Sie hält das für Gartenkunst. Die Nachbarn sehen das anders, solange sie noch sehen.", foes: [{ mon: "giftmorchel" }, { name: "Mutter Giftmorchel", arch: "pilz", color: "#5a3a6a", accent: "#d9f27a", boss: true }] },
         { lv: 48, t: "Die erste Saat", x: "Aus dem ersten Samen wuchs einst alles Leben Hibernias. Die Tiefe hat ihn ausgegraben und pflanzt ihn neu, falsch herum.", foes: [{ name: "Der Uralte Same", arch: "pilz", color: "#2a3a1f", accent: "#9fffc8", boss: true, final: true }] },
+        { lv: 58, t: "Gärten aus Wolken", x: "Auf den Wolken blüht ein Garten, dessen Sporen wie Schnee auf Hibernia fallen. Wo sie landen, wächst etwas, das dort nicht hingehört. Zum Beispiel Zähne.", foes: [{ mon: "sporenschrecken" }, { name: "Der Wolkengärtner", arch: "pilz", color: "#e6ecff", accent: "#c47bff", boss: true }] },
+        { lv: 70, t: "Die letzte Blüte", x: "Alle hundert Jahre blüht eine Blume, deren Duft Welten einschläfert. Sie blüht heute. Sie steht auf einer Wolke. Und sie ist ungefähr so groß wie eine Insel.", foes: [{ mon: "giftmorchel" }, { name: "Die Letzte Blüte", arch: "pilz", color: "#ff7ab0", accent: "#ffe27a", boss: true, final: true }] },
       ],
     },
   };
@@ -325,6 +349,12 @@
       { lv: 40, t: "Das Feuer unter der Abtei", x: "Unter der Versunkenen Abtei brennt ein Feuer, das kein Wasser löscht. Die Mönche nennen, was darin schläft, die Mutter aller Schwelwürmer. Sie schläft nicht mehr.", foes: [{ mon: "schwelwurm" }, { name: "Die Schwelwurm-Ahnin", arch: "drache", color: "#5a1f12", accent: "#ffb13b", boss: true }] },
       { lv: 45, t: "Abstieg ins Nebelmeer", x: "Um die Tiefe aufzuhalten, musst du hinunter, wohin noch kein Albier gegangen ist: unter die Inseln, in das Nebelmeer. Dort unten spricht eine Stimme in deiner eigenen Sprache und kennt deinen Namen.", foes: [{ mon: "leerenschemen" }, { mon: "obsidiangolem" }, { name: "Die Stimme der Tiefe", arch: "schemen", color: "#14121c", accent: "#c47bff", boss: true }] },
       { lv: 50, t: "Das Herz der Tiefe", x: "Am Grund des Nebelmeers schlägt ein Herz so groß wie eine Insel. Mit jedem Schlag sinkt Albion ein Stück. Hinter dir stehen alle, die du je beschützt hast. Vor dir steht der Erste König der Tiefe.", foes: [{ mon: "todesritter" }, { mon: "sturmdrache" }, { name: "Der Erste König der Tiefe", arch: "todesritter", color: "#1a1622", accent: "#ff5a3d", boss: true, final: true }] },
+      // dritter Akt (0.80): Ueber den Wolken
+      { lv: 55, t: "Der Himmel reißt auf", x: "Seit das Herz der Tiefe schweigt, steigen die Splitter. Jeden Morgen liegt Kreidenfels ein Stück höher, und gestern hat ein Fischer eine Wolke geangelt. Über den Wolken singt ein Chor aus Licht. Er singt deinen Namen, aber nicht freundlich.", foes: [{ mon: "fahlerschemen" }, { mon: "aasflatterer" }, { name: "Der Erste Herold des Himmels", arch: "schemen", color: "#fff4d6", accent: "#ffd27a", boss: true }] },
+      { lv: 60, t: "Die Festung in den Wolken", x: "Über Kreidenfels ankert eine Festung aus Wolkenstein. Ihre Ritter tragen Albions altes Wappen, nur seitenverkehrt. Ihr Marschall lädt dich höflich zur Kapitulation ein. Du lehnst höflich ab.", foes: [{ mon: "grabritter" }, { mon: "eisengolem" }, { name: "Wolkenmarschall Aurel", arch: "todesritter", color: "#d8dce6", accent: "#ffd27a", boss: true }] },
+      { lv: 65, t: "Die Sternenschmiede", x: "In der Festung schmiedet jemand Sterne. Jeder fertige Stern wird an einen Splitter genagelt, damit er gehorcht. Der Schmied ist sehr stolz auf seine Nägel und zeigt sie dir gern aus der Nähe.", foes: [{ mon: "obsidiangolem" }, { name: "Sternenschmied Ignatius", arch: "golem", color: "#4a4f6a", accent: "#ffe27a", boss: true }] },
+      { lv: 72, t: "Der König, der erwachte", x: "Der schlafende König unter dem Steinkreis ist endlich erwacht. Leider haben ihn die Herren des Himmels geweckt, und er hält sie für seine Engel. Von dir ist er sehr enttäuscht.", foes: [{ mon: "todesritter" }, { mon: "grabritter" }, { name: "König Arthwen der Wiedergekehrte", arch: "todesritter", color: "#c9a441", accent: "#fff4d6", boss: true }] },
+      { lv: 80, t: "Die Krone über den Wolken", x: "Ganz oben, wo die Luft nach Eisen schmeckt, sitzt der Himmelsfürst auf einem Thron aus gefrorenem Licht. Er hat die Splitter einst in die Luft gehoben, und jetzt will er sie zurück. Albion gehört niemandem, schon gar nicht dem Himmel.", foes: [{ mon: "sturmdrache" }, { name: "Der Himmelsfürst von Albion", arch: "drache", color: "#f0e8d0", accent: "#ffd27a", boss: true, final: true }] },
     ],
     midgard: [
       { lv: 1, t: "Kälte formt Helden", x: "Die Jarle schicken dich nach Schwebfels. Nicht als Wächter, sondern als Beweis, dass der Norden noch Zähne hat. Am Hafen warten bereits hungrige Wölfe auf diesen Beweis.", foes: [{ mon: "grauwolf" }, { mon: "grauwolf" }] },
@@ -337,6 +367,11 @@
       { lv: 40, t: "Das Nest der Eiswyrme", x: "Die Eiswyrme brüten. Wenn ihre Jungen schlüpfen, wird Midgard nie wieder einen Sommer sehen. Die Wyrmmutter weiß, dass du kommst. Sie freut sich auf das Futter.", foes: [{ mon: "eiswyrm" }, { name: "Die Eiswyrm-Mutter", arch: "drache", color: "#cfe8ff", accent: "#2f5fa8", boss: true }] },
       { lv: 45, t: "Unter dem Weltenbaum", x: "Die Tiefe nagt an den Wurzeln des Weltenbaums, der die Splitter Midgards hält. Du steigst hinab zwischen die Wurzeln. Etwas hat dort sehr lange gefressen und ist immer noch hungrig.", foes: [{ mon: "leerenspinne" }, { mon: "schattenwolf" }, { name: "Nidhögg der Wurzelnager", arch: "drache", color: "#2a2633", accent: "#7fffb0", boss: true }] },
       { lv: 50, t: "Götterdämmerung", x: "Die Skalden haben das Ende der Welt besungen. Jetzt ist es da, und es hat einen Schlund. Die Götter schweigen. Also sprichst du für sie.", foes: [{ mon: "sturmdrache" }, { mon: "obsidiangolem" }, { name: "Der Schlund unter der Welt", arch: "schlund", color: "#1a1418", accent: "#ff5a3d", boss: true, final: true }] },
+      { lv: 55, t: "Bifröst brennt", x: "Die Regenbogenbrücke, die seit tausend Wintern niemand gesehen hat, ist plötzlich wieder da und brennt an beiden Enden. Wer sie bewacht, lässt niemanden durch, auch keine Helden, und schon gar keine nassen.", foes: [{ mon: "aasflatterer" }, { mon: "reifgolem" }, { name: "Brückenwächterin Heimdra", arch: "golem", color: "#e6ecff", accent: "#ff9a3d", boss: true }] },
+      { lv: 60, t: "Walküren ohne Herrn", x: "Die Walküren reiten wieder, aber niemand sagt ihnen mehr, wen sie holen sollen. Also holen sie jeden. Gestern einen Bäcker, heute vielleicht dich.", foes: [{ mon: "draugrfuerst" }, { name: "Walküre Sigrdrifa", arch: "schemen", color: "#cfe8ff", accent: "#ffd27a", boss: true }] },
+      { lv: 65, t: "Die Riesen am Himmelsrand", x: "Am Rand der Wolken stehen Riesen und werfen Hagel nach Midgard, Brocken so groß wie Langhäuser. Die Skalden nennen es Wetter. Du nennst es Arbeit.", foes: [{ mon: "bergtroll" }, { mon: "bergtroll" }, { name: "Hagelriese Grund", arch: "troll", color: "#9fb4c9", accent: "#e9fbff", boss: true }] },
+      { lv: 72, t: "Die Halle der Gefallenen", x: "Die Halle der Gefallenen hat ihre Tore geöffnet, und die Einherjar marschieren. Ihr Fürst hält dich für einen Rekruten und bietet dir einen Platz an. Du müsstest nur vorher sterben.", foes: [{ mon: "todesritter" }, { mon: "draugrfuerst" }, { name: "Einherjar-Fürst Ragnvald", arch: "todesritter", color: "#6a7a8a", accent: "#ffd27a", boss: true }] },
+      { lv: 80, t: "Der Urriese erwacht", x: "Aus dem Eis über den Wolken steigt der Urriese, aus dessen Knochen der Norden gemacht sein soll. Er will sie zurück, alle. Die Götter schweigen noch immer. Also sprichst du wieder für sie, diesmal lauter.", foes: [{ mon: "reifgolem" }, { name: "Ymirsson der Urriese", arch: "troll", color: "#cfe8ff", accent: "#4fa9ff", boss: true, final: true, pow: 0.88 }] },
     ],
     hibernia: [
       { lv: 1, t: "Der Hain vergisst nicht", x: "Die Druiden schicken dich nach Schwebfels, weil die Bäume unruhig sind. Bäume sind nie ohne Grund unruhig. Im Nebelhain wachsen Sporlinge, und sie wachsen viel zu schnell.", foes: [{ mon: "sporling" }, { mon: "sporling" }] },
@@ -349,6 +384,11 @@
       { lv: 40, t: "Die ertrinkende See", x: "Der Mondsee steigt, obwohl es nicht regnet. Aus der Tiefe singt Muirgen, die einst eine Heilige war. Wer ihr Lied hört, geht freiwillig ins Wasser. Halte dir die Ohren zu.", foes: [{ mon: "urschlund" }, { mon: "irrlichtschemen" }, { name: "Muirgen die Tiefe", arch: "schemen", color: "#1f3a4a", accent: "#9fffe0", boss: true }] },
       { lv: 45, t: "Das Grab der Smaragdschlange", x: "Unter Glenfeyn liegt ein Grab, das niemand öffnen soll. Jemand hat es geöffnet. Was herauskam, ist grün, glänzt und hat dich bereits gerochen.", foes: [{ mon: "leerenspinne" }, { name: "Der Smaragdwyrm-Ahn", arch: "drache", color: "#1f5a3a", accent: "#7fffb0", boss: true }] },
       { lv: 50, t: "Wenn die Sterne fallen", x: "Die Sterne über Hibernia fallen, einer nach dem anderen, in die Tiefe. Unten wartet die Mutter der Tiefe und sammelt sie wie Beeren. Wenn sie den letzten hat, wird es für immer Nacht.", foes: [{ mon: "leerenschemen" }, { mon: "urschlund" }, { name: "Die Mutter der Tiefe", arch: "baum", color: "#14121c", accent: "#c47bff", boss: true, final: true }] },
+      { lv: 55, t: "Die Sterne kehren heim", x: "Die Sterne, die die Mutter der Tiefe gesammelt hatte, steigen wieder auf. Nicht alle wollen zurück an den Himmel. Einige haben unterwegs Beine bekommen. Viele Beine.", foes: [{ mon: "kristallweberin" }, { mon: "irrlichtschemen" }, { name: "Die Sternenweberin", arch: "spinne", color: "#2a2a4a", accent: "#e6ecff", boss: true }] },
+      { lv: 60, t: "Der Hohe Hof", x: "Über den Wolken hält der Hohe Hof der Sidhe Gericht. Angeklagt ist Hibernia, weil es den Himmel vergessen hat. Die Richterin ist die Fürstin selbst. Der Verteidiger bist du.", foes: [{ mon: "irrlichtschemen" }, { name: "Fürstin Aoibheall vom Hohen Hof", arch: "schemen", color: "#e6ffe0", accent: "#7fffb0", boss: true }] },
+      { lv: 65, t: "Der Hain über den Wolken", x: "Auf den höchsten Wolken wächst ein Wald, dessen Wurzeln nach unten greifen, bis nach Glenfeyn. Er trinkt Hibernias Bäche leer. Die Bäume sind sehr durstig und sehr groß.", foes: [{ mon: "dornenhirte" }, { mon: "moderhirte" }, { name: "Der Himmelshain", arch: "baum", color: "#2f5a3a", accent: "#d9f27a", boss: true }] },
+      { lv: 72, t: "Das Lied der Banshee", x: "Nachts weint über Glenfeyn eine Banshee. Jeder, für den sie weint, stirbt binnen einer Woche. Gestern hat sie für dich geweint. Du hast also sechs Tage Zeit.", foes: [{ mon: "fahlerschemen" }, { mon: "leerenschemen" }, { name: "Die Banshee von Glenfeyn", arch: "schemen", color: "#cfe9ff", accent: "#9fffe0", boss: true }] },
+      { lv: 80, t: "Der Silberne König", x: "Der König der Sidhe kehrt vom Himmel zurück, um Hibernia heimzuholen, Hügel für Hügel, in eine Welt ohne Morgen. Er ist schön, uralt und vollkommen sicher, dass du nachgibst.", foes: [{ mon: "smaragdwyrm" }, { name: "Der Silberne König", arch: "schemen", color: "#e6ecff", accent: "#7fffb0", boss: true, final: true }] },
     ],
   };
 
@@ -677,6 +717,23 @@
         { name: "Sturmdrache Tempestas", arch: "drache", color: "#1f2f8f", accent: "#9fe3ff", final: true },
       ],
     },
+    // 0.80: siebtes Verlies ueber dem Sturm; einziges mit Chance auf mythische Beute (myth: je Boss, Endboss), Kulisse
+    // vom Auge des Sturms (kulisse), nicht in der Wochenboss-Auswahl (spaet), Bosse 0,4 staerker als die Formel (zusatz)
+    {
+      id: "himmelsthron", name: "Der Himmelsthron", unlock: 55, base: 58, theme: "#ffd27a", kulisse: "sturmkern", spaet: true, zusatz: 0.4,
+      myth: { boss: 0.04, final: 0.3 },
+      desc: "Über dem ewigen Sturm thront der Hof des Himmels. Wer bis hierher steigt, sieht die Splitter von oben, und manche Schätze dort sind nicht von dieser Welt.",
+      bosses: [
+        { name: "Wolkenhüter Nimbus", arch: "golem", color: "#d8dce6", accent: "#ffd27a" },
+        { name: "Sturmfalke Kreischwind", arch: "fledermaus", color: "#c8b48a", accent: "#9fe3ff" },
+        { name: "Himmelsspinne Lichtfaden", arch: "spinne", color: "#e6ecff", accent: "#ffd27a" },
+        { name: "Herold Strahlenkranz", arch: "schemen", color: "#fff4d6", accent: "#ffb13b" },
+        { name: "Thronritter Ewigwacht", arch: "todesritter", color: "#c9ccd2", accent: "#ffd27a" },
+        { name: "Sternentroll Funkelfaust", arch: "troll", color: "#4a4f6a", accent: "#ffe27a" },
+        { name: "Sonnenwyrm Glutkrone", arch: "drache", color: "#c96a2a", accent: "#ffe27a" },
+        { name: "Die Kaiserin der Wolken", arch: "schemen", color: "#fff4d6", accent: "#ff5a4a", final: true },
+      ],
+    },
   ];
 
   const PLACES = ["Kreidefurt", "Eschenmoor", "Rabenstein", "Nebelhain", "Frostfurt", "Schwarzsee", "Druidenfels", "Wolfsklamm",
@@ -738,6 +795,16 @@
     midgard: [["Die Eisbärte", "EIS"], ["Sturmrudel", "RUDL"], ["Haus Hrafn", "HRFN"], ["Die Methalle", "MET"]],
     hibernia: [["Hüter des Hains", "HAIN"], ["Mondschleier", "MOND"], ["Die Dornenkrone", "DORN"], ["Kinder des Nebels", "NBL"]],
   };
+
+  /* Gildenbosse (0.80): je Woche und Gilde einer, sein Leben besteht aus Abschnitten, die die Gilde gemeinsam bricht */
+  const GUILD_BOSSES = [
+    { id: "wolkenkraken", name: "Der Wolkenkraken", arch: "schlund", color: "#5f6f9f", accent: "#9fe3ff", desc: "Er hat sich um einen ganzen Splitter gewickelt und drückt langsam zu." },
+    { id: "aschenkoloss", name: "Der Aschenkoloss", arch: "golem", color: "#3a3030", accent: "#ff7a3d", desc: "Ein wandelnder Berg aus Schlacke, der jede Nacht ein Dorf weiterzieht." },
+    { id: "nebelmutter", name: "Die Nebelmutter", arch: "spinne", color: "#cfd8e6", accent: "#c47bff", desc: "Ihre Netze spannen sich von Insel zu Insel. Wer darin hängt, vergisst, wer er ist." },
+    { id: "grollgrimm", name: "Grollgrimm der Bergbrecher", arch: "troll", color: "#6a7f9a", accent: "#ffe45a", desc: "Er reißt Brücken ein, um sich Zahnstocher daraus zu machen." },
+    { id: "schattenwyrm", name: "Der Schattenwyrm", arch: "drache", color: "#1a1622", accent: "#c47bff", desc: "Wo sein Schatten fällt, wird es mitten am Tag Nacht." },
+    { id: "eisenwald", name: "Der Eiserne Wald", arch: "baum", color: "#4a4f58", accent: "#ffd27a", desc: "Ein Hain aus rostigen Bäumen, der wandert und alles Metall frisst." },
+  ];
 
   const POTIONS = [
     { id: "baerenkraft", name: "Bärenkraft-Elixier", desc: "+15 % auf deinen Hauptwert für 30 Minuten.", eff: { main: 0.15 }, mins: 30, cost: { goldMult: 2.2 }, color: "#e0644f" },
@@ -805,6 +872,12 @@
     { id: "mondjaeger25", name: "Schrecken der Nacht", desc: "Gewinne 25 Nachtjagden am Mondtor.", perlen: 6, hard: true },
     { id: "legendaer5", name: "Schatzhüter", desc: "Finde 5 legendäre Gegenstände.", perlen: 8, hard: true },
     { id: "bestiarium30", name: "Weltenkundler", desc: "Entdecke 30 Wesen im Bestiarium.", perlen: 6, hard: true },
+    // 0.80
+    { id: "himmelsthron", name: "Thronsturz", desc: "Stürze die Kaiserin der Wolken im Himmelsthron.", perlen: 12, hard: true },
+    { id: "mythisch1", name: "Nicht von dieser Welt", desc: "Finde einen mythischen Gegenstand im Himmelsthron.", perlen: 6, hard: true },
+    { id: "gildenboss", name: "Seite an Seite", desc: "Bezwinge mit deiner Gilde einen Gildenboss.", perlen: 4 },
+    { id: "gilde10", name: "Gildenlegende", desc: "Bringe deine Gilde auf Stufe 10.", perlen: 10, hard: true },
+    { id: "gefaehrte5", name: "Treue Seele", desc: "Erreiche mit einem Gefährten fünf Treuesterne.", perlen: 6, hard: true },
   ];
 
   const WELL_PRIZES = [
@@ -866,7 +939,7 @@
   SB.data = {
     ATTRS, ATTR_INFO, LORE, REALMS, RACES, TATTOOS, TATTOO_COLORS, SCARS, EYES, HAIR_STYLES, BEARDS,
     ARCHETYPES, CLASSES, REALM_STORY, SLOTS, SLOT_INFO, BASES, RARITIES, RARITY_ORDER, ADJ, SUFFIX, LEGEND_NAMES,
-    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES,
+    MONSTER_TYPES, ARCH_TYPE, ARCH_NAMES, MONSTERS, NIGHT_FOES, DUNGEONS, PLACES, PERSONS, QUESTS, RARE_QUESTS, BOSS_QUESTS, NPC_FIRST, NPC_LAST, GUILD_NAMES, GUILD_BOSSES,
     POTIONS, MOUNTS, HOUSE_TIERS, FURNITURE, ACHIEVEMENTS, WELL_PRIZES, NPCS, BUILDINGS, TALENT_TIER_REQ, TALENT_EFFECTS, TALENT_ARCH, TALENT_CLASS, RUHM, JAGD, JAGD_TITEL,
   };
 })();

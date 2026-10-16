@@ -142,8 +142,9 @@
   E.energyMax = (S) => E.C.ENERGY_MAX + E.furn(S, "lager") * 10;
   E.invSize = (S) => E.C.INV_SIZE + E.furn(S, "truhe") * 2;
   E.bossesDefeated = (S) => Object.values(S.dungeons.progress).reduce((a, b) => a + b, 0);
-  E.goldBonus = (S) => (E.furn(S, "trophaeen") ? E.bossesDefeated(S) * 0.01 : 0);
-  E.xpBonus = (S) => E.furn(S, "herd") * 0.03;
+  // dazu je Gildenstufe 1 % (0.80, E.guildBonus)
+  E.goldBonus = (S) => (E.furn(S, "trophaeen") ? E.bossesDefeated(S) * 0.01 : 0) + (S.guild ? E.guildBonus(S).gold : 0);
+  E.xpBonus = (S) => E.furn(S, "herd") * 0.03 + (S.guild ? E.guildBonus(S).xp : 0);
   E.buyHouseTier = function (S) {
     const next = D.HOUSE_TIERS[S.house.tier + 1];
     if (!next) return { ok: false, msg: "Dein Heim ist bereits vollständig ausgebaut." };
@@ -335,6 +336,8 @@
       ruhm: {},
       pets: [],
       petActive: null,
+      petActive2: null,
+      gilde: { pts: {}, boss: null },
       staub: 0,
       shops: {},
       buffs: [],
@@ -403,6 +406,10 @@
     S.house = S.house || { tier: 0, furn: {} };
     S.house.furn = S.house.furn || {};
     S.guild = S.guild || null;
+    // 0.80: Gildenleben; wer schon in einer Gilde ist, zaehlt ab jetzt
+    if (S.guild && !S.guild.joined) S.guild.joined = E.now();
+    S.gilde = S.gilde && typeof S.gilde === "object" ? S.gilde : { pts: {}, boss: null };
+    S.gilde.pts = S.gilde.pts || {};
     S.seen = S.seen || {};
     S.daily = Object.assign({ nightHunts: 0 }, S.daily || {});
     // Version 0.67: freier Brunnenwurf alle 8 Stunden statt einmal am Tag (wer heute schon geworfen hat, darf gleich)
@@ -414,6 +421,7 @@
     S.staub = typeof S.staub === "number" ? S.staub : 0;
     S.pets = Array.isArray(S.pets) ? S.pets : [];
     if (typeof S.petActive !== "string") S.petActive = null;
+    if (typeof S.petActive2 !== "string") S.petActive2 = null;
     S.jagd = S.jagd && typeof S.jagd === "object" ? S.jagd : {};
     if (typeof S.title !== "string") S.title = null;
     S.arena = Object.assign({ next: 0, wins: 0, losses: 0, roll: 0, freeRoll: true, prev: [] }, S.arena || {});
@@ -1461,7 +1469,7 @@
   };
   E.buyBrew = function (S, now) {
     now = now || E.now();
-    if (S.daily.brews >= E.C.BREW_MAX) return { ok: false, msg: "Hulda schenkt heute nichts mehr aus. Morgen wieder." };
+    if (S.daily.brews >= E.brewMax(S)) return { ok: false, msg: "Hulda schenkt heute nichts mehr aus. Morgen wieder." };
     if (S.perlen < 1) return { ok: false, msg: "Ein Krug Nebelmet kostet eine Wolkenperle." };
     S.perlen -= 1;
     S.daily.brews++;
@@ -1494,6 +1502,8 @@
       let p = f.final ? (n >= 3 ? 0.86 : 0.96) : f.boss ? (n >= 3 ? 0.82 : n === 2 ? 0.86 : 0.95) : n >= 3 ? 0.55 : n === 2 ? 0.66 : 0.78;
       // zweiter Akt (ab Stufe 40): Endkaempfe mit Gewicht, der Held soll merken, dass es um alles geht
       if (ch.lv >= 40) p *= f.final ? (n >= 2 ? 1.12 : 1.05) : 1.05;
+      // Feinabstimmung je Gegner (pow): Trolle sind so zaeh, dass Magier sonst an ihnen scheitern
+      if (f.pow) p *= f.pow;
       return E.monsterFighter(mon, L, E.adaptPower(hero, L, p), { boss: !!f.boss, final: !!f.final });
     });
   };
@@ -1803,19 +1813,164 @@
     if (!/^[\p{L}\p{N}]{2,4}$/u.test(tag)) return { ok: false, msg: "Das Kürzel braucht 2 bis 4 Buchstaben oder Ziffern." };
     if (S.gold < E.C.GUILD_COST) return { ok: false, msg: "Eine Gilde zu gründen kostet " + E.C.GUILD_COST + " Gold." };
     S.gold -= E.C.GUILD_COST;
-    S.guild = { id: id || "p-" + U.uid(), name, tag, realm: S.realm, founder: true };
+    S.guild = { id: id || "p-" + U.uid(), name, tag, realm: S.realm, founder: true, joined: E.now(), mates: 0 };
     E.grantAch(S, "gilde");
     return { ok: true, guild: S.guild };
   };
-  E.joinGuild = function (S, g) {
+  // mates: Zahl der uebrigen Mitglieder (die Oberflaeche zaehlt sie aus der Rangliste nach)
+  E.joinGuild = function (S, g, mates) {
     if (!g || g.realm !== S.realm) return { ok: false, msg: "Du kannst nur einer Gilde deines Reiches beitreten." };
-    S.guild = { id: g.id, name: g.name, tag: g.tag, realm: g.realm };
+    S.guild = { id: g.id, name: g.name, tag: g.tag, realm: g.realm, joined: E.now(), mates: Math.max(0, mates | 0) };
     E.grantAch(S, "gilde");
     return { ok: true };
   };
   E.leaveGuild = function (S) {
     S.guild = null;
     return { ok: true };
+  };
+
+  /* ---------------- Gildenleben (0.80) ----------------
+     Gildenruhm ergibt die Gildenstufe 1 bis 10. Er kommt aus den eigenen Beitraegen (Spenden, Gildenboss; je Gilde
+     gemerkt in S.gilde.pts, ein Wiedereintritt behaelt sie) und aus den uebrigen Mitgliedern, die je Tag seit dem
+     Beitritt 2 Ruhm beitragen (hoechstens 12 zaehlen). Jede Stufe gibt +1 % Gold und Erfahrung, Stufe 5 und 10 je
+     einen Krug Nebelmet mehr am Tag. Der Gildenboss der Woche hat 12 Abschnitte: jeder Kampf bricht einen ganz
+     (Sieg) oder anteilig (Niederlage), die uebrigen Mitglieder brechen je Tag 0,12 je Kopf, zusammen hoechstens 6. */
+  E.C.GUILD_LV = [0, 30, 80, 160, 280, 450, 680, 980, 1360, 1840];
+  E.C.GUILD_DONATE_MAX = 3;
+  E.C.GUILD_DONATE_PTS = 10;
+  E.C.GUILD_PERL_PTS = 15;
+  E.C.GBOSS_SEG = 12;
+  E.C.GBOSS_ENERGY = 10;
+  E.C.GBOSS_UNLOCK = 10;
+  E.C.GBOSS_MATE_DAY = 0.12;
+  E.gilde = (S) => (S.gilde = S.gilde && typeof S.gilde === "object" ? S.gilde : { pts: {}, boss: null });
+  E.setGuildMates = function (S, n) {
+    if (S.guild) S.guild.mates = Math.max(0, n | 0);
+  };
+  E.guildPoints = function (S, now) {
+    if (!S.guild) return 0;
+    const own = E.gilde(S).pts[S.guild.id] || 0;
+    const days = Math.max(0, ((now || E.now()) - (S.guild.joined || E.now())) / 864e5);
+    return Math.round(own + Math.min(12, S.guild.mates || 0) * days * 2);
+  };
+  E.guildLevel = function (S, now) {
+    if (!S.guild) return 0;
+    const p = E.guildPoints(S, now);
+    let lv = 1;
+    while (lv < E.C.GUILD_LV.length && p >= E.C.GUILD_LV[lv]) lv++;
+    return lv;
+  };
+  E.guildBonus = function (S, now) {
+    const lv = E.guildLevel(S, now);
+    return { lv, gold: lv * 0.01, xp: lv * 0.01, brews: (lv >= 5 ? 1 : 0) + (lv >= 10 ? 1 : 0) };
+  };
+  E.brewMax = (S) => E.C.BREW_MAX + E.guildBonus(S).brews;
+  function addGuildPts(S, n) {
+    const G = E.gilde(S);
+    G.pts[S.guild.id] = (G.pts[S.guild.id] || 0) + n;
+    if (E.guildLevel(S) >= 10) E.grantAch(S, "gilde10");
+  }
+  E.guildDonate = function (S, kind) {
+    if (!S.guild) return { ok: false, msg: "Dafür brauchst du eine Gilde." };
+    if ((S.daily.donations || 0) >= E.C.GUILD_DONATE_MAX) return { ok: false, msg: "Die Gildenkasse nimmt heute nichts mehr an. Morgen wieder." };
+    let pts;
+    if (kind === "perle") {
+      if (S.perlen < 1) return { ok: false, msg: "Dafür brauchst du eine Wolkenperle." };
+      S.perlen -= 1;
+      pts = E.C.GUILD_PERL_PTS;
+    } else {
+      const cost = E.guildDonateCost(S);
+      if (S.gold < cost) return { ok: false, msg: "Eine Spende kostet " + U.fmt(cost) + " Gold." };
+      S.gold -= cost;
+      pts = E.C.GUILD_DONATE_PTS;
+    }
+    const before = E.guildLevel(S);
+    S.daily.donations = (S.daily.donations || 0) + 1;
+    addGuildPts(S, pts);
+    E.dailyProgress(S, "gilde");
+    return { ok: true, pts, up: E.guildLevel(S) > before ? E.guildLevel(S) : 0 };
+  };
+  E.guildDonateCost = (S) => Math.round(E.goldBase(S.level) * 4);
+  // Gildenboss der Woche: je Woche und Gilde fest, der eigene Fortschritt (seg) zaehlt nur fuer diese Gilde
+  E.guildBoss = function (S, now) {
+    if (!S.guild) return null;
+    now = now || E.now();
+    const week = E.weekKey(now);
+    const G = E.gilde(S);
+    if (!G.boss || G.boss.week !== week || G.boss.guild !== S.guild.id) G.boss = { week, guild: S.guild.id, seg: 0, tries: 0, done: false };
+    const def = D.GUILD_BOSSES[Math.abs(U.hash("gboss" + week + S.guild.id)) % D.GUILD_BOSSES.length];
+    const mon = { id: "gboss-" + def.id, name: def.name, arch: def.arch, color: def.color, accent: def.accent };
+    const [wy, wm, wd] = week.split("-").map(Number);
+    const monday = new Date(wy, wm - 1, wd).getTime();
+    const days = Math.max(0, (now - monday) / 864e5);
+    const mateSeg = Math.min(E.C.GBOSS_SEG / 2, Math.min(12, S.guild.mates || 0) * E.C.GBOSS_MATE_DAY * days);
+    const total = Math.min(E.C.GBOSS_SEG, G.boss.seg + mateSeg);
+    return { week, def, mon, L: S.level, seg: G.boss.seg, mateSeg, total, left: E.C.GBOSS_SEG - total, done: G.boss.done, tries: G.boss.tries };
+  };
+  E.gbossFoe = (b, hero) => E.monsterFighter(b.mon, b.L, E.adaptPower(hero, b.L, 1.05), { boss: true });
+  E.gbossFight = function (S, now) {
+    now = now || E.now();
+    if (!S.guild) return { ok: false, msg: "Den Gildenboss bekämpfst du mit einer Gilde." };
+    if (S.level < E.C.GBOSS_UNLOCK) return { ok: false, msg: "Den Gildenboss darfst du ab Stufe " + E.C.GBOSS_UNLOCK + " angreifen." };
+    if (E.busy(S)) return { ok: false, msg: "Du bist gerade beschäftigt." };
+    const b = E.guildBoss(S, now);
+    if (b.done) return { ok: false, msg: b.def.name + " ist diese Woche schon gefallen. Montag kommt der nächste." };
+    const en = E.energy(S, now);
+    if (en < E.C.GBOSS_ENERGY) return { ok: false, msg: "Dir fehlt der Tatendrang. Ein Krug Nebelmet hilft." };
+    E.setEnergy(S, en - E.C.GBOSS_ENERGY, now);
+    const hero = E.heroFighter(S, now);
+    const foe = E.gbossFoe(b, hero);
+    E.gilde(S).boss.tries++;
+    const chain = E.simulateChain(hero, [foe], U.hash(S.name + "gboss" + b.week + now));
+    return { ok: true, fight: { hero, foes: [foe], chain, gboss: b } };
+  };
+  E.resolveGboss = function (S, fight, now) {
+    now = now || E.now();
+    const won = fight.chain.winner === 0;
+    const b = fight.gboss;
+    const foe = fight.foes[0];
+    const w = fight.chain.waves[0];
+    // Anteil des gebrochenen Abschnitts: ganz bei Sieg, sonst der angerichtete Schaden
+    const frac = won ? 1 : Math.max(0, Math.min(1, 1 - (w ? w.hp[1] : foe.maxHp) / foe.maxHp));
+    const G = E.gilde(S);
+    G.boss.seg = Math.min(E.C.GBOSS_SEG, G.boss.seg + frac);
+    const gpts = 1 + Math.round(4 * frac);
+    const rew = { won, xp: 0, gold: 0, item: null, perlen: 0, itemSold: 0, gpts };
+    rew.gold = Math.round(E.goldBase(S.level) * 1.5 * frac * (1 + E.goldBonus(S)));
+    rew.xp = Math.round(E.xpReward(S.level) * 0.03 * frac * (1 + E.xpBonus(S)));
+    const after = E.guildBoss(S, now);
+    if (after.total >= E.C.GBOSS_SEG - 1e-9 && !G.boss.done) {
+      G.boss.done = true;
+      rew.fell = true;
+      rew.perlen = 3;
+      S.perlen += 3;
+      rew.gold += Math.round(E.goldBase(S.level) * 10 * (1 + E.goldBonus(S)));
+      rew.gpts += 40;
+      const r = U.rng(U.hash(S.name + "gbossbeute" + b.week));
+      giveItem(S, E.makeItem(r, { level: S.level + 1, cls: S.cls, minRarity: "episch", boost: 1.5 + E.lootBoost(S) }), rew);
+      E.grantAch(S, "gildenboss");
+    }
+    addGuildPts(S, rew.gpts);
+    E.gainGold(S, rew.gold);
+    E.gainXp(S, rew.xp);
+    // Texte ohne gebeugten Bossnamen (Der Aschenkoloss, Die Nebelmutter: Artikel stehen im Namen)
+    const pct = Math.round(frac * 100);
+    rew.head = rew.fell ? b.def.name + " fällt!" : won ? "Abschnitt gebrochen!" : pct >= 1 ? "Treffer gelandet" : "";
+    rew.sub = rew.fell
+      ? "Gemeinsam mit deiner Gilde ist der Gildenboss dieser Woche bezwungen. Die Gildenkasse klingelt."
+      : won
+        ? "Ein ganzer Lebensabschnitt des Gildenbosses ist gebrochen. Noch " + U.fmt(Math.max(0, Math.ceil(after.left * 10) / 10)) + " von " + E.C.GBOSS_SEG + " übrig."
+        : pct >= 1
+          ? "Du musstest dich zurückziehen, hast aber " + pct + " % eines Lebensabschnitts gebrochen."
+          : "Der Gildenboss hat kaum einen Kratzer abbekommen. Bessere Ausrüstung und Attribute helfen.";
+    if (!rew.head) delete rew.head;
+    if (!rew.sub) delete rew.sub;
+    if (won) {
+      S.stats.wins++;
+      E.dailyProgress(S, "gboss", now);
+    } else S.stats.losses++;
+    E.checkAch(S, now);
+    return rew;
   };
 
   /* ---------------- Arena: Ring der Reiche ---------------- */
@@ -1995,7 +2150,8 @@
     const D0 = D.DUNGEONS[d];
     const b = D0.bosses[floor];
     const mon = E.dungeonMon(D0.id + "-" + floor);
-    return { mon, L: D0.base + floor, power: 0.95 + 0.02 * floor + (b.final ? 0.05 : 0), final: !!b.final };
+    // zusatz: Staerkezuschlag eines Verlieses (Himmelsthron 0.80), damit es sich nach Endgame anfuehlt
+    return { mon, L: D0.base + floor, power: 0.95 + 0.02 * floor + (b.final ? 0.05 : 0) + (D0.zusatz || 0), final: !!b.final };
   };
   E.dungeonFight = function (S, d, now) {
     now = now || E.now();
@@ -2022,7 +2178,16 @@
       rew.xp = Math.round(E.xpReward(Math.min(S.level, b.L)) * (b.final ? 0.6 : 0.32) * E.bestiaryBonus(S));
       rew.gold = Math.round(E.goldBase(b.L) * (b.final ? 8 : 3));
       const r = U.rng(U.hash(b.mon.id + now));
-      giveItem(S, E.makeItem(r, Object.assign({ level: b.L, cls: S.cls }, E.bossLoot(b.L, b.final, b.final ? 2 : 0.6, E.lootBoost(S)))), rew);
+      // Himmelsthron (0.80): eigener Wurf auf mythische Beute, damit die uebrige Zufallsfolge gleich bleibt
+      const mythP = D0.myth ? (b.final ? D0.myth.final : D0.myth.boss) : 0;
+      const myth = mythP > 0 && U.rng(U.hash("mythos" + b.mon.id + now))() < mythP;
+      const loot = Object.assign({ level: b.L, cls: S.cls }, E.bossLoot(b.L, b.final, b.final ? 2 : 0.6, E.lootBoost(S)));
+      if (myth) loot.rarity = "mythisch";
+      giveItem(S, E.makeItem(r, loot), rew);
+      if (myth) {
+        S.stats.myths = (S.stats.myths || 0) + 1;
+        rew.myth = true;
+      }
       if (b.final) {
         rew.perlen = 3;
         S.perlen += 3;
@@ -2079,8 +2244,9 @@
     { id: "sieg4", ev: "sieg", need: 4, text: "Gewinne 4 Kämpfe, ganz gleich wo" },
     { id: "brunnen1", ev: "brunnen", need: 1, text: "Wirf eine Münze in den Wunschbrunnen" },
     { id: "turm3", ev: "turm", need: 3, text: "Erklimme 3 Etagen des Wolkenturms", avail: (S) => S.level >= E.C.TURM_UNLOCK },
+    { id: "gilde1", ev: "gilde", need: 1, text: "Spende in die Gildenkasse", avail: (S) => !!S.guild },
   ];
-  const FIGHT_EVS = ["auftrag", "arena", "verlies", "nacht", "turm", "chronik", "wboss"];
+  const FIGHT_EVS = ["auftrag", "arena", "verlies", "nacht", "turm", "chronik", "wboss", "gboss"];
   E.dailyTasks = function (S) {
     if (!S.daily.tasks) {
       const r = U.rng(U.hash(S.name + "tag" + S.daily.day));
@@ -2125,8 +2291,10 @@
     now = now || E.now();
     const week = E.weekKey(now);
     if (!S.wboss || S.wboss.week !== week) S.wboss = { week, won: false, tries: 0 };
-    const di = Math.abs(U.hash("wboss" + week)) % D.DUNGEONS.length;
-    const D0 = D.DUNGEONS[di];
+    // nur die sechs urspruenglichen Verliese, damit die Wochenfolge mit dem Himmelsthron (0.80) gleich bleibt
+    const pool = D.DUNGEONS.filter((d) => !d.spaet);
+    const di = Math.abs(U.hash("wboss" + week)) % pool.length;
+    const D0 = pool[di];
     const fi = D0.bosses.length - 1;
     const mon = E.dungeonMon(D0.id + "-" + fi);
     return { week, mon, L: S.level, dungeon: D0, won: S.wboss.won, tries: S.wboss.tries };
@@ -2399,23 +2567,67 @@
   E.C.PET_CHANCE = { nacht: 0.2, turmboss: 0.15, verlies: 0.1 };
   E.PET_FAMS = ["wolf", "spinne", "drache", "krebs", "schlund", "fledermaus"];
   E.PET_EFF = { wolf: { dmg: 0.05 }, drache: { dmg: 0.06 }, spinne: { crit: 0.03 }, krebs: { armor: 0.1 }, schlund: { hp: 0.06 }, fledermaus: { evade: 0.02 } };
+  /* Ausbau (0.80): Fuettern gibt eine Stufe (hoechstens 3 je Tag, nie ueber die Heldenstufe), Kaempfe auf voller
+     Stufe sammeln Treue (alle 20 einen Stern, hoechstens 5, je Stern +10 % Wirkung), ab Heldenstufe 40 begleitet
+     ein zweiter Gefaehrte einer anderen Familie (S.petActive2). Umbenennen ist frei. */
+  E.C.PET_FEED_MAX = 3;
+  E.C.PET_LOYAL_PER_STAR = 20;
+  E.C.PET_STARS = 5;
+  E.C.PET2_LEVEL = 40;
   E.activePet = (S) => ((S.pets || []).find((p) => p.id === S.petActive) || null);
-  E.petLevel = (S, pet) => Math.max(1, Math.min(S.level, pet.lv + Math.floor((pet.fights || 0) / E.C.PET_FIGHTS_PER_LV)));
-  E.petMon = (pet) => E.monById(pet.mon) || { id: pet.mon, name: pet.name, arch: pet.arch, color: pet.color, accent: pet.accent };
-  // Bonus des Begleiters, voll bei Gefaehrtenstufe = Heldenstufe
-  E.petEffects = function (S) {
-    const pet = E.activePet(S);
-    if (!pet) return null;
-    const base = E.PET_EFF[pet.arch];
-    if (!base) return null;
-    const k = E.petLevel(S, pet) / Math.max(1, S.level);
-    const out = {};
-    for (const key in base) out[key] = base[key] * k;
+  E.activePets = function (S) {
+    const out = [];
+    const a = E.activePet(S);
+    if (a) out.push(a);
+    if (S.level >= E.C.PET2_LEVEL && S.petActive2) {
+      const b = (S.pets || []).find((p) => p.id === S.petActive2);
+      if (b && (!a || (b.id !== a.id && b.arch !== a.arch))) out.push(b);
+    }
     return out;
   };
+  E.petLevel = (S, pet) => Math.max(1, Math.min(S.level, pet.lv + (pet.fed || 0) + Math.floor((pet.fights || 0) / E.C.PET_FIGHTS_PER_LV)));
+  E.petStars = (pet) => Math.min(E.C.PET_STARS, Math.floor((pet.loyal || 0) / E.C.PET_LOYAL_PER_STAR));
+  E.petMon = (pet) => E.monById(pet.mon) || { id: pet.mon, name: pet.name, arch: pet.arch, color: pet.color, accent: pet.accent };
+  E.petFeedCost = (S) => Math.round(E.goldBase(S.level) * 1.5);
+  // Bonus der Begleiter, voll bei Gefaehrtenstufe = Heldenstufe, Treuesterne darueber hinaus
+  E.petEffects = function (S) {
+    const pets = E.activePets(S);
+    if (!pets.length) return null;
+    const out = {};
+    for (const pet of pets) {
+      const base = E.PET_EFF[pet.arch];
+      if (!base) continue;
+      const k = (E.petLevel(S, pet) / Math.max(1, S.level)) * (1 + 0.1 * E.petStars(pet));
+      for (const key in base) out[key] = (out[key] || 0) + base[key] * k;
+    }
+    return Object.keys(out).length ? out : null;
+  };
   E.petFought = function (S) {
-    const pet = E.activePet(S);
-    if (pet) pet.fights = (pet.fights || 0) + 1;
+    for (const pet of E.activePets(S)) {
+      const full = E.petLevel(S, pet) >= S.level;
+      pet.fights = (pet.fights || 0) + 1;
+      if (full) pet.loyal = (pet.loyal || 0) + 1;
+    }
+  };
+  E.feedPet = function (S, id) {
+    const pet = (S.pets || []).find((p) => p.id === id);
+    if (!pet) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    if (E.petLevel(S, pet) >= S.level) return { ok: false, msg: pet.name + " ist schon so stark wie du. Mehr Futter macht nur satt." };
+    if ((S.daily.feeds || 0) >= E.C.PET_FEED_MAX) return { ok: false, msg: "Henrietta findet, für heute ist genug gefüttert. Morgen wieder." };
+    const cost = E.petFeedCost(S);
+    if (S.gold < cost) return { ok: false, msg: "Das Futter kostet " + U.fmt(cost) + " Gold." };
+    S.gold -= cost;
+    S.daily.feeds = (S.daily.feeds || 0) + 1;
+    pet.fed = (pet.fed || 0) + 1;
+    return { ok: true, pet, level: E.petLevel(S, pet) };
+  };
+  E.renamePet = function (S, id, name) {
+    const pet = (S.pets || []).find((p) => p.id === id);
+    if (!pet) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    name = String(name || "").trim().replace(/\s+/g, " ");
+    if (!/^[\p{L}\p{N} '\-.]{2,24}$/u.test(name)) return { ok: false, msg: "Der Name braucht 2 bis 24 Buchstaben." };
+    pet.name = name;
+    return { ok: true, pet };
   };
   E.tryCapture = function (S, foes, source, seed) {
     const chance = E.C.PET_CHANCE[source] || 0;
@@ -2430,9 +2642,21 @@
     toast("Du hast ein Jungtier eingefangen: " + f.name + "! Es wartet im Stall auf dich.", "good");
     return pet;
   };
-  E.setActivePet = function (S, id) {
-    if (id && !(S.pets || []).some((p) => p.id === id)) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+  // slot 2: zweiter Begleiter (ab Stufe 40, andere Familie als der erste)
+  E.setActivePet = function (S, id, slot) {
+    const pet = id ? (S.pets || []).find((p) => p.id === id) : null;
+    if (id && !pet) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
+    if (slot === 2) {
+      if (S.level < E.C.PET2_LEVEL) return { ok: false, msg: "Einen zweiten Gefährten kannst du ab Stufe " + E.C.PET2_LEVEL + " mitnehmen." };
+      const a = E.activePet(S);
+      if (pet && a && (a.id === pet.id || a.arch === pet.arch)) return { ok: false, msg: "Zwei Gefährten derselben Familie vertragen sich nicht. Wähle eine andere Familie." };
+      S.petActive2 = id || null;
+      return { ok: true };
+    }
     S.petActive = id || null;
+    // wird der erste zur Familie des zweiten, tritt der zweite zurueck
+    const b = S.petActive2 && (S.pets || []).find((p) => p.id === S.petActive2);
+    if (b && pet && (b.id === pet.id || b.arch === pet.arch)) S.petActive2 = null;
     return { ok: true };
   };
   E.releasePet = function (S, id) {
@@ -2440,6 +2664,7 @@
     if (i < 0) return { ok: false, msg: "Dieses Tier lebt nicht in deinem Stall." };
     const pet = S.pets.splice(i, 1)[0];
     if (S.petActive === id) S.petActive = null;
+    if (S.petActive2 === id) S.petActive2 = null;
     return { ok: true, pet };
   };
 
@@ -2638,7 +2863,15 @@
         const ch = E.storyChapters(S);
         return done(ch.filter((c) => c.done).length, ch.length);
       }
-      case "dungeonAll": return done(D.DUNGEONS.filter((d) => ((S.dungeons && S.dungeons.progress[d.id]) || 0) >= d.bosses.length).length, D.DUNGEONS.length);
+      // "alle sechs Verliese": der Himmelsthron (0.80) hat sein eigenes Abzeichen
+      case "dungeonAll": {
+        const six = D.DUNGEONS.filter((d) => !d.spaet);
+        return done(six.filter((d) => ((S.dungeons && S.dungeons.progress[d.id]) || 0) >= d.bosses.length).length, six.length);
+      }
+      case "himmelsthron": return done((S.dungeons && S.dungeons.progress.himmelsthron) || 0, 8);
+      case "mythisch1": return done(st.myths, 1);
+      case "gilde10": return done(E.guildLevel(S), 10);
+      case "gefaehrte5": return done(Math.max(0, ...(S.pets || []).map((p) => E.petStars(p))), 5);
       default: return null;
     }
   };
