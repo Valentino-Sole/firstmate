@@ -13,3 +13,7 @@ assets/gen-*.pack
 assets/gen.pack
 dist/gen-*.js
 dist/kulissen.js
+
+# Aufgenommene Musik (ElevenLabs, Rechte beim Abo des Kapitaens), nicht im Repository
+assets/musik/
+dist/musik-*.js

@@ -4928,6 +4928,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   let master = null;
   let sfxBus = null;
   let musicBus = null;
+  let procBus = null;
   let reverb = null;
   let noiseBuf = null;
 
@@ -4956,16 +4957,20 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       sfxBus = c.createGain();
       sfxBus.gain.value = 1;
       sfxBus.connect(master);
+      // musicBus blendet ein und aus (Ortswechsel, Lieder); die erzeugte Musik laeuft ueber procBus mit Hall,
+      // aufgenommene Stuecke (SB_MUSIK) ohne Hall direkt hinein
       musicBus = c.createGain();
       musicBus.gain.value = 0;
+      musicBus.connect(master);
+      procBus = c.createGain();
+      procBus.connect(musicBus);
       reverb = c.createConvolver();
       reverb.buffer = impulse(c, 3.2, 2.6);
       const wet = c.createGain();
       wet.gain.value = 0.45;
-      musicBus.connect(master);
-      musicBus.connect(reverb);
+      procBus.connect(reverb);
       reverb.connect(wet);
-      wet.connect(master);
+      wet.connect(musicBus);
       const len = c.sampleRate * 1.0;
       noiseBuf = c.createBuffer(1, len, c.sampleRate);
       const d = noiseBuf.getChannelData(0);
@@ -5525,7 +5530,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       o.stop(t + dur + 0.05);
     }
     f.connect(g);
-    g.connect(musicBus);
+    g.connect(procBus);
   }
   function pad(notes, t, dur, vol, bright) {
     const c = A.ctx;
@@ -5548,10 +5553,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         o.stop(t + dur + 0.1);
       }
     f.connect(g);
-    g.connect(musicBus);
+    g.connect(procBus);
   }
   function bell(n, t, vol) {
-    for (const [m, v, d] of [[1, 1, 2.2], [2.76, 0.4, 1.2], [5.4, 0.15, 0.6]]) tone(hz(n) * m, d, "sine", vol * v, 0, null, musicBus, t);
+    for (const [m, v, d] of [[1, 1, 2.2], [2.76, 0.4, 1.2], [5.4, 0.15, 0.6]]) tone(hz(n) * m, d, "sine", vol * v, 0, null, procBus, t);
   }
   function flute(n, t, dur, vol) {
     const c = A.ctx;
@@ -5570,7 +5575,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     g.gain.setValueAtTime(vol, t + dur * 0.7);
     g.gain.linearRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(musicBus);
+    g.connect(procBus);
     o.start(t);
     lfo.start(t);
     o.stop(t + dur + 0.05);
@@ -5590,18 +5595,18 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(f);
     f.connect(g);
-    g.connect(musicBus);
+    g.connect(procBus);
     o.start(t);
     o.stop(t + dur + 0.05);
   }
   function drum(kind, t, vol) {
-    if (kind === "kick") tone(130, 0.25, "sine", vol, 0, 42, musicBus, t);
-    else if (kind === "tom") tone(190, 0.3, "sine", vol, 0, 90, musicBus, t);
-    else if (kind === "frame") noise(0.18, vol, "bandpass", 220, 0, 120, musicBus, t, 2);
-    else if (kind === "hat") noise(0.05, vol, "highpass", 7000, 0, null, musicBus, t);
+    if (kind === "kick") tone(130, 0.25, "sine", vol, 0, 42, procBus, t);
+    else if (kind === "tom") tone(190, 0.3, "sine", vol, 0, 90, procBus, t);
+    else if (kind === "frame") noise(0.18, vol, "bandpass", 220, 0, 120, procBus, t, 2);
+    else if (kind === "hat") noise(0.05, vol, "highpass", 7000, 0, null, procBus, t);
     else if (kind === "boom") {
-      tone(60, 2.2, "sine", vol, 0, 30, musicBus, t);
-      noise(1.5, vol * 0.4, "lowpass", 200, 0, 60, musicBus, t);
+      tone(60, 2.2, "sine", vol, 0, 30, procBus, t);
+      noise(1.5, vol * 0.4, "lowpass", 200, 0, 60, procBus, t);
     }
   }
 
@@ -5637,7 +5642,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     g.gain.linearRampToValueAtTime(0.0001, t + dur);
     osc.connect(f);
     f.connect(g);
-    g.connect(musicBus);
+    g.connect(procBus);
     osc.start(t);
     osc.stop(t + dur + 0.05);
   }
@@ -5673,7 +5678,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       o.stop(t + dur + 0.05);
     }
     f.connect(g);
-    g.connect(musicBus);
+    g.connect(procBus);
   }
   function whistle(n, t, dur, vol, orn) {
     // Blechfloete: Verzierung (kurzer Vorschlag) und etwas Atem
@@ -5683,15 +5688,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       dur -= 0.06;
     }
     voice(n, t, dur, vol, { type: "sine", freq: 6000, attack: 0.03, hold: 0.75, vib: [6, 10] });
-    noise(Math.min(0.3, dur), vol * 0.25, "bandpass", hz(n), 0, null, musicBus, t, 8);
+    noise(Math.min(0.3, dur), vol * 0.25, "bandpass", hz(n), 0, null, procBus, t, 8);
   }
   function clap(t, vol) {
-    noise(0.07, vol, "bandpass", 1600, 0, null, musicBus, t, 1.2);
-    noise(0.05, vol * 0.6, "bandpass", 1300, 0, null, musicBus, t + 0.012, 1.2);
+    noise(0.07, vol, "bandpass", 1600, 0, null, procBus, t, 1.2);
+    noise(0.05, vol * 0.6, "bandpass", 1300, 0, null, procBus, t + 0.012, 1.2);
   }
   function snare(t, vol) {
-    noise(0.12, vol, "highpass", 1800, 0, null, musicBus, t);
-    tone(220, 0.08, "triangle", vol * 0.5, 0, 160, musicBus, t);
+    noise(0.12, vol, "highpass", 1800, 0, null, procBus, t);
+    tone(220, 0.08, "triangle", vol * 0.5, 0, 160, procBus, t);
   }
   // Melodie schrittweise durch eine Tonleiter fuehren
   function walk(song, r, span) {
@@ -5780,7 +5785,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
           bell(n, t + sp * (1 + Math.floor(r() * 3)), 0.035);
           if (r() < 0.4) bell(n + 1, t + sp * 3.2, 0.025);
         }
-        noise(sp * 3, 0.02, "bandpass", 300, 0, 900, musicBus, t + sp, 3);
+        noise(sp * 3, 0.02, "bandpass", 300, 0, 900, procBus, t + sp, 3);
       },
     },
     heim: {
@@ -5791,7 +5796,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         pad(ch.map((n) => n + 12), t, sp * 4.1, 0.03, 900);
         [0, 1, 2, 1].forEach((k, i) => pluck(ch[k] + 12, t + i * sp, sp * 1.6, 0.055));
         if (r() < 0.6) pluck(ch[Math.floor(r() * 3)] + 24, t + sp * 2.5, sp * 1.5, 0.04);
-        for (let i = 0; i < 6; i++) if (r() < 0.5) noise(0.02, 0.03, "highpass", 3000, 0, null, musicBus, t + r() * sp * 4);
+        for (let i = 0; i < 6; i++) if (r() < 0.5) noise(0.02, 0.03, "highpass", 3000, 0, null, procBus, t + r() * sp * 4);
       },
     },
     chronik: {
@@ -5883,7 +5888,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       const ch = this.chords[b % 4];
       pad(ch, t, sp * 4.3, 0.045, 300);
       choir(ch[1] + 12, t, sp * 4, 0.035);
-      noise(sp * 4, 0.03, "bandpass", 500, 0, 1600, musicBus, t, 2);
+      noise(sp * 4, 0.03, "bandpass", 500, 0, 1600, procBus, t, 2);
       if (r() < 0.6) fiddle(this.scale[Math.floor(r() * this.scale.length)] + 12, t + sp, sp * 2.6, 0.03);
       if (b % 4 === 0) drum("boom", t, 0.2);
     },
@@ -5914,7 +5919,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       horn(ch[2], t, sp * 3.8, 0.04);
       if (b % 2 === 1) {
         clap(t + sp * 3, 0.3);
-        noise(0.18, 0.12, "bandpass", 700, 0, 400, musicBus, t + sp * 3, 3);
+        noise(0.18, 0.12, "bandpass", 700, 0, 400, procBus, t + sp * 3, 3);
       }
       if (b % 4 === 3) choir(ch[2] + 12, t, sp * 4, 0.04);
     },
@@ -5988,7 +5993,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   function startScheduler() {
     if (sched) return;
     sched = setInterval(() => {
-      if (!A.ctx || !cur || !A.musicOn) return;
+      if (!A.ctx || !cur || !A.musicOn || recSrc) return;
       const c = A.ctx;
       const song = SONGS[cur];
       const sp = 60 / song.bpm;
@@ -6004,6 +6009,83 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       }
     }, 120);
   }
+  /* Aufgenommene Musik (ElevenLabs, assets/musik, siehe assets-src/klang/build_musik.py): je Ort eine Datei
+     musik-<ort>.js neben der Seite, die SB_MUSIK[<ort>] setzt; welche es gibt, steht in SB_MUSIK_LISTE (von
+     build.mjs in die Seite geschrieben, Ort wie bei SONGS, also "tag:albion" oder "tiefe"). Jede Datei traegt vorn
+     und hinten eine Sekunde Ueberhang, die Schleife laeuft ueber [1, 1 + Laenge] und ist damit nahtlos, auch wenn
+     der MP3-Decoder am Anfang etwas Stille einfuegt. Bis ein Stueck geladen ist, spielt die erzeugte Musik. */
+  const REC = {};
+  const recState = {};
+  let recSrc = null;
+  let recGain = null;
+  function recKey(context) {
+    const L = globalThis.SB_MUSIK_LISTE;
+    if (!L) return null;
+    if (L[context]) return context;
+    const base = String(context).split(":")[0];
+    return L[base] ? base : null;
+  }
+  function recLoad(key) {
+    if (REC[key] || recState[key] === "laden" || recState[key] === "fehler") return;
+    const info = globalThis.SB_MUSIK_LISTE[key];
+    recState[key] = "laden";
+    const fertig = () => {
+      const b64 = globalThis.SB_MUSIK && globalThis.SB_MUSIK[key];
+      if (!b64 || !A.ctx) return (recState[key] = "fehler");
+      globalThis.SB_MUSIK[key] = null;
+      const bin = atob(b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      A.ctx.decodeAudioData(
+        u8.buffer,
+        (buf) => {
+          REC[key] = { buf, len: info.len };
+          recState[key] = "bereit";
+          // noch am selben Ort: zum aufgenommenen Stueck ueberblenden
+          if (A.musicOn && recKey(A.context) === key) A.music(A.context, true);
+        },
+        () => (recState[key] = "fehler")
+      );
+    };
+    if (globalThis.SB_MUSIK && globalThis.SB_MUSIK[key]) return fertig();
+    const el = document.createElement("script");
+    el.src = info.file;
+    el.onload = fertig;
+    el.onerror = () => {
+      el.remove();
+      recState[key] = "fehler";
+    };
+    document.head.appendChild(el);
+  }
+  function recStop() {
+    if (!recSrc) return;
+    try {
+      recSrc.stop();
+    } catch (e) {
+      /* schon gestoppt */
+    }
+    recSrc = null;
+  }
+  function recStart(key, t0) {
+    const r = REC[key];
+    const c = A.ctx;
+    if (!recGain) {
+      recGain = c.createGain();
+      recGain.connect(musicBus);
+    }
+    recGain.gain.value = globalThis.SB_MUSIK_LISTE[key].gain || 1;
+    const s = c.createBufferSource();
+    s.buffer = r.buf;
+    s.loop = true;
+    s.loopStart = 1;
+    s.loopEnd = Math.min(r.buf.duration, 1 + r.len);
+    s.connect(recGain);
+    s.start(t0, 1);
+    recSrc = s;
+  }
+  A.recStats = () => Object.fromEntries(Object.keys(globalThis.SB_MUSIK_LISTE || {}).map((k) => [k, recState[k] || "aus"]));
+  A.recPlaying = () => !!recSrc;
+
   // Ort wechseln: blendet sanft ueber
   A.music = function (context, force) {
     if (context === A.context && !force && cur) return;
@@ -6015,10 +6097,17 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     g.setValueAtTime(g.value, c.currentTime);
     g.linearRampToValueAtTime(0.0001, c.currentTime + 0.6);
     setTimeout(() => {
+      if (context !== A.context) return;
       const key = SONGS[context] ? context : String(context).split(":")[0];
       cur = A.musicOn && SONGS[key] ? key : null;
       barNo = 0;
       nextBar = c.currentTime + 0.1;
+      recStop();
+      const rk = A.musicOn ? recKey(context) : null;
+      if (rk && REC[rk]) {
+        if (!cur) cur = rk;
+        recStart(rk, c.currentTime + 0.05);
+      } else if (rk) recLoad(rk);
       if (cur) {
         // laeuft noch ein Lied nach dem Kampf, kommt die Musik erst danach
         const t0 = Math.max(c.currentTime, duckUntil);
@@ -6033,6 +6122,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     A.musicOn = !!on;
     if (!on) {
       cur = null;
+      recStop();
       if (musicBus && A.ctx) musicBus.gain.setTargetAtTime(0.0001, A.ctx.currentTime, 0.2);
     } else if (A.context) A.music(A.context, true);
   };

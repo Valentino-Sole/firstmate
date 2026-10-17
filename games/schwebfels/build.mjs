@@ -130,6 +130,31 @@ try {
 } catch (e) {
   console.warn("Hinweis: assets/klang.pack fehlt, das Spiel nutzt die erzeugten Klaenge.");
 }
+// Aufgenommene Musik je Ort (ElevenLabs, assets-src/klang/build_musik.py): je Stueck eine Datei musik-<datei>.js neben
+// der Seite, die das Spiel erst beim Betreten des Ortes laedt; die Liste SB_MUSIK_LISTE steht in der Seite. Ohne
+// assets/musik/musik.json (oder MUSIK_DIR) bleibt die erzeugte Musik.
+{
+  const src = process.env.MUSIK_DIR ? path.resolve(process.env.MUSIK_DIR) : path.join(dir, "assets/musik");
+  let liste = null;
+  try {
+    liste = JSON.parse(readFileSync(path.join(src, "musik.json"), "utf8"));
+  } catch (e) {
+    /* keine aufgenommene Musik */
+  }
+  if (liste && Object.keys(liste).length) {
+    const page = {};
+    let kb = 0;
+    for (const [ort, m] of Object.entries(liste)) {
+      const file = "musik-" + m.datei + ".js";
+      const js = "(globalThis.SB_MUSIK=globalThis.SB_MUSIK||{})[" + JSON.stringify(ort) + ']="' + readFileSync(path.join(src, m.datei + ".mp3")).toString("base64") + '";';
+      writeFileSync(path.join(out, file), js);
+      kb += js.length / 1024;
+      page[ort] = { file, len: m.len, gain: m.gain || 1 };
+    }
+    packJs += "<script>globalThis.SB_MUSIK_LISTE=" + JSON.stringify(page) + ";</script>";
+    genFiles.push(Object.keys(page).length + " Musikdateien musik-*.js, zusammen " + kb.toFixed(0) + " KB (Musik je Ort, beim Veroeffentlichen alle unter files angeben)");
+  }
+}
 const inlineJs = packJs + "\n" + scripts.map((s) => "<script>/* " + s + " */\n" + safeScript(read(s)) + "\n</script>").join("\n");
 const cdnTags = cdn.map((u) => '<script src="' + u + '"></script>').join("\n");
 const fontTags = fonts.map((u) => '<link rel="stylesheet" href="' + u + '">').join("\n");
