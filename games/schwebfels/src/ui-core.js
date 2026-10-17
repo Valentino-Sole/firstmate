@@ -792,7 +792,15 @@
     // Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders
     if (ctx === "tag" || ctx === "nacht" || ctx === "taverne" || ctx === "kampf") ctx += ":" + S.realm;
     SB.audio.music(ctx);
+    // Hintergrundgeraeusche (zweite Klangbank): Orte mit eigenem Klang, sonst die Insel bei Tag oder Nacht; im Kampf
+    // die Insel leise darunter
+    if (SB.audio.ort) {
+      const draussen = "ort." + (UI.isNight() ? "nacht" : "tag") + "." + S.realm;
+      const ort = !UI.inBattle && UI.panelId && PANEL_ORT[UI.panelId];
+      SB.audio.ort(ort || draussen, UI.inBattle ? 0.12 : ort ? 0.32 : 0.25);
+    }
   };
+  const PANEL_ORT = { taverne: "ort.taverne", gildenhalle: "ort.taverne", schmiede: "ort.schmiede", tiefen: "ort.tiefe", heim: "ort.heim", arena: "ort.arena", mondtor: "ort.mondtor" };
 
   /* ---------- Panels ---------- */
   UI.openPanel = function (id) {

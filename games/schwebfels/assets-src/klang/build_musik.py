@@ -8,7 +8,7 @@ Schleife: Vorspiel und Ausklang fallen weg (hauptteil, nach den Hoehen gemessen)
 in der zweiten Haelfte, an der die Musik ueber U = 4 Sekunden dem Anfang klanglich am meisten gleicht (Spektren,
 Passung 1 = gleich); dort wird das Ende x[L:L+U] in den Anfang ueberblendet (gleiche Leistung). Gespeichert
 wird [letzte Sekunde, ganze Schleife, erste Sekunde]; das Spiel spielt die Schleife von 1 bis 1 + L (src/audio.js),
-damit ist sie auch dann nahtlos, wenn der MP3-Decoder vorn Stille einfuegt. Lautheit aller Stuecke gleich (RMS).
+damit ist sie auch dann nahtlos, wenn der MP3-Decoder vorn Stille einfuegt. Lautheit aller Stuecke gleich (RMS -25 dBFS, so laut wie die erzeugte Musik).
 """
 import json
 import os
@@ -98,7 +98,8 @@ def seamless(x, bpm, takt):
     t = np.linspace(0, np.pi / 2, u)[:, None]
     m[:u] = x[:u] * np.sin(t) + x[L:L + u] * np.cos(t)
     rms = np.sqrt((m ** 2).mean())
-    m *= 10 ** (-19 / 20) / max(rms, 1e-6)
+    # so laut wie die erzeugte Musik im Spiel (im Browser gemessen: -19 dBFS waren dort gut 6 dB lauter)
+    m *= 10 ** (-25 / 20) / max(rms, 1e-6)
     pk = np.abs(m).max()
     if pk > 0.97:
         m *= 0.97 / pk

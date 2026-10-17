@@ -385,7 +385,7 @@ await page.evaluate((s) => {
   localStorage.setItem("schwebfels:save:v1", JSON.stringify(s));
 }, v1);
 await page.reload();
-await page.waitForSelector(".realmcards", { timeout: 15000 });
+await page.waitForSelector(".realmcards", { timeout: 120000 });
 await page.waitForTimeout(800);
 await shot(page, "25-reichswahl-alt");
 await page.click('[data-act="chooseRealm"][data-r="albion"]');

@@ -1,0 +1,133 @@
+{
+  "_hinweis": "Geraeusche aus ElevenLabs (assets-src/gen/elevenlabs.py geraeusch), gebaut mit build_eleven.py. orte: Hintergrund je Ort, nahtlose Schleife (loop), 30 Sekunden. stimmen: Heldenstimmen je Volk und Geschlecht; arten.angriff: drei einzelne Rufe zu je einer Sekunde (Dateien <name>.angriff.<n>.mp3; ein Auftrag mit drei Rufen lieferte einen langen Schrei), arten.schmerz: ein Auftrag mit drei Lauten und Pausen, build_eleven.py trennt sie in Varianten. Keine Woerter, damit nichts in einer Sprache klingt.",
+  "orte": [
+    {
+      "name": "ort.tag.albion",
+      "prompt": "Clearly audible outdoor ambience loop on a chalk cliff above the sea in daytime: steady sea breeze, waves breaking on the shore below, seagulls calling, songbirds chirping in the grass, no music, no voices",
+      "einfluss": 0.6
+    },
+    {
+      "name": "ort.nacht.albion",
+      "prompt": "Clearly audible night ambience loop on a chalk cliff above the sea: constant chorus of crickets, gentle waves on the shore below, soft wind, an owl hooting now and then, no music, no voices",
+      "einfluss": 0.6
+    },
+    {
+      "name": "ort.tag.midgard",
+      "prompt": "Ambient loop of a snowy nordic mountain island at daytime: cold howling wind, blowing snow, distant raven calls, creaking ice, no music, no voices"
+    },
+    {
+      "name": "ort.nacht.midgard",
+      "prompt": "Ambient loop of a frozen nordic night: low icy wind, crackle of frost, a lone wolf howling far away, deep silence, no music, no voices"
+    },
+    {
+      "name": "ort.tag.hibernia",
+      "prompt": "Ambient loop of an enchanted celtic forest island at daytime: rustling leaves, a babbling brook, birdsong, gentle breeze, magical and green, no music, no voices"
+    },
+    {
+      "name": "ort.nacht.hibernia",
+      "prompt": "Ambient loop of a moonlit celtic grove at night: soft brook, crickets, frogs, gentle leaves, faint magical shimmer, no music, no voices"
+    },
+    {
+      "name": "ort.taverne",
+      "prompt": "Ambient loop of a busy medieval fantasy tavern: murmuring crowd, clinking mugs, crackling fireplace, wooden chairs, occasional laughter, no music, no clear words"
+    },
+    {
+      "name": "ort.schmiede",
+      "prompt": "Ambient loop of a medieval blacksmith forge: rhythmic hammer on anvil, roaring forge fire, bellows breathing, hissing quench now and then, no music, no voices"
+    },
+    {
+      "name": "ort.tiefe",
+      "prompt": "Ambient loop of a dark fantasy dungeon: water dripping in a stone cave, distant low rumble, echoing chains, faint eerie wind, ominous, no music, no voices"
+    },
+    {
+      "name": "ort.heim",
+      "prompt": "Ambient loop of a cozy medieval home: crackling fireplace, soft wind outside the window, a wooden beam creaking, warm and calm, no music, no voices"
+    },
+    {
+      "name": "ort.arena",
+      "prompt": "Ambient loop of a fantasy arena crowd waiting for a fight: murmuring audience in a stone amphitheater, distant cheering, flags flapping in the wind, no music, no clear words"
+    },
+    {
+      "name": "ort.mondtor",
+      "prompt": "Ambient loop of a mystical moon gate at night: low magical hum, soft shimmering chimes, gentle night wind, crickets, otherworldly and calm, no music, no voices"
+    }
+  ],
+  "stimmen": [
+    {
+      "name": "held.albier.m",
+      "wer": "a noble medieval English knight, strong clear male voice"
+    },
+    {
+      "name": "held.albier.w",
+      "wer": "a brave medieval English female knight, clear strong female voice"
+    },
+    {
+      "name": "held.kreidezwerg.m",
+      "wer": "a stocky male dwarf warrior, gruff deep voice"
+    },
+    {
+      "name": "held.kreidezwerg.w",
+      "wer": "a sturdy female dwarf warrior, low gruff female voice"
+    },
+    {
+      "name": "held.nordmann.m",
+      "wer": "a fierce male viking warrior, powerful rough voice"
+    },
+    {
+      "name": "held.nordmann.w",
+      "wer": "a fierce female viking shieldmaiden, strong rough female voice"
+    },
+    {
+      "name": "held.trollblut.m",
+      "wer": "a huge male half-troll brute, very deep guttural booming voice"
+    },
+    {
+      "name": "held.trollblut.w",
+      "wer": "a large female half-troll warrior, deep husky growling female voice"
+    },
+    {
+      "name": "held.sidhe.m",
+      "wer": "a graceful male elf warrior, clear light tenor voice"
+    },
+    {
+      "name": "held.sidhe.w",
+      "wer": "a graceful female elf warrior, clear bright female voice"
+    },
+    {
+      "name": "held.moorling.m",
+      "wer": "a small nimble male bog creature, quick raspy high voice"
+    },
+    {
+      "name": "held.moorling.w",
+      "wer": "a small nimble female bog creature, quick bright high-pitched female voice"
+    },
+    {
+      "name": "held.frostwicht.m",
+      "wer": "a small male frost sprite, sharp crisp high voice"
+    },
+    {
+      "name": "held.frostwicht.w",
+      "wer": "a small female frost sprite, sharp crisp high female voice"
+    },
+    {
+      "name": "held.glutzwerg.m",
+      "wer": "a male ember dwarf smith, raspy smoky gravelly voice"
+    },
+    {
+      "name": "held.glutzwerg.w",
+      "wer": "a female ember dwarf smith, raspy smoky low female voice"
+    }
+  ],
+  "arten": {
+    "angriff": {
+      "anzahl": 3,
+      "sek": 1.0,
+      "text": "One single short effortful battle shout by {wer}, a sharp yell while striking with a weapon, no words, no music"
+    },
+    "schmerz": {
+      "anzahl": 1,
+      "sek": 4,
+      "text": "Three separate short pain grunts by {wer}, each a single hurt groan when hit in combat, about half a second each, with one second of silence between them, no words, no music"
+    }
+  }
+}

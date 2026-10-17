@@ -17,3 +17,5 @@ dist/kulissen.js
 # Aufgenommene Musik (ElevenLabs, Rechte beim Abo des Kapitaens), nicht im Repository
 assets/musik/
 dist/musik-*.js
+assets/klang-eleven.pack
+dist/klang2.js

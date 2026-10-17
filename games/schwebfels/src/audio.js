@@ -211,8 +211,50 @@
     base += (4 - (base % 4)) % 4;
     const out = {};
     for (const k in head.klang) out[k] = head.klang[k].map((r) => u8.slice(base + r.$[1], base + r.$[1] + r.$[2]).buffer);
+    if (head.loops) Object.assign(LOOPS, head.loops);
     return out;
   }
+  // Schleifenlaengen der Hintergrundgeraeusche (zweite Bank, Name -> Sekunden)
+  const LOOPS = {};
+  let ortLevel = 0.5;
+  /* Zweite Klangbank aus ElevenLabs (klang2.js, globalThis.SB_KLANG2, assets-src/klang/build_eleven.py): Heldenstimmen je
+     Volk und Geschlecht und Hintergrundgeraeusche je Ort. Sie wird nach der ersten Bank geladen; fehlt sie, bleibt alles
+     wie zuvor (Stimmen aus der ersten Bank, keine Ortsgeraeusche). */
+  let bank2State = "aus";
+  function loadBank2() {
+    if (bank2State !== "aus" || !A.ctx) return;
+    const go = () => {
+      let raw;
+      try {
+        raw = unpack(globalThis.SB_KLANG2);
+      } catch (e) {
+        bank2State = "fehler";
+        return;
+      }
+      globalThis.SB_KLANG2 = null;
+      const jobs = [];
+      for (const k in raw) {
+        const arr = [];
+        raw[k].forEach((buf, i) => jobs.push(new Promise((ok) => A.ctx.decodeAudioData(buf, (b) => ok((arr[i] = b)), () => ok(null)))));
+        jobs.push(Promise.resolve().then(() => (BANK[k] = arr)));
+      }
+      Promise.all(jobs).then(() => {
+        bank2State = "bereit";
+        if (A.ortKey) A.ort(A.ortKey, ortLevel, true);
+      });
+    };
+    bank2State = "laden";
+    if (globalThis.SB_KLANG2) return go();
+    const el = document.createElement("script");
+    el.src = "klang2.js";
+    el.onload = () => (globalThis.SB_KLANG2 ? go() : (bank2State = "fehler"));
+    el.onerror = () => {
+      el.remove();
+      bank2State = "fehler";
+    };
+    document.head.appendChild(el);
+  }
+  A.bank2Ready = () => bank2State === "bereit";
   // Die Klangbank liegt als klang.js neben der Seite (build.mjs); fehlt sie, bleibt es bei den erzeugten Effekten
   // und nach einer Minute wird es erneut versucht
   function fetchBank() {
@@ -252,7 +294,10 @@
         )
       );
     }
-    Promise.all(jobs).then(() => (bankState = "bereit"));
+    Promise.all(jobs).then(() => {
+      bankState = "bereit";
+      loadBank2();
+    });
   }
   A.bankReady = () => bankState === "bereit";
   A.bankStats = () => Object.fromEntries(Object.entries(BANK).map(([k, v]) => [k, v.filter(Boolean).length + "/" + v.length]));
@@ -426,6 +471,8 @@
       if (BANK["stimme." + d.arch + ".angriff"]) return ["stimme." + d.arch, boss, d.boss ? 0.95 : 0.8];
       return ["held.m", boss, 0.7];
     }
+    const eigen = "held." + d.race + "." + (d.gender === "w" ? "w" : "m");
+    if (BANK[eigen + ".angriff"]) return [eigen, 1, 0.4];
     const v = VOLK[d.race] || VOLK.albier;
     if (d.gender === "w") return ["held." + v[0], v[1], 0.6];
     return [d.race === "trollblut" ? "held.gross" : "held.m", d.race === "trollblut" ? 1.0 : v[1], 0.6];
@@ -1211,5 +1258,56 @@
   };
   A.setSfx = function (on) {
     A.enabled = !!on;
+    if (A.ortKey) A.ort(A.ortKey, ortLevel, true);
   };
+
+  /* Hintergrundgeraeusche je Ort (zweite Bank, Namen ort.*): leise Schleife unter Musik und Effekten, gehoert zu den
+     Effekten (Einstellung Klang). Wechsel mit Ueberblendung; Schleife von 1 bis 1 + Laenge wie bei der Musik. */
+  let ortSrc = null;
+  let ortGain = null;
+  A.ortKey = null;
+  A.ort = function (name, level, force) {
+    level = level || 0.5;
+    if (name === A.ortKey && level === ortLevel && !force) return;
+    if (name === A.ortKey && ortSrc && !force) {
+      // gleicher Ort, nur leiser oder lauter (Kampf)
+      ortLevel = level;
+      ortGain.gain.setTargetAtTime(level, A.ctx.currentTime, 0.4);
+      return;
+    }
+    A.ortKey = name;
+    ortLevel = level;
+    const c = A.ctx;
+    if (!c) return;
+    const t = c.currentTime;
+    if (ortSrc) {
+      const old = ortSrc;
+      ortGain.gain.cancelScheduledValues(t);
+      ortGain.gain.setValueAtTime(ortGain.gain.value, t);
+      ortGain.gain.linearRampToValueAtTime(0.0001, t + 1.2);
+      setTimeout(() => {
+        try {
+          old.stop();
+        } catch (e) {
+          /* schon gestoppt */
+        }
+      }, 1300);
+      ortSrc = null;
+    }
+    const buf = name && BANK[name] && BANK[name][0];
+    if (!buf || !A.enabled || !LOOPS[name]) return;
+    ortGain = c.createGain();
+    ortGain.gain.value = 0.0001;
+    ortGain.connect(master);
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    s.loop = true;
+    s.loopStart = 1;
+    s.loopEnd = Math.min(buf.duration, 1 + LOOPS[name]);
+    s.connect(ortGain);
+    s.start(t + 0.05, 1);
+    ortGain.gain.linearRampToValueAtTime(level, t + 1.5);
+    ortSrc = s;
+  };
+  A.ortPlaying = () => !!ortSrc;
 })();

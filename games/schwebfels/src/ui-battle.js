@@ -449,7 +449,7 @@
         UI.ACTIONS.importSave();
         return;
       } else if (act === "start") {
-        const name = keep.trim().replace(/\s+/g, " ");
+        const name = String(keep || "").trim().replace(/\s+/g, " ");
         const err = $("#nameErr");
         if (!/^[\p{L}\p{N}][\p{L}\p{N} '\-]{1,15}$/u.test(name)) {
           err.hidden = false;

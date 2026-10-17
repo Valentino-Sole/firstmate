@@ -12,6 +12,7 @@ Aufruf (Ausgabeordner <aus>, Protokoll <aus>/credits.jsonl):
   python elevenlabs.py report    <aus>
   --max-credits N: bricht vor dem Auftrag ab, wenn im laufenden Abrechnungszeitraum schon mehr als N verbraucht sind
   --dry-run: zeigt nur den Auftrag, sendet nichts
+  --schnell: nicht auf den nachgefuehrten Kontostand warten (Credits je Auftrag dann 0 im Protokoll)
 
 Grenzen laut API-Referenz (Oktober 2026): Musik 3 bis 600 Sekunden, ohne Schleifenoption (nahtlos machen wir beim
 Bau der Klangbank); Geraeusche 0,5 bis 30 Sekunden, mit Schleifenoption.
@@ -88,7 +89,7 @@ def log(aus, rec):
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
-def auftrag(art, aus, name, path, body, fmt, maxc, dry):
+def auftrag(art, aus, name, path, body, fmt, maxc, dry, schnell=False):
     print(art, name, json.dumps(body, ensure_ascii=False))
     if dry:
         return
@@ -100,8 +101,10 @@ def auftrag(art, aus, name, path, body, fmt, maxc, dry):
     os.makedirs(aus, exist_ok=True)
     datei = os.path.join(aus, name + ".mp3")
     open(datei, "wb").write(audio)
-    # der Kontostand folgt ein paar Sekunden spaeter
-    for _ in range(12):
+    # der Kontostand folgt erst nach bis zu einer Minute; mit --schnell wird nicht gewartet (Kosten dann ueber den
+    # Kontostand vor und nach einer ganzen Reihe von Auftraegen bestimmen)
+    nach = vor
+    for _ in range(0 if schnell else 12):
         time.sleep(5)
         nach = konto()
         if nach["verbraucht"] != vor["verbraucht"]:
@@ -118,6 +121,7 @@ def main():
     if not args:
         raise SystemExit(__doc__)
     dry = opt(args, "--dry-run", False, True)
+    schnell = opt(args, "--schnell", False, True)
     maxc = opt(args, "--max-credits")
     maxc = int(maxc) if maxc is not None else None
     cmd = args.pop(0)
@@ -129,7 +133,7 @@ def main():
         gesang = opt(args, "--mit-gesang", False, True)
         aus, name, text = args
         body = {"prompt": text, "music_length_ms": int(sek * 1000), "model_id": modell, "force_instrumental": not gesang}
-        auftrag("musik", aus, name, "/music", body, "mp3_44100_128", maxc, dry)
+        auftrag("musik", aus, name, "/music", body, "mp3_44100_128", maxc, dry, schnell)
     elif cmd == "geraeusch":
         sek = opt(args, "--sek")
         schleife = opt(args, "--schleife", False, True)
@@ -138,7 +142,7 @@ def main():
         body = {"text": text, "prompt_influence": einfluss, "loop": schleife, "model_id": "eleven_text_to_sound_v2"}
         if sek:
             body["duration_seconds"] = float(sek)
-        auftrag("geraeusch", aus, name, "/sound-generation", body, "mp3_44100_128", maxc, dry)
+        auftrag("geraeusch", aus, name, "/sound-generation", body, "mp3_44100_128", maxc, dry, schnell)
     elif cmd == "report":
         (aus,) = args
         p = os.path.join(aus, "credits.jsonl")

@@ -130,6 +130,15 @@ try {
 } catch (e) {
   console.warn("Hinweis: assets/klang.pack fehlt, das Spiel nutzt die erzeugten Klaenge.");
 }
+// Zweite Klangbank aus ElevenLabs (assets/klang-eleven.pack, assets-src/klang/build_eleven.py, nicht im Repository):
+// Heldenstimmen je Volk und Geschlecht und Hintergrundgeraeusche je Ort, als eigene Datei klang2.js
+try {
+  const js = 'globalThis.SB_KLANG2="' + readFileSync(path.join(dir, "assets/klang-eleven.pack")).toString("base64") + '";';
+  writeFileSync(path.join(out, "klang2.js"), js);
+  genFiles.push(path.relative(dir, path.join(out, "klang2.js")) + " " + (js.length / 1024).toFixed(0) + " KB (Heldenstimmen und Ortsgeraeusche, beim Veroeffentlichen als klang2.js unter files angeben)");
+} catch (e) {
+  /* ohne zweite Bank: Stimmen aus der ersten, keine Ortsgeraeusche */
+}
 // Aufgenommene Musik je Ort (ElevenLabs, assets-src/klang/build_musik.py): je Stueck eine Datei musik-<datei>.js neben
 // der Seite, die das Spiel erst beim Betreten des Ortes laedt; die Liste SB_MUSIK_LISTE steht in der Seite. Ohne
 // assets/musik/musik.json (oder MUSIK_DIR) bleibt die erzeugte Musik.
