@@ -515,10 +515,13 @@ def shrink_kulissen(js, opt):
     return "globalThis.SB_KULISSEN=" + json.dumps(out, separators=(",", ":")) + ";"
 
 
-def shrink_klang(js, opt):
+def shrink_klang(js, opt, var="SB_KLANG"):
     """Klangbank fuers Handy: Klaenge einkanalig mit --klang-kbps bei 22,05 kHz und hoechstens --klang-varianten je
-    Klang, die Lieder nach dem Kampf stereo mit 48 kbit/s; gleiches Paketformat wie assets/klang.pack (SBP1)."""
-    m = re.match(r'globalThis\.SB_KLANG="([A-Za-z0-9+/=]+)";', js)
+    Klang, die Lieder nach dem Kampf stereo mit 48 kbit/s; gleiches Paketformat wie assets/klang.pack (SBP1).
+    Zweite Bank (klang2.js, var SB_KLANG2): Ortsgeraeusche (ort.*, nahtlose Schleifen, die Laengen unter "loops"
+    bleiben) einkanalig mit 32 kbit/s, Saetze der Inselfiguren (npc.*) alle, ebenfalls 32 kbit/s, Monsterlaute
+    (stimme.*) alle Varianten."""
+    m = re.match(r'globalThis\.' + var + r'="([A-Za-z0-9+/=]+)";', js)
     b = base64.b64decode(m.group(1))
     hl = struct.unpack("<I", b[4:8])[0]
     head = json.loads(b[8:8 + hl])
@@ -526,10 +529,12 @@ def shrink_klang(js, opt):
     blobs, out, off = [], {}, 0
     for k, recs in head["klang"].items():
         lied = k.startswith("lied.")
+        alle = lied or k.startswith(("npc.", "stimme.", "ort."))
+        kbps = max(opt.klang_kbps, 32) if k.startswith(("ort.", "npc.")) else opt.klang_kbps
         out[k] = []
-        for r in recs if lied else recs[:opt.klang_varianten]:
+        for r in recs if alle else recs[:opt.klang_varianten]:
             src = b[base + r["$"][1]:base + r["$"][1] + r["$"][2]]
-            fmt = ["-ac", "2", "-ar", "44100", "-b:a", "48k"] if lied else ["-ac", "1", "-ar", "22050", "-b:a", "%dk" % opt.klang_kbps]
+            fmt = ["-ac", "2", "-ar", "44100", "-b:a", "48k"] if lied else ["-ac", "1", "-ar", "22050", "-b:a", "%dk" % kbps]
             z = subprocess.run(["ffmpeg", "-v", "error", "-i", "-"] + fmt + ["-c:a", "libmp3lame", "-f", "mp3", "-"], input=src, capture_output=True)
             if z.returncode or not z.stdout:
                 raise SystemExit("ffmpeg (mit libmp3lame) fehlt oder scheitert an " + k + "; ohne Klangbank bauen: --ohne-klang")
@@ -537,9 +542,25 @@ def shrink_klang(js, opt):
             pad = (4 - len(z.stdout) % 4) % 4
             blobs.append(z.stdout + b"\0" * pad)
             off += len(z.stdout) + pad
-    hj = json.dumps({"klang": out}, separators=(",", ":")).encode()
+    rest = {key: v for key, v in head.items() if key != "klang"}
+    hj = json.dumps(dict({"klang": out}, **rest), separators=(",", ":")).encode()
     pk = struct.pack("<II", 0x31504253, len(hj)) + hj + b"\0" * ((4 - (8 + len(hj)) % 4) % 4) + b"".join(blobs)
-    return 'globalThis.SB_KLANG="' + base64.b64encode(pk).decode() + '";'
+    return "globalThis." + var + '="' + base64.b64encode(pk).decode() + '";'
+
+
+def shrink_musik(js, opt):
+    """Aufgenommene Musik je Ort (musik-<ort>.js) fuers Handy neu kodiert (--musik-kbps). Die Stuecke liegen
+    als [letzte Sekunde, Schleife, erste Sekunde] vor; die Laenge der Schleife steht in SB_MUSIK_LISTE der Seite und
+    bleibt gleich."""
+    m = re.match(r'\(globalThis\.SB_MUSIK=globalThis\.SB_MUSIK\|\|\{\}\)\["([^"]+)"\]="([A-Za-z0-9+/=]+)";?\s*$', js)
+    src = base64.b64decode(m.group(2))
+    # MP3 mit 32 kHz kennt erst ab 32 kbit/s, darunter 22,05 kHz einkanalig
+    fmt = ["-ac", "2", "-ar", "32000"] if opt.musik_kbps >= 32 else ["-ac", "1", "-ar", "22050"]
+    fmt += ["-b:a", "%dk" % opt.musik_kbps]
+    z = subprocess.run(["ffmpeg", "-v", "error", "-i", "-"] + fmt + ["-c:a", "libmp3lame", "-f", "mp3", "-"], input=src, capture_output=True)
+    if z.returncode or not z.stdout:
+        raise SystemExit("ffmpeg scheitert an Musik " + m.group(1))
+    return '(globalThis.SB_MUSIK=globalThis.SB_MUSIK||{})["%s"]="%s";' % (m.group(1), base64.b64encode(z.stdout).decode())
 
 
 def main():
@@ -557,6 +578,8 @@ def main():
     ap.add_argument("--klang-kbps", type=int, default=24, help="Bitrate der Kampfklaenge (einkanalig, 22,05 kHz)")
     ap.add_argument("--klang-varianten", type=int, default=2, help="Varianten je Kampfklang")
     ap.add_argument("--ohne-klang", action="store_true", help="Klangbank weglassen (dann die erzeugten Klaenge)")
+    ap.add_argument("--musik-kbps", type=int, default=0, help="aufgenommene Musik je Ort mit dieser Bitrate (Stereo) "
+                    "einbetten; 0 = ohne, dann spielt die erzeugte Musik")
     ap.add_argument("--ganz", action="store_true")
     opt = ap.parse_args()
 
@@ -612,6 +635,27 @@ def main():
         js = js0 if opt.ganz else shrink_klang(js0, opt)
         print("klang.js               %6.2f MB -> %5.2f MB" % (len(js0) / 1e6, len(js) / 1e6))
         scripts.append("<script>/* klang.js */\n" + js + "\n</script>")
+    # zweite Klangbank (Heldenstimmen, Ortsgeraeusche, Monsterlaute, Inselfiguren, neue Lieder), src/audio.js findet
+    # SB_KLANG2 ohne Nachladen
+    kl2 = os.path.join(opt.dist, "klang2.js")
+    if os.path.exists(kl2) and not opt.ohne_klang:
+        js0 = open(kl2, encoding="utf-8").read()
+        js = js0 if opt.ganz else shrink_klang(js0, opt, "SB_KLANG2")
+        print("klang2.js              %6.2f MB -> %5.2f MB" % (len(js0) / 1e6, len(js) / 1e6))
+        scripts.append("<script>/* klang2.js */\n" + js + "\n</script>")
+    musik = sorted(glob.glob(os.path.join(opt.dist, "musik-*.js")))
+    if musik and (opt.ganz or opt.musik_kbps):
+        n0 = n1 = 0
+        for f in musik:
+            js0 = open(f, encoding="utf-8").read()
+            js = js0 if opt.ganz else shrink_musik(js0, opt)
+            n0 += len(js0)
+            n1 += len(js)
+            scripts.append("<script>/* %s */\n%s\n</script>" % (os.path.basename(f), js))
+        print("musik-*.js (%2d)        %6.2f MB -> %5.2f MB" % (len(musik), n0 / 1e6, n1 / 1e6))
+    elif "SB_MUSIK_LISTE" in page:
+        # ohne Musikdateien: Liste leeren, sonst versucht das Spiel bei jedem Ortswechsel sie nachzuladen
+        page = re.sub(r"globalThis\.SB_MUSIK_LISTE=\{.*?\};?</script>", "globalThis.SB_MUSIK_LISTE={};</script>", page, count=1, flags=re.S)
     for s in scripts:
         assert "</script" not in s[8:-9]
     laden = ('<div id="sbx-laden" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;'
