@@ -2,35 +2,124 @@
   "_hinweis": "Musik je Ort fuer ElevenLabs (assets-src/gen/elevenlabs.py musik). Schluessel = Ort wie in SONGS (src/audio.js), datei = Dateiname ohne Endung. Ohne Gesang, keine Kuenstler- oder Liednamen (Music Terms). bpm hilft build_musik.py, die Schleife auf ganze Takte zu legen.",
   "sek": 96,
   "stuecke": [
-    { "ort": "tag:albion", "datei": "tag-albion", "bpm": 96, "takt": 3,
-      "prompt": "Instrumental medieval court music for a fantasy RPG home island at daytime. Lute, recorder, shawm, soft frame drum in 3/4 time, bright and noble, gentle and welcoming, loopable background music, no vocals, steady tempo 96 BPM." },
-    { "ort": "nacht:albion", "datei": "nacht-albion", "bpm": 72, "takt": 3,
-      "prompt": "Instrumental calm medieval night music for a fantasy RPG island. Soft lute arpeggios, low recorder, distant harp, quiet and moonlit, peaceful, loopable background music, no drums, no vocals, tempo 72 BPM." },
-    { "ort": "kampf:albion", "datei": "kampf-albion", "bpm": 132, "takt": 4,
-      "prompt": "Instrumental medieval battle music for a fantasy RPG duel. Driving war drums, brass fanfares, shawm and strings, heroic and tense, knights in combat, loopable, no vocals, steady tempo 132 BPM." },
-    { "ort": "tag:midgard", "datei": "tag-midgard", "bpm": 84, "takt": 4,
-      "prompt": "Instrumental dark nordic folk music for a snowy fantasy RPG home island at daytime. Drone, hardanger fiddle, tagelharpa, deep frame drum, horn calls in the distance, cold and proud, loopable background music, no vocals, tempo 84 BPM." },
-    { "ort": "nacht:midgard", "datei": "nacht-midgard", "bpm": 60, "takt": 4,
-      "prompt": "Instrumental nordic ambient night music for a frozen fantasy island. Low drone, slow bowed lyre, wind, soft deep drum heartbeat, northern lights mood, mysterious and quiet, loopable, no vocals, tempo 60 BPM." },
-    { "ort": "taverne:midgard", "datei": "taverne-midgard", "bpm": 112, "takt": 4,
-      "prompt": "Instrumental lively nordic tavern music for a fantasy RPG. Fiddle, jaw harp, stomping drum, mugs and cheer feeling, rough and warm, loopable, no vocals, tempo 112 BPM." },
-    { "ort": "kampf:midgard", "datei": "kampf-midgard", "bpm": 126, "takt": 4,
-      "prompt": "Instrumental epic viking battle music for a fantasy RPG fight. Pounding war drums, low horns, aggressive fiddle and tagelharpa, primal and fierce, loopable, no vocals, steady tempo 126 BPM." },
-    { "ort": "tag:hibernia", "datei": "tag-hibernia", "bpm": 104, "takt": 3,
-      "prompt": "Instrumental celtic folk music for a magical forest fantasy RPG home island at daytime. Celtic harp, tin whistle, bodhran in a light jig feel, green and enchanted, joyful, loopable background music, no vocals, tempo 104 BPM." },
-    { "ort": "nacht:hibernia", "datei": "nacht-hibernia", "bpm": 66, "takt": 3,
-      "prompt": "Instrumental celtic night music for an enchanted moonlit grove in a fantasy RPG. Slow celtic harp, low whistle, soft strings, fireflies and fairy mood, dreamy and calm, loopable, no drums, no vocals, tempo 66 BPM." },
-    { "ort": "taverne:hibernia", "datei": "taverne-hibernia", "bpm": 116, "takt": 3,
-      "prompt": "Instrumental cheerful celtic tavern music for a fantasy RPG. Fiddle reel, tin whistle, bouzouki, bodhran, dancing and warm, loopable, no vocals, tempo 116 BPM." },
-    { "ort": "kampf:hibernia", "datei": "kampf-hibernia", "bpm": 138, "takt": 3,
-      "prompt": "Instrumental fast celtic battle music for a fantasy RPG fight. Driving bodhran and toms, fiery fiddle, uilleann pipes, wild and heroic, loopable, no vocals, steady tempo 138 BPM." },
-    { "ort": "taverne", "datei": "taverne", "bpm": 108, "takt": 4,
-      "prompt": "Instrumental cozy medieval tavern music for a fantasy RPG. Lute, hurdy-gurdy, recorder, tambourine, friendly and warm, loopable, no vocals, tempo 108 BPM." },
-    { "ort": "tiefe", "datei": "tiefe", "bpm": 70, "takt": 4,
-      "prompt": "Instrumental dark dungeon ambient music for a fantasy RPG. Deep drones, distant low drums, eerie bowed metal, dripping cave atmosphere, ominous and tense, loopable, no vocals, tempo 70 BPM." },
-    { "ort": "heim", "datei": "heim", "bpm": 80, "takt": 4,
-      "prompt": "Instrumental warm fireside home music for a fantasy RPG. Soft acoustic lute, gentle harp, light cello, crackling hearth mood, safe and cozy, loopable, no drums, no vocals, tempo 80 BPM." },
-    { "ort": "chronik", "datei": "chronik", "bpm": 76, "takt": 4,
-      "prompt": "Instrumental epic storytelling music for a fantasy RPG chronicle of ancient stone circles. Solemn strings, low choir-like pads, harp, slow timpani swells, mythic and grand, loopable, no vocals, tempo 76 BPM." }
+    {
+      "ort": "tag:albion",
+      "datei": "tag-albion",
+      "bpm": 96,
+      "takt": 3,
+      "prompt": "Instrumental medieval court music for a fantasy RPG home island at daytime. Lute, recorder, shawm, soft frame drum in 3/4 time, bright and noble, gentle and welcoming, loopable background music, no vocals, steady tempo 96 BPM."
+    },
+    {
+      "ort": "nacht:albion",
+      "datei": "nacht-albion",
+      "bpm": 72,
+      "takt": 3,
+      "prompt": "Instrumental calm medieval night music for a fantasy RPG island. Soft lute arpeggios, low recorder, distant harp, quiet and moonlit, peaceful, loopable background music, no drums, no vocals, tempo 72 BPM."
+    },
+    {
+      "ort": "kampf:albion",
+      "datei": "kampf-albion",
+      "bpm": 132,
+      "takt": 4,
+      "prompt": "Instrumental medieval battle music for a fantasy RPG duel. Driving war drums, brass fanfares, shawm and strings, heroic and tense, knights in combat, loopable, no vocals, steady tempo 132 BPM."
+    },
+    {
+      "ort": "tag:midgard",
+      "datei": "tag-midgard",
+      "bpm": 84,
+      "takt": 4,
+      "prompt": "Instrumental dark nordic folk music for a snowy fantasy RPG home island at daytime. Drone, hardanger fiddle, tagelharpa, deep frame drum, horn calls in the distance, cold and proud, loopable background music, no vocals, tempo 84 BPM."
+    },
+    {
+      "ort": "nacht:midgard",
+      "datei": "nacht-midgard",
+      "bpm": 60,
+      "takt": 4,
+      "prompt": "Instrumental nordic ambient night music for a frozen fantasy island. Low drone, slow bowed lyre, wind, soft deep drum heartbeat, northern lights mood, mysterious and quiet, loopable, no vocals, tempo 60 BPM."
+    },
+    {
+      "ort": "taverne:midgard",
+      "datei": "taverne-midgard",
+      "bpm": 112,
+      "takt": 4,
+      "prompt": "Instrumental lively nordic tavern music for a fantasy RPG. Fiddle, jaw harp, stomping drum, mugs and cheer feeling, rough and warm, loopable, no vocals, tempo 112 BPM."
+    },
+    {
+      "ort": "kampf:midgard",
+      "datei": "kampf-midgard",
+      "bpm": 126,
+      "takt": 4,
+      "prompt": "Instrumental epic viking battle music for a fantasy RPG fight. Pounding war drums, low horns, aggressive fiddle and tagelharpa, primal and fierce, loopable, no vocals, steady tempo 126 BPM."
+    },
+    {
+      "ort": "tag:hibernia",
+      "datei": "tag-hibernia",
+      "bpm": 104,
+      "takt": 3,
+      "prompt": "Instrumental celtic folk music for a magical forest fantasy RPG home island at daytime. Celtic harp, tin whistle, bodhran in a light jig feel, green and enchanted, joyful, loopable background music, no vocals, tempo 104 BPM."
+    },
+    {
+      "ort": "nacht:hibernia",
+      "datei": "nacht-hibernia",
+      "bpm": 66,
+      "takt": 3,
+      "prompt": "Instrumental celtic night music for an enchanted moonlit grove in a fantasy RPG. Slow celtic harp, low whistle, soft strings, fireflies and fairy mood, dreamy and calm, loopable, no drums, no vocals, tempo 66 BPM."
+    },
+    {
+      "ort": "taverne:hibernia",
+      "datei": "taverne-hibernia",
+      "bpm": 116,
+      "takt": 3,
+      "prompt": "Instrumental cheerful celtic tavern music for a fantasy RPG. Fiddle reel, tin whistle, bouzouki, bodhran, dancing and warm, loopable, no vocals, tempo 116 BPM."
+    },
+    {
+      "ort": "kampf:hibernia",
+      "datei": "kampf-hibernia",
+      "bpm": 138,
+      "takt": 3,
+      "prompt": "Instrumental fast celtic battle music for a fantasy RPG fight. Driving bodhran and toms, fiery fiddle, uilleann pipes, wild and heroic, loopable, no vocals, steady tempo 138 BPM."
+    },
+    {
+      "ort": "taverne",
+      "datei": "taverne",
+      "bpm": 108,
+      "takt": 4,
+      "prompt": "Instrumental cozy medieval tavern music for a fantasy RPG. Lute, hurdy-gurdy, recorder, tambourine, friendly and warm, loopable, no vocals, tempo 108 BPM."
+    },
+    {
+      "ort": "tiefe",
+      "datei": "tiefe",
+      "bpm": 70,
+      "takt": 4,
+      "prompt": "Instrumental dark dungeon ambient music for a fantasy RPG. Deep drones, distant low drums, eerie bowed metal, dripping cave atmosphere, ominous and tense, loopable, no vocals, tempo 70 BPM."
+    },
+    {
+      "ort": "heim",
+      "datei": "heim",
+      "bpm": 80,
+      "takt": 4,
+      "prompt": "Instrumental warm fireside home music for a fantasy RPG. Soft acoustic lute, gentle harp, light cello, crackling hearth mood, safe and cozy, loopable, no drums, no vocals, tempo 80 BPM."
+    },
+    {
+      "ort": "chronik",
+      "datei": "chronik",
+      "bpm": 76,
+      "takt": 4,
+      "prompt": "Instrumental epic storytelling music for a fantasy RPG chronicle of ancient stone circles. Solemn strings, low choir-like pads, harp, slow timpani swells, mythic and grand, loopable, no vocals, tempo 76 BPM."
+    },
+    {
+      "ort": "kampf:boss",
+      "datei": "kampf-boss",
+      "bpm": 140,
+      "takt": 4,
+      "prompt": "Instrumental epic dark fantasy boss battle music for an RPG: thunderous war drums and timpani, low brass, aggressive strings, ominous and powerful, a mighty dragon or demon lord fight, loopable, no vocals, steady tempo 140 BPM."
+    },
+    {
+      "ort": "kampf:arena",
+      "datei": "kampf-arena",
+      "bpm": 128,
+      "takt": 4,
+      "prompt": "Instrumental heroic gladiator arena fight music for a fantasy RPG: pounding drums, bold brass fanfares, driving strings, proud and competitive, a duel in front of a cheering crowd, loopable, no vocals, steady tempo 128 BPM."
+    }
   ]
 }

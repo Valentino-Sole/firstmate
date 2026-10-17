@@ -9,6 +9,7 @@ Aufruf (Ausgabeordner <aus>, Protokoll <aus>/credits.jsonl):
   python elevenlabs.py konto
   python elevenlabs.py musik     <aus> <name> "<beschreibung>" --sek 90 [--modell music_v1] [--mit-gesang]
   python elevenlabs.py geraeusch <aus> <name> "<beschreibung>" [--sek 20] [--schleife] [--einfluss 0.3]
+  python elevenlabs.py sprache   <aus> <name> <stimmen-id> "<text>" [--modell eleven_multilingual_v2]
   python elevenlabs.py report    <aus>
   --max-credits N: bricht vor dem Auftrag ab, wenn im laufenden Abrechnungszeitraum schon mehr als N verbraucht sind
   --dry-run: zeigt nur den Auftrag, sendet nichts
@@ -143,6 +144,11 @@ def main():
         if sek:
             body["duration_seconds"] = float(sek)
         auftrag("geraeusch", aus, name, "/sound-generation", body, "mp3_44100_128", maxc, dry, schnell)
+    elif cmd == "sprache":
+        modell = opt(args, "--modell", "eleven_multilingual_v2")
+        aus, name, stimme, text = args
+        body = {"text": text, "model_id": modell, "voice_settings": {"stability": 0.45, "similarity_boost": 0.75, "style": 0.35, "use_speaker_boost": True}}
+        auftrag("sprache", aus, name, "/text-to-speech/" + stimme, body, "mp3_44100_128", maxc, dry, schnell)
     elif cmd == "report":
         (aus,) = args
         p = os.path.join(aus, "credits.jsonl")

@@ -40,6 +40,9 @@
       const root = $("#battle");
       UI.hideTip();
       UI.inBattle = true;
+      // eigene Musik fuer Bosse (Endbosse, Verliesbosse, Wochen- und Gildenboss) und die Arena (0.84)
+      const fs = fight.foes || [];
+      UI.battleMusic = opts.setting === "arena" ? "arena" : fs.some((f) => f.final) || (opts.setting === "dungeon" && fs.some((f) => f.boss)) || /^(Wochenboss|Gildenboss)/.test(opts.title || "") ? "boss" : null;
       UI.updateMusic();
       if (UI.hub) UI.hub.pause();
       const hero = fight.hero;
@@ -266,6 +269,7 @@
           root.innerHTML = "";
           root.onclick = null;
           UI.inBattle = false;
+          UI.battleMusic = null;
           UI.flushNotices();
           UI.updateMusic();
           if (UI.hub) UI.hub.resume();

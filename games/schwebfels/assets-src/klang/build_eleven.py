@@ -99,6 +99,35 @@ def laute(x):
     return out
 
 
+def stille_weg(x, rel=0.02):
+    """Stille vorn und hinten abschneiden (unter rel der Spitze)."""
+    m = np.abs(x).max(axis=1)
+    laut = np.where(m > rel * m.max())[0]
+    if not len(laut):
+        return x
+    return x[max(0, laut[0] - int(0.01 * SR)):laut[-1] + int(0.05 * SR)]
+
+
+def einzel(x, cap, spitze=-3):
+    """Ein Laut je Datei (Monster, Figuren): Stille weg, hoechstens cap Sekunden, sanft aus, Spitze in dBFS."""
+    y = stille_weg(x)[: int(cap * SR)].copy()
+    f = min(len(y) // 4, int(0.01 * SR))
+    y[:f] *= np.linspace(0, 1, f)[:, None]
+    f = min(len(y) // 3, int(0.2 * SR))
+    y[-f:] *= np.linspace(1, 0, f)[:, None]
+    return y * (10 ** (spitze / 20) / max(np.abs(y).max(), 1e-6))
+
+
+def lied(x):
+    """Sieg- und Niederlagenlied: Stille weg, kurzes Ausklingen, Lautheit wie die alten Lieder (RMS -17 dBFS)."""
+    y = stille_weg(x, 0.01).copy()
+    f = min(len(y) // 4, int(0.4 * SR))
+    y[-f:] *= (np.cos(np.linspace(0, np.pi / 2, f)) ** 2)[:, None]
+    y *= 10 ** (-17 / 20) / max(np.sqrt((y ** 2).mean()), 1e-6)
+    pk = np.abs(y).max()
+    return y * (0.95 / pk) if pk > 0.95 else y
+
+
 def main():
     args = sys.argv[1:]
     here = os.path.dirname(os.path.abspath(__file__))
@@ -106,7 +135,16 @@ def main():
     vor = opt(args, "--vorhoer")
     src, out = args
     namen = [o["name"] for o in plan["orte"]] + [s["name"] + "." + a for s in plan["stimmen"] for a in plan["arten"]]
+    namen += [l["name"] for l in plan.get("lieder", [])]
+    namen += [m["name"] + "." + a for m in plan.get("monster", []) for a in plan.get("monster_arten", {})]
+    fig = {k: v for k, v in plan.get("figuren", {}).items() if not k.startswith("_")}
+    namen += ["npc." + k for k in fig]
     teile = {n: [os.path.join(src, n + ".mp3")] for n in namen}
+    for k, v in fig.items():
+        teile["npc." + k] = [os.path.join(src, "npc.%s.%d.mp3" % (k, i + 1)) for i in range(len(v["saetze"]))]
+    for m in plan.get("monster", []):
+        for a, art in plan.get("monster_arten", {}).items():
+            teile[m["name"] + "." + a] = [os.path.join(src, "%s.%s.%d.mp3" % (m["name"], a, i + 1)) for i in range(art.get("anzahl", 1))]
     for s_ in plan["stimmen"]:
         for a, art in plan["arten"].items():
             if art.get("anzahl", 1) > 1:
@@ -123,6 +161,19 @@ def main():
             varianten = [mp3(y, 64)]
             loops[name] = round(L, 4)
             info = "Schleife %.1f s" % L
+        elif name.startswith("lied."):
+            y = lied(load(p, 2))
+            varianten = [mp3(y, 112)]
+            info = "Lied %.1f s" % (len(y) / SR)
+        elif name.startswith("npc."):
+            ys = [einzel(load(q, 1), 9) for q in da]
+            varianten = [mp3(y, 64) for y in ys]
+            info = "%d Saetze (%s s)" % (len(ys), ", ".join("%.1f" % (len(y) / SR) for y in ys))
+        elif name.startswith("stimme."):
+            # Monster 6 dB leiser als Heldenstimmen: im Testbrowser lagen sie sonst deutlich ueber den Treffern
+            ys = [einzel(load(q, 1), 2.6, -9) for q in da]
+            varianten = [mp3(y, 64) for y in ys]
+            info = "%d Laute (%s s)" % (len(ys), ", ".join("%.2f" % (len(y) / SR) for y in ys))
         else:
             ys = [y for q in da for y in laute(load(q, 1))]
             varianten = [mp3(y, 64) for y in ys]

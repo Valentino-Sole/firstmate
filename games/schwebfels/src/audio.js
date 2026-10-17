@@ -241,6 +241,8 @@
       Promise.all(jobs).then(() => {
         bank2State = "bereit";
         if (A.ortKey) A.ort(A.ortKey, ortLevel, true);
+        // Ottilie gruesst einmal je Sitzung, wenn der Held gerade auf der Insel steht (UI setzt A.begruessung)
+        if (A.begruessung) setTimeout(A.begruessung, 1200);
       });
     };
     bank2State = "laden";
@@ -1310,4 +1312,21 @@
     ortSrc = s;
   };
   A.ortPlaying = () => !!ortSrc;
+
+  /* Begruessungen der Inselfiguren (zweite Bank, npc.<id>, je drei Saetze): beim Betreten ihres Ortes, dieselbe
+     Figur hoechstens alle 40 Sekunden, nie zwei Figuren uebereinander. Gehoert zur Einstellung Klang. */
+  const npcLast = {};
+  let npcSrcEnd = 0;
+  A.npc = function (id, force) {
+    if (!A.ctx || !A.enabled) return false;
+    if (bank2State === "aus") loadBank2();
+    const name = "npc." + id;
+    const now = A.ctx.currentTime;
+    if (!BANK[name] || (!force && (now - (npcLast[id] || -99) < 40 || now < npcSrcEnd))) return false;
+    npcLast[id] = now;
+    const ok = sample(name, { gain: 0.75, vary: 0 });
+    const arr = BANK[name].filter(Boolean);
+    if (ok && arr.length) npcSrcEnd = now + Math.max(...arr.map((b) => b.duration)) * 0.6;
+    return ok;
+  };
 })();

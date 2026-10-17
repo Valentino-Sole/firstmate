@@ -1679,6 +1679,7 @@
       h += '<div class="muted small" style="margin-top:8px">Im Spiel nach einer Niederlage:</div>' + wahl("niederlage", [["fest", "Mittelalterlich"], ["tragisch", "Tragisch"]], st.liedNiederlage || "fest");
       h += '<div class="section-title">Gegner</div><div class="muted small">Tippe auf einen Gegner: Auftritt, Angriff, Schmerz und Niederlage nacheinander.</div>' + row(KP_ARCHS, "kpGegner");
       h += '<div class="section-title">Völker</div><div class="muted small">Kampfruf und Schmerzlaut, jeweils Frau und Mann.</div>' + row(KP_RACES, "kpVolk");
+      if (SB.audio.bank2Ready && SB.audio.bank2Ready()) h += '<div class="section-title">Figuren</div><div class="muted small">So begrüßen dich die Figuren der Insel, wenn du ihren Ort betrittst.</div>' + row(Object.keys(D.NPCS).map((k) => [k, D.NPCS[k].name]), "kpNpc");
       if (SB.audio.bank2Ready && SB.audio.bank2Ready()) h += '<div class="section-title">Orte</div><div class="muted small">Hintergrundgeräusche, die leise unter der Musik laufen. Tippe auf einen Ort, um ihn zehn Sekunden lang lauter zu hören.</div>' + row(KP_ORTE, "kpOrt");
       h += '<div class="section-title">Waffe trifft Material</div>' + row(KP_WAFFEN.map(([v, n]) => [v, (KP.waffe === v ? "● " : "") + n]), "kpWaffe") + '<div style="height:6px"></div>' + row(KP_ZIELE, "kpZiel");
       h += '<div class="section-title">Magie</div>' + row(KP_MAGIE, "kpMagie") + '<div style="height:6px"></div>' + row([["magie.heilung", "Heilung"], ["magie.barriere", "Barriere"], ["magie.teleport", "Verschwinden"], ["magie.reinigung", "Reinigung"]], "kpBank");
@@ -1690,6 +1691,7 @@
     },
   };
   const KP_ORTE = [["ort.tag.albion", "Albion Tag"], ["ort.nacht.albion", "Albion Nacht"], ["ort.tag.midgard", "Midgard Tag"], ["ort.nacht.midgard", "Midgard Nacht"], ["ort.tag.hibernia", "Hibernia Tag"], ["ort.nacht.hibernia", "Hibernia Nacht"], ["ort.taverne", "Taverne"], ["ort.schmiede", "Schmiede"], ["ort.tiefe", "Verlies"], ["ort.heim", "Heim"], ["ort.arena", "Arena"], ["ort.mondtor", "Mondtor"]];
+  A.kpNpc = (el) => SB.audio.npc(el.dataset.v, true);
   let kpOrtUhr = null;
   A.kpOrt = (el) => {
     SB.audio.ort(el.dataset.v, 1, true);

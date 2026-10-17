@@ -129,5 +129,186 @@
       "sek": 4,
       "text": "Three separate short pain grunts by {wer}, each a single hurt groan when hit in combat, about half a second each, with one second of silence between them, no words, no music"
     }
+  },
+  "lieder": [
+    {
+      "name": "lied.sieg.fest",
+      "sek": 8,
+      "prompt": "Short triumphant medieval victory jingle for a fantasy RPG: lute, recorder, shawm and frame drum, joyful and proud, ends cleanly on a bright final chord, instrumental, no vocals"
+    },
+    {
+      "name": "lied.sieg.fanfare",
+      "sek": 7,
+      "prompt": "Short epic fantasy victory fanfare for a fantasy RPG boss win: brass horns and timpani, heroic and glorious, ends on a strong sustained final chord, instrumental, no vocals"
+    },
+    {
+      "name": "lied.niederlage.fest",
+      "sek": 8,
+      "prompt": "Short somber medieval defeat jingle for a fantasy RPG: slow lute and low recorder, sad but dignified, ends softly on a minor chord, instrumental, no vocals"
+    },
+    {
+      "name": "lied.niederlage.tragisch",
+      "sek": 6,
+      "prompt": "Short tragic fantasy defeat sting for a fantasy RPG: low strings, a deep drum hit and a mournful horn, dark and heavy, ends on a fading low note, instrumental, no vocals"
+    }
+  ],
+  "monster": [
+    {
+      "name": "stimme.wolf",
+      "wer": "a large fierce wolf"
+    },
+    {
+      "name": "stimme.drache",
+      "wer": "a huge fire-breathing dragon"
+    },
+    {
+      "name": "stimme.troll",
+      "wer": "a massive brutish troll"
+    },
+    {
+      "name": "stimme.golem",
+      "wer": "a giant stone golem made of grinding rock"
+    },
+    {
+      "name": "stimme.schemen",
+      "wer": "a ghostly wraith spirit with an eerie hollow wail"
+    },
+    {
+      "name": "stimme.ghul",
+      "wer": "a rotting undead ghoul with a raspy rattling throat"
+    },
+    {
+      "name": "stimme.spinne",
+      "wer": "a giant hissing spider"
+    },
+    {
+      "name": "stimme.pilz",
+      "wer": "a walking mushroom spore creature, wet squelchy and puffing"
+    },
+    {
+      "name": "stimme.baum",
+      "wer": "an ancient walking tree giant with creaking groaning wood"
+    },
+    {
+      "name": "stimme.krebs",
+      "wer": "a giant armored crab with clacking claws and bubbling hiss"
+    },
+    {
+      "name": "stimme.fledermaus",
+      "wer": "a giant carrion bat with a shrill screech"
+    },
+    {
+      "name": "stimme.goblin",
+      "wer": "a small nasty goblin with a high cackling voice"
+    },
+    {
+      "name": "stimme.kultist",
+      "wer": "a dark human cultist sorcerer with a sinister male voice"
+    },
+    {
+      "name": "stimme.todesritter",
+      "wer": "an undead death knight in armor with a deep hollow echoing voice"
+    },
+    {
+      "name": "stimme.schlund",
+      "wer": "a slimy swamp maw beast with a gurgling wet roar"
+    }
+  ],
+  "monster_arten": {
+    "angriff": {
+      "anzahl": 2,
+      "sek": 1.2,
+      "text": "A single short aggressive attack sound of {wer}, snarling or roaring while striking, no music, no words"
+    },
+    "schmerz": {
+      "anzahl": 2,
+      "sek": 1.0,
+      "text": "A single short pain sound of {wer} when hit in combat, no music, no words"
+    },
+    "tod": {
+      "anzahl": 1,
+      "sek": 2.2,
+      "text": "The dying sound of {wer}, a final agonized cry fading out as it collapses, no music, no words"
+    },
+    "auftritt": {
+      "anzahl": 1,
+      "sek": 2.5,
+      "text": "An intimidating battle entrance call of {wer}, a powerful threatening roar or call, no music, no words"
+    }
+  },
+  "figuren": {
+    "_hinweis": "Begruessungen der Inselfiguren (Text zu Sprache, eleven_multilingual_v2, Stimmen aus ElevenLabs' Grundausstattung). Name im Spiel: npc.<id>.<n>.",
+    "ottilie": {
+      "stimme": "Xb7hH8MSUJpSbSDYk0k2",
+      "saetze": [
+        "Willkommen zurück auf deiner Insel, Held.",
+        "Schön, dass du da bist. Es gibt viel zu tun.",
+        "Die Insel hat dich vermisst."
+      ]
+    },
+    "hulda": {
+      "stimme": "XrExE9yKIg1WjnnlVkGX",
+      "saetze": [
+        "Willkommen in der Schiefen Krähe! Setz dich, die Aufträge warten schon.",
+        "Na, Durst auf Abenteuer? Am Brett hängt frische Arbeit.",
+        "Wisch dir die Stiefel ab, Held. Was darf es heute sein?"
+      ]
+    },
+    "seherin": {
+      "stimme": "pFZP5JQG7iQjIQuC4Bku",
+      "saetze": [
+        "Die Steine flüstern deinen Namen, Wanderer.",
+        "Tritt näher. Die Chronik ist noch nicht zu Ende geschrieben.",
+        "Ich sah dich kommen, lange bevor du hier warst."
+      ]
+    },
+    "brumm": {
+      "stimme": "N2lVS1w4EtoT3dr4eOWO",
+      "saetze": [
+        "Hrmpf. Was soll geschmiedet werden?",
+        "Gutes Eisen braucht Geduld. Und Gold.",
+        "Leg es auf den Amboss, ich schau es mir an."
+      ]
+    },
+    "zinnober": {
+      "stimme": "EXAVITQu4vr4xnSDxMaL",
+      "saetze": [
+        "Ah, ein Kenner seltener Dinge. Sieh dich ruhig um.",
+        "Alles hier hat eine Geschichte. Manche davon beißen.",
+        "Für dich, mein Lieber, mache ich einen besonderen Preis."
+      ]
+    },
+    "krawall": {
+      "stimme": "FGY2WhTYpPnrIDTdsKH5",
+      "saetze": [
+        "Willkommen im Ring der Reiche! Die Menge will Blut sehen!",
+        "Na, traust du dich in die Arena?",
+        "Zeig mir, was du kannst, Held!"
+      ]
+    },
+    "funzel": {
+      "stimme": "IKne3meq5aSn9XLyUdCD",
+      "saetze": [
+        "Oh! Besuch auf dem Wachturm! Selten genug.",
+        "Von hier oben sehe ich alles. Na ja, fast alles.",
+        "Wache halten ist ehrliche Arbeit. Und gut bezahlt."
+      ]
+    },
+    "hufnagel": {
+      "stimme": "cgSgspJ2msm6clMCkdW9",
+      "saetze": [
+        "Willkommen im Greifenstall! Suchst du ein Reittier?",
+        "Vorsicht, die Greifen beißen nur, wenn man sie ärgert.",
+        "Deine Gefährten sind bei mir in guten Händen."
+      ]
+    },
+    "mondhaendler": {
+      "stimme": "hpp4J3VqNfWAUOO0d1Us",
+      "saetze": [
+        "Der Mond ist aufgegangen. Meine Waren glänzen nur bei Nacht.",
+        "Leise, Wanderer. Das Mondtor hört mit.",
+        "Was der Tag verbirgt, verkaufe ich in der Nacht."
+      ]
+    }
   }
 }

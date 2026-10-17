@@ -786,7 +786,7 @@
     const S = UI.S;
     if (!S) return;
     let ctx;
-    if (UI.inBattle) ctx = "kampf";
+    if (UI.inBattle) ctx = UI.battleMusic ? "kampf:" + UI.battleMusic : "kampf";
     else if (UI.panelId && PANEL_MUSIC[UI.panelId]) ctx = PANEL_MUSIC[UI.panelId];
     else ctx = UI.isNight() ? "nacht" : "tag";
     // Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders
@@ -799,6 +799,9 @@
       const ort = !UI.inBattle && UI.panelId && PANEL_ORT[UI.panelId];
       SB.audio.ort(ort || draussen, UI.inBattle ? 0.12 : ort ? 0.32 : 0.25);
     }
+  };
+  SB.audio.begruessung = () => {
+    if (UI.S && !UI.panelId && !UI.inBattle) SB.audio.npc("ottilie");
   };
   const PANEL_ORT = { taverne: "ort.taverne", gildenhalle: "ort.taverne", schmiede: "ort.schmiede", tiefen: "ort.tiefe", heim: "ort.heim", arena: "ort.arena", mondtor: "ort.mondtor" };
 
@@ -823,6 +826,9 @@
     UI.renderActivity();
     UI.checkHint();
     UI.updateMusic();
+    // die Figur des Ortes gruesst (zweite Klangbank, npc.<id>; Mondtor nur bei Nacht, wenn Selene da ist)
+    const bd = D.BUILDINGS.find((b) => b.id === id);
+    if (bd && bd.npc && (!bd.night || UI.isNight()) && SB.audio.npc) SB.audio.npc(bd.npc);
   };
   UI.closePanel = function () {
     const def = UI.PANELS[UI.panelId];
