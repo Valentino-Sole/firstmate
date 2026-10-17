@@ -718,9 +718,9 @@
       ],
     },
     // 0.80: siebtes Verlies ueber dem Sturm; einziges mit Chance auf mythische Beute (myth: je Boss, Endboss), Kulisse
-    // vom Auge des Sturms (kulisse), nicht in der Wochenboss-Auswahl (spaet), Bosse 0,4 staerker als die Formel (zusatz)
+    // himmelsthron.webp (0.81, vorher die des Auges des Sturms; kulisse waere ein anderer Bildschluessel), nicht in der Wochenboss-Auswahl (spaet), Bosse 0,4 staerker als die Formel (zusatz)
     {
-      id: "himmelsthron", name: "Der Himmelsthron", unlock: 55, base: 58, theme: "#ffd27a", kulisse: "sturmkern", spaet: true, zusatz: 0.4,
+      id: "himmelsthron", name: "Der Himmelsthron", unlock: 55, base: 58, theme: "#ffd27a", spaet: true, zusatz: 0.4,
       myth: { boss: 0.04, final: 0.3 },
       desc: "Über dem ewigen Sturm thront der Hof des Himmels. Wer bis hierher steigt, sieht die Splitter von oben, und manche Schätze dort sind nicht von dieser Welt.",
       bosses: [

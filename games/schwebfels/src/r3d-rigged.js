@@ -139,7 +139,16 @@
     if (nref) m.normalMap = SB.assets.texture(tk + ".n", nref, { srgb: false });
     // Ruestungsteile und Waffen beidseitig: Meshys Stoffe und Klingen sind duenne Doppelschichten, die sich nach dem
     // Verkleinern und Anpassen stellenweise kreuzen; einseitig sah man dort durch Loecher auf dunkle Rueckseiten
-    if (/^(piece|weapon)\./.test(key)) m.side = T.DoubleSide;
+    if (/^(piece|weapon)\./.test(key)) {
+      m.side = T.DoubleSide;
+      // Stahl und Gold glaenzen (Metallkarte aus der Farbe, SB.assets.metalMap); die Werte multiplizieren sich mit der Karte
+      const mm = m.map && SB.assets.metalMap && SB.assets.metalMap(tk, m.map);
+      if (mm) {
+        m.metalnessMap = m.roughnessMap = mm;
+        m.metalness = 1;
+        m.roughness = 1;
+      }
+    }
     return (GMAT[key] = m);
   }
   function makeBones(E) {

@@ -243,4 +243,70 @@
     img.src = url;
     return (TEXC[key] = tex);
   };
+  /* Metallkarte (Glanz 0.81) aus einer Farbtextur: Meshys umgefaerbte Ruestungen und Waffen kommen ohne Metall- und
+     Rauheitskarte, alles wirkte darum gleich matt. Graue bis weisse, kaum gesaettigte Stellen gelten als Stahl, warme
+     helle Gelb- und Orangetoene als Gold oder Bronze, alles andere (Stoff, Leder, Holz, Farbe) bleibt matt. Kanal G ist
+     die Rauheit, B das Metall (so liest three.js roughnessMap und metalnessMap). Erzeugt einmal je Textur, 256 Pixel. */
+  const METC = {};
+  const smooth = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  A.metalPixel = function (r, g, b) {
+    const mx = Math.max(r, g, b);
+    const mn = Math.min(r, g, b);
+    const v = mx / 255;
+    const s = mx > 0 ? (mx - mn) / mx : 0;
+    let h = 0;
+    if (mx > mn) {
+      if (mx === r) h = ((g - b) / (mx - mn) + 6) % 6;
+      else if (mx === g) h = (b - r) / (mx - mn) + 2;
+      else h = (r - g) / (mx - mn) + 4;
+      h *= 60;
+    }
+    // Stahl: wenig Farbe, nicht zu dunkel; sehr helle Flaechen kaum (Fell und Leinen sind ebenfalls hell und grau)
+    const steel = (1 - smooth(0.12, 0.24, s)) * smooth(0.3, 0.5, v) * (1 - 0.75 * smooth(0.84, 0.95, v));
+    // Gold und Bronze: Farbton 30 bis 55 Grad, kraeftig und hell
+    const gold = smooth(22, 32, h) * (1 - smooth(52, 62, h)) * smooth(0.3, 0.45, s) * smooth(0.5, 0.68, v);
+    const metal = Math.min(1, Math.max(steel * 0.9, gold));
+    return { metal, rough: 0.82 - 0.5 * metal };
+  };
+  A.metalMap = function (key, src) {
+    const T = globalThis.THREE;
+    if (!T || !src) return null;
+    if (METC[key]) return METC[key];
+    // bis das Bild da ist: matt, wie bisher
+    const c0 = document.createElement("canvas");
+    c0.width = c0.height = 1;
+    const x0 = c0.getContext("2d");
+    x0.fillStyle = "rgb(0,209,0)";
+    x0.fillRect(0, 0, 1, 1);
+    const tex = new T.CanvasTexture(c0);
+    tex.colorSpace = T.NoColorSpace;
+    tex.wrapS = tex.wrapT = src.wrapS;
+    const build = () => {
+      const img = src.image;
+      if (!img || !img.width) return;
+      const N = Math.min(256, img.width);
+      const c = document.createElement("canvas");
+      c.width = c.height = N;
+      const cx = c.getContext("2d", { willReadFrequently: true });
+      cx.drawImage(img, 0, 0, N, N);
+      const d = cx.getImageData(0, 0, N, N);
+      const p = d.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const m = A.metalPixel(p[i], p[i + 1], p[i + 2]);
+        p[i] = 0;
+        p[i + 1] = Math.round(m.rough * 255);
+        p[i + 2] = Math.round(m.metal * 255);
+        p[i + 3] = 255;
+      }
+      cx.putImageData(d, 0, 0);
+      tex.image = c;
+      tex.needsUpdate = true;
+    };
+    if (src.image && src.image.width) build();
+    else if (src.userData && src.userData.ready) src.userData.ready.then(build);
+    return (METC[key] = tex);
+  };
 })();

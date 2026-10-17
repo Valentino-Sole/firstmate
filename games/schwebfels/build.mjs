@@ -106,7 +106,9 @@ for (const f of readdirSync(path.join(dir, "assets"))) {
   const src = process.env.KULISSEN_DIR ? path.resolve(process.env.KULISSEN_DIR) : path.join(dir, "assets/kulissen");
   // drei Reiche, Arena und je Verlies eins (Dateiname = Reich, "arena" oder Verlies-ID), dazu die gemalten Heime
   // (Housing v08 des Kapitaens, heim-<reich>)
-  for (const r of ["albion", "midgard", "hibernia", "arena", "pilzgrotte", "glockenstadt", "rostwerk", "frostspitzen", "laternengruft", "sturmkern", "heim-albion", "heim-midgard", "heim-hibernia"]) {
+  for (const r of ["albion", "midgard", "hibernia", "arena", "pilzgrotte", "glockenstadt", "rostwerk", "frostspitzen", "laternengruft", "sturmkern", "himmelsthron", "heim-albion", "heim-midgard", "heim-hibernia",
+    // Lichtumgebungen fuer Spiegelungen im Kampf (0.81, aus Poly-Haven-HDRIs, assets-src/umgebung.py)
+    "env-albion", "env-midgard", "env-hibernia", "env-arena"]) {
     try {
       kul[r] = "data:image/webp;base64," + readFileSync(path.join(src, r + ".webp")).toString("base64");
     } catch (e) {

@@ -74,6 +74,50 @@
     return env;
   }
   R.envMap = envMap;
+  /* Lichtumgebung je Kulisse (0.81): ein kleines Panoramabild aus einem Poly-Haven-HDRI (kulissen.js, Schluessel
+     env-<ort>) als Spiegelung fuer Stahl und Gold, dazu eine helle Flaeche in Richtung der Bildsonne. Helligkeit und
+     Farbton je Ort in KUL_LIGHT.env (k, tint); das Bild ist auf 0,85 im 95. Perzentil normiert. Je Renderer und Ort
+     einmal erzeugt; bis es fertig ist, gilt die allgemeine Umgebung. */
+  function envKulisse(r, key, L) {
+    if (L && L.env && L.env.key) key = L.env.key;
+    const url = globalThis.SB_KULISSEN && globalThis.SB_KULISSEN["env-" + key];
+    if (!url) return null;
+    r.userData = r.userData || {};
+    const cache = (r.userData.envK = r.userData.envK || {});
+    if (cache[key]) return cache[key];
+    return (cache[key] = new Promise((done) => {
+      const img = new Image();
+      img.onload = () => {
+        const E = (L && L.env) || {};
+        const k = E.k || 1.2;
+        const tint = new T.Color(E.tint || "#ffffff");
+        const sc = new T.Scene();
+        const tex = new T.Texture(img);
+        tex.colorSpace = T.SRGBColorSpace;
+        tex.needsUpdate = true;
+        const geo = new T.SphereGeometry(10, 48, 24);
+        const mat = new T.MeshBasicMaterial({ map: tex, side: T.BackSide, color: tint.multiplyScalar(k) });
+        sc.add(new T.Mesh(geo, mat));
+        // Sonne aus der Richtung des Bildlichts (Glanzpunkt auf Metall)
+        const sp = new T.Vector3(...((L && L.sunP) || [4, 9, 6])).normalize().multiplyScalar(7);
+        const sunC = new T.Color((L && L.sun) || "#ffe9c8").multiplyScalar(E.sun != null ? E.sun : 4);
+        const pl = new T.Mesh(new T.PlaneGeometry(3.2, 3.2), new T.MeshBasicMaterial({ color: sunC }));
+        pl.position.copy(sp);
+        pl.lookAt(0, 0, 0);
+        sc.add(pl);
+        const pm = new T.PMREMGenerator(r);
+        const env = pm.fromScene(sc, 0.03).texture;
+        pm.dispose();
+        geo.dispose();
+        mat.dispose();
+        tex.dispose();
+        done(env);
+      };
+      img.onerror = () => done(null);
+      img.src = url;
+    }));
+  }
+  R.envKulisse = envKulisse;
   function killRenderer(r) {
     try {
       r.dispose();
@@ -2757,18 +2801,20 @@
   const KUL_FEET = { a: 0.27, b: 0.72, y: 0.79 };
   const KUL_LIGHT = {
     // Kreidehoehen: warme Abendsonne von links hinten, kuehle Schatten
-    albion: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd49a", sunI: 2.6, sunP: [-7, 8, 2], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1 },
+    albion: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd49a", sunI: 2.6, sunP: [-7, 8, 2], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1, env: { k: 1.3, tint: "#fff1dc" } },
     // Runenpass: kuehles Daemmerlicht und Nordlicht, rechts ein kleines Feuer
-    midgard: { sky: "#d4e2ff", ground: "#4a5570", hemi: 1.25, sun: "#dfe9ff", sunI: 2.0, sunP: [-4, 9, 5], front: "#f2f6ff", frontI: 1.15, warm: ["#ff9a3d", [6.5, 1.4, -1.5], 9], fog: "#4a5a7a", nightDim: 0.8 },
+    midgard: { sky: "#d4e2ff", ground: "#4a5570", hemi: 1.25, sun: "#dfe9ff", sunI: 2.0, sunP: [-4, 9, 5], front: "#f2f6ff", frontI: 1.15, warm: ["#ff9a3d", [6.5, 1.4, -1.5], 9], fog: "#4a5a7a", nightDim: 0.8, env: { k: 1.1, tint: "#e2ebff" } },
     // Mondhain: silbernes Mondlicht von hinten, warmes Laternenlicht von vorn
-    hibernia: { sky: "#cdd6ff", ground: "#3c3a2c", hemi: 1.15, sun: "#d4dcff", sunI: 2.0, sunP: [3, 9, -4], front: "#ffe2b8", frontI: 1.25, fog: "#2c3550", nightDim: 0.5 },
+    hibernia: { sky: "#cdd6ff", ground: "#3c3a2c", hemi: 1.15, sun: "#d4dcff", sunI: 2.0, sunP: [3, 9, -4], front: "#ffe2b8", frontI: 1.25, fog: "#2c3550", nightDim: 0.5, env: { k: 1.05, tint: "#a3b4ea", sun: 3 } },
     // Ring der Reiche: warme Nachmittagssonne von rechts, Feuerschalen an den Seiten
-    arena: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd8a0", sunI: 2.5, sunP: [6, 8, 3], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1 },
+    arena: { sky: "#fff0d8", ground: "#6b5a3e", hemi: 1.25, sun: "#ffd8a0", sunI: 2.5, sunP: [6, 8, 3], front: "#fff2e0", frontI: 1.1, fog: "#d9c6a4", nightDim: 1, env: { k: 1.25 } },
     // Verliese liegen unter der Erde oder im Sturm: keine Nacht, Licht in der Farbe des Ortes
     pilzgrotte: { sky: "#cfeec0", ground: "#2f3a24", hemi: 1.15, sun: "#d8ffc0", sunI: 1.7, sunP: [-3, 9, 4], front: "#f0ffe0", frontI: 1.15, warm: ["#ffc35a", [6, 1.6, -2], 6], fog: "#2c3a28", nightDim: 0 },
     glockenstadt: { sky: "#cfdcf0", ground: "#3a4250", hemi: 1.2, sun: "#dfe8ff", sunI: 1.9, sunP: [4, 9, -3], front: "#eef2ff", frontI: 1.15, fog: "#5a6a80", nightDim: 0 },
     rostwerk: { sky: "#ffd8b8", ground: "#3a2a20", hemi: 1.05, sun: "#ffc890", sunI: 1.8, sunP: [-5, 7, 3], front: "#fff0e0", frontI: 1.1, warm: ["#ff7a2a", [-6, 1.2, -1], 12], fog: "#3a2a20", nightDim: 0 },
     frostspitzen: { sky: "#e0ecff", ground: "#5a6a80", hemi: 1.3, sun: "#f4f8ff", sunI: 2.3, sunP: [-4, 9, 4], front: "#f2f6ff", frontI: 1.1, fog: "#b8c8e0", nightDim: 0 },
+    // Himmelsthron (0.81): goldene Abendsonne von rechts oben ueber dem Wolkenmeer, Spiegelung vom Wolkenhimmel der Arena
+    himmelsthron: { sky: "#fff2d6", ground: "#8a7a5a", hemi: 1.3, sun: "#ffe0a0", sunI: 2.6, sunP: [7, 9, -2], front: "#fff4e2", frontI: 1.15, fog: "#e8d8b0", nightDim: 0, env: { key: "arena", k: 1.35, tint: "#fff0d0" } },
     laternengruft: { sky: "#ffe8c0", ground: "#3a3020", hemi: 1.1, sun: "#ffd890", sunI: 1.8, sunP: [0, 9, 2], front: "#ffe8c8", frontI: 1.2, fog: "#3a3020", nightDim: 0 },
     sturmkern: { sky: "#d8d0ff", ground: "#2a2440", hemi: 1.15, sun: "#d8ccff", sunI: 2.0, sunP: [3, 9, 2], front: "#eee8ff", frontI: 1.15, fog: "#3a3060", nightDim: 0 },
   };
@@ -2914,6 +2960,11 @@
     let aur = null;
     let bg = null;
     if (KUL) bg = backdrop(scene, KUL, info.night * KL.nightDim);
+    // Spiegelung passend zur Kulisse (Albion, Midgard, Hibernia, Arena), sobald das Lichtbild bereitsteht
+    if (KUL) {
+      const ek = envKulisse(renderer, KK, KL);
+      if (ek) ek.then((env) => env && (scene.environment = env));
+    }
     else {
       stars = starField(rng, 500);
       stars.material.opacity = setting === "dungeon" ? 0 : Math.max(0, info.night - 0.2);
