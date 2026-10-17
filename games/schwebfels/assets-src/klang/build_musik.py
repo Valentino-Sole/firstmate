@@ -86,14 +86,13 @@ def seamless(x, bpm, takt):
     f, hop = spektrum(x)
     k = u // hop
     head = f[:k]
-    best, bestL = -2, None
-    lo = int(max(8 * bar, total * 0.5) * SR) // hop
+    lo = int(max(8 * bar, total * 0.4) * SR) // hop
     hi = len(f) - k
-    for L in range(lo, hi):
-        c = float((f[L:L + k] * head).sum(axis=1).mean())
-        if c > best:
-            best, bestL = c, L * hop
-    L = bestL
+    cs = [(float((f[L:L + k] * head).sum(axis=1).mean()), L) for L in range(lo, hi)]
+    top = max(c for c, _ in cs)
+    # die laengste Schleife, die fast so gut passt wie die beste (kurze Schleifen wiederholen sich hoerbar)
+    best, L = max(((c, L) for c, L in cs if c >= top - 0.08), key=lambda t: t[1])
+    L *= hop
     m = x[:L].copy()
     t = np.linspace(0, np.pi / 2, u)[:, None]
     m[:u] = x[:u] * np.sin(t) + x[L:L + u] * np.cos(t)
