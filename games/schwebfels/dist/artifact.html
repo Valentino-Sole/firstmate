@@ -5128,8 +5128,50 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     base += (4 - (base % 4)) % 4;
     const out = {};
     for (const k in head.klang) out[k] = head.klang[k].map((r) => u8.slice(base + r.$[1], base + r.$[1] + r.$[2]).buffer);
+    if (head.loops) Object.assign(LOOPS, head.loops);
     return out;
   }
+  // Schleifenlaengen der Hintergrundgeraeusche (zweite Bank, Name -> Sekunden)
+  const LOOPS = {};
+  let ortLevel = 0.5;
+  /* Zweite Klangbank aus ElevenLabs (klang2.js, globalThis.SB_KLANG2, assets-src/klang/build_eleven.py): Heldenstimmen je
+     Volk und Geschlecht und Hintergrundgeraeusche je Ort. Sie wird nach der ersten Bank geladen; fehlt sie, bleibt alles
+     wie zuvor (Stimmen aus der ersten Bank, keine Ortsgeraeusche). */
+  let bank2State = "aus";
+  function loadBank2() {
+    if (bank2State !== "aus" || !A.ctx) return;
+    const go = () => {
+      let raw;
+      try {
+        raw = unpack(globalThis.SB_KLANG2);
+      } catch (e) {
+        bank2State = "fehler";
+        return;
+      }
+      globalThis.SB_KLANG2 = null;
+      const jobs = [];
+      for (const k in raw) {
+        const arr = [];
+        raw[k].forEach((buf, i) => jobs.push(new Promise((ok) => A.ctx.decodeAudioData(buf, (b) => ok((arr[i] = b)), () => ok(null)))));
+        jobs.push(Promise.resolve().then(() => (BANK[k] = arr)));
+      }
+      Promise.all(jobs).then(() => {
+        bank2State = "bereit";
+        if (A.ortKey) A.ort(A.ortKey, ortLevel, true);
+      });
+    };
+    bank2State = "laden";
+    if (globalThis.SB_KLANG2) return go();
+    const el = document.createElement("script");
+    el.src = "klang2.js";
+    el.onload = () => (globalThis.SB_KLANG2 ? go() : (bank2State = "fehler"));
+    el.onerror = () => {
+      el.remove();
+      bank2State = "fehler";
+    };
+    document.head.appendChild(el);
+  }
+  A.bank2Ready = () => bank2State === "bereit";
   // Die Klangbank liegt als klang.js neben der Seite (build.mjs); fehlt sie, bleibt es bei den erzeugten Effekten
   // und nach einer Minute wird es erneut versucht
   function fetchBank() {
@@ -5169,7 +5211,10 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         )
       );
     }
-    Promise.all(jobs).then(() => (bankState = "bereit"));
+    Promise.all(jobs).then(() => {
+      bankState = "bereit";
+      loadBank2();
+    });
   }
   A.bankReady = () => bankState === "bereit";
   A.bankStats = () => Object.fromEntries(Object.entries(BANK).map(([k, v]) => [k, v.filter(Boolean).length + "/" + v.length]));
@@ -5343,6 +5388,8 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       if (BANK["stimme." + d.arch + ".angriff"]) return ["stimme." + d.arch, boss, d.boss ? 0.95 : 0.8];
       return ["held.m", boss, 0.7];
     }
+    const eigen = "held." + d.race + "." + (d.gender === "w" ? "w" : "m");
+    if (BANK[eigen + ".angriff"]) return [eigen, 1, 0.4];
     const v = VOLK[d.race] || VOLK.albier;
     if (d.gender === "w") return ["held." + v[0], v[1], 0.6];
     return [d.race === "trollblut" ? "held.gross" : "held.m", d.race === "trollblut" ? 1.0 : v[1], 0.6];
@@ -6128,7 +6175,58 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   };
   A.setSfx = function (on) {
     A.enabled = !!on;
+    if (A.ortKey) A.ort(A.ortKey, ortLevel, true);
   };
+
+  /* Hintergrundgeraeusche je Ort (zweite Bank, Namen ort.*): leise Schleife unter Musik und Effekten, gehoert zu den
+     Effekten (Einstellung Klang). Wechsel mit Ueberblendung; Schleife von 1 bis 1 + Laenge wie bei der Musik. */
+  let ortSrc = null;
+  let ortGain = null;
+  A.ortKey = null;
+  A.ort = function (name, level, force) {
+    level = level || 0.5;
+    if (name === A.ortKey && level === ortLevel && !force) return;
+    if (name === A.ortKey && ortSrc && !force) {
+      // gleicher Ort, nur leiser oder lauter (Kampf)
+      ortLevel = level;
+      ortGain.gain.setTargetAtTime(level, A.ctx.currentTime, 0.4);
+      return;
+    }
+    A.ortKey = name;
+    ortLevel = level;
+    const c = A.ctx;
+    if (!c) return;
+    const t = c.currentTime;
+    if (ortSrc) {
+      const old = ortSrc;
+      ortGain.gain.cancelScheduledValues(t);
+      ortGain.gain.setValueAtTime(ortGain.gain.value, t);
+      ortGain.gain.linearRampToValueAtTime(0.0001, t + 1.2);
+      setTimeout(() => {
+        try {
+          old.stop();
+        } catch (e) {
+          /* schon gestoppt */
+        }
+      }, 1300);
+      ortSrc = null;
+    }
+    const buf = name && BANK[name] && BANK[name][0];
+    if (!buf || !A.enabled || !LOOPS[name]) return;
+    ortGain = c.createGain();
+    ortGain.gain.value = 0.0001;
+    ortGain.connect(master);
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    s.loop = true;
+    s.loopStart = 1;
+    s.loopEnd = Math.min(buf.duration, 1 + LOOPS[name]);
+    s.connect(ortGain);
+    s.start(t + 0.05, 1);
+    ortGain.gain.linearRampToValueAtTime(level, t + 1.5);
+    ortSrc = s;
+  };
+  A.ortPlaying = () => !!ortSrc;
 })();
 
 </script>
@@ -22934,7 +23032,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     // Tag, Nacht, Taverne und Kampf klingen in jedem Reich anders
     if (ctx === "tag" || ctx === "nacht" || ctx === "taverne" || ctx === "kampf") ctx += ":" + S.realm;
     SB.audio.music(ctx);
+    // Hintergrundgeraeusche (zweite Klangbank): Orte mit eigenem Klang, sonst die Insel bei Tag oder Nacht; im Kampf
+    // die Insel leise darunter
+    if (SB.audio.ort) {
+      const draussen = "ort." + (UI.isNight() ? "nacht" : "tag") + "." + S.realm;
+      const ort = !UI.inBattle && UI.panelId && PANEL_ORT[UI.panelId];
+      SB.audio.ort(ort || draussen, UI.inBattle ? 0.12 : ort ? 0.32 : 0.25);
+    }
   };
+  const PANEL_ORT = { taverne: "ort.taverne", gildenhalle: "ort.taverne", schmiede: "ort.schmiede", tiefen: "ort.tiefe", heim: "ort.heim", arena: "ort.arena", mondtor: "ort.mondtor" };
 
   /* ---------- Panels ---------- */
   UI.openPanel = function (id) {
@@ -24894,6 +25000,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
       h += '<div class="muted small" style="margin-top:8px">Im Spiel nach einer Niederlage:</div>' + wahl("niederlage", [["fest", "Mittelalterlich"], ["tragisch", "Tragisch"]], st.liedNiederlage || "fest");
       h += '<div class="section-title">Gegner</div><div class="muted small">Tippe auf einen Gegner: Auftritt, Angriff, Schmerz und Niederlage nacheinander.</div>' + row(KP_ARCHS, "kpGegner");
       h += '<div class="section-title">Völker</div><div class="muted small">Kampfruf und Schmerzlaut, jeweils Frau und Mann.</div>' + row(KP_RACES, "kpVolk");
+      if (SB.audio.bank2Ready && SB.audio.bank2Ready()) h += '<div class="section-title">Orte</div><div class="muted small">Hintergrundgeräusche, die leise unter der Musik laufen. Tippe auf einen Ort, um ihn zehn Sekunden lang lauter zu hören.</div>' + row(KP_ORTE, "kpOrt");
       h += '<div class="section-title">Waffe trifft Material</div>' + row(KP_WAFFEN.map(([v, n]) => [v, (KP.waffe === v ? "● " : "") + n]), "kpWaffe") + '<div style="height:6px"></div>' + row(KP_ZIELE, "kpZiel");
       h += '<div class="section-title">Magie</div>' + row(KP_MAGIE, "kpMagie") + '<div style="height:6px"></div>' + row([["magie.heilung", "Heilung"], ["magie.barriere", "Barriere"], ["magie.teleport", "Verschwinden"], ["magie.reinigung", "Reinigung"]], "kpBank");
       h += '<div class="section-title">Vorher und nachher</div><div class="muted small">Links der bisherige erzeugte Ton, rechts die neue Aufnahme.</div>';
@@ -24902,6 +25009,13 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         .join("");
       return h;
     },
+  };
+  const KP_ORTE = [["ort.tag.albion", "Albion Tag"], ["ort.nacht.albion", "Albion Nacht"], ["ort.tag.midgard", "Midgard Tag"], ["ort.nacht.midgard", "Midgard Nacht"], ["ort.tag.hibernia", "Hibernia Tag"], ["ort.nacht.hibernia", "Hibernia Nacht"], ["ort.taverne", "Taverne"], ["ort.schmiede", "Schmiede"], ["ort.tiefe", "Verlies"], ["ort.heim", "Heim"], ["ort.arena", "Arena"], ["ort.mondtor", "Mondtor"]];
+  let kpOrtUhr = null;
+  A.kpOrt = (el) => {
+    SB.audio.ort(el.dataset.v, 1, true);
+    clearTimeout(kpOrtUhr);
+    kpOrtUhr = setTimeout(() => UI.updateMusic(), 10000);
   };
   const kpSay = (d, kind, ms) => setTimeout(() => SB.audio.voiceProbe(d, kind), ms || 0);
   const kpEv = (name, c, ms) => setTimeout(() => SB.audio.event(name, c), ms || 0);
@@ -25507,7 +25621,7 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         UI.ACTIONS.importSave();
         return;
       } else if (act === "start") {
-        const name = keep.trim().replace(/\s+/g, " ");
+        const name = String(keep || "").trim().replace(/\s+/g, " ");
         const err = $("#nameErr");
         if (!/^[\p{L}\p{N}][\p{L}\p{N} '\-]{1,15}$/u.test(name)) {
           err.hidden = false;
