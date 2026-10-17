@@ -100,7 +100,12 @@ def auftrag(art, aus, name, path, body, fmt, maxc, dry):
     os.makedirs(aus, exist_ok=True)
     datei = os.path.join(aus, name + ".mp3")
     open(datei, "wb").write(audio)
-    nach = konto()
+    # der Kontostand folgt ein paar Sekunden spaeter
+    for _ in range(12):
+        time.sleep(5)
+        nach = konto()
+        if nach["verbraucht"] != vor["verbraucht"]:
+            break
     kosten = (nach["verbraucht"] or 0) - (vor["verbraucht"] or 0)
     log(aus, {"zeit": time.strftime("%Y-%m-%d %H:%M:%S"), "art": art, "name": name, "body": body, "datei": datei,
               "bytes": len(audio), "sekunden_warten": round(time.time() - t0, 1), "credits": kosten,

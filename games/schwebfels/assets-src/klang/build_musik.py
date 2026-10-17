@@ -4,9 +4,9 @@ Aufruf: python build_musik.py <roh-ordner> <assets/musik> [--plan musik_plan.jso
   <roh-ordner>: die von elevenlabs.py geholten Stuecke (<datei>.mp3, Namen wie im Plan)
   <assets/musik>: Ausgabe, je Stueck <datei>.mp3 und eine Liste musik.json (liest build.mjs)
 
-Schleife: Ein Stueck der Laenge x wird auf eine Laenge L aus ganzen Takten gekuerzt (bpm und takt aus dem Plan),
-das Ende x[L:L+U] in den Anfang ueberblendet (U = 4 Sekunden, gleiche Leistung) und die Lage von L um bis zu einen
-halben Takt so verschoben, dass Ende und Anfang am besten zusammenpassen (Korrelation der Huellkurven). Gespeichert
+Schleife: Vorspiel und Ausklang fallen weg (hauptteil, nach den Hoehen gemessen). Die Schleifenlaenge L ist die Stelle
+in der zweiten Haelfte, an der die Musik ueber U = 4 Sekunden dem Anfang klanglich am meisten gleicht (Spektren,
+Passung 1 = gleich); dort wird das Ende x[L:L+U] in den Anfang ueberblendet (gleiche Leistung). Gespeichert
 wird [letzte Sekunde, ganze Schleife, erste Sekunde]; das Spiel spielt die Schleife von 1 bis 1 + L (src/audio.js),
 damit ist sie auch dann nahtlos, wenn der MP3-Decoder vorn Stille einfuegt. Lautheit aller Stuecke gleich (RMS).
 """
@@ -42,27 +42,57 @@ def env(x, hop=441):
     return m[: n * hop].reshape(n, hop).mean(axis=1)
 
 
+def hauptteil(x):
+    """Vorspiel und Ausklang abschneiden: ElevenLabs-Stuecke beginnen oft leise (nur Bordun) und blenden am Ende aus.
+    Hauptteil = von der ersten bis zur letzten Stelle, an der die Lautstaerke ueber zwei Sekunden mindestens die
+    Haelfte des lauten Teils (80. Perzentil) erreicht."""
+    hop = SR // 4
+    # Hoehen zaehlen (zweite Differenz, betont alles ueber gut 1 kHz): ein lautes Bordun-Vorspiel ist tief und leise in
+    # den Hoehen, der Hauptteil mit Fidel, Trommeln und Floeten nicht
+    h = np.diff(x.mean(axis=1), n=2)
+    n = len(h) // hop
+    e = np.sqrt((h[: n * hop] ** 2).reshape(n, hop).mean(axis=1))
+    w = 8
+    m = np.convolve(e, np.ones(w) / w, mode="valid")
+    loud = 0.5 * np.percentile(e, 80)
+    ok = np.where(m >= loud)[0]
+    if not len(ok):
+        return 0, len(x)
+    return int(ok[0] * hop), int((ok[-1] + w) * hop)
+
+
+def spektrum(x, hop=512, win=2048):
+    """Log-Betragsspektrum bis gut 5 kHz je Rahmen (Mono), normiert je Rahmen: zeigt Akkord und Klangfarbe."""
+    m = x.mean(axis=1)
+    n = (len(m) - win) // hop
+    idx = np.arange(win)[None, :] + hop * np.arange(n)[:, None]
+    f = np.abs(np.fft.rfft(m[idx] * np.hanning(win), axis=1))[:, :240]
+    f = np.log1p(f * 50)
+    f -= f.mean(axis=1, keepdims=True)
+    f /= np.linalg.norm(f, axis=1, keepdims=True) + 1e-9
+    return f, hop
+
+
 def seamless(x, bpm, takt):
+    von, bis = hauptteil(x)
+    x = x[von:bis]
     bar = 60.0 / bpm * takt
     u = int(U * SR)
     total = len(x) / SR
-    # laengste Schleife aus ganzen Takten, hinter der noch U Sekunden Ende fuer die Ueberblendung liegen
-    bars = int((total - U - 0.5) // bar)
-    if bars < 4:
-        raise SystemExit("Stueck zu kurz fuer eine Schleife (%.1f s)" % total)
-    L0 = int(bars * bar * SR)
-    head = env(x[:u])
-    best, bestL = -2, L0
-    for d in range(-int(bar * SR / 2), int(bar * SR / 2) + 1, 441):
-        L = L0 + d
-        if L <= u or L + u > len(x):
-            continue
-        tail = env(x[L:L + u])
-        k = min(len(head), len(tail))
-        a, b = head[:k] - head[:k].mean(), tail[:k] - tail[:k].mean()
-        c = float((a * b).sum() / (np.sqrt((a * a).sum() * (b * b).sum()) + 1e-9))
+    if total - U < 8 * bar:
+        raise SystemExit("Hauptteil zu kurz fuer eine Schleife (%.1f s)" % total)
+    # Schleifenlaenge L: die Stelle in der zweiten Haelfte, an der die Musik ueber U Sekunden dem Anfang am meisten
+    # gleicht (gleicher Akkord, gleiche Klangfarbe), damit die Ueberblendung keine zwei Akkorde mischt
+    f, hop = spektrum(x)
+    k = u // hop
+    head = f[:k]
+    best, bestL = -2, None
+    lo = int(max(8 * bar, total * 0.5) * SR) // hop
+    hi = len(f) - k
+    for L in range(lo, hi):
+        c = float((f[L:L + k] * head).sum(axis=1).mean())
         if c > best:
-            best, bestL = c, L
+            best, bestL = c, L * hop
     L = bestL
     m = x[:L].copy()
     t = np.linspace(0, np.pi / 2, u)[:, None]
@@ -74,7 +104,7 @@ def seamless(x, bpm, takt):
         m *= 0.97 / pk
     one = SR
     out = np.concatenate([m[-one:], m, m[:one]])
-    return out, L / SR, best
+    return out, L / SR, best, von / SR
 
 
 def mp3(x, kbps):
@@ -99,11 +129,11 @@ def main():
         if not os.path.exists(src):
             continue
         x = load(src)
-        y, L, c = seamless(x, st["bpm"], st["takt"])
+        y, L, c, a = seamless(x, st["bpm"], st["takt"])
         b = mp3(y, kbps)
         open(os.path.join(aus, st["datei"] + ".mp3"), "wb").write(b)
         liste[st["ort"]] = {"datei": st["datei"], "len": round(L, 4)}
-        print("%-18s Schleife %.1f s, Passung %.2f, %d KB" % (st["ort"], L, c, len(b) // 1024))
+        print("%-18s Hauptteil ab %.1f s, Schleife %.1f s, Passung %.2f, %d KB" % (st["ort"], a, L, c, len(b) // 1024))
         if vor:
             # zum Anhoeren: die Schleife zweimal hintereinander, die Naht liegt in der Mitte
             os.makedirs(vor, exist_ok=True)
