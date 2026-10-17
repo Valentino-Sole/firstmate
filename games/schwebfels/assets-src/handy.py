@@ -382,7 +382,7 @@ class Repack:
                 return self.image(o, getattr(self, "limit", None) or (self.opt.tex_monster if self.monster else self.opt.tex))
             return self.copy(o)
         if isinstance(o, dict):
-            return {k: self.walk(v) for k, v in o.items() if not (k == "ntex" and not self.opt.ganz)}
+            return {k: self.walk(v) for k, v in o.items() if not (k == "ntex" and not (self.opt.ganz or self.opt.normalen))}
         if isinstance(o, list):
             return [self.walk(v) for v in o]
         return o
@@ -581,6 +581,7 @@ def main():
     ap.add_argument("--musik-kbps", type=int, default=0, help="aufgenommene Musik je Ort mit dieser Bitrate (Stereo) "
                     "einbetten; 0 = ohne, dann spielt die erzeugte Musik")
     ap.add_argument("--ganz", action="store_true")
+    ap.add_argument("--normalen", action="store_true", help="Normalenkarten behalten (Falten, Naehte; Fassung fuer Rechner)")
     opt = ap.parse_args()
 
     page = open(os.path.join(opt.dist, "schwebfels.html"), encoding="utf-8").read()
