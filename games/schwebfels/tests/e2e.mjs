@@ -28,6 +28,9 @@ let browser = await launch();
 async function newPage(vp, dpr = 1) {
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: dpr });
   const page = await ctx.newPage();
+  // Software-WebGL: das erste Bild nach der Heldenerschaffung (Insel, Portraets, Shader) braucht je nach Rechner
+  // ueber 30 Sekunden, in denen der Hauptfaden blockiert; Playwrights Standardfrist reicht dafuer nicht
+  page.setDefaultTimeout(120000);
   // Optional: CDN_CACHE zeigt auf eine JSON-Datei {url: lokaler Pfad}, z. B. fuer Umgebungen,
   // in denen der Testbrowser das CDN nicht direkt erreicht.
   if (cdnMap) {

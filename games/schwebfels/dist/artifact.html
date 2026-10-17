@@ -6597,22 +6597,20 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
     const T = globalThis.THREE;
     if (!T || !src) return null;
     if (METC[key]) return METC[key];
-    // bis das Bild da ist: matt, wie bisher
-    const c0 = document.createElement("canvas");
-    c0.width = c0.height = 1;
-    const x0 = c0.getContext("2d");
-    x0.fillStyle = "rgb(0,209,0)";
-    x0.fillRect(0, 0, 1, 1);
-    const tex = new T.CanvasTexture(c0);
+    // bis das Bild da ist: matt, wie bisher. Gleich in Endgroesse, denn WebGL2 legt den Speicher einer Textur
+    // beim ersten Hochladen fest; ein spaeter groesseres Bild in derselben Textur fuehrt zu Fehlern je Bild
+    const N = 256;
+    const c = document.createElement("canvas");
+    c.width = c.height = N;
+    const cx = c.getContext("2d", { willReadFrequently: true });
+    cx.fillStyle = "rgb(0,209,0)";
+    cx.fillRect(0, 0, N, N);
+    const tex = new T.CanvasTexture(c);
     tex.colorSpace = T.NoColorSpace;
     tex.wrapS = tex.wrapT = src.wrapS;
     const build = () => {
       const img = src.image;
       if (!img || !img.width) return;
-      const N = Math.min(256, img.width);
-      const c = document.createElement("canvas");
-      c.width = c.height = N;
-      const cx = c.getContext("2d", { willReadFrequently: true });
       cx.drawImage(img, 0, 0, N, N);
       const d = cx.getImageData(0, 0, N, N);
       const p = d.data;
@@ -6624,7 +6622,6 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
         p[i + 3] = 255;
       }
       cx.putImageData(d, 0, 0);
-      tex.image = c;
       tex.needsUpdate = true;
     };
     if (src.image && src.image.width) build();
